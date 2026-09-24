@@ -5,6 +5,7 @@ import Icon from './Icon.jsx';
 const navItems = [
   { to: '/search', label: '캔버스 탐색', icon: 'search' },
   { to: '/profile', label: '내 프로필', icon: 'user' },
+  { to: '/docs', label: '프로젝트 문서', icon: 'book' },
 ];
 
 export default function AppShell({ children }) {

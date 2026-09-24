@@ -1,0 +1,58 @@
+.route-loading{min-height:100vh;display:grid;place-items:center;color:#718275;font-size:12px;background:#f5f7f3}
+.canvas-loading-state{align-items:center;justify-content:center;gap:12px;color:#8a9a8d;font-size:11px}
+.tutorial-page{min-height:100vh;background:#f5f7f3;color:#344b3e;padding-bottom:35px}
+.tutorial-header{height:68px;padding:0 clamp(18px,4vw,54px);display:grid;grid-template-columns:1fr 1.4fr 1fr;align-items:center;border-bottom:1px solid #e7ebe4;background:#fbfcf9}
+.tutorial-header>.brand-lockup{font-size:22px}
+.tutorial-header>div{display:flex;justify-content:center;align-items:center;gap:17px}
+.tutorial-breadcrumb{display:flex;align-items:center;gap:6px;color:#6d7d71;font-size:10px}
+.tutorial-breadcrumb svg{color:#a3ada3}
+.tutorial-local-badge{display:flex;align-items:center;gap:6px;color:#8b998d;font-size:8px}
+.tutorial-local-badge i,.tutorial-board-top>span i,.tutorial-board-footer>span:last-child i{width:6px;height:6px;border-radius:50%;background:#87a58a}
+.tutorial-header>.button{justify-self:end;padding:9px 12px;font-size:10px}
+.tutorial-main{width:min(1240px,calc(100% - 48px));margin:0 auto}
+.tutorial-intro{display:flex;align-items:end;justify-content:space-between;gap:20px;padding:34px 2px 22px}
+.tutorial-intro .section-kicker{font-size:8px;color:#8c9b8f;letter-spacing:.8px}
+.tutorial-intro h1{margin:9px 0 6px;color:#304a3a;font:600 clamp(23px,3vw,34px)/1.2 var(--display);letter-spacing:-1.2px}
+.tutorial-intro p{margin:0;color:#87948a;font-size:10px}
+.tutorial-steps{display:flex;align-items:center;gap:11px;padding-bottom:3px;color:#929d93;font-size:8px;white-space:nowrap}
+.tutorial-steps span{display:flex;align-items:center;gap:5px}.tutorial-steps b{display:grid;place-items:center;width:19px;height:19px;border-radius:50%;background:#e5ece3;color:#617a65;font:8px var(--mono)}
+.tutorial-workspace{min-height:500px;display:grid;grid-template-columns:56px minmax(0,1fr);border:1px solid #e2e8e0;border-radius:13px;background:#fff;box-shadow:0 18px 50px #3446390d;overflow:hidden}
+.tutorial-tools{display:flex;align-items:center;flex-direction:column;gap:7px;padding:13px 7px;border-right:1px solid #ebefea;background:#fcfdfa}
+.tutorial-tools>button{width:36px;height:35px;display:grid;place-items:center;border:1px solid transparent;border-radius:8px;background:transparent;color:#89968b}
+.tutorial-tools>button:hover{background:#f0f4ef;color:#4c7058}
+.tutorial-tools>button.active{border-color:#dce8dc;background:#eaf1e8;color:#4e7157}
+.tutorial-tool-divider{width:27px;height:1px;margin:3px 0;background:#e8ede7}
+.tutorial-color{position:relative;width:23px;height:23px;display:grid;place-items:center;cursor:pointer}
+.tutorial-color input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.tutorial-color span{width:16px;height:16px;border:2px solid white;border-radius:50%;box-shadow:0 0 0 1px #d9e0d7}
+.tutorial-board-column{min-width:0;display:flex;flex-direction:column;padding:13px 15px 9px}
+.tutorial-board-top{height:34px;flex:0 0 34px;display:flex;align-items:flex-start;justify-content:space-between;color:#839087}
+.tutorial-board-top>span{display:flex;align-items:center;gap:7px;font-size:9px}
+.tutorial-board-top>div{display:flex;gap:7px}
+.tutorial-board-top button{height:25px;display:flex;align-items:center;gap:5px;padding:0 8px;border:1px solid #e3e9e2;border-radius:6px;background:#fbfcfa;color:#758477;font-size:8px}
+.tutorial-stage{position:relative;min-height:400px;flex:1;overflow:hidden;touch-action:none;border:1px solid #e6ebe4;border-radius:9px;background:#fff;background-image:radial-gradient(#dce4db 1px,transparent 1px);background-size:19px 19px;cursor:default}
+.tutorial-stage.no-grid{background-image:none}.tutorial-stage.pen-active{cursor:crosshair}
+.tutorial-coordinate{position:absolute;z-index:1;pointer-events:none;background:#c8d5c9}.tutorial-coordinate.x-axis{left:0;right:0;top:50%;height:1px}.tutorial-coordinate.y-axis{top:0;bottom:0;left:50%;width:1px}
+.tutorial-origin{position:absolute;z-index:1;left:calc(50% + 5px);top:calc(50% + 5px);color:#a2afa3;font:8px var(--mono);pointer-events:none}
+.tutorial-stage .vector-layer{z-index:3}
+.tutorial-item{position:absolute;z-index:4;display:flex;align-items:center;gap:6px;max-width:44%;min-height:32px;color:#4c5f50;pointer-events:auto}
+.tutorial-item>button{width:18px;height:18px;display:grid;place-items:center;border:0;border-radius:50%;background:#fff;color:#94a095;box-shadow:0 1px 5px #263b3516;font-size:13px;opacity:0;transition:opacity .15s}
+.tutorial-item:hover>button,.tutorial-item:focus-within>button{opacity:1}
+.tutorial-text-item{padding:8px 11px;border:1px solid #e8dcc0;border-radius:5px;background:#f6edcf;box-shadow:0 7px 16px #39483013;color:#5c5849;font-size:11px}
+.tutorial-math-item{padding:9px 11px;border:1px solid #dce7dd;border-radius:8px;background:#f4f8f2;box-shadow:0 7px 16px #39483013;color:#506f58}
+.tutorial-math-item .mathjax-output{max-width:100%;overflow-x:auto}.tutorial-math-item mjx-container{color:inherit!important}
+.tutorial-code-item{display:block;min-width:200px;overflow:hidden;border:1px solid #344b3a;border-radius:8px;background:#23352c;box-shadow:0 10px 20px #223a2b20;color:#dce7db}
+.tutorial-code-item>div{height:30px;display:flex;align-items:center;gap:6px;padding:0 9px;border-bottom:1px solid #35483c;color:#bccbbd;font-size:8px}
+.tutorial-code-item pre{margin:0;max-height:180px;overflow:auto;padding:10px;color:#dce7db;font:8px/1.6 var(--mono);white-space:pre-wrap}
+.tutorial-code-item>button{position:absolute;right:5px;top:5px;background:#304539;color:#fff}
+.tutorial-editor{z-index:8;min-width:270px}
+.tutorial-editor-heading{display:flex;align-items:center;justify-content:space-between;margin:0 0 6px;color:#6c7c6f;font-size:9px}
+.tutorial-editor-heading button{display:grid;place-items:center;width:23px;height:23px;border:0;border-radius:6px;background:transparent;color:#8b988c}
+.tutorial-editor .tutorial-place-button{padding:8px 11px}
+.tutorial-stage-hint{position:absolute;z-index:2;right:12px;bottom:10px;padding:6px 8px;border:1px solid #e9eee8;border-radius:14px;background:#ffffffdb;color:#a1aba2;font-size:8px;pointer-events:none}
+.tutorial-board-footer{height:25px;flex:0 0 25px;display:flex;align-items:end;justify-content:space-between;color:#97a198;font:8px var(--mono)}
+.tutorial-board-footer>span:last-child{display:flex;align-items:center;gap:6px}
+.tutorial-footnote{display:flex;align-items:center;gap:11px;margin:16px 2px 0;padding:13px 15px;border:1px solid #e3eae1;border-radius:9px;background:#eef3ec;color:#78867a}
+.tutorial-footnote>svg{flex:0 0 auto;color:#6f8d73}.tutorial-footnote p{margin:0;font-size:9px;line-height:1.6}.tutorial-footnote p strong{color:#536b57}.tutorial-footnote>a{margin-left:auto;display:flex;align-items:center;gap:5px;color:#55765d;white-space:nowrap;font-size:9px}
+@media(max-width:800px){.tutorial-header{grid-template-columns:1fr 1fr}.tutorial-header>div{display:none}.tutorial-main{width:calc(100% - 28px)}.tutorial-intro{align-items:flex-start;flex-direction:column;gap:14px;padding:24px 2px 17px}.tutorial-steps{gap:8px}.tutorial-workspace{min-height:550px;grid-template-columns:47px minmax(0,1fr)}.tutorial-tools{padding:10px 4px}.tutorial-tools>button{width:35px;height:34px}.tutorial-board-column{padding:9px 8px 7px}.tutorial-board-top{height:31px;flex-basis:31px}.tutorial-board-top>div{gap:4px}.tutorial-board-top button{padding:0 6px;font-size:7px}.tutorial-stage{min-height:440px}.tutorial-footnote{align-items:flex-start}.tutorial-footnote p{font-size:8px}}
+@media(max-width:500px){.tutorial-header{height:58px;padding:0 14px}.tutorial-header>.brand-lockup{font-size:20px}.tutorial-header>.button{padding:8px;font-size:8px}.tutorial-intro h1{font-size:23px}.tutorial-steps{font-size:7px}.tutorial-steps b{width:16px;height:16px;font-size:7px}.tutorial-workspace{min-height:calc(100svh - 310px);grid-template-columns:42px minmax(0,1fr)}.tutorial-tools>button{width:33px;height:32px}.tutorial-board-top>span{font-size:7px}.tutorial-board-top button{height:23px;padding:0 5px}.tutorial-stage{min-height:380px}.tutorial-stage-hint{max-width:calc(100% - 24px);font-size:7px}.tutorial-editor{min-width:min(270px,90%)}.tutorial-footnote{gap:8px;padding:10px}.tutorial-footnote>a{font-size:8px}}

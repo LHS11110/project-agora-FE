@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes, useLocation } from './routing.jsx';
 import { useAuth } from './state/AuthContext.jsx';
 import AppShell from './components/AppShell.jsx';
@@ -5,7 +6,9 @@ import HomePage from './pages/HomePage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import SearchPage from './pages/SearchPage.jsx';
-import CanvasPage from './pages/CanvasPage.jsx';
+const CanvasPage = lazy(() => import('./pages/CanvasPage.jsx'));
+import DocsPage from './pages/DocsPage.jsx';
+const TutorialPage = lazy(() => import('./pages/TutorialPage.jsx'));
 
 function Protected({ children }) {
   const { isAuthenticated } = useAuth();
@@ -16,6 +19,8 @@ function Protected({ children }) {
 export default function App() {
   return <Routes>
     <Route path="/" element={<HomePage />} />
+    <Route path="/docs" element={<DocsPage />} />
+    <Route path="/tutorial" element={<Suspense fallback={<div className="route-loading">캔버스 체험을 준비하고 있어요.</div>}><TutorialPage /></Suspense>} />
     <Route path="/login" element={<LoginPage />} />
     <Route path="/profile" element={<Protected><ProfilePage /></Protected>} />
     <Route path="/search" element={<Protected><SearchPage /></Protected>} />
