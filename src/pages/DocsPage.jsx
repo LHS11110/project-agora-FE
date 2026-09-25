@@ -12,7 +12,7 @@ const publicEndpoints = [
   ['GET', '/api/users/{nickname}/{tagNumber}', 'Bearer JWT', '닉네임과 태그로 사용자 조회. 서버 권한 정책을 따릅니다.'],
   ['PUT · PATCH', '/api/users/{nickname}/{tagNumber}', 'Bearer JWT', '프로필 변경. JSON: nickname 및/또는 password. 이메일과 태그는 변경하지 않습니다.'],
   ['DELETE', '/api/users/{nickname}/{tagNumber}', 'Bearer JWT', '사용자 삭제. 본인 또는 관리자 권한 검사를 서버에서 수행합니다.'],
-  ['GET', '/api/users · /api/auth/users', 'Bearer JWT', '사용자 목록. 현재 SecurityConfig상 인증 사용자에게 열려 있으므로 개인정보 노출 범위를 운영 전에 검토해야 합니다.'],
+  ['GET', '/api/users · /api/auth/users', '없음', '로그인 없이 사용자 배열을 조회합니다.'],
   ['POST', '/api/canvases', 'Bearer JWT', '캔버스 생성. JSON { canvasName, description?, canvasPassword? } 또는 multipart 필드와 선택 image.'],
   ['GET', '/api/canvases · /api/canvases/search?name={name}', 'Bearer JWT', '캔버스 목록 및 이름 검색. 목록 API에도 선택 쿼리 name을 사용할 수 있습니다.'],
   ['GET', '/api/canvases/{canvasId}', 'Bearer JWT', '캔버스 요약. canvas_id, image, description, canvas_name, user_count.'],
@@ -30,8 +30,10 @@ const internalEndpoints = [
   ['GET · POST', '/api/load-balancer/allocate/redis', 'ROLE_ADMIN', 'Redis 노드 할당 및 상태 조회.'],
   ['GET', '/api/load-balancer/database · /api/database/address', 'ROLE_ADMIN', '데이터베이스 주소 조회.'],
   ['POST', '/api/load-balancer/allocate/database', 'ROLE_ADMIN', '데이터베이스 할당.'],
-  ['POST', '/api/test/cpp-access · /api/test/cpp-disconnect', 'ROLE_ADMIN', '개발 진단용 C++ 프록시. cpp-access는 제거된 C++ /api/access를 호출하는 레거시 경로라 현재 실패할 수 있습니다.'],
-  ['GET', '/api/test/cpp-canvas-count · /api/test/cpp-active-canvases · /api/test/socket-ping', 'ROLE_ADMIN', '개발 진단용 캔버스·소켓 상태 검사.'],
+  ['POST', '/api/test/cpp-access', 'ROLE_ADMIN', '개발 진단용 C++ 접속 프록시. server_ip, server_port, canvas_id와 Authorization을 전달하지만, C++의 /api/access 경로는 제거되어 프록시 호출이 실패할 수 있습니다.'],
+  ['POST', '/api/test/cpp-disconnect', 'ROLE_ADMIN', '개발 진단용 C++ 연결 종료 프록시. server_ip, server_port, canvas_id, user_id를 받습니다.'],
+  ['GET', '/api/test/cpp-canvas-count', 'ROLE_ADMIN', '등록되어 있고 최근 heartbeat가 있는 C++ 서버의 활성 캔버스 수를 조회합니다.'],
+  ['GET', '/api/test/cpp-active-canvases', '로그인 사용자', '테스트베드에서 C++ 서버의 활성 캔버스 상세를 확인합니다.'],
   ['GET', 'C++ :8000/health · /', '내부 네트워크', 'C++ REST 프로세스 상태 확인. 일반 브라우저에 공개하지 않습니다.'],
   ['GET', 'C++ :8000/api/canvas/count · /api/canvas/active', '내부 네트워크', '활성 캔버스 운영 현황. 상세 응답에는 내부 사용자 식별자가 포함될 수 있습니다.'],
   ['POST · DELETE', 'C++ :8000/api/users/{userId}/disconnect · /api/canvas/{canvasId}/users/{userId}/disconnect · /api/canvas/{canvasId}', '내부 네트워크', 'Spring↔C++ 세션 정리·캔버스 제거 제어. userId를 외부 클라이언트에 전달하지 않습니다.'],
@@ -45,8 +47,8 @@ const publicApiGroups = [
 
 const internalApiGroups = [
   { id: 'api-infra', title: '서버·저장소 할당', rows: internalEndpoints.slice(0, 4) },
-  { id: 'api-debug', title: '진단 API', rows: internalEndpoints.slice(4, 6) },
-  { id: 'api-cpp', title: 'C++ 내부 API', rows: internalEndpoints.slice(6) },
+  { id: 'api-debug', title: '진단 API', rows: internalEndpoints.slice(4, 8) },
+  { id: 'api-cpp', title: 'C++ 내부 API', rows: internalEndpoints.slice(8) },
 ];
 
 const sqlTables = [
@@ -64,7 +66,7 @@ const canvasDocumentFields = [
   ['canvas-password-hash', '접속 비밀번호 해시. API 응답에 포함하지 않음'],
   ['inner-group', '그룹 이름을 사용자 ID 배열에 매핑'],
   ['settings-revision', '설정 변경 낙관적 동시성 revision'],
-  ['items', '아이템 ID를 키로 하는 도형·텍스트·코드·채팅방 데이터'],
+  ['items-b64', 'ES 필드 매핑 충돌을 피하려고 분할 인코딩한 items JSON. 읽을 때 items 객체로 복원'],
 ];
 
 const redisDocumentFields = [
@@ -81,12 +83,15 @@ const redisDocumentFields = [
 ];
 
 const socketEvents = [
-  ['연결 직후', '서버 → 클라이언트', 'init_items · rtc_peers', '가시 항목·그룹 초기 스냅샷 뒤, 인증된 같은 캔버스 피어의 임시 식별자·닉네임·태그·접근 그룹을 전달합니다. 내부 user_id는 포함하지 않습니다.'],
-  ['핑', '양방향', '{ type: "ping" }', '요청자에게 pong { canvas_id, timestamp }. 사용자 ID는 포함하지 않습니다.'],
-  ['채팅', '클라이언트 → 서버', '{ type: "chat", text }', '서버가 인증한 sender, tag_number, canvas_id를 채워 브로드캐스트합니다.'],
-  ['항목 생성·수정', '클라이언트 → 서버', '{ type: "item_update", item_id, item }', '일반 그래픽·이미지 등 비텍스트 항목은 권한 검사 뒤 브로드캐스트하고 저장합니다.'],
-  ['텍스트·코드 저장', '클라이언트 → 서버', '{ type: "item_save", item_id, item: { automerge_snapshot, automerge_changes } }', 'Ctrl + S에서만 공통 Automerge 스냅샷과 변경 이력을 저장합니다. 서버는 같은 아이템의 변경 이력을 중복 제거해 합칩니다.'],
-  ['WebRTC 신호 교환', '클라이언트 ↔ 서버 ↔ 지정 피어', '{ type: "rtc_signal", peer_id, action, description|candidate }', '인증된 같은 캔버스의 대상 소켓 하나에만 SDP/ICE를 전달합니다. 신호는 저장하지 않으며 커서·CRDT 본문은 이 경로를 통과하지 않습니다.'],
+  ['Canvas 연결 직후', '서버 → 클라이언트', 'init_items', '권한에 맞춘 아이템, 현재 공개 그룹, rtc_canvas_connection_id와 rtc_canvas_connection_hash를 반환합니다. 채팅방에는 내역 대신 메타데이터만 포함합니다.'],
+  ['RTC 신호 연결·참여', '서버 ↔ 클라이언트', 'rtc_ready · { type: "rtc_join", canvas_connection_id, canvas_connection_hash }', 'RTC 전용 WebSocket에 rtc_ready가 오면 init_items의 ID·해시 쌍으로 rtc_join을 보냅니다. 해시는 해당 캔버스 소켓 연결에 묶인 64자리 HMAC-SHA256 증명값입니다.'],
+  ['RTC 피어 상태', '서버 → 클라이언트', 'rtc_peers · rtc_peer_joined · rtc_peer_left', 'RTC 신호 소켓별 임시 peer_id와 공개 닉네임·태그·그룹을 전달합니다. 내부 user_id는 포함하지 않습니다.'],
+  ['핑', '양방향 · Canvas 소켓', '{ type: "ping" }', '요청자에게 pong { canvas_id, timestamp }. 사용자 ID는 포함하지 않습니다.'],
+  ['채팅 보내기', '클라이언트 → 서버 · Canvas 소켓', '{ type: "chat", room_id: "general", text, request_id }', '서버가 sender, tag_number, canvas_id, 방별 sequence, created_at을 채워 같은 ACL의 사용자에게 전송합니다.'],
+  ['채팅 내역 조회', '양방향 · Canvas 소켓', '{ type: "chat_history", room_id, limit|from_sequence|to_sequence, request_id }', '최근 50개(최대 200개) 또는 순번 범위를 조회합니다. 응답에는 messages, total, has_more와 필요 시 다음 순번이 포함됩니다.'],
+  ['항목 생성·수정', '클라이언트 → 서버 · Canvas 소켓', '{ type: "item_update", item_id, item }', '일반 그래픽·이미지 등 비텍스트 항목은 권한 검사 뒤 브로드캐스트하고 저장합니다.'],
+  ['텍스트·코드 저장', '클라이언트 → 서버 · Canvas 소켓', '{ type: "item_save", item_id, item: { automerge_snapshot, automerge_changes } }', 'Ctrl + S에서만 공통 Automerge 스냅샷과 변경 이력을 저장합니다. 서버는 같은 아이템의 변경 이력을 중복 제거해 합칩니다.'],
+  ['WebRTC 신호 교환', '클라이언트 ↔ 서버 ↔ 지정 피어 · RTC 소켓', '{ type: "rtc_signal", peer_id, action, description|candidate }', '인증된 같은 캔버스의 대상 소켓 하나에만 SDP/ICE를 전달합니다. 신호는 저장하지 않으며 커서·CRDT 본문은 이 경로를 통과하지 않습니다.'],
   ['커서·Automerge 변경', '피어 ↔ 피어', 'RTCDataChannel: cursor · doc_change · doc_snapshot', '커서는 비신뢰 전달 채널, 문서 변경은 신뢰성 있는 채널로 직접 전송합니다. 서버는 이 데이터 트래픽을 중계하지 않습니다.'],
   ['항목 삭제', '클라이언트 → 서버', '{ type: "item_delete", item_id }', '항목 권한 확인 후 삭제 이벤트를 브로드캐스트합니다.'],
   ['설정 조회', '클라이언트 → 서버', '{ type: "canvas_settings_get" }', '요청자에게 canvas_settings_snapshot을 반환합니다.'],
@@ -237,12 +242,14 @@ export default function DocsPage() {
           <pre className="docs-tree"><code>{projectTree.join('\n')}</code></pre>
           <div className="docs-role-grid"><div><span>FRONTEND</span><h3>한 화면에서 함께 만들기</h3><p>PixiJS가 보이는 벡터만 그리고, 공간 B-tree로 화면 밖 객체를 제외합니다. 커서와 Automerge 편집은 WebRTC P2P, 텍스트 저장은 Ctrl + S로 요청합니다.</p></div><div><span>SPRING BOOT</span><h3>인증과 권한의 기준점</h3><p>사용자 JWT, 캔버스 메타데이터, 접속 토큰 발급, C++ 서버 할당을 관리합니다.</p></div><div><span>C++ REALTIME</span><h3>신호와 영속 저장</h3><p>같은 캔버스의 WebRTC 신호만 지정 피어로 전달하고, 명시적 item_save 및 일반 그래픽 이벤트를 저장합니다. 커서와 CRDT 본문은 중계하지 않습니다.</p></div></div>
         </section>
-        <section className="docs-section" id="public-api"><SectionTitle eyebrow="02 / CLIENT API" title="외부에 공개된 API">브라우저에서 사용하는 HTTPS API입니다. 캔버스·프로필 API에는 access token을 Bearer 헤더로 전달합니다.</SectionTitle><div className="docs-callout"><Icon name="lock" size={18} /><p><strong>인증 헤더</strong><code>Authorization: Bearer &lt;accessToken&gt;</code> · 단, <code>POST /api/auth/me</code>는 현재 본문에 <code>{'{ token }'}</code>을 받습니다. SecurityConfig상 공개 예외 외 경로는 인증이 필요합니다.</p></div><div className="docs-api-groups">{publicApiGroups.map((group, index) => <section className="docs-api-group" id={group.id} key={group.id}><div className="docs-subsection-heading"><span>REST / {String(index + 1).padStart(2, '0')}</span><h3>{group.title}</h3></div><EndpointTable rows={group.rows} /></section>)}</div><div className="docs-note"><strong>명세 일치 참고</strong><p>현재 Spring Security 코드에서는 사용자 목록 API도 인증이 필요합니다. 백엔드 <code>API_SPEC.md</code>에는 일부 목록 경로가 인증 없음으로 적혀 있어 차이가 있으므로, 이 페이지는 실제 SecurityConfig 기준으로 표시합니다.</p></div><div className="docs-note"><strong>이미지 응답 참고</strong><p>요약 DTO는 <code>image</code>에 <code>/api/canvases/:canvasId/image</code> URL을 반환하도록 되어 있습니다. 현재 Spring 소스에는 이 URL을 처리하는 GET 매핑이 확인되지 않아 실제 이미지 요청은 404가 될 수 있습니다.</p></div><div className="docs-payload-card"><div><span className="section-kicker">CANVAS ACCESS FLOW</span><h3>캔버스 접속 순서</h3><p>REST로 권한을 확인한 다음, 전용 접속 토큰으로 WebSocket을 엽니다.</p></div><pre><code>{'POST /api/canvases/42/access\nAuthorization: Bearer <accessToken>\n\n→ { "ws_port": "8002",\n     "canvas_access_token": "<short-lived-token>" }\n\nWSS /wss/port/8002/canvas/42?token=<canvas_access_token>'}</code></pre></div><div className="docs-note"><strong>캔버스 설정 변경</strong><p>활성 캔버스는 REST PATCH 대신 캔버스 WebSocket 설정 이벤트를 사용합니다. 비활성 캔버스 설정은 REST API로 변경합니다.</p></div></section>
-        <section className="docs-section" id="internal-api"><SectionTitle eyebrow="03 / PRIVATE OPERATIONS" title="내부·운영 전용 API">운영 상태와 서버 제어용 경로입니다. 일반 브라우저나 외부 연동에 공개하지 말고 내부 네트워크와 관리자 인증으로 제한하세요.</SectionTitle><div className="docs-callout warning"><Icon name="lock" size={18} /><p><strong>외부 공개 금지</strong> Spring 관리자 경로는 현재 ROLE_ADMIN이 필요합니다. C++ REST는 내부 포트(기본 8000)에 두고 Nginx에서 전달하지 않습니다. 운영 경로에는 내부 user ID가 나타날 수 있습니다.</p></div><div className="docs-api-groups">{internalApiGroups.map((group, index) => <section className="docs-api-group" id={group.id} key={group.id}><div className="docs-subsection-heading"><span>PRIVATE / {String(index + 1).padStart(2, '0')}</span><h3>{group.title}</h3></div><EndpointTable rows={group.rows} internal /></section>)}</div><div className="docs-note"><strong>네트워크 경계</strong><p>브라우저용 WebSocket은 Nginx의 <code>/wss/port/:wsPort/canvas/:canvasId</code> 경로로만 접근합니다. 내부 REST 제어 API, DB·Redis 포트는 외부에 직접 열지 않습니다.</p></div></section>
+        <section className="docs-section" id="public-api"><SectionTitle eyebrow="02 / CLIENT API" title="외부에 공개된 API">브라우저에서 사용하는 HTTPS API입니다. 보호된 API에는 access token을 Bearer 헤더로 전달합니다.</SectionTitle><div className="docs-callout"><Icon name="lock" size={18} /><p><strong>인증 헤더</strong><code>Authorization: Bearer &lt;accessToken&gt;</code> · <code>POST /api/auth/me</code>는 본문에 <code>{'{ token }'}</code>을 받습니다. 사용자 목록 조회는 비인증 경로이고, 테스트베드의 활성 캔버스 조회는 로그인한 사용자에게 허용됩니다.</p></div><div className="docs-api-groups">{publicApiGroups.map((group, index) => <section className="docs-api-group" id={group.id} key={group.id}><div className="docs-subsection-heading"><span>REST / {String(index + 1).padStart(2, '0')}</span><h3>{group.title}</h3></div><EndpointTable rows={group.rows} /></section>)}</div><div className="docs-note"><strong>이미지 응답 참고</strong><p>요약 DTO는 <code>image</code>에 <code>/api/canvases/:canvasId/image</code> URL을 반환하도록 되어 있습니다. 현재 Spring 소스에는 이 URL을 처리하는 GET 매핑이 확인되지 않아 실제 이미지 요청은 404가 될 수 있습니다.</p></div><div className="docs-payload-card"><div><span className="section-kicker">CANVAS ACCESS FLOW</span><h3>캔버스 접속 순서</h3><p>REST로 권한을 확인한 다음, 전용 접속 토큰으로 두 WebSocket을 엽니다.</p></div><pre><code>{'POST /api/canvases/42/access\nAuthorization: Bearer <accessToken>\n\n→ { "ws_port": "8002",\n     "canvas_access_token": "<short-lived-token>" }\n\nWSS /wss/port/8002/canvas/42?token=<canvas_access_token>\nWSS /wss/port/8002/rtc/canvas/42?token=<canvas_access_token>'}</code></pre></div><div className="docs-note"><strong>캔버스 설정 변경</strong><p>활성 캔버스는 REST PATCH 대신 캔버스 WebSocket 설정 이벤트를 사용합니다. 비활성 캔버스 설정은 REST API로 변경합니다.</p></div></section>
+        <section className="docs-section" id="internal-api"><SectionTitle eyebrow="03 / PRIVATE OPERATIONS" title="내부·운영 전용 API">운영 상태와 서버 제어용 경로입니다. 관리자 전용 Spring API와 내부 C++ REST 경로를 지정된 인증 범위에 맞춰 사용하세요.</SectionTitle><div className="docs-callout warning"><Icon name="lock" size={18} /><p><strong>접근 범위</strong> 서버·저장소 할당과 대부분의 테스트 프록시는 ROLE_ADMIN이 필요합니다. <code>/api/test/cpp-active-canvases</code>는 로그인 사용자에게 허용됩니다. C++ REST는 내부 포트(기본 8000)에 두고 Nginx에서 전달하지 않습니다.</p></div><div className="docs-api-groups">{internalApiGroups.map((group, index) => <section className="docs-api-group" id={group.id} key={group.id}><div className="docs-subsection-heading"><span>PRIVATE / {String(index + 1).padStart(2, '0')}</span><h3>{group.title}</h3></div><EndpointTable rows={group.rows} internal /></section>)}</div><div className="docs-note"><strong>네트워크 경계</strong><p>브라우저용 WebSocket은 Nginx의 <code>/wss/port/:wsPort/canvas/:canvasId</code> 및 <code>/wss/port/:wsPort/rtc/canvas/:canvasId</code> 경로를 사용합니다. 내부 REST 제어 API, DB·Redis 포트는 외부에 직접 열지 않습니다.</p></div></section>
         <section className="docs-section" id="websocket">
-          <SectionTitle eyebrow="04 / REALTIME PROTOCOL" title="캔버스 WebSocket 명세">접속 토큰은 Spring 접속 API가 발급합니다. 서버는 handshake 때 토큰·캔버스·참여 권한을 검증합니다.</SectionTitle>
-          <div className="docs-endpoint-line"><span>WSS</span><code>/wss/port/:wsPort/canvas/:canvasId?token=:canvasAccessToken</code><small>운영 · Nginx 경유</small></div>
-          <div className="docs-endpoint-line secondary"><span>WS</span><code>{'ws://<cppHost>:<wsPort>/ws/canvas/:canvasId?token=:canvasAccessToken'}</code><small>로컬 개발 전용 직접 연결</small></div>
+          <SectionTitle eyebrow="04 / REALTIME PROTOCOL" title="캔버스·RTC WebSocket 명세">Spring 접속 API가 발급한 캔버스 전용 토큰으로 캔버스 이벤트와 RTC 신호용 소켓을 각각 엽니다.</SectionTitle>
+          <div className="docs-endpoint-line"><span>WSS</span><code>/wss/port/:wsPort/canvas/:canvasId?token=:canvasAccessToken</code><small>캔버스 이벤트 · Nginx 경유</small></div>
+          <div className="docs-endpoint-line secondary"><span>WS</span><code>{'ws://<cppHost>:<wsPort>/ws/canvas/:canvasId?token=:canvasAccessToken'}</code><small>캔버스 이벤트 · 로컬 직접 연결</small></div>
+          <div className="docs-endpoint-line"><span>WSS</span><code>/wss/port/:wsPort/rtc/canvas/:canvasId?token=:canvasAccessToken</code><small>별도 RTC 신호 연결 · Nginx 경유</small></div>
+          <div className="docs-endpoint-line secondary"><span>WS</span><code>{'ws://<cppHost>:<wsPort>/ws/rtc/canvas/:canvasId?token=:canvasAccessToken'}</code><small>RTC 신호 · 로컬 직접 연결</small></div>
           <div className="docs-table-scroll"><table className="docs-api-table socket-table"><thead><tr><th>이벤트</th><th>방향</th><th>페이로드 / 동작</th></tr></thead><tbody>{socketEvents.map(([name, direction, payload, description], index) => <tr id={socketEventId(index)} key={name}><td><strong>{name}</strong></td><td>{direction}</td><td><code>{payload}</code><br />{description}</td></tr>)}</tbody></table></div>
           <div className="docs-note" id="webrtc-signaling"><strong>P2P 연결과 NAT</strong><p>기본 STUN은 연결 경로 탐색만 돕고 사용자 데이터는 릴레이하지 않습니다. 일부 NAT·방화벽에서는 직접 연결이 불가능할 수 있습니다. 그런 배포에서는 TURN 서버를 준비하고 프런트 환경변수 <code>VITE_WEBRTC_ICE_SERVERS</code>에 ICE 서버 JSON 배열을 지정해야 합니다. TURN 릴레이 사용량은 해당 TURN 사업자/서버 부하에 포함됩니다. 현재 직접 피어 메시는 참여자 N명에서 각 브라우저가 최대 N−1개 연결을 열기 때문에 참여자 수가 아주 큰 방은 별도 SFU 구조가 필요할 수 있습니다.</p></div>
           <div className="docs-role-grid docs-safety-grid"><div><span>IDENTITY</span><h3>공개 식별자는 닉네임 + 태그</h3><p>채팅 이벤트에는 <code>sender</code>와 <code>tag_number</code>만 포함하며 user_id와 sender_id는 전달하지 않습니다. WebRTC 식별자는 연결 중에만 쓰는 임의 peer 토큰입니다.</p></div><div><span>CONCURRENCY</span><h3>저장 시점 명시</h3><p>Automerge 변경은 연결된 피어끼리 실시간 동기화하며 서버에는 자동 저장하지 않습니다. 텍스트·코드는 <code>Ctrl + S</code>에서 공통 스냅샷과 변경 이력으로 저장하고, 서버는 오프라인 동시 편집 이력도 합칩니다.</p></div></div>

@@ -7,12 +7,45 @@ import MathFormula from '../components/MathFormula.jsx';
 import VectorLayer from '../components/VectorLayer.jsx';
 import CanvasPeerMesh from '../components/CanvasPeerMesh.js';
 import CanvasSpatialBTree from '../components/CanvasSpatialBTree.js';
-import { api, canvasSocketUrl } from '../api/client.js';
+import { api, canvasSocketUrl, rtcSocketUrl } from '../api/client.js';
 import { useAuth } from '../state/AuthContext.jsx';
 
 const inkColors = ['#263b35', '#d9785e', '#617db2', '#d8a443', '#7e6b9d'];
+const CHAT_ROOM_ID = 'general';
+const CHAT_HISTORY_LIMIT = 50;
 const createId = () => globalThis.crypto?.randomUUID?.() || `item-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const automergeReady = Automerge.initializeWasm(automergeWasmUrl);
+
+function toChatEntry(message, user) {
+  const numericTimestamp = Number(message.created_at);
+  const timestamp = Number.isFinite(numericTimestamp) && String(message.created_at ?? '').trim() !== ''
+    ? new Date(numericTimestamp < 1e12 ? numericTimestamp * 1000 : numericTimestamp)
+    : new Date(message.created_at || Date.now());
+  const sequence = Number(message.sequence);
+  const hasSequence = Number.isFinite(sequence) && sequence > 0;
+  const nickname = message.sender || '알 수 없는 사용자';
+  const tagNumber = message.tag_number;
+  return {
+    id: hasSequence ? `${CHAT_ROOM_ID}-${sequence}` : createId(),
+    sequence: hasSequence ? sequence : null,
+    sender: `${nickname}#${tagNumber ?? '?'}`,
+    text: message.text || '',
+    time: Number.isNaN(timestamp.getTime()) ? new Date() : timestamp,
+    own: nickname === user?.nickname && Number(tagNumber) === Number(user?.tag_number),
+  };
+}
+
+function mergeChatEntries(current, incoming) {
+  const entries = new Map();
+  for (const entry of [...current, ...incoming]) {
+    entries.set(entry.sequence == null ? entry.id : `sequence-${entry.sequence}`, entry);
+  }
+  return [...entries.values()].sort((left, right) => {
+    if (left.sequence == null) return 1;
+    if (right.sequence == null) return -1;
+    return left.sequence - right.sequence;
+  });
+}
 
 function encodeBase64(bytes) {
   let binary = '';
@@ -133,6 +166,7 @@ function CanvasWorkspace() {
   const navigate = useNavigate();
   const boardRef = useRef(null);
   const wsRef = useRef(null);
+  const rtcWsRef = useRef(null);
   const itemsRef = useRef({});
   const pendingItemChangesRef = useRef([]);
   const rejectedEventPongsRef = useRef(0);
@@ -143,6 +177,8 @@ function CanvasWorkspace() {
   const peerMeshRef = useRef(null);
   const syncedPeersRef = useRef(new Set());
   const newCollaborativeItemsRef = useRef(new Set());
+  const chatHistoryRequestRef = useRef(null);
+  const chatHistoryPageRef = useRef({ hasMore: false, nextToSequence: null });
   const itemEditRevisionRef = useRef(new Map());
   const dragRef = useRef(null);
   const panRef = useRef(null);
@@ -174,6 +210,8 @@ function CanvasWorkspace() {
   const [editingId, setEditingId] = useState(null);
   const [imageFailed, setImageFailed] = useState(false);
   const [messages, setMessages] = useState([]);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [chatHistoryLoading, setChatHistoryLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [showCode, setShowCode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -187,6 +225,29 @@ function CanvasWorkspace() {
     if (!socket || socket.readyState !== WebSocket.OPEN) return false;
     socket.send(JSON.stringify(payload)); return true;
   }, []);
+  const sendRtcRaw = useCallback((payload) => {
+    const socket = rtcWsRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+    socket.send(JSON.stringify(payload)); return true;
+  }, []);
+  const requestChatHistory = useCallback((toSequence) => {
+    if (chatHistoryRequestRef.current) return false;
+    const requestId = createId();
+    const payload = { type: 'chat_history', room_id: CHAT_ROOM_ID, request_id: requestId };
+    if (toSequence == null) payload.limit = CHAT_HISTORY_LIMIT;
+    else payload.to_sequence = toSequence;
+    chatHistoryRequestRef.current = requestId;
+    if (!sendRaw(payload)) {
+      chatHistoryRequestRef.current = null;
+      return false;
+    }
+    setChatHistoryLoading(true);
+    return true;
+  }, [sendRaw]);
+  const loadOlderMessages = useCallback(() => {
+    const { hasMore, nextToSequence } = chatHistoryPageRef.current;
+    if (hasMore && nextToSequence != null) requestChatHistory(nextToSequence);
+  }, [requestChatHistory]);
   const markItemDirty = useCallback((id) => {
     const key = String(id);
     itemEditRevisionRef.current.set(key, (itemEditRevisionRef.current.get(key) || 0) + 1);
@@ -429,8 +490,35 @@ function CanvasWorkspace() {
   useEffect(() => {
     let cancelled = false;
     let socket;
+    let rtcSocket;
+    let rtcReady = false;
+    let canvasConnectionId = '';
+    let canvasConnectionHash = '';
+    let joinedCanvasConnectionId = '';
+    const joinRtcSocket = () => {
+      if (!rtcReady || !canvasConnectionId || !canvasConnectionHash || !rtcSocket || rtcSocket.readyState !== WebSocket.OPEN
+        || joinedCanvasConnectionId === canvasConnectionId) return;
+      rtcSocket.send(JSON.stringify({
+        type: 'rtc_join',
+        canvas_connection_id: canvasConnectionId,
+        canvas_connection_hash: canvasConnectionHash,
+      }));
+      joinedCanvasConnectionId = canvasConnectionId;
+    };
+    const resetPeerMesh = () => {
+      if (peerMeshRef.current) peerMeshRef.current.close();
+      peerMeshRef.current = null;
+      syncedPeersRef.current.clear();
+      setPeerList([]);
+      setRemoteCursors({});
+    };
     async function connect() {
       setConnection('connecting'); setError(''); setItemsInitialized(false);
+      setMessages([]);
+      setHasOlderMessages(false);
+      setChatHistoryLoading(false);
+      chatHistoryRequestRef.current = null;
+      chatHistoryPageRef.current = { hasMore: false, nextToSequence: null };
       try {
         const summary = await api(`/api/canvases/${canvasId}`, { token });
         if (cancelled) return;
@@ -446,38 +534,21 @@ function CanvasWorkspace() {
         if (cancelled) return;
         socket = new WebSocket(canvasSocketUrl(canvasId, access.ws_port, access.canvas_access_token));
         wsRef.current = socket;
-        socket.onopen = () => { if (!cancelled) setConnection('connected'); };
-        socket.onmessage = (event) => {
+        rtcSocket = new WebSocket(rtcSocketUrl(canvasId, access.ws_port, access.canvas_access_token));
+        rtcWsRef.current = rtcSocket;
+        const handleRtcMessage = (event) => {
           let data;
           try { data = JSON.parse(event.data); } catch { return; }
-          if (data.type === 'init_items') {
-            const initialItems = data.items && typeof data.items === 'object' ? data.items : {};
-            collaborativeDocsRef.current.clear();
-            collaborativeBaseDocsRef.current.clear();
-            const hydratedItems = { ...initialItems };
-            for (const [id, item] of Object.entries(initialItems)) {
-              if (!isCollaborativeItem(item)) continue;
-              try {
-                const doc = getCollaborativeDoc(id, item);
-                hydratedItems[id] = { ...item, [collaborativeField(item)]: doc.content };
-              } catch { /* Keep the stored plain-text fallback for damaged legacy snapshots. */ }
-            }
-            itemsRef.current = hydratedItems;
-            setItems(hydratedItems);
-            refreshSpatialIndex();
-            setItemsInitialized(true);
-            const currentGroups = Array.isArray(data.groups) ? data.groups : [];
-            groupsRef.current = currentGroups;
-            setGroups(currentGroups);
-            setCanvas((current) => ({ ...current, canvas_name: data.canvas_name || current?.canvas_name }));
-            sendRaw({ type: 'canvas_settings_get' });
+          if (data.type === 'rtc_ready') {
+            rtcReady = true;
+            joinRtcSocket();
             return;
           }
           if (data.type === 'rtc_peers') {
             let mesh = peerMeshRef.current;
             if (!mesh) {
               mesh = new CanvasPeerMesh({
-                sendSignal: sendRaw,
+                sendSignal: sendRtcRaw,
                 onData: receivePeerData,
                 onCursor: (peer, cursor) => {
                   if (cursor.visible === false) {
@@ -530,6 +601,55 @@ function CanvasWorkspace() {
           }
           if (data.type === 'rtc_signal') {
             void peerMeshRef.current?.handleSignal(data);
+            return;
+          }
+          if (data.type === 'rtc_disconnected') {
+            resetPeerMesh();
+            return;
+          }
+          if (data.type === 'error' && data.code?.startsWith('RTC_')) {
+            setToast(`P2P 연결 오류: ${data.code}`);
+          }
+        };
+        rtcSocket.onmessage = handleRtcMessage;
+        rtcSocket.onerror = () => {
+          if (!cancelled && wsRef.current?.readyState === WebSocket.OPEN) setToast('P2P 신호 서버에 연결할 수 없습니다.');
+        };
+        rtcSocket.onclose = () => {
+          if (rtcWsRef.current === rtcSocket) rtcWsRef.current = null;
+          resetPeerMesh();
+          if (!cancelled && wsRef.current?.readyState === WebSocket.OPEN) setToast('P2P 신호 연결이 종료되었습니다.');
+        };
+        socket.onopen = () => { if (!cancelled) setConnection('connected'); };
+        socket.onmessage = (event) => {
+          let data;
+          try { data = JSON.parse(event.data); } catch { return; }
+          if (data.type === 'init_items') {
+            const initialItems = data.items && typeof data.items === 'object' ? data.items : {};
+            collaborativeDocsRef.current.clear();
+            collaborativeBaseDocsRef.current.clear();
+            const hydratedItems = { ...initialItems };
+            for (const [id, item] of Object.entries(initialItems)) {
+              if (!isCollaborativeItem(item)) continue;
+              try {
+                const doc = getCollaborativeDoc(id, item);
+                hydratedItems[id] = { ...item, [collaborativeField(item)]: doc.content };
+              } catch { /* Keep the stored plain-text fallback for damaged legacy snapshots. */ }
+            }
+            itemsRef.current = hydratedItems;
+            setItems(hydratedItems);
+            refreshSpatialIndex();
+            setItemsInitialized(true);
+            const currentGroups = Array.isArray(data.groups) ? data.groups : [];
+            groupsRef.current = currentGroups;
+            setGroups(currentGroups);
+            setCanvas((current) => ({ ...current, canvas_name: data.canvas_name || current?.canvas_name }));
+            canvasConnectionId = data.rtc_canvas_connection_id == null ? '' : String(data.rtc_canvas_connection_id);
+            canvasConnectionHash = typeof data.rtc_canvas_connection_hash === 'string' ? data.rtc_canvas_connection_hash : '';
+            if (!canvasConnectionId || !canvasConnectionHash) setToast('RTC 연결 증명값을 받지 못했습니다. 페이지를 새로고침해주세요.');
+            joinRtcSocket();
+            sendRaw({ type: 'canvas_settings_get' });
+            requestChatHistory();
             return;
           }
           if (data.type === 'canvas_settings_snapshot' || data.type === 'canvas_settings_changed') {
@@ -614,8 +734,20 @@ function CanvasWorkspace() {
             }
             return;
           }
+          if (data.type === 'chat_history') {
+            if (chatHistoryRequestRef.current && data.request_id !== chatHistoryRequestRef.current) return;
+            chatHistoryRequestRef.current = null;
+            setChatHistoryLoading(false);
+            const entries = Array.isArray(data.messages) ? data.messages.map((entry) => toChatEntry(entry, user)) : [];
+            setMessages((current) => mergeChatEntries(current, entries));
+            const nextToSequence = Number(data.next_to_sequence);
+            const hasMore = Boolean(data.has_more) && Number.isFinite(nextToSequence) && nextToSequence > 0;
+            chatHistoryPageRef.current = { hasMore, nextToSequence: hasMore ? nextToSequence : null };
+            setHasOlderMessages(hasMore);
+            return;
+          }
           if (data.type === 'chat') {
-            setMessages((current) => [...current, { id: createId(), sender: data.sender ? `${data.sender}#${data.tag_number ?? '?'}` : '알 수 없는 사용자', text: data.text || '', time: new Date() }]);
+            setMessages((current) => mergeChatEntries(current, [toChatEntry(data, user)]));
             return;
           }
           if (data.type === 'pong') {
@@ -624,6 +756,21 @@ function CanvasWorkspace() {
             return;
           }
           if (data.type === 'error') {
+            if (chatHistoryRequestRef.current && data.request_id === chatHistoryRequestRef.current) {
+              chatHistoryRequestRef.current = null;
+              setChatHistoryLoading(false);
+              if (data.code === 'CHAT_ROOM_NOT_FOUND') {
+                chatHistoryPageRef.current = { hasMore: false, nextToSequence: null };
+                setHasOlderMessages(false);
+                return;
+              }
+              setToast(data.code === 'ITEM_ACCESS_DENIED' ? '이 채팅방의 내역을 볼 권한이 없습니다.' : `채팅 내역을 불러오지 못했습니다: ${data.code || '오류'}`);
+              return;
+            }
+            if (data.code?.startsWith('CHAT_')) {
+              setToast(`채팅을 처리하지 못했습니다: ${data.code}`);
+              return;
+            }
             if (['ITEM_ACCESS_DENIED', 'ITEM_SAVE_INVALID', 'ITEM_SAVE_REQUIRED'].includes(data.code)) {
               const rejected = pendingItemChangesRef.current.shift();
               if (rejected) {
@@ -647,6 +794,8 @@ function CanvasWorkspace() {
         socket.onerror = () => { if (!cancelled) setError('실시간 서버에 연결할 수 없습니다. 서버 주소와 WebSocket 설정을 확인해주세요.'); };
         socket.onclose = (event) => {
           if (wsRef.current === socket) wsRef.current = null;
+          chatHistoryRequestRef.current = null;
+          setChatHistoryLoading(false);
           for (const pending of pendingItemChangesRef.current.splice(0)) {
             if (pending.type === 'item_save') {
               markItemDirty(pending.id);
@@ -654,11 +803,13 @@ function CanvasWorkspace() {
             }
           }
           rejectedEventPongsRef.current = 0;
-          if (peerMeshRef.current) peerMeshRef.current.close();
-          peerMeshRef.current = null;
-          syncedPeersRef.current.clear();
-          setPeerList([]);
-          setRemoteCursors({});
+          if (rtcSocket && rtcSocket.readyState !== WebSocket.CLOSED) rtcSocket.close();
+          if (rtcWsRef.current === rtcSocket) rtcWsRef.current = null;
+          rtcReady = false;
+          canvasConnectionId = '';
+          canvasConnectionHash = '';
+          joinedCanvasConnectionId = '';
+          resetPeerMesh();
           setItemsInitialized(false);
           if (!cancelled) { setConnection('disconnected'); if (event.code === 1008) setError('캔버스 권한이나 설정이 변경되었습니다. 다시 접속해주세요.'); }
         };
@@ -669,13 +820,17 @@ function CanvasWorkspace() {
     connect();
     return () => {
       cancelled = true;
-      if (peerMeshRef.current) peerMeshRef.current.close();
-      peerMeshRef.current = null;
-      syncedPeersRef.current.clear();
+      rtcReady = false;
+      canvasConnectionId = '';
+      canvasConnectionHash = '';
+      joinedCanvasConnectionId = '';
+      resetPeerMesh();
+      if (rtcSocket && rtcSocket.readyState !== WebSocket.CLOSED) rtcSocket.close();
+      if (rtcWsRef.current === rtcSocket) rtcWsRef.current = null;
       if (socket) socket.close();
       if (wsRef.current === socket) wsRef.current = null;
     };
-  }, [canvasId, getCollaborativeDoc, markItemDirty, navigate, receivePeerData, refreshSpatialIndex, sendRaw, token]);
+  }, [canvasId, getCollaborativeDoc, markItemDirty, navigate, receivePeerData, refreshSpatialIndex, requestChatHistory, sendRaw, sendRtcRaw, token, user]);
 
   const spatialIndex = useMemo(() => new CanvasSpatialBTree(items), [spatialRevision]);
   const visibleBounds = useMemo(() => ({
@@ -820,8 +975,8 @@ function CanvasWorkspace() {
   };
   const submitMessage = (event) => {
     event.preventDefault(); const text = message.trim();
-    if (!text || !sendRaw({ type: 'chat', text })) return;
-    setMessages((current) => [...current, { id: createId(), sender: `${user?.nickname || '나'}#${user?.tag_number ?? '?'}`, text, time: new Date(), own: true }]); setMessage('');
+    if (!text || !sendRaw({ type: 'chat', room_id: CHAT_ROOM_ID, text, request_id: createId() })) return;
+    setMessage('');
   };
   const startObjectDrag = (event, id, item) => {
     if (event.button === 1 || spacePressedRef.current) { startPan(event); return; }
@@ -929,7 +1084,7 @@ function CanvasWorkspace() {
         <section className="inspector-members"><div className="member-panel-title"><strong>참여자</strong><span>{settings?.participants?.length || 0}명</span></div>{(settings?.participants || []).slice(0, 5).map((person, index) => <div className="member-row" key={`${person.nickname}-${person.tag_number}`}><span className={`avatar member-avatar avatar-tone-${index % 4}`}>{person.nickname.slice(0, 1)}</span><span><strong>{person.nickname} <small>#{person.tag_number}</small></strong><small>{index === 0 ? '캔버스 멤버' : '참여자'}</small></span></div>)}<button className="manage-members-button" onClick={() => setShowSettings(true)}>참여자 관리 <Icon name="arrow" size={14} /></button></section>
         <div className="sidepanel-bottom"><span className="online-indicator"><i /> {connection === 'connected' ? '동기화됨' : '연결 확인 중'}</span></div>
       </aside>
-      <section className="canvas-chat-panel" aria-label="캔버스 채팅"><div className="chat-dock-heading"><span className="conversation-icon"><Icon name="chat" size={16} /></span><div><strong>캔버스 채팅</strong><small>아이디어를 바로 나눠보세요</small></div><span className="chat-message-count">{messages.length}개 메시지</span></div><div className="message-list">{messages.length ? messages.map((entry) => <div className={`chat-entry${entry.own ? ' own' : ''}`} key={entry.id}><div className="chat-entry-avatar">{entry.sender.slice(0, 1)}</div><div className="chat-entry-content"><div><strong>{entry.sender}</strong><time>{entry.time.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</time></div><p>{entry.text}</p></div></div>) : <div className="chat-empty"><span>✳</span><strong>첫 대화를 시작해보세요.</strong><small>캔버스에 대한 생각을 멤버들과 나눠요.</small></div>}</div><form className="chat-compose" onSubmit={submitMessage}><textarea rows="2" placeholder="메시지를 남겨보세요..." value={message} onChange={(event) => setMessage(event.target.value)} disabled={connection !== 'connected'} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit(); } }} /><div><span>Enter 전송 · Shift + Enter 줄바꿈</span><button type="submit" disabled={!message.trim() || connection !== 'connected'} aria-label="메시지 전송"><Icon name="send" size={16} /></button></div></form></section>
+      <section className="canvas-chat-panel" aria-label="캔버스 채팅"><div className="chat-dock-heading"><span className="conversation-icon"><Icon name="chat" size={16} /></span><div><strong>캔버스 채팅</strong><small>아이디어를 바로 나눠보세요</small></div><span className="chat-message-count">{messages.length}개 표시</span>{hasOlderMessages && <button type="button" className="chat-load-more" style={{ padding: '5px 7px', border: '1px solid var(--line)', borderRadius: 6, background: 'var(--panel-soft)', color: 'var(--ink-muted)', fontSize: 7, whiteSpace: 'nowrap' }} onClick={loadOlderMessages} disabled={chatHistoryLoading}>{chatHistoryLoading ? '불러오는 중' : '이전 메시지'}</button>}</div><div className="message-list">{messages.length ? messages.map((entry) => <div className={`chat-entry${entry.own ? ' own' : ''}`} key={entry.id}><div className="chat-entry-avatar">{entry.sender.slice(0, 1)}</div><div className="chat-entry-content"><div><strong>{entry.sender}</strong><time>{entry.time.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</time></div><p>{entry.text}</p></div></div>) : <div className="chat-empty"><span>✳</span><strong>첫 대화를 시작해보세요.</strong><small>캔버스에 대한 생각을 멤버들과 나눠요.</small></div>}</div><form className="chat-compose" onSubmit={submitMessage}><textarea rows="2" placeholder="메시지를 남겨보세요..." value={message} onChange={(event) => setMessage(event.target.value)} disabled={connection !== 'connected'} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit(); } }} /><div><span>Enter 전송 · Shift + Enter 줄바꿈</span><button type="submit" disabled={!message.trim() || connection !== 'connected'} aria-label="메시지 전송"><Icon name="send" size={16} /></button></div></form></section>
     </div>}
     {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{toast}</div>}
     {showCode && <CodeDialog onClose={() => setShowCode(false)} onShare={shareCode} />}
