@@ -5,6 +5,7 @@ import { extname, resolve, sep } from 'node:path';
 
 function localMathJaxAssets() {
   const source = resolve(process.cwd(), 'node_modules/mathjax');
+  let outputRoot = resolve(process.cwd(), 'dist');
   const mimeTypes = {
     '.js': 'text/javascript; charset=utf-8',
     '.mjs': 'text/javascript; charset=utf-8',
@@ -16,6 +17,9 @@ function localMathJaxAssets() {
   };
   return {
     name: 'local-mathjax-assets',
+    configResolved(config) {
+      outputRoot = resolve(config.root, config.build.outDir);
+    },
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
         if (!request.url?.startsWith('/mathjax/')) return next();
@@ -28,10 +32,10 @@ function localMathJaxAssets() {
     },
     closeBundle() {
       if (!existsSync(source)) return;
-      const output = resolve(process.cwd(), 'dist/mathjax');
+      const output = resolve(outputRoot, 'mathjax');
       mkdirSync(output, { recursive: true });
       cpSync(source, output, { recursive: true, filter: (file) => !file.endsWith('.map') });
-      const licenses = resolve(process.cwd(), 'dist/licenses');
+      const licenses = resolve(outputRoot, 'licenses');
       mkdirSync(licenses, { recursive: true });
       copyFileSync(resolve(process.cwd(), 'node_modules/pixi.js/LICENSE'), resolve(licenses, 'pixi.js.txt'));
       copyFileSync(resolve(process.cwd(), 'node_modules/@automerge/automerge/LICENSE'), resolve(licenses, 'automerge.txt'));

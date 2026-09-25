@@ -10,7 +10,7 @@ import SharedMediaContent from '../components/SharedMediaContent.jsx';
 import MathFormula from '../components/MathFormula.jsx';
 import VectorLayer from '../components/VectorLayer.jsx';
 import ResizeHandles from '../components/ResizeHandles.jsx';
-import RotationHandles, { rotationAtPointer } from '../components/RotationHandles.jsx';
+import RotationHandles, { rotationAtPointer } from '../components/CanvasRotationHandles.jsx';
 import { captureResize, resizeItemAtPointer } from '../components/objectResize.js';
 import CanvasPeerMesh from '../components/CanvasPeerMesh.js';
 import CanvasSpatialBTree, { objectBounds } from '../components/CanvasSpatialBTree.js';
@@ -1044,6 +1044,14 @@ function CanvasWorkspace() {
   const permission = groups.includes('default') ? 'default' : groups[0] || 'admin-group';
   const startEditing = (id) => { setSelectedItemId(String(id)); setEditingId(id); };
   const stopEditing = (id) => setEditingId((current) => current === id ? null : current);
+  const finishEditing = useCallback((id = editingId) => {
+    if (id == null) return;
+    const editor = [...(sceneRef.current?.querySelectorAll('[data-item-id]') || [])]
+      .find((element) => element.dataset.itemId === String(id));
+    const focusedElement = document.activeElement;
+    if (editor?.contains(focusedElement) && typeof focusedElement.blur === 'function') focusedElement.blur();
+    setEditingId((current) => String(current) === String(id) ? null : current);
+  }, [editingId]);
   const focusConnectorTarget = (connector, connectorId) => {
     if (activeTool !== 'select') return;
     const target = itemsRef.current[String(connector.to)];
@@ -1155,7 +1163,12 @@ function CanvasWorkspace() {
     }
   };
   const startDrawing = (event) => {
-    if (event.button === 1 || spacePressedRef.current || (activeTool === 'select' && !event.target.closest?.('.canvas-object'))) { startPan(event); return; }
+    const clickedEmptySpace = event.button === 0 && !event.target.closest?.('.canvas-object');
+    if (clickedEmptySpace) {
+      finishEditing();
+      setSelectedItemId(null);
+    }
+    if (event.button === 1 || spacePressedRef.current || (activeTool === 'select' && clickedEmptySpace)) { startPan(event); return; }
     if (connection !== 'connected' || (activeTool !== 'pen' && event.target.closest?.('.canvas-object'))) return;
     if (activeTool === 'link') {
       event.preventDefault();
@@ -1334,6 +1347,7 @@ function CanvasWorkspace() {
     const centerY = frameBounds.top + frameBounds.height / 2;
     setSelectedItemId(key);
     element.classList.add('object-rotating');
+    boardRef.current?.classList.add('rotating');
     dragRef.current = {
       mode: 'rotate',
       id: key,
@@ -1369,6 +1383,7 @@ function CanvasWorkspace() {
     if (!dragRef.current) return;
     const { id, initial, element } = dragRef.current; dragRef.current = null;
     element?.classList.remove('object-dragging', 'object-resizing', 'object-rotating');
+    boardRef.current?.classList.remove('rotating');
     const item = itemsRef.current[id];
     refreshSpatialIndex();
     if (isCollaborativeItem(item)) {
@@ -1430,6 +1445,12 @@ function CanvasWorkspace() {
     const isEditableTarget = (target) => target instanceof HTMLElement
       && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
     const onKeyDown = (event) => {
+      if (event.key === 'Escape' && editingId != null) {
+        event.preventDefault();
+        event.stopPropagation();
+        finishEditing(editingId);
+        return;
+      }
       if (event.code === 'Space' && !isEditableTarget(event.target)) {
         spacePressedRef.current = true;
         event.preventDefault();
@@ -1446,7 +1467,20 @@ function CanvasWorkspace() {
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); };
-  }, [editingId, saveCollaborativeItem, selectedItemId]);
+  }, [editingId, finishEditing, saveCollaborativeItem, selectedItemId]);
+  useEffect(() => {
+    if (editingId == null) return undefined;
+    const onDocumentPointerDown = (event) => {
+      const editor = [...(sceneRef.current?.querySelectorAll('[data-item-id]') || [])]
+        .find((element) => element.dataset.itemId === String(editingId));
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      const clickedEditorField = target?.closest('textarea, input, select, [contenteditable="true"]');
+      if (editor?.contains(target) && clickedEditorField) return;
+      finishEditing(editingId);
+    };
+    document.addEventListener('pointerdown', onDocumentPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onDocumentPointerDown, true);
+  }, [editingId, finishEditing]);
   useEffect(() => {
     let cancelled = false;
     let objectUrl = '';
@@ -1530,7 +1564,7 @@ function CanvasWorkspace() {
         {activeTool === 'note' && <section className="inspector-section"><span className="inspector-label">포스트잇 색상</span><div className="sticky-note-colors">{stickyNoteColors.map((swatch) => <button key={swatch} type="button" style={{ '--sticky-swatch': swatch }} className={noteColor === swatch ? 'selected' : ''} onClick={() => setNoteColor(swatch)} aria-label={`포스트잇 색상 ${swatch}`} aria-pressed={noteColor === swatch} />)}</div><small className="inspector-hint">캔버스를 클릭해 Markdown 포스트잇을 놓으세요.</small></section>}
         {activeTool === 'link' && <section className="inspector-section"><strong className="inspector-label">동영상·링크 공유</strong><small className="inspector-hint">캔버스를 클릭하고 YouTube, 동영상 주소 또는 웹 링크를 입력하세요.</small></section>}
         {(activeTool === 'connect' || selectedConnector) && <section className="inspector-section connector-style-section"><strong className="inspector-label">{connectorToEdit ? '선택한 화살표 스타일' : '새 연결 스타일'}</strong><label className="connector-color-control">색상<input type="color" value={connectorToEdit?.color || connectorColor} onChange={(event) => connectorToEdit ? updateConnectorAppearance(selectedItemId, 'color', event.target.value) : setConnectorColor(event.target.value)} /></label><label className="connector-width-control"><span>굵기 <b>{Number(connectorToEdit?.strokeWidth) || connectorWidth}px</b></span><input type="range" min="0.8" max="4" step="0.2" value={Number(connectorToEdit?.strokeWidth) || connectorWidth} onChange={(event) => connectorToEdit ? updateConnectorAppearance(selectedItemId, 'strokeWidth', event.target.value) : setConnectorWidth(Number(event.target.value))} aria-label="연결 화살표 굵기" /></label><small className="inspector-hint">화살표는 회색으로 시작하며, 연결 도구에서 새 연결의 색과 굵기를 설정할 수 있어요.</small></section>}
-        {selectedItem && <section className="inspector-section rotation-section"><div className="zoom-sensitivity-heading"><strong>{selectedConnector ? '곡선 방향' : '객체 회전'}</strong><span>{Math.round(Number(selectedItem.rotation) || 0)}°</span></div><input type="range" min="-180" max="180" step="1" value={Math.round(Number(selectedItem.rotation) || 0)} onChange={(event) => updateItemRotation(selectedItemId, event.target.value)} aria-label={selectedConnector ? '선택한 화살표 곡선 방향' : '선택한 객체 회전'} /><button type="button" onClick={() => updateItemRotation(selectedItemId, 0)}>{selectedConnector ? '방향 초기화' : '회전 초기화'}</button></section>}
+        {selectedItem && <section className="inspector-section rotation-section"><div className="zoom-sensitivity-heading"><strong>{selectedConnector ? '곡선 방향' : '객체 회전'}</strong><span>{Math.round(Number(selectedItem.rotation) || 0)}°</span></div><input type="range" min="-180" max="180" step="1" value={Math.round(Number(selectedItem.rotation) || 0)} onChange={(event) => updateItemRotation(selectedItemId, event.target.value)} aria-label={selectedConnector ? '선택한 화살표 곡선 방향' : '선택한 객체 회전'} />{!selectedConnector && <small className="inspector-hint">선택 객체 위쪽 핸들을 드래그해 마우스 방향을 따라 회전하세요.</small>}<button type="button" onClick={() => updateItemRotation(selectedItemId, 0)}>{selectedConnector ? '방향 초기화' : '회전 초기화'}</button></section>}
         {(activeTool === 'table' || selectedTable) && <section className="inspector-section"><strong className="inspector-label">{activeTool === 'table' ? '새 테이블 설정' : '테이블 설정'}</strong><div className="table-config-grid"><label>행 수<input type="number" min="1" max={MAX_TABLE_ROWS} value={activeTool === 'table' ? tableConfig.rows : selectedTable.rows?.length || 1} onChange={(event) => changeTableCount('rows', event)} /></label><label>열 수<input type="number" min="1" max={MAX_TABLE_COLUMNS} value={activeTool === 'table' ? tableConfig.columns : selectedTable.columns?.length || 1} onChange={(event) => changeTableCount('columns', event)} /></label><label>너비 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.width : Math.round((selectedTable.width || 0.42) * 100)} onChange={(event) => changeTableSize('width', event)} /></label><label>높이 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.height : Math.round((selectedTable.height || 0.32) * 100)} onChange={(event) => changeTableSize('height', event)} /></label></div><small className="inspector-hint">{activeTool === 'table' ? '설정 후 캔버스를 클릭해 놓으세요.' : '셀이나 컬럼 이름을 두 번 클릭해 Markdown으로 편집하세요.'}</small></section>}
         {(activeTool === 'text' || activeTool === 'code') && <section className="inspector-section"><strong className="inspector-label">{activeTool === 'text' ? '텍스트 작성' : '코드 작성'}</strong><small className="inspector-hint">캔버스를 클릭하면 편집 가능한 아이템이 놓입니다.</small></section>}
         <section className="inspector-section inspector-stats"><div><span>캔버스 ID</span><strong>#{canvasId}</strong></div><div><span>오브젝트</span><strong>{Object.keys(items).length}</strong></div><div><span>설정 revision</span><strong>{settings?.settings_revision ?? '—'}</strong></div></section>
