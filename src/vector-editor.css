@@ -22,6 +22,13 @@
 .canvas-app-page .object-rotation-handle.rotate-n{top:-39px;right:auto;bottom:auto;left:50%;transform:translateX(-50%);border:1px solid #d9dfd5;border-radius:50%;background:var(--surface);box-shadow:0 2px 7px #263b3226}
 .canvas-app-page .object-rotation-handle.rotate-n::before{opacity:1}
 .canvas-stage.rotating{cursor:grabbing!important}
+.canvas-stage .object-resize-handle.resize-n,.canvas-stage .object-resize-handle.resize-s{top:-6px;left:20%;right:auto;bottom:auto;width:60%;height:12px;transform:none;opacity:1;cursor:ns-resize}
+.canvas-stage .object-resize-handle.resize-s{top:auto;bottom:-6px}
+.canvas-stage .object-resize-handle.resize-e,.canvas-stage .object-resize-handle.resize-w{top:20%;right:auto;bottom:auto;left:-6px;width:12px;height:60%;transform:none;opacity:1;cursor:ew-resize}
+.canvas-stage .object-resize-handle.resize-e{left:auto;right:-6px}
+.canvas-stage .object-resize-handle.resize-n::after,.canvas-stage .object-resize-handle.resize-s::after{content:"";position:absolute;top:4px;left:0;right:0;height:4px;border-radius:4px;background:#b78e4e;opacity:.5;pointer-events:none;transition:opacity .12s}
+.canvas-stage .object-resize-handle.resize-e::after,.canvas-stage .object-resize-handle.resize-w::after{content:"";position:absolute;top:0;bottom:0;left:4px;width:4px;border-radius:4px;background:#b78e4e;opacity:.5;pointer-events:none;transition:opacity .12s}
+.canvas-stage .object-resize-handle.resize-n:hover::after,.canvas-stage .object-resize-handle.resize-s:hover::after,.canvas-stage .object-resize-handle.resize-e:hover::after,.canvas-stage .object-resize-handle.resize-w:hover::after{opacity:1}
 
 .zoom-sensitivity-heading{display:flex;align-items:center;justify-content:space-between;color:var(--ink-strong);font-size:9px}.zoom-sensitivity-heading span{color:var(--ink-muted);font:8px var(--mono)}.zoom-sensitivity-section input[type="range"]{display:block;width:100%;height:17px;margin:8px 0 1px;accent-color:#6e9172;cursor:pointer}.zoom-sensitivity-section>small{display:block;color:var(--ink-muted);font-size:7px;line-height:1.5}
 .canvas-stage .code-filename-input,.canvas-stage .code-language-select{height:23px;min-width:0;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink-strong);outline:none;font:7px var(--mono)}.canvas-stage .code-filename-input{flex:1;width:0;padding:3px 5px}.canvas-stage .code-language-select{flex:0 0 82px;padding:0 3px}.canvas-stage .code-filename-input:focus,.canvas-stage .code-language-select:focus{border-color:#91a991;box-shadow:0 0 0 2px #dce8dd80}.canvas-app-page[data-theme="dark"] .code-shared-input::placeholder{color:#9eae9f}
