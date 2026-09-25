@@ -7,6 +7,8 @@
 .canvas-stage .code-shared-input{display:block;width:100%;min-height:150px;max-height:310px;resize:vertical;margin:0;border:0;outline:0;background:#202c25;color:#d9e8dc;padding:12px 13px;font:10px/1.65 var(--mono);tab-size:2;white-space:pre;overflow:auto}
 .canvas-stage .mathjax-output{display:inline-block;max-width:100%;overflow-x:auto;vertical-align:middle}
 .canvas-stage .mathjax-output mjx-container[display="true"]{margin:0!important}
+.canvas-stage .math-formula-preview{display:inline-block;max-width:100%;cursor:text}
+.canvas-stage .math-formula-input{display:block;width:max(180px,100%);max-width:48vw;box-sizing:border-box;padding:2px 0;border:0;border-bottom:1px solid currentColor;border-radius:0;outline:0;background:transparent;color:inherit;font:12px/1.5 var(--mono);white-space:nowrap;touch-action:auto}
 .canvas-stage .math-object{max-width:48%;overflow:visible}
 .canvas-stage .math-object mjx-container{color:inherit!important}
 .canvas-stage .text-object textarea:focus,.canvas-stage .code-shared-input:focus{box-shadow:inset 0 0 0 1px #9eb39f}

@@ -1,0 +1,50 @@
+.object-rotation-frame {
+  position: absolute;
+  z-index: 14;
+  transform-origin: center center;
+  overflow: visible;
+  pointer-events: none;
+  touch-action: none;
+}
+
+.object-rotation-handle {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  color: #7a694c;
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.object-rotation-handle::before {
+  content: '⟳';
+  opacity: 0;
+  color: #90754c;
+  font: 20px/1 Arial, sans-serif;
+  text-shadow: 0 1px 3px #fff, 0 1px 4px #263b3540;
+  transition: opacity .12s, transform .12s;
+}
+
+.object-rotation-handle:hover::before {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
+.object-rotation-handle:active { cursor: grabbing; }
+.object-rotation-handle.rotate-nw { top: -27px; left: -27px; }
+.object-rotation-handle.rotate-ne { top: -27px; right: -27px; }
+.object-rotation-handle.rotate-se { right: -27px; bottom: -27px; }
+.object-rotation-handle.rotate-sw { bottom: -27px; left: -27px; }
+
+.canvas-stage .canvas-object.object-rotating,
+.tutorial-scene .tutorial-item.object-rotating {
+  z-index: 13;
+  user-select: none;
+  -webkit-user-select: none;
+}

@@ -13,7 +13,6 @@ export default function ResizeHandles({ onPointerDown }) {
       type="button"
       className={`object-resize-handle resize-${direction}`}
       aria-label={`${labels[direction]} 모서리에서 크기 조절`}
-      title="드래그해 크기 조절"
       tabIndex={-1}
       onPointerDown={(event) => {
         event.preventDefault();

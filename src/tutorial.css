@@ -149,6 +149,8 @@
 .tutorial-sticky-head{position:relative;z-index:3;padding-right:14px}
 .tutorial-sticky-content,.tutorial-sticky-note textarea,.tutorial-sticky-note>small{position:relative;z-index:1}
 .tutorial-scene .tutorial-math-item{padding:0;border:0;border-radius:0;background:transparent!important;box-shadow:none;color:#506f58}
+.tutorial-scene .tutorial-math-preview{display:inline-block;max-width:100%;cursor:text}
+.tutorial-scene .tutorial-math-input{display:block;width:max(180px,100%);max-width:48vw;box-sizing:border-box;padding:2px 0;border:0;border-bottom:1px solid currentColor;border-radius:0;outline:0;background:transparent;color:inherit;font:12px/1.5 var(--mono);white-space:nowrap;touch-action:auto}
 .tutorial-scene .tutorial-vector-hit{display:block;min-width:0;min-height:0;max-width:none;transform:none;background:transparent;overflow:visible}
 .tutorial-scene .tutorial-vector-hit.selected{outline:none}
 .tutorial-scene .tutorial-vector-hit>button{position:absolute;top:-9px;right:-9px}

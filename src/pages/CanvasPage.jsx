@@ -10,6 +10,7 @@ import SharedMediaContent from '../components/SharedMediaContent.jsx';
 import MathFormula from '../components/MathFormula.jsx';
 import VectorLayer from '../components/VectorLayer.jsx';
 import ResizeHandles from '../components/ResizeHandles.jsx';
+import RotationHandles, { rotationAtPointer } from '../components/RotationHandles.jsx';
 import { captureResize, resizeItemAtPointer } from '../components/objectResize.js';
 import CanvasPeerMesh from '../components/CanvasPeerMesh.js';
 import CanvasSpatialBTree, { objectBounds } from '../components/CanvasSpatialBTree.js';
@@ -151,14 +152,17 @@ function SettingsDialog({ settings, pending, onClose, onUpdate, onAddParticipant
   </section></div>;
 }
 
-function CanvasObject({ id, item, bounds, selected, activeTool, connectionStartId, editing, dirty, connectorCurve, viewSize, onStartEditing, onTextChange, onMetadataChange, onTableChange, onStopEditing, onSave, onPointerDown, onResizeStart, onPointerMove, onPointerUp, onDelete, onCopy }) {
+function CanvasObject({ id, item, bounds, selected, activeTool, connectionStartId, editing, dirty, connectorCurve, viewSize, onStartEditing, onTextChange, onMetadataChange, onFormulaChange, onTableChange, onStopEditing, onSave, onPointerDown, onResizeStart, onPointerMove, onPointerUp, onDelete, onCopy }) {
+  const formula = String(item.formula ?? item.text ?? 'x + y');
+  const [formulaDraft, setFormulaDraft] = useState(formula);
+  useEffect(() => { setFormulaDraft(formula); }, [id, formula]);
   const width = Number(item.width) || ({ image: 0.3, code: 0.32, shape: 0.14, math: 0.2, text: 0.22, note: 0.22, table: 0.42, link: 0.3 }[item.kind] || 0.2);
   const height = Number(item.height) || ({ shape: 0.12, math: 0.09, text: 0.12, note: 0.15, table: 0.32, link: 0.15 }[item.kind] || 0.2);
   const style = { left: `${(Number(item.x) || 0) * 100}%`, top: `${(Number(item.y) || 0) * 100}%`, width: `${width * 100}%`, '--object-color': item.color || '#617d68', '--object-rotation': `${Number(item.rotation) || 0}deg` };
   if (item.height) style.height = `${height * 100}%`;
   const movable = activeTool === 'select';
   const classes = `canvas-object canvas-object-${item.kind}${movable ? ' movable' : ''}${selected ? ' selected' : ''}${connectionStartId === id ? ' connection-source' : ''}${item.height ? ' has-custom-height' : ''}`;
-  const handlers = { onPointerDown: (event) => onPointerDown(event, id, item), onPointerMove, onPointerUp, onPointerCancel: onPointerUp };
+  const handlers = { 'data-item-id': id, onPointerDown: (event) => onPointerDown(event, id, item), onPointerMove, onPointerUp, onPointerCancel: onPointerUp };
   const resizeHandles = selected && movable && !editing && item.kind !== 'connector'
     ? <ResizeHandles onPointerDown={(event, handle) => onResizeStart(event, id, item, handle)} />
     : null;
@@ -190,7 +194,12 @@ function CanvasObject({ id, item, bounds, selected, activeTool, connectionStartI
   if (item.kind === 'table') return withResizeHandles(<div key={id} className={`${classes} canvas-table-object`} style={style} data-item-id={id} {...handlers}><EditableTable item={item} onChange={(location, value) => onTableChange(id, (current) => updateTableValue(current, location, value))} /><button className="canvas-table-delete" onPointerDown={(event) => event.stopPropagation()} onClick={() => onDelete(id)} aria-label="테이블 삭제">×</button></div>);
   if (item.kind === 'shape') return withResizeHandles(<div key={id} className={`${classes} shape-object shape-vector-hit shape-${item.shapeType || 'rectangle'}`} style={style} {...handlers}><button onClick={() => onDelete(id)} aria-label="도형 삭제">×</button></div>);
   if (item.kind === 'text') return withResizeHandles(<div key={id} className={`${classes} text-object`} style={style} data-item-id={id} {...handlers}>{editing ? <><textarea autoFocus aria-label="공동 편집 텍스트" value={item.text || ''} placeholder="여기에 텍스트를 입력하세요." onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onTextChange(id, event.target.value)} onBlur={() => onStopEditing(id)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }} /><small className="collab-save-hint">{dirty ? '저장되지 않음 · Ctrl + S' : '저장됨'}</small></> : <p onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 함께 편집">{item.text || '두 번 클릭해 편집'}</p>}<button onClick={() => onDelete(id)} aria-label="텍스트 삭제">×</button></div>);
-  if (item.kind === 'math') return withResizeHandles(<div key={id} className={`${classes} math-object`} style={style} {...handlers}><MathFormula formula={item.formula || item.text || 'x + y'} /><button onPointerDown={(event) => event.stopPropagation()} onClick={() => onDelete(id)} aria-label="수식 삭제">×</button></div>);
+  if (item.kind === 'math') return withResizeHandles(<div key={id} className={`${classes} math-object`} style={style} {...handlers}>
+    {editing
+      ? <input className="math-formula-input" autoFocus aria-label="수식 편집" value={formulaDraft} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => setFormulaDraft(event.target.value)} onBlur={() => { onFormulaChange(id, formulaDraft); onStopEditing(id); }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }} />
+      : <span className="math-formula-preview" onDoubleClick={(event) => { event.stopPropagation(); onStartEditing(id); }} title="두 번 클릭해 수식 편집"><MathFormula formula={formula} /></span>}
+    <button onPointerDown={(event) => event.stopPropagation()} onClick={() => onDelete(id)} aria-label="수식 삭제">×</button>
+  </div>);
   return null;
 }
 
@@ -199,6 +208,7 @@ function CanvasWorkspace() {
   const { token, user } = useAuth();
   const navigate = useNavigate();
   const boardRef = useRef(null);
+  const sceneRef = useRef(null);
   const wsRef = useRef(null);
   const rtcWsRef = useRef(null);
   const itemsRef = useRef({});
@@ -400,6 +410,21 @@ function CanvasWorkspace() {
     }
     return true;
   }, [refreshSpatialIndex, sendItemChange]);
+  const updateFormulaItem = useCallback((id, formula) => {
+    const key = String(id);
+    const previous = itemsRef.current[key];
+    if (previous?.kind !== 'math' || previous.formula === formula) return false;
+    const nextItem = { ...previous, formula };
+    itemsRef.current = { ...itemsRef.current, [key]: nextItem };
+    setItems((current) => ({ ...current, [key]: nextItem }));
+    if (!sendItemChange({ type: 'item_update', item_id: key, item: nextItem }, previous)) {
+      itemsRef.current = { ...itemsRef.current, [key]: previous };
+      setItems((current) => ({ ...current, [key]: previous }));
+      setToast('연결이 복구되면 수식을 다시 편집해주세요.');
+      return false;
+    }
+    return true;
+  }, [sendItemChange]);
   const updateItemRotation = (id, value) => {
     const key = String(id);
     const previous = itemsRef.current[key];
@@ -1294,9 +1319,43 @@ function CanvasWorkspace() {
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
+  const startObjectRotation = (event, id, item) => {
+    if (activeTool !== 'select' || item?.kind === 'connector') return;
+    const key = String(id);
+    const initial = itemsRef.current[key] || item;
+    const frame = event.currentTarget.closest('.object-rotation-frame');
+    const frameBounds = frame?.getBoundingClientRect();
+    const element = sceneRef.current && [...sceneRef.current.querySelectorAll('[data-item-id]')]
+      .find((node) => node.dataset.itemId === key);
+    if (!initial || !frameBounds || !element) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const centerX = frameBounds.left + frameBounds.width / 2;
+    const centerY = frameBounds.top + frameBounds.height / 2;
+    setSelectedItemId(key);
+    element.classList.add('object-rotating');
+    dragRef.current = {
+      mode: 'rotate',
+      id: key,
+      initial,
+      centerX,
+      centerY,
+      startAngle: Math.atan2(event.clientY - centerY, event.clientX - centerX),
+      initialRotation: Number(initial.rotation) || 0,
+      element,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
   const moveObject = (event) => {
     if (!dragRef.current) return;
     const { mode, id, initial, offsetX, offsetY, startX, startY, resize, viewport } = dragRef.current;
+    if (mode === 'rotate') {
+      const { centerX, centerY, startAngle, initialRotation } = dragRef.current;
+      const next = { ...initial, rotation: rotationAtPointer(initialRotation, startAngle, event.clientX, event.clientY, centerX, centerY) };
+      itemsRef.current = { ...itemsRef.current, [id]: next };
+      setItems((current) => ({ ...current, [id]: next }));
+      return;
+    }
     const point = pointerPosition(event);
     const next = mode === 'resize'
       ? resizeItemAtPointer(initial, resize, point, viewport)
@@ -1309,7 +1368,7 @@ function CanvasWorkspace() {
   const stopObjectDrag = () => {
     if (!dragRef.current) return;
     const { id, initial, element } = dragRef.current; dragRef.current = null;
-    element?.classList.remove('object-dragging', 'object-resizing');
+    element?.classList.remove('object-dragging', 'object-resizing', 'object-rotating');
     const item = itemsRef.current[id];
     refreshSpatialIndex();
     if (isCollaborativeItem(item)) {
@@ -1453,8 +1512,9 @@ function CanvasWorkspace() {
           <div className="stage-label"><span>AGORA / {String(canvasId).padStart(2, '0')}</span><b>{canvas?.canvas_name || '공유 캔버스'}</b></div>
           <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true"><span className="coordinate-x" /><span className="coordinate-y" /><i className="coordinate-origin">0</i><b className="coordinate-x-label">X</b><b className="coordinate-y-label">Y</b></div>
           <VectorLayer items={visibleVectorItems} referenceItems={items} camera={camera} onReady={(setDraft) => { vectorDraftRef.current = setDraft; }} />
-          <div className="canvas-scene" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}>
-            {sortedItems.map(([id, item, bounds, connectorCurve]) => <CanvasObject key={id} id={id} item={item} bounds={bounds} connectorCurve={connectorCurve} viewSize={boardSize} selected={String(selectedItemId) === String(id)} activeTool={activeTool} connectionStartId={connectionStartId} editing={editingId === id} dirty={dirtyItems.has(String(id))} onStartEditing={startEditing} onTextChange={updateCollaborativeText} onMetadataChange={updateCollaborativeMetadata} onTableChange={updateTableItem} onStopEditing={stopEditing} onSave={saveCollaborativeItem} onPointerDown={startObjectDrag} onResizeStart={startObjectResize} onPointerMove={moveObject} onPointerUp={stopObjectDrag} onDelete={deleteItem} onCopy={(value) => navigator.clipboard?.writeText(value)} />)}
+          <div className="canvas-scene" ref={sceneRef} style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}>
+            {sortedItems.map(([id, item, bounds, connectorCurve]) => <CanvasObject key={id} id={id} item={item} bounds={bounds} connectorCurve={connectorCurve} viewSize={boardSize} selected={String(selectedItemId) === String(id)} activeTool={activeTool} connectionStartId={connectionStartId} editing={editingId === id} dirty={dirtyItems.has(String(id))} onStartEditing={startEditing} onTextChange={updateCollaborativeText} onMetadataChange={updateCollaborativeMetadata} onFormulaChange={updateFormulaItem} onTableChange={updateTableItem} onStopEditing={stopEditing} onSave={saveCollaborativeItem} onPointerDown={startObjectDrag} onResizeStart={startObjectResize} onPointerMove={moveObject} onPointerUp={stopObjectDrag} onDelete={deleteItem} onCopy={(value) => navigator.clipboard?.writeText(value)} />)}
+            {selectedItem && selectedItem.kind !== 'connector' && activeTool === 'select' && !editingId && <RotationHandles sceneRef={sceneRef} id={String(selectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startObjectRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
             {Object.entries(remoteCursors).filter(([, cursor]) => cursor.visible !== false && cursor.x >= visibleBounds.minX && cursor.x <= visibleBounds.maxX && cursor.y >= visibleBounds.minY && cursor.y <= visibleBounds.maxY).map(([peerId, cursor]) => <div className="remote-cursor" key={peerId} style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%`, '--cursor-color': cursor.color }} title={`${cursor.nickname}#${cursor.tag_number}`}><svg viewBox="0 0 18 22" aria-hidden="true"><path d="M1 1v17l4.5-4.3 3.1 7.1 3.1-1.4-3.2-6.8H15z" /></svg><span>{cursor.nickname}</span></div>)}
           </div>
           {sharePosition && <ShareComposer onCancel={() => { setSharePosition(null); setActiveTool('select'); }} onSubmit={placeSharedLink} />}

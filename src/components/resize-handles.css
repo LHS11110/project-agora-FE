@@ -47,19 +47,20 @@
   height: 12px;
   margin: 0;
   padding: 0;
-  border: 1px solid #bc8b43;
-  border-radius: 3px;
-  background: #fffdf7;
-  box-shadow: 0 1px 4px #263b3533;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none;
+  opacity: 0;
   pointer-events: auto;
   touch-action: none;
-  transition: background-color .12s, transform .12s;
+  transition: none;
 }
 
 .object-resize-handle:hover {
   z-index: 2;
-  background: #f5dba9;
-  transform: scale(1.12);
+  background: transparent;
 }
 
 .object-resize-handle.resize-nw { top: 0; left: 0; cursor: nwse-resize; }
@@ -70,8 +71,3 @@
 .object-resize-handle.resize-s { bottom: 0; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
 .object-resize-handle.resize-sw { bottom: 0; left: 0; cursor: nesw-resize; }
 .object-resize-handle.resize-w { top: 50%; left: 0; transform: translateY(-50%); cursor: ew-resize; }
-
-.object-resize-handle.resize-n:hover,
-.object-resize-handle.resize-s:hover { transform: translateX(-50%) scale(1.12); }
-.object-resize-handle.resize-e:hover,
-.object-resize-handle.resize-w:hover { transform: translateY(-50%) scale(1.12); }
