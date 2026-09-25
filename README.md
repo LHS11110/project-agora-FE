@@ -34,3 +34,5 @@ npm run preview
 ```
 
 빌드 결과는 `dist/`에 생성됩니다. SPA 경로(`/profile`, `/search`, `/canvases/...`)가 `index.html`로 fallback되도록 웹 서버를 설정해야 합니다.
+
+Nginx 배포 예시는 `../project-agora-BE/nginx/agora.conf.example`에 있습니다. 이 설정은 `/var/www/agora-frontend`에서 Vite 빌드 파일을 정적으로 제공하고, `/api`와 캔버스·RTC WebSocket 경로는 각 백엔드로 전달합니다. 배포할 때는 `npm run build` 후 `dist/` 안의 파일을 해당 Nginx root로 복사하세요.
