@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Application, Graphics } from 'pixi.js';
+import { connectorGeometry } from './connectorGeometry.js';
 import './vector-layer.css';
 
 const colorNumber = (value) => {
@@ -24,6 +25,39 @@ function drawArrow(graphics, x1, y1, x2, y2, color, width = 2.5) {
   graphics.poly([x2, y2, baseX + px, baseY + py, baseX - px, baseY - py]).fill(color);
 }
 
+function rotatePoint(x, y, centerX, centerY, angle) {
+  if (!angle) return { x, y };
+  const cosine = Math.cos(angle);
+  const sine = Math.sin(angle);
+  const dx = x - centerX;
+  const dy = y - centerY;
+  return { x: centerX + dx * cosine - dy * sine, y: centerY + dx * sine + dy * cosine };
+}
+
+function drawPolyline(graphics, points, color, width) {
+  if (!points.length) return;
+  graphics.moveTo(points[0].x, points[0].y);
+  for (const point of points.slice(1)) graphics.lineTo(point.x, point.y);
+  graphics.stroke({ color, width, cap: 'round', join: 'round' });
+}
+
+function drawCurvedArrow(graphics, geometry, color, width) {
+  if (!geometry?.points?.length) return;
+  const end = geometry.points[geometry.points.length - 1];
+  const headLength = Math.max(8, Math.min(15, 6 + width * 2.5));
+  const halfWidth = headLength * 0.45;
+  const baseX = end.x - geometry.directionX * headLength;
+  const baseY = end.y - geometry.directionY * headLength;
+  const perpendicularX = -geometry.directionY * halfWidth;
+  const perpendicularY = geometry.directionX * halfWidth;
+  drawPolyline(graphics, geometry.points, color, width);
+  graphics.poly([
+    end.x, end.y,
+    baseX + perpendicularX, baseY + perpendicularY,
+    baseX - perpendicularX, baseY - perpendicularY,
+  ]).fill(color);
+}
+
 export function drawVectorItems(graphics, items, width, height, visibleItemIds = null, referenceItems = items) {
   graphics.clear();
   const entries = Object.entries(items || {}).filter(([id]) => !visibleItemIds || visibleItemIds.has(id));
@@ -32,14 +66,14 @@ export function drawVectorItems(graphics, items, width, height, visibleItemIds =
     if (item?.kind !== 'stroke' || !Array.isArray(item.points) || item.points.length < 1) continue;
     const points = item.points;
     const ink = colorNumber(item.color);
-    const first = points[0];
-    graphics.moveTo(first.x * width, first.y * height);
-    if (points.length === 1) {
-      graphics.lineTo(first.x * width + 0.1, first.y * height + 0.1);
-    } else {
-      for (const point of points.slice(1)) graphics.lineTo(point.x * width, point.y * height);
-    }
-    graphics.stroke({ color: ink, width: Number(item.strokeWidth) || 3.5, cap: 'round', join: 'round' });
+    const pixelPoints = points.map((point) => ({ x: point.x * width, y: point.y * height }));
+    const bounds = pixelPoints.reduce((current, point) => ({ minX: Math.min(current.minX, point.x), minY: Math.min(current.minY, point.y), maxX: Math.max(current.maxX, point.x), maxY: Math.max(current.maxY, point.y) }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+    const centerY = (bounds.minY + bounds.maxY) / 2;
+    const angle = (Number(item.rotation) || 0) * Math.PI / 180;
+    const rotated = pixelPoints.map((point) => rotatePoint(point.x, point.y, centerX, centerY, angle));
+    if (rotated.length === 1) rotated.push({ x: rotated[0].x + 0.1, y: rotated[0].y + 0.1 });
+    drawPolyline(graphics, rotated, ink, Number(item.strokeWidth) || 3.5);
   }
 
   for (const [, item] of entries) {
@@ -49,31 +83,42 @@ export function drawVectorItems(graphics, items, width, height, visibleItemIds =
     const w = (Number(item.width) || 0.14) * width;
     const h = (Number(item.height) || 0.12) * height;
     const ink = colorNumber(item.color);
+    const centerX = x + w / 2;
+    const centerY = y + h / 2;
+    const angle = (Number(item.rotation) || 0) * Math.PI / 180;
     if (item.shapeType === 'ellipse') {
-      graphics.ellipse(x + w / 2, y + h / 2, w / 2, h / 2).stroke({ color: ink, width: 2.5 });
+      if (!angle) {
+        graphics.ellipse(centerX, centerY, w / 2, h / 2).stroke({ color: ink, width: 2.5 });
+        continue;
+      }
+      const points = Array.from({ length: 48 }, (_, index) => {
+        const phase = index / 48 * Math.PI * 2;
+        return rotatePoint(centerX + Math.cos(phase) * w / 2, centerY + Math.sin(phase) * h / 2, centerX, centerY, angle);
+      });
+      graphics.poly(points.flatMap((point) => [point.x, point.y]), true).stroke({ color: ink, width: 2.5 });
     } else if (item.shapeType === 'arrow') {
-      drawArrow(graphics, x, y + h, x + w, y, ink, 3);
+      const start = rotatePoint(x, y + h, centerX, centerY, angle);
+      const end = rotatePoint(x + w, y, centerX, centerY, angle);
+      drawArrow(graphics, start.x, start.y, end.x, end.y, ink, 3);
     } else {
-      graphics.roundRect(x, y, w, h, 5).stroke({ color: ink, width: 2.5 });
+      if (!angle) {
+        graphics.roundRect(x, y, w, h, 5).stroke({ color: ink, width: 2.5 });
+        continue;
+      }
+      const corners = [
+        rotatePoint(x, y, centerX, centerY, angle),
+        rotatePoint(x + w, y, centerX, centerY, angle),
+        rotatePoint(x + w, y + h, centerX, centerY, angle),
+        rotatePoint(x, y + h, centerX, centerY, angle),
+      ];
+      drawPolyline(graphics, [...corners, corners[0]], ink, 2.5);
     }
   }
 
   for (const [, item] of entries) {
     if (item?.kind !== 'connector') continue;
-    const from = referenceItems[item.from];
-    const to = referenceItems[item.to];
-    if (!from || !to) continue;
-    const center = (object) => {
-      const fallbackWidth = object.kind === 'code' ? 0.32 : 0.18;
-      const fallbackHeight = object.kind === 'image' || object.kind === 'code' ? 0.2 : 0.12;
-      return {
-        x: ((Number(object.x) || 0) + (Number(object.width) || fallbackWidth) / 2) * width,
-        y: ((Number(object.y) || 0) + (Number(object.height) || fallbackHeight) / 2) * height,
-      };
-    };
-    const a = center(from);
-    const b = center(to);
-    drawArrow(graphics, a.x, a.y, b.x, b.y, colorNumber(item.color || '#6f9078'));
+    const geometry = connectorGeometry(item, referenceItems, width, height);
+    drawCurvedArrow(graphics, geometry, colorNumber(item.color || '#8b8f8c'), Number(item.strokeWidth) || 1.5);
   }
 }
 

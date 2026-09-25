@@ -30,6 +30,8 @@ const paths = {
   connect: <><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="m8.2 8.2 7.6 7.6"/></>,
   shape: <><rect x="3" y="4" width="10" height="10" rx="2"/><circle cx="17.5" cy="16.5" r="3.5"/></>,
   text: <><path d="M4 5h16M12 5v14M8 19h8"/></>,
+  sticky: <><path d="M5 3h10l4 4v14H5z"/><path d="M15 3v5h4M8 12h8M8 16h5"/></>,
+  table: <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16M15 4v16"/></>,
   math: <><path d="m3 6 5 6-5 6M10 18h4l4-12h3"/><path d="M13 12h7"/></>,
   sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></>,
   moon: <path d="M20.9 13A8.5 8.5 0 0 1 11 3.1 8.5 8.5 0 1 0 20.9 13Z"/>,
