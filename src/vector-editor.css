@@ -130,4 +130,13 @@
 .share-composer-actions button{height:31px;display:flex;align-items:center;gap:5px;padding:0 10px;border:1px solid var(--line,#e2e8e0);border-radius:6px;background:var(--surface,#fff);color:var(--ink-muted,#829084);font-size:8px;cursor:pointer}
 .share-composer-actions button[type="submit"]{border-color:#54755b;background:#54755b;color:#fff}
 .share-composer-actions button[type="submit"]:disabled{border-color:#cbd4ca;background:#cbd4ca;cursor:not-allowed}
+
+.canvas-stage.eraser-active,.tutorial-stage.eraser-active{cursor:none}
+.eraser-cursor{position:absolute;z-index:10;box-sizing:border-box;transform:translate(-50%,-50%);border:1px solid #55765d;border-radius:50%;background:#78977b2e;box-shadow:0 0 0 1px #fff9,inset 0 0 0 1px #ffffff80;visibility:hidden;pointer-events:none}
+.eraser-cursor.is-visible{visibility:visible}
+.eraser-cursor:after{content:"";position:absolute;left:50%;top:50%;width:2px;height:2px;transform:translate(-50%,-50%);border-radius:50%;background:#45684d}
+.canvas-app-page[data-theme="dark"] .eraser-cursor{border-color:#d5e3d5;background:#aec8b52e;box-shadow:0 0 0 1px #23332b,inset 0 0 0 1px #ffffff80}
+.canvas-app-page[data-theme="dark"] .eraser-cursor:after{background:#e2eee1}
+.canvas-stage.eraser-active .canvas-scene .canvas-object{pointer-events:none!important}
+.canvas-stage.eraser-active .object-rotation-frame,.canvas-stage.eraser-active .object-rotation-handle{pointer-events:none!important}
 .sticky-note-head>span{cursor:grab}.object-dragging .sticky-note-head>span{cursor:grabbing}

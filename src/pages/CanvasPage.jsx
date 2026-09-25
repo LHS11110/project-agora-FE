@@ -15,6 +15,7 @@ import { captureResize, resizeItemAtPointer } from '../components/objectResize.j
 import CanvasPeerMesh from '../components/CanvasPeerMesh.js';
 import CanvasSpatialBTree, { objectBounds } from '../components/CanvasSpatialBTree.js';
 import { connectorGeometry } from '../components/connectorGeometry.js';
+import { eraseStrokeWithEraser } from '../components/strokeGeometry.js';
 import { createTableData, normalizeTableCount, resizeTableData, updateTableValue, MAX_TABLE_COLUMNS, MAX_TABLE_ROWS } from '../components/tableModel.js';
 import { api, apiUrl, canvasSocketUrl, rtcSocketUrl } from '../api/client.js';
 import { useAuth } from '../state/AuthContext.jsx';
@@ -29,6 +30,7 @@ const MAX_ZOOM_SENSITIVITY = 2;
 const STROKE_WIDTH_KEY = 'agora_canvas_stroke_width';
 const MIN_STROKE_WIDTH = 1;
 const MAX_STROKE_WIDTH = 20;
+const ERASER_RADIUS = 12;
 const createId = () => globalThis.crypto?.randomUUID?.() || `item-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const automergeReady = Automerge.initializeWasm(automergeWasmUrl);
 
@@ -170,7 +172,8 @@ function CanvasObject({ id, item, bounds, selected, activeTool, connectionStartI
     ? cloneElement(element, { className: `${element.props.className} resizeable` }, <>{element.props.children}{resizeHandles}</>)
     : element;
 
-  if (item.kind === 'stroke' || item.kind === 'connector') {
+  if (item.kind === 'stroke') return null;
+  if (item.kind === 'connector') {
     const vectorStyle = { ...style, left: `${(bounds?.minX ?? 0) * 100}%`, top: `${(bounds?.minY ?? 0) * 100}%`, width: `${Math.max(0.01, (bounds?.maxX ?? 0.2) - (bounds?.minX ?? 0)) * 100}%`, height: `${Math.max(0.01, (bounds?.maxY ?? 0.12) - (bounds?.minY ?? 0)) * 100}%` };
     const geometryWidth = Math.max(1, (bounds.maxX - bounds.minX) * viewSize.width);
     const geometryHeight = Math.max(1, (bounds.maxY - bounds.minY) * viewSize.height);
@@ -178,7 +181,7 @@ function CanvasObject({ id, item, bounds, selected, activeTool, connectionStartI
     const offsetY = bounds.minY * viewSize.height;
     const curvePath = connectorCurve?.points.map((point, index) => `${index ? 'L' : 'M'}${point.x - offsetX} ${point.y - offsetY}`).join(' ');
     const arrowTip = connectorCurve?.points.at(-1);
-    return withResizeHandles(<div key={id} className={`${classes} vector-object-hit`} style={vectorStyle} data-item-id={id} {...handlers}><button onPointerDown={(event) => event.stopPropagation()} onClick={() => onDelete(id)} aria-label="벡터 오브젝트 삭제">×</button>{item.kind === 'connector' && curvePath && <svg className="connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} /><circle cx={arrowTip.x - offsetX} cy={arrowTip.y - offsetY} r="9" /></svg>}</div>);
+    return withResizeHandles(<div key={id} className={`${classes} vector-object-hit`} style={vectorStyle} data-item-id={id} {...handlers}><button onPointerDown={(event) => event.stopPropagation()} onClick={() => onDelete(id)} aria-label="연결 화살표 삭제">×</button>{curvePath && <svg className="connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} /><circle cx={arrowTip.x - offsetX} cy={arrowTip.y - offsetY} r="9" /></svg>}</div>);
   }
   if (item.kind === 'image') return withResizeHandles(<div key={id} className={`${classes} image-object`} style={style} {...handlers}><img src={item.src} alt={item.filename || '공유된 이미지'} /><div className="object-caption"><Icon name="image" size={13} />{item.filename || '공유 이미지'}<button onClick={() => onDelete(id)} aria-label="이미지 삭제">×</button></div></div>);
   if (item.kind === 'link') return withResizeHandles(<div key={id} className={`${classes} media-link-object${item.mediaType === 'link' ? ' external-link-object' : ' video-link-object'}`} style={style} data-item-id={id} {...handlers}>
@@ -231,6 +234,8 @@ function CanvasWorkspace() {
   const spacePressedRef = useRef(false);
   const lastCursorSentAtRef = useRef(0);
   const drawingRef = useRef(false);
+  const eraserRef = useRef(null);
+  const eraserCursorRef = useRef(null);
   const draftRef = useRef([]);
   const vectorDraftRef = useRef(null);
   const [canvas, setCanvas] = useState(null);
@@ -1080,6 +1085,56 @@ function CanvasWorkspace() {
       y: (event.clientY - bounds.top - camera.y) / (bounds.height * camera.scale),
     };
   };
+  const updateEraserCursor = (event) => {
+    if (activeTool !== 'eraser') return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const cursor = eraserCursorRef.current;
+    if (!cursor) return;
+    cursor.style.left = `${event.clientX - bounds.left}px`;
+    cursor.style.top = `${event.clientY - bounds.top}px`;
+    cursor.classList.add('is-visible');
+  };
+  const hideEraserCursor = () => eraserCursorRef.current?.classList.remove('is-visible');
+  const eraseStrokesBetween = (from, to) => {
+    const entries = Object.entries(itemsRef.current).filter(([, item]) => item?.kind === 'stroke');
+    for (const [id, item] of entries) {
+      if (itemsRef.current[id]?.kind !== 'stroke') continue;
+      const remainingPaths = eraseStrokeWithEraser(item, from, to, boardSize, camera.scale, ERASER_RADIUS);
+      if (remainingPaths === null) continue;
+      if (remainingPaths.length === 0) {
+        if (!deleteItem(id)) {
+          setToast('연결이 복구되면 지우개를 다시 사용해주세요.');
+          return;
+        }
+        continue;
+      }
+
+      const updatedItem = { ...item, points: remainingPaths[0] };
+      if (!sendItemChange({ type: 'item_update', item_id: id, item: updatedItem }, item)) {
+        setToast('연결이 복구되면 지우개를 다시 사용해주세요.');
+        return;
+      }
+
+      const nextItems = { ...itemsRef.current, [id]: updatedItem };
+      let allFragmentsSent = true;
+      for (const points of remainingPaths.slice(1)) {
+        const fragmentId = createId();
+        const fragment = { ...item, points };
+        if (!sendItemChange({ type: 'item_update', item_id: fragmentId, item: fragment }, null)) {
+          allFragmentsSent = false;
+          break;
+        }
+        nextItems[fragmentId] = fragment;
+      }
+      itemsRef.current = nextItems;
+      setItems(nextItems);
+      refreshSpatialIndex();
+      if (!allFragmentsSent) {
+        setToast('일부 선을 지우지 못했습니다. 연결이 복구되면 다시 시도해주세요.');
+        return;
+      }
+    }
+  };
   const centeredItemPosition = (width, height) => {
     const bounds = boardRef.current?.getBoundingClientRect();
     const viewWidth = Math.max(1, bounds?.width || boardSize.width);
@@ -1096,7 +1151,10 @@ function CanvasWorkspace() {
     const point = pointerPosition(event);
     peerMeshRef.current?.sendCursor({ type: 'cursor', x: point.x, y: point.y });
   };
-  const hideCursor = () => peerMeshRef.current?.sendCursor({ type: 'cursor', visible: false });
+  const hideCursor = () => {
+    peerMeshRef.current?.sendCursor({ type: 'cursor', visible: false });
+    hideEraserCursor();
+  };
   const startPan = (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -1163,6 +1221,7 @@ function CanvasWorkspace() {
     }
   };
   const startDrawing = (event) => {
+    updateEraserCursor(event);
     const clickedEmptySpace = event.button === 0 && !event.target.closest?.('.canvas-object');
     if (clickedEmptySpace) {
       finishEditing();
@@ -1170,6 +1229,14 @@ function CanvasWorkspace() {
     }
     if (event.button === 1 || spacePressedRef.current || (activeTool === 'select' && clickedEmptySpace)) { startPan(event); return; }
     if (connection !== 'connected' || (activeTool !== 'pen' && event.target.closest?.('.canvas-object'))) return;
+    if (activeTool === 'eraser') {
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      const point = pointerPosition(event);
+      eraserRef.current = point;
+      eraseStrokesBetween(point, point);
+      return;
+    }
     if (activeTool === 'link') {
       event.preventDefault();
       setSharePosition(pointerPosition(event));
@@ -1216,10 +1283,17 @@ function CanvasWorkspace() {
     drawingRef.current = true; draftRef.current = [pointerPosition(event)];
   };
   const moveDrawing = (event) => {
+    updateEraserCursor(event);
     sendCursorPosition(event);
     if (panRef.current) {
       const pan = panRef.current;
       setCamera((current) => ({ ...current, x: pan.cameraX + event.clientX - pan.x, y: pan.cameraY + event.clientY - pan.y }));
+      return;
+    }
+    if (eraserRef.current) {
+      const point = pointerPosition(event);
+      eraseStrokesBetween(eraserRef.current, point);
+      eraserRef.current = point;
       return;
     }
     if (!drawingRef.current) return;
@@ -1234,6 +1308,11 @@ function CanvasWorkspace() {
       panRef.current = null;
       boardRef.current?.classList.remove('panning');
       event.currentTarget.releasePointerCapture?.(event.pointerId);
+      return;
+    }
+    if (eraserRef.current) {
+      eraserRef.current = null;
+      if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
       return;
     }
     if (!drawingRef.current) return;
@@ -1536,13 +1615,13 @@ function CanvasWorkspace() {
     </header>
     {error ? <div className="canvas-error-state"><div className="error-art"><Icon name="grid" size={30} /></div><span className="section-kicker">CANVAS CONNECTION</span><h1>캔버스를 열 수 없어요.</h1><p>{error}</p><div><button className="button button-dark" onClick={() => window.location.reload()}>다시 연결하기</button><Link className="button button-outline" to="/search">캔버스 목록</Link></div></div> : <div className="canvas-workspace">
       <aside className="canvas-tools" aria-label="캔버스 도구">
-        <div className="tool-group"><button className={`tool-button${activeTool === 'select' ? ' active' : ''}`} title="선택 및 이동" aria-label="선택 및 이동" onClick={() => setActiveTool('select')}><Icon name="select" size={19} /></button><button className={`tool-button${activeTool === 'pen' ? ' active' : ''}`} title="드로잉" aria-label="드로잉" onClick={() => setActiveTool('pen')}><Icon name="pen" size={19} /></button><button className={`tool-button${activeTool === 'connect' ? ' active' : ''}`} title="오브젝트 연결" aria-label="오브젝트 연결" onClick={() => { setConnectionStartId(null); setActiveTool('connect'); }}><Icon name="connect" size={19} /></button></div>
+        <div className="tool-group"><button className={`tool-button${activeTool === 'select' ? ' active' : ''}`} title="선택 및 이동" aria-label="선택 및 이동" onClick={() => setActiveTool('select')}><Icon name="select" size={19} /></button><button className={`tool-button${activeTool === 'pen' ? ' active' : ''}`} title="드로잉" aria-label="드로잉" onClick={() => setActiveTool('pen')}><Icon name="pen" size={19} /></button><button className={`tool-button${activeTool === 'eraser' ? ' active' : ''}`} title="드로잉 지우개" aria-label="드로잉 지우개" onClick={() => setActiveTool('eraser')}><Icon name="eraser" size={19} /></button><button className={`tool-button${activeTool === 'connect' ? ' active' : ''}`} title="오브젝트 연결" aria-label="오브젝트 연결" onClick={() => { setConnectionStartId(null); setActiveTool('connect'); }}><Icon name="connect" size={19} /></button></div>
         <div className="tool-separator" /><div className="tool-group"><button className={`tool-button${activeTool === 'shape' ? ' active' : ''}`} title="도형" aria-label="도형" onClick={() => setActiveTool('shape')}><Icon name="shape" size={19} /></button><button className={`tool-button${activeTool === 'text' ? ' active' : ''}`} title="텍스트" aria-label="텍스트" onClick={() => setActiveTool('text')}><Icon name="text" size={19} /></button><button className={`tool-button${activeTool === 'note' ? ' active' : ''}`} title="포스트잇" aria-label="포스트잇" onClick={() => setActiveTool('note')}><Icon name="sticky" size={19} /></button><button className={`tool-button${activeTool === 'math' ? ' active' : ''}`} title="수식 작성" aria-label="수식 작성" onClick={() => setActiveTool('math')}><Icon name="math" size={19} /></button><button className={`tool-button${activeTool === 'table' ? ' active' : ''}`} title="테이블" aria-label="테이블" onClick={() => setActiveTool('table')}><Icon name="table" size={19} /></button></div>
         <div className="tool-separator" /><div className="tool-group"><label className="tool-button file-tool" title="사진 올리기" aria-label="사진 올리기"><Icon name="image" size={19} /><input type="file" accept="image/*" onChange={uploadImage} /></label><button className={`tool-button${activeTool === 'code' ? ' active' : ''}`} title="코드 블록" aria-label="코드 블록" onClick={() => setActiveTool('code')}><Icon name="code" size={19} /></button><button className={`tool-button${activeTool === 'link' ? ' active' : ''}`} title="동영상·링크 공유" aria-label="동영상·링크 공유" onClick={() => setActiveTool('link')}><Icon name="link" size={19} /></button></div>
         <div className="tool-separator" /><div className="color-picker" aria-label="펜 및 도형 색상">{inkColors.map((ink) => <button key={ink} style={{ '--ink': ink }} className={color === ink ? 'selected' : ''} onClick={() => setColor(ink)} aria-label={`색상 ${ink}`} />)}</div><div className="tool-bottom"><span className="tool-help">CANVAS</span><span>도구</span></div>
       </aside>
       <main className="board-region"><div className="board-topline"><span className="board-section-label"><i /> 2차 좌표 캔버스</span><div className="board-toolbar-actions"><span className="board-updated"><Icon name="clock" size={14} /> P2P {peerList.filter((peer) => peer.connected).length}명 · 저장 Ctrl+S</span><button className="zoom-button" aria-label="확대" title="클릭: 한 단계 확대 · 길게 누르기: 계속 확대" onPointerDown={(event) => startZoomHold(event, 1 + 0.15 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.15 * zoomSensitivity)}>+</button><span className="zoom-value">{Math.round(camera.scale * 100)}%</span><button className="zoom-button" aria-label="축소" title="클릭: 한 단계 축소 · 길게 누르기: 계속 축소" onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.15 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.15 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => setCamera({ x: 0, y: 0, scale: 1 })}>맞춤</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />격자 {showGrid ? '켜짐' : '꺼짐'}</button></div></div>
-        <div className={`canvas-stage ${activeTool === 'pen' ? 'drawing-mode' : ''}${showGrid ? '' : ' no-grid'}`} style={{ '--grid-size': `${20 * camera.scale}px`, '--grid-dot-radius': `${camera.scale}px`, '--grid-position-x': `${camera.x}px`, '--grid-position-y': `${camera.y}px` }} ref={boardRef} onPointerDown={startDrawing} onPointerMove={moveDrawing} onPointerUp={stopDrawing} onPointerCancel={stopDrawing} onPointerLeave={hideCursor} onWheel={handleStageWheel}>
+        <div className={`canvas-stage ${activeTool === 'pen' ? 'drawing-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ '--grid-size': `${20 * camera.scale}px`, '--grid-dot-radius': `${camera.scale}px`, '--grid-position-x': `${camera.x}px`, '--grid-position-y': `${camera.y}px` }} ref={boardRef} onPointerDown={startDrawing} onPointerMove={moveDrawing} onPointerUp={stopDrawing} onPointerCancel={stopDrawing} onPointerLeave={hideCursor} onWheel={handleStageWheel}>
           <div className="stage-label"><span>AGORA / {String(canvasId).padStart(2, '0')}</span><b>{canvas?.canvas_name || '공유 캔버스'}</b></div>
           <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true"><span className="coordinate-x" /><span className="coordinate-y" /><i className="coordinate-origin">0</i><b className="coordinate-x-label">X</b><b className="coordinate-y-label">Y</b></div>
           <VectorLayer items={visibleVectorItems} referenceItems={items} camera={camera} onReady={(setDraft) => { vectorDraftRef.current = setDraft; }} />
@@ -1551,8 +1630,9 @@ function CanvasWorkspace() {
             {selectedItem && selectedItem.kind !== 'connector' && activeTool === 'select' && !editingId && <RotationHandles sceneRef={sceneRef} id={String(selectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startObjectRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
             {Object.entries(remoteCursors).filter(([, cursor]) => cursor.visible !== false && cursor.x >= visibleBounds.minX && cursor.x <= visibleBounds.maxX && cursor.y >= visibleBounds.minY && cursor.y <= visibleBounds.maxY).map(([peerId, cursor]) => <div className="remote-cursor" key={peerId} style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%`, '--cursor-color': cursor.color }} title={`${cursor.nickname}#${cursor.tag_number}`}><svg viewBox="0 0 18 22" aria-hidden="true"><path d="M1 1v17l4.5-4.3 3.1 7.1 3.1-1.4-3.2-6.8H15z" /></svg><span>{cursor.nickname}</span></div>)}
           </div>
+          {activeTool === 'eraser' && <div className="eraser-cursor" ref={eraserCursorRef} style={{ width: `${ERASER_RADIUS * 2}px`, height: `${ERASER_RADIUS * 2}px` }} aria-hidden="true" />}
           {sharePosition && <ShareComposer onCancel={() => { setSharePosition(null); setActiveTool('select'); }} onSubmit={placeSharedLink} />}
-          {activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} /> 그리는 중</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? '도착 오브젝트 선택' : '시작 오브젝트 선택'}</div>}{activeTool === 'link' && !sharePosition && <div className="draw-cursor-label"><Icon name="link" size={13} /> 공유 자료를 놓을 위치 선택</div>}
+          {activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} /> 그리는 중</div>}{activeTool === 'eraser' && <div className="draw-cursor-label"><Icon name="eraser" size={13} /> 드로잉을 드래그해 지우기</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? '도착 오브젝트 선택' : '시작 오브젝트 선택'}</div>}{activeTool === 'link' && !sharePosition && <div className="draw-cursor-label"><Icon name="link" size={13} /> 공유 자료를 놓을 위치 선택</div>}
         </div><div className="board-footer"><span>무한 좌표 평면 · X/Y축</span><span className="board-footer-center">드래그 이동 · 휠 이동 · Ctrl/⌘ + 휠 확대</span><span>{visibleItemIds.size}/{Object.keys(items).length}개 표시</span></div>
       </main>
       <aside className="canvas-sidepanel canvas-inspector"><div className="inspector-heading"><div><span className="section-kicker">WORKSPACE</span><h2>환경 설정</h2></div><button className="icon-button" onClick={() => setShowSettings(true)} aria-label="캔버스 세부 설정"><Icon name="settings" size={18} /></button></div>
@@ -1560,6 +1640,7 @@ function CanvasWorkspace() {
         <section className="inspector-section"><div className="inspector-switch-row"><span><strong>좌표 격자</strong><small>2차 평면 가이드라인</small></span><button className={`toggle-switch${showGrid ? ' on' : ''}`} role="switch" aria-checked={showGrid} onClick={toggleGrid}><i /></button></div><div className="axis-preview"><span>X축</span><i /><span>Y축</span><i className="axis-preview-origin" /></div></section>
         <section className="inspector-section zoom-sensitivity-section"><div className="zoom-sensitivity-heading"><strong>줌 감도</strong><span>{Math.round(zoomSensitivity * 100)}%</span></div><input type="range" min={MIN_ZOOM_SENSITIVITY} max={MAX_ZOOM_SENSITIVITY} step="0.1" value={zoomSensitivity} onChange={changeZoomSensitivity} aria-label="줌 감도" /><small>휠과 확대·축소 버튼 반응 속도</small></section>
         {activeTool === 'pen' && <section className="inspector-section stroke-width-section"><div className="zoom-sensitivity-heading"><strong>선 굵기</strong><span>{strokeWidth}px</span></div><input type="range" min={MIN_STROKE_WIDTH} max={MAX_STROKE_WIDTH} step="1" value={strokeWidth} onChange={changeStrokeWidth} aria-label="드로잉 선 굵기" /><small>새로 그리는 선에 적용됩니다.</small></section>}
+        {activeTool === 'eraser' && <section className="inspector-section"><strong className="inspector-label">드로잉 지우개</strong><small className="inspector-hint">지우려는 선 위를 드래그하면 닿은 부분만 지워집니다. 드로잉은 개체로 선택되지 않습니다.</small></section>}
         {activeTool === 'shape' && <section className="inspector-section"><label className="inspector-label" htmlFor="shape-kind">도형 종류</label><select id="shape-kind" className="shape-select" value={shapeType} onChange={(event) => setShapeType(event.target.value)}><option value="rectangle">사각형</option><option value="ellipse">타원</option><option value="arrow">화살표</option></select><small className="inspector-hint">캔버스를 클릭해 도형을 놓으세요.</small></section>}
         {activeTool === 'note' && <section className="inspector-section"><span className="inspector-label">포스트잇 색상</span><div className="sticky-note-colors">{stickyNoteColors.map((swatch) => <button key={swatch} type="button" style={{ '--sticky-swatch': swatch }} className={noteColor === swatch ? 'selected' : ''} onClick={() => setNoteColor(swatch)} aria-label={`포스트잇 색상 ${swatch}`} aria-pressed={noteColor === swatch} />)}</div><small className="inspector-hint">캔버스를 클릭해 Markdown 포스트잇을 놓으세요.</small></section>}
         {activeTool === 'link' && <section className="inspector-section"><strong className="inspector-label">동영상·링크 공유</strong><small className="inspector-hint">캔버스를 클릭하고 YouTube, 동영상 주소 또는 웹 링크를 입력하세요.</small></section>}

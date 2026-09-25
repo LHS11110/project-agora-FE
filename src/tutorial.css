@@ -168,3 +168,6 @@
 .tutorial-scene .tutorial-text-item textarea{min-height:40px;padding:0;border:0!important;border-radius:0;background:transparent!important;box-shadow:none!important}
 @media(max-width:500px){.tutorial-table-settings{gap:5px}.tutorial-table-settings>strong{flex:1 0 100%}.tutorial-table-settings>small{white-space:normal}.tutorial-board-actions .tutorial-range-control input{width:42px}}
 .tutorial-sticky-head>span{cursor:grab}.object-dragging .tutorial-sticky-head>span{cursor:grabbing}
+.tutorial-stage.eraser-active{cursor:none}
+.tutorial-stage.eraser-active .tutorial-scene .tutorial-item{pointer-events:none!important}
+.tutorial-stage.eraser-active .object-rotation-frame,.tutorial-stage.eraser-active .object-rotation-handle{pointer-events:none!important}

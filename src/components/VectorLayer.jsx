@@ -41,6 +41,16 @@ function drawPolyline(graphics, points, color, width) {
   graphics.stroke({ color, width, cap: 'round', join: 'round' });
 }
 
+function drawStroke(graphics, points, color, width) {
+  if (!points.length) return;
+  const strokeWidth = Math.max(0.5, Number(width) || 3.5);
+  if (points.length === 1) {
+    graphics.circle(points[0].x, points[0].y, strokeWidth / 2).fill(color);
+    return;
+  }
+  drawPolyline(graphics, points, color, strokeWidth);
+}
+
 function drawCurvedArrow(graphics, geometry, color, width) {
   if (!geometry?.points?.length) return;
   const end = geometry.points[geometry.points.length - 1];
@@ -73,7 +83,7 @@ export function drawVectorItems(graphics, items, width, height, visibleItemIds =
     const angle = (Number(item.rotation) || 0) * Math.PI / 180;
     const rotated = pixelPoints.map((point) => rotatePoint(point.x, point.y, centerX, centerY, angle));
     if (rotated.length === 1) rotated.push({ x: rotated[0].x + 0.1, y: rotated[0].y + 0.1 });
-    drawPolyline(graphics, rotated, ink, Number(item.strokeWidth) || 3.5);
+    drawStroke(graphics, rotated, ink, Number(item.strokeWidth) || 3.5);
   }
 
   for (const [, item] of entries) {
@@ -125,10 +135,7 @@ export function drawVectorItems(graphics, items, width, height, visibleItemIds =
 function drawDraft(graphics, draft, width, height) {
   graphics.clear();
   if (!draft?.points?.length) return;
-  const [first, ...remaining] = draft.points;
-  graphics.moveTo(first.x * width, first.y * height);
-  for (const point of remaining) graphics.lineTo(point.x * width, point.y * height);
-  graphics.stroke({ color: colorNumber(draft.color), width: Number(draft.strokeWidth) || 3.5, cap: 'round', join: 'round' });
+  drawStroke(graphics, draft.points.map((point) => ({ x: point.x * width, y: point.y * height })), colorNumber(draft.color), Number(draft.strokeWidth) || 3.5);
 }
 
 function vectorSceneChanged(previous, current) {

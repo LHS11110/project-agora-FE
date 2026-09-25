@@ -9,6 +9,7 @@ import MathFormula from '../components/MathFormula.jsx';
 import VectorLayer from '../components/VectorLayer.jsx';
 import ResizeHandles from '../components/ResizeHandles.jsx';
 import RotationHandles, { rotationAtPointer } from '../components/RotationHandles.jsx';
+import { eraseStrokeWithEraser } from '../components/strokeGeometry.js';
 import { objectBounds } from '../components/CanvasSpatialBTree.js';
 import { connectorGeometry } from '../components/connectorGeometry.js';
 import { captureResize, resizeItemAtPointer } from '../components/objectResize.js';
@@ -30,6 +31,7 @@ const stickyNoteColors = ['#f6edcf', '#f3d8cc', '#dce9e0', '#dce6f4', '#eadff1']
 const tools = [
   { id: 'select', label: '선택 및 이동', icon: 'select' },
   { id: 'pen', label: '드로잉', icon: 'pen' },
+  { id: 'eraser', label: '드로잉 지우개', icon: 'eraser' },
   { id: 'connect', label: '오브젝트 연결', icon: 'connect' },
   { id: 'rectangle', label: '사각형', icon: 'rectangle' },
   { id: 'ellipse', label: '타원', icon: 'ellipse' },
@@ -43,6 +45,7 @@ const tools = [
 ];
 
 const makeId = () => globalThis.crypto?.randomUUID?.() || `tutorial-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const ERASER_RADIUS = 12;
 const isEditableTarget = (target) => target instanceof HTMLElement
   && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
 
@@ -51,6 +54,8 @@ export default function TutorialPage() {
   const sceneRef = useRef(null);
   const draftSetterRef = useRef(null);
   const drawingRef = useRef(false);
+  const eraserRef = useRef(null);
+  const eraserCursorRef = useRef(null);
   const pointsRef = useRef([]);
   const panRef = useRef(null);
   const dragRef = useRef(null);
@@ -121,11 +126,52 @@ export default function TutorialPage() {
     };
   };
 
+  const updateEraserCursor = (event) => {
+    if (activeTool !== 'eraser') return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const cursor = eraserCursorRef.current;
+    if (!cursor) return;
+    cursor.style.left = `${event.clientX - bounds.left}px`;
+    cursor.style.top = `${event.clientY - bounds.top}px`;
+    cursor.classList.add('is-visible');
+  };
+
+  const hideEraserCursor = () => eraserCursorRef.current?.classList.remove('is-visible');
+
   const addItem = (item) => {
     const id = makeId();
     setItems((current) => ({ ...current, [id]: item }));
     setSelectedItemId(id);
     return id;
+  };
+
+  const eraseStrokesBetween = (from, to) => {
+    const entries = Object.entries(items).filter(([, item]) => item?.kind === 'stroke');
+    const edits = entries.map(([id, item]) => ({
+      id,
+      item,
+      remainingPaths: eraseStrokeWithEraser(item, from, to, boardSize, camera.scale, ERASER_RADIUS),
+    })).filter(({ remainingPaths }) => remainingPaths !== null)
+      .map((edit) => ({
+        ...edit,
+        fragmentIds: edit.remainingPaths.slice(1).map(() => makeId()),
+      }));
+    if (!edits.length) return;
+
+    setItems((current) => {
+      let next = current;
+      for (const { id, item, remainingPaths, fragmentIds } of edits) {
+        if (next[id]?.kind !== 'stroke') continue;
+        if (next === current) next = { ...current };
+        if (remainingPaths.length === 0) {
+          delete next[id];
+          continue;
+        }
+        next[id] = { ...item, points: remainingPaths[0] };
+        remainingPaths.slice(1).forEach((points, index) => { next[fragmentIds[index]] = { ...item, points }; });
+      }
+      return next;
+    });
   };
 
   const startPan = (event) => {
@@ -137,9 +183,18 @@ export default function TutorialPage() {
   };
 
   const startOnBoard = (event) => {
+    updateEraserCursor(event);
     const targetItem = event.target.closest?.('.tutorial-item');
     if (event.button === 1 || spacePressedRef.current) { startPan(event); return; }
     if (activeTool === 'select' && !targetItem) { startPan(event); return; }
+    if (activeTool === 'eraser') {
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      const point = position(event);
+      eraserRef.current = point;
+      eraseStrokesBetween(point, point);
+      return;
+    }
     if (targetItem && activeTool !== 'pen') return;
 
     if (activeTool === 'pen') {
@@ -284,9 +339,16 @@ export default function TutorialPage() {
   };
 
   const moveOnBoard = (event) => {
+    updateEraserCursor(event);
     if (panRef.current) {
       const pan = panRef.current;
       setCamera((current) => ({ ...current, x: pan.cameraX + event.clientX - pan.x, y: pan.cameraY + event.clientY - pan.y }));
+      return;
+    }
+    if (eraserRef.current) {
+      const point = position(event);
+      eraseStrokesBetween(eraserRef.current, point);
+      eraserRef.current = point;
       return;
     }
     if (dragRef.current) {
@@ -322,6 +384,11 @@ export default function TutorialPage() {
     if (panRef.current) {
       panRef.current = null;
       boardRef.current?.classList.remove('panning');
+      if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+      return;
+    }
+    if (eraserRef.current) {
+      eraserRef.current = null;
       if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
       return;
     }
@@ -564,13 +631,14 @@ export default function TutorialPage() {
           </div>
           {(activeTool === 'table' || selectedTable) && <div className="tutorial-table-settings" onPointerDown={(event) => event.stopPropagation()}><strong>{activeTool === 'table' ? '새 테이블 설정' : '테이블 설정'}</strong><label>행<input type="number" min="1" max={MAX_TABLE_ROWS} value={activeTool === 'table' ? tableConfig.rows : selectedTable.rows?.length || 1} onChange={(event) => changeTableCount('rows', event)} /></label><label>열<input type="number" min="1" max={MAX_TABLE_COLUMNS} value={activeTool === 'table' ? tableConfig.columns : selectedTable.columns?.length || 1} onChange={(event) => changeTableCount('columns', event)} /></label><label>너비 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.width : Math.round((selectedTable.width || 0.42) * 100)} onChange={(event) => changeTableSize('width', event)} /></label><label>높이 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.height : Math.round((selectedTable.height || 0.32) * 100)} onChange={(event) => changeTableSize('height', event)} /></label><small>{activeTool === 'table' ? '캔버스를 클릭해 놓으세요.' : '컬럼 이름과 셀을 두 번 클릭해 Markdown으로 편집하세요.'}</small></div>}
           <div
-            className={`tutorial-stage${showGrid ? '' : ' no-grid'}${activeTool === 'pen' ? ' pen-active' : ''}`}
+            className={`tutorial-stage${showGrid ? '' : ' no-grid'}${activeTool === 'pen' ? ' pen-active' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}`}
             ref={boardRef}
             style={stageStyle}
             onPointerDown={startOnBoard}
             onPointerMove={moveOnBoard}
             onPointerUp={finishInteraction}
             onPointerCancel={finishInteraction}
+            onPointerLeave={hideEraserCursor}
             onWheel={handleWheel}
           >
             <div className="tutorial-plane" style={planeStyle} aria-hidden="true"><span className="tutorial-coordinate x-axis" /><span className="tutorial-coordinate y-axis" /><span className="tutorial-origin">0</span><b className="tutorial-x-label">X</b><b className="tutorial-y-label">Y</b></div>
@@ -597,6 +665,7 @@ export default function TutorialPage() {
                 };
                 if (item.height) style.height = `${item.height * 100}%`;
                 if (item.kind === 'stroke' || item.kind === 'connector') {
+                  if (item.kind === 'stroke') return null;
                   const bounds = objectBounds(item, items, boardSize.width, boardSize.height);
                   const curve = item.kind === 'connector' ? connectorGeometry(item, items, boardSize.width, boardSize.height) : null;
                   const geometryWidth = Math.max(1, (bounds.maxX - bounds.minX) * boardSize.width);
@@ -656,9 +725,10 @@ export default function TutorialPage() {
               })}
               {selectedItem && selectedItem.kind !== 'connector' && activeTool === 'select' && editingId !== selectedItemId && <RotationHandles sceneRef={sceneRef} id={String(selectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startItemRotation} />}
             </div>
+            {activeTool === 'eraser' && <div className="eraser-cursor" ref={eraserCursorRef} style={{ width: `${ERASER_RADIUS * 2}px`, height: `${ERASER_RADIUS * 2}px` }} aria-hidden="true" />}
             {sharePosition && <ShareComposer onCancel={() => { setSharePosition(null); setActiveTool('select'); }} onSubmit={placeSharedLink} />}
             {composer && <form className="tutorial-editor" onPointerDown={(event) => event.stopPropagation()} onSubmit={(event) => { event.preventDefault(); placeComposer(); }}><div className="tutorial-editor-heading"><span>수식 작성</span><button type="button" onClick={() => setComposer(null)} aria-label="닫기"><Icon name="close" size={15} /></button></div><textarea autoFocus value={composer.value} onChange={(event) => setComposer((current) => ({ ...current, value: event.target.value }))} aria-label="수식 입력" /><button className="tutorial-place-button" type="submit">캔버스에 놓기 <Icon name="arrow" size={14} /></button></form>}
-            <span className="tutorial-stage-hint">{activeTool === 'select' ? '오브젝트 드래그 이동 · 빈 곳 드래그 또는 Space + 드래그 이동' : `${tools.find((tool) => tool.id === activeTool)?.label} 도구 · 캔버스를 클릭`}</span>
+            <span className="tutorial-stage-hint">{activeTool === 'select' ? '오브젝트 드래그 이동 · 빈 곳 드래그 또는 Space + 드래그 이동' : activeTool === 'eraser' ? '지우개 도구 · 드래그한 곳의 선 부분만 지우기' : `${tools.find((tool) => tool.id === activeTool)?.label} 도구 · 캔버스를 클릭`}</span>
           </div>
           <div className="tutorial-board-footer"><span>{Object.keys(items).length}개 오브젝트</span><span><i /> 이 탭에서만 유지 · 저장되지 않음</span></div>
         </div>
