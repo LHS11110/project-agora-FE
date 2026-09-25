@@ -1,0 +1,20 @@
+.auth-page .auth-brand{animation:auth-reveal .65s .04s cubic-bezier(.2,.7,.2,1) both}
+.auth-page .auth-quote{animation:auth-reveal .72s .13s cubic-bezier(.2,.7,.2,1) both}
+.auth-page .auth-form-wrap{animation:auth-reveal .7s .12s cubic-bezier(.2,.7,.2,1) both}
+.auth-page .auth-art-paper{transform-origin:50% 70%;animation:auth-paper-float 5.8s ease-in-out infinite}
+.auth-page .auth-art-paper svg .auth-draw-line{stroke-dasharray:1;stroke-dashoffset:1;animation:auth-sketch 5.2s cubic-bezier(.5,0,.3,1) infinite}
+.auth-page .auth-art-paper svg .auth-dash-line{stroke-dashoffset:0;animation:auth-dash-flow 8s linear infinite}
+.auth-page .auth-art-spark{transform-origin:center;animation:auth-spark 2.8s ease-in-out infinite}
+.auth-page .auth-art-orbit{animation:auth-orbit 32s linear infinite}
+.auth-page .auth-form .form-field{animation:auth-reveal .48s ease-out both}
+.auth-page .auth-form .form-field:nth-child(1){animation-delay:.18s}
+.auth-page .auth-form .form-field:nth-child(2){animation-delay:.26s}
+.auth-page .auth-form .form-field:nth-child(3){animation-delay:.34s}
+.auth-page .auth-form .button-submit{animation:auth-reveal .5s .42s ease-out both}
+@keyframes auth-reveal{from{opacity:0;translate:0 13px}to{opacity:1;translate:0 0}}
+@keyframes auth-paper-float{0%,100%{transform:rotate(-6deg) translateY(0)}50%{transform:rotate(-6deg) translateY(-7px)}}
+@keyframes auth-sketch{0%,8%{stroke-dashoffset:1}54%,78%{stroke-dashoffset:0}100%{stroke-dashoffset:1}}
+@keyframes auth-dash-flow{to{stroke-dashoffset:-48}}
+@keyframes auth-spark{0%,100%{scale:.88;rotate:-8deg;opacity:.7}50%{scale:1.12;rotate:9deg;opacity:1}}
+@keyframes auth-orbit{to{rotate:360deg}}
+@media(prefers-reduced-motion:reduce){.auth-page .auth-brand,.auth-page .auth-quote,.auth-page .auth-form-wrap,.auth-page .auth-art-paper,.auth-page .auth-art-paper svg .auth-draw-line,.auth-page .auth-art-paper svg .auth-dash-line,.auth-page .auth-art-spark,.auth-page .auth-art-orbit,.auth-page .auth-form .form-field,.auth-page .auth-form .button-submit{animation:none!important;opacity:1;translate:none}.auth-page .auth-art-paper svg .auth-draw-line{stroke-dashoffset:0}.auth-page .auth-art-paper svg .auth-dash-line{stroke-dashoffset:0}.auth-page .auth-pencil animateMotion{display:none}}

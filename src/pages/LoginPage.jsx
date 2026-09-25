@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from '../routing.jsx';
 import Icon from '../components/Icon.jsx';
 import { useAuth } from '../state/AuthContext.jsx';
+import './login-motion.css';
 
 export default function LoginPage() {
   const { isAuthenticated, login, signup } = useAuth();
@@ -28,7 +29,7 @@ export default function LoginPage() {
     <div className="auth-visual-panel">
       <Link className="brand-lockup auth-brand" to="/"><span className="brand-mark"><i /><i /><i /><i /></span><span>agora<span className="brand-period">.</span></span></Link>
       <div className="auth-quote"><span className="section-kicker">MAKE ROOM FOR IDEAS</span><h1>같이 그리면<br /><em>더 멀리</em> 보여요.</h1><p>작은 낙서 하나가<br />모두의 다음 아이디어가 되는 곳.</p></div>
-      <div className="auth-art" aria-hidden="true"><div className="auth-art-paper"><span className="auth-art-bubble">let it<br />grow<span>✳</span></span><svg viewBox="0 0 260 150"><path d="M10 118 C 48 102, 48 28, 100 48 S 154 147, 204 72 S 234 26, 253 30" fill="none" stroke="#e18462" strokeWidth="4" strokeLinecap="round"/><path d="M38 62 C 70 22, 116 122, 157 56" fill="none" stroke="#69877b" strokeWidth="3" strokeLinecap="round" strokeDasharray="4 8"/></svg></div><span className="auth-art-spark">✦</span><span className="auth-art-orbit" /></div>
+      <div className="auth-art" aria-hidden="true"><div className="auth-art-paper"><span className="auth-art-bubble">let it<br />grow<span>✳</span></span><svg viewBox="0 0 260 150"><path className="auth-draw-line" d="M10 118 C 48 102, 48 28, 100 48 S 154 147, 204 72 S 234 26, 253 30" fill="none" stroke="#e18462" strokeWidth="4" strokeLinecap="round" pathLength="1"/><path className="auth-dash-line" d="M38 62 C 70 22, 116 122, 157 56" fill="none" stroke="#69877b" strokeWidth="3" strokeLinecap="round" strokeDasharray="4 8"/><g className="auth-pencil"><path d="M1 0L13 11L8 12L5 18L3 12Z" fill="#385b49" stroke="#fff" strokeWidth="1"/><animateMotion dur="5.2s" repeatCount="indefinite" rotate="auto" path="M10 118 C 48 102, 48 28, 100 48 S 154 147, 204 72 S 234 26, 253 30"/></g></svg></div><span className="auth-art-spark">✦</span><span className="auth-art-orbit" /></div>
       <div className="auth-panel-foot"><span>IDEAS IN GOOD COMPANY</span><span>© Agora Project</span></div>
     </div>
     <main className="auth-form-panel">
