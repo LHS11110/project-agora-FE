@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, startTransition, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 const RouterContext = createContext(null);
 const ParamsContext = createContext({});
@@ -14,7 +14,9 @@ function currentLocation() {
 
 export function BrowserRouter({ children }) {
   const [location, setLocation] = useState(currentLocation);
-  const sync = useCallback(() => setLocation(currentLocation()), []);
+  const sync = useCallback(() => {
+    startTransition(() => setLocation(currentLocation()));
+  }, []);
   useEffect(() => {
     window.addEventListener('popstate', sync);
     return () => window.removeEventListener('popstate', sync);
@@ -24,7 +26,7 @@ export function BrowserRouter({ children }) {
     const historyState = { __agora: true, value: options.state };
     if (options.replace) window.history.replaceState(historyState, '', target);
     else window.history.pushState(historyState, '', target);
-    setLocation(currentLocation());
+    startTransition(() => setLocation(currentLocation()));
     if (options.scroll !== false) window.scrollTo({ top: 0, behavior: 'instant' });
   }, []);
   const value = useMemo(() => ({ location, navigate }), [location, navigate]);

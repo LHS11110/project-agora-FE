@@ -1,5 +1,9 @@
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
+export function apiUrl(path) {
+  return /^https?:\/\//i.test(path) ? path : `${API_BASE}${path}`;
+}
+
 export class ApiError extends Error {
   constructor(message, status, code, payload) {
     super(message || '요청을 처리하지 못했습니다.');
@@ -11,7 +15,7 @@ export class ApiError extends Error {
 }
 
 export async function api(path, { method = 'GET', body, token, headers = {} } = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(apiUrl(path), {
     method,
     headers: {
       ...(body instanceof FormData ? {} : body ? { 'Content-Type': 'application/json' } : {}),

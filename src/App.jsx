@@ -24,7 +24,7 @@ export default function App() {
     <Route path="/login" element={<LoginPage />} />
     <Route path="/profile" element={<Protected><ProfilePage /></Protected>} />
     <Route path="/search" element={<Protected><SearchPage /></Protected>} />
-    <Route path="/canvases/:canvasId" element={<Protected><CanvasPage /></Protected>} />
+    <Route path="/canvases/:canvasId" element={<Protected><Suspense fallback={<div className="canvas-app-page canvas-loading-state"><span className="loader" /> 캔버스 화면을 불러오고 있어요.</div>}><CanvasPage /></Suspense></Protected>} />
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes>;
 }
