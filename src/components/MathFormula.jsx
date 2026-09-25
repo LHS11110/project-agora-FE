@@ -1,18 +1,18 @@
 import { useLayoutEffect, useRef } from 'react';
 
 let mathJaxLoadPromise;
-let mathJaxTypesetQueue = Promise.resolve();
+let mathJaxRenderQueue = Promise.resolve();
 
 function mathJaxReady(mathJax) {
   return Promise.resolve(mathJax?.startup?.promise).then(() => {
-    if (typeof mathJax?.typesetPromise !== 'function') throw new Error('MathJax is not ready');
+    if (typeof mathJax?.tex2svgPromise !== 'function') throw new Error('MathJax is not ready');
     return mathJax;
   });
 }
 
 function loadMathJax() {
   if (mathJaxLoadPromise) return mathJaxLoadPromise;
-  if (window.MathJax?.typesetPromise) {
+  if (window.MathJax?.tex2svgPromise) {
     mathJaxLoadPromise = mathJaxReady(window.MathJax).catch((error) => {
       mathJaxLoadPromise = null;
       throw error;
@@ -31,7 +31,10 @@ function loadMathJax() {
     script.async = true;
     script.dataset.agoraMathjax = 'true';
     script.onload = () => mathJaxReady(window.MathJax).then(resolve, reject);
-    script.onerror = () => reject(new Error('MathJax failed to load'));
+    script.onerror = () => {
+      script.remove();
+      reject(new Error('MathJax failed to load'));
+    };
     document.head.appendChild(script);
   }).catch((error) => {
     mathJaxLoadPromise = null;
@@ -51,17 +54,17 @@ export default function MathFormula({ formula }) {
     let cancelled = false;
     loadMathJax().then((mathJax) => {
       if (cancelled) return;
-      mathJaxTypesetQueue = mathJaxTypesetQueue.catch(() => {}).then(async () => {
+      mathJaxRenderQueue = mathJaxRenderQueue.catch(() => {}).then(async () => {
         if (cancelled) return;
-        mathJax.typesetClear?.([element]);
-        element.textContent = source;
-        await mathJax.typesetPromise([element]);
+        const output = await mathJax.tex2svgPromise(String(formula ?? '').slice(0, 1200), { display: false });
+        if (cancelled) return;
+        element.replaceChildren(output);
       });
-      return mathJaxTypesetQueue;
+      return mathJaxRenderQueue;
     }).catch(() => { if (!cancelled) element.textContent = source; });
     return () => {
       cancelled = true;
-      window.MathJax?.typesetClear?.([element]);
+      element.replaceChildren();
     };
   }, [formula]);
 
