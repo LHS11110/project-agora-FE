@@ -1,12 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { cloneElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Automerge from '@automerge/automerge/slim';
 import automergeWasmUrl from '@automerge/automerge/automerge.wasm?url';
 import { Link, useNavigate, useParams } from '../routing.jsx';
 import Icon from '../components/Icon.jsx';
 import MarkdownText from '../components/MarkdownText.jsx';
 import EditableTable from '../components/EditableTable.jsx';
+import ShareComposer from '../components/ShareComposer.jsx';
+import SharedMediaContent from '../components/SharedMediaContent.jsx';
 import MathFormula from '../components/MathFormula.jsx';
 import VectorLayer from '../components/VectorLayer.jsx';
+import ResizeHandles from '../components/ResizeHandles.jsx';
+import { captureResize, resizeItemAtPointer } from '../components/objectResize.js';
 import CanvasPeerMesh from '../components/CanvasPeerMesh.js';
 import CanvasSpatialBTree, { objectBounds } from '../components/CanvasSpatialBTree.js';
 import { connectorGeometry } from '../components/connectorGeometry.js';
@@ -147,14 +151,20 @@ function SettingsDialog({ settings, pending, onClose, onUpdate, onAddParticipant
   </section></div>;
 }
 
-function CanvasObject({ id, item, bounds, selected, activeTool, connectionStartId, editing, dirty, connectorCurve, viewSize, onStartEditing, onTextChange, onMetadataChange, onTableChange, onStopEditing, onSave, onPointerDown, onPointerMove, onPointerUp, onDelete, onCopy }) {
-  const width = Number(item.width) || ({ image: 0.3, code: 0.32, shape: 0.14, math: 0.2, text: 0.22, note: 0.22, table: 0.42 }[item.kind] || 0.2);
-  const height = Number(item.height) || ({ shape: 0.12, math: 0.09, text: 0.12, note: 0.15, table: 0.32 }[item.kind] || 0.2);
+function CanvasObject({ id, item, bounds, selected, activeTool, connectionStartId, editing, dirty, connectorCurve, viewSize, onStartEditing, onTextChange, onMetadataChange, onTableChange, onStopEditing, onSave, onPointerDown, onResizeStart, onPointerMove, onPointerUp, onDelete, onCopy }) {
+  const width = Number(item.width) || ({ image: 0.3, code: 0.32, shape: 0.14, math: 0.2, text: 0.22, note: 0.22, table: 0.42, link: 0.3 }[item.kind] || 0.2);
+  const height = Number(item.height) || ({ shape: 0.12, math: 0.09, text: 0.12, note: 0.15, table: 0.32, link: 0.15 }[item.kind] || 0.2);
   const style = { left: `${(Number(item.x) || 0) * 100}%`, top: `${(Number(item.y) || 0) * 100}%`, width: `${width * 100}%`, '--object-color': item.color || '#617d68', '--object-rotation': `${Number(item.rotation) || 0}deg` };
   if (item.height) style.height = `${height * 100}%`;
   const movable = activeTool === 'select';
-  const classes = `canvas-object canvas-object-${item.kind}${movable ? ' movable' : ''}${selected ? ' selected' : ''}${connectionStartId === id ? ' connection-source' : ''}`;
+  const classes = `canvas-object canvas-object-${item.kind}${movable ? ' movable' : ''}${selected ? ' selected' : ''}${connectionStartId === id ? ' connection-source' : ''}${item.height ? ' has-custom-height' : ''}`;
   const handlers = { onPointerDown: (event) => onPointerDown(event, id, item), onPointerMove, onPointerUp, onPointerCancel: onPointerUp };
+  const resizeHandles = selected && movable && !editing && item.kind !== 'connector'
+    ? <ResizeHandles onPointerDown={(event, handle) => onResizeStart(event, id, item, handle)} />
+    : null;
+  const withResizeHandles = (element) => resizeHandles
+    ? cloneElement(element, { className: `${element.props.className} resizeable` }, <>{element.props.children}{resizeHandles}</>)
+    : element;
 
   if (item.kind === 'stroke' || item.kind === 'connector') {
     const vectorStyle = { ...style, left: `${(bounds?.minX ?? 0) * 100}%`, top: `${(bounds?.minY ?? 0) * 100}%`, width: `${Math.max(0.01, (bounds?.maxX ?? 0.2) - (bounds?.minX ?? 0)) * 100}%`, height: `${Math.max(0.01, (bounds?.maxY ?? 0.12) - (bounds?.minY ?? 0)) * 100}%` };
@@ -164,19 +174,23 @@ function CanvasObject({ id, item, bounds, selected, activeTool, connectionStartI
     const offsetY = bounds.minY * viewSize.height;
     const curvePath = connectorCurve?.points.map((point, index) => `${index ? 'L' : 'M'}${point.x - offsetX} ${point.y - offsetY}`).join(' ');
     const arrowTip = connectorCurve?.points.at(-1);
-    return <div key={id} className={`${classes} vector-object-hit`} style={vectorStyle} data-item-id={id} {...handlers}><button onPointerDown={(event) => event.stopPropagation()} onClick={() => onDelete(id)} aria-label="벡터 오브젝트 삭제">×</button>{item.kind === 'connector' && curvePath && <svg className="connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} /><circle cx={arrowTip.x - offsetX} cy={arrowTip.y - offsetY} r="9" /></svg>}</div>;
+    return withResizeHandles(<div key={id} className={`${classes} vector-object-hit`} style={vectorStyle} data-item-id={id} {...handlers}><button onPointerDown={(event) => event.stopPropagation()} onClick={() => onDelete(id)} aria-label="벡터 오브젝트 삭제">×</button>{item.kind === 'connector' && curvePath && <svg className="connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} /><circle cx={arrowTip.x - offsetX} cy={arrowTip.y - offsetY} r="9" /></svg>}</div>);
   }
-  if (item.kind === 'image') return <div key={id} className={`${classes} image-object`} style={style} {...handlers}><img src={item.src} alt={item.filename || '공유된 이미지'} /><div className="object-caption"><Icon name="image" size={13} />{item.filename || '공유 이미지'}<button onClick={() => onDelete(id)} aria-label="이미지 삭제">×</button></div></div>;
-  if (item.kind === 'code') return <div key={id} className={`${classes} code-object`} style={style} data-item-id={id} {...handlers} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) onStopEditing(id); }} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}><div className="code-object-head"><span className="code-file-icon"><Icon name="code" size={15} /></span>{editing ? <><input className="code-filename-input" aria-label="코드 파일 이름" value={item.filename || ''} placeholder="idea.js" maxLength={80} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'filename', event.target.value)} /><select className="code-language-select" aria-label="코드 언어" value={item.language || 'javascript'} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'language', event.target.value)}><option>javascript</option><option>typescript</option><option>python</option><option>html</option><option>css</option><option>json</option><option>text</option></select></> : <><strong>{item.filename || 'snippet.js'}</strong><small>{item.language || 'text'}</small></>}<button onClick={() => onDelete(id)} aria-label="코드 삭제">×</button></div>{editing ? <textarea className="code-shared-input" autoFocus aria-label="공동 편집 코드" value={item.code || ''} placeholder="여기에 코드를 작성하세요." onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onTextChange(id, event.target.value)} /> : <pre onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 함께 편집"><code>{item.code}</code></pre>}<div className="code-object-foot"><span><i /> {dirty ? '저장되지 않음 · Ctrl + S' : editing ? 'P2P 실시간 편집' : '두 번 클릭해 편집'}</span><button onClick={() => onCopy(item.code || '')}>복사</button></div></div>;
-  if (item.kind === 'note') return <div key={id} className={`${classes} sticky-note-object`} style={{ ...style, '--sticky-note-color': item.color || stickyNoteColors[0], '--sticky-note-rotation': `${Number(item.rotation) || -1}deg` }} data-item-id={id} {...handlers} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) onStopEditing(id); }} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}>
+  if (item.kind === 'image') return withResizeHandles(<div key={id} className={`${classes} image-object`} style={style} {...handlers}><img src={item.src} alt={item.filename || '공유된 이미지'} /><div className="object-caption"><Icon name="image" size={13} />{item.filename || '공유 이미지'}<button onClick={() => onDelete(id)} aria-label="이미지 삭제">×</button></div></div>);
+  if (item.kind === 'link') return withResizeHandles(<div key={id} className={`${classes} media-link-object${item.mediaType === 'link' ? ' external-link-object' : ' video-link-object'}`} style={style} data-item-id={id} {...handlers}>
+    <div className="shared-media-header"><span className="shared-media-drag-handle" title="여기를 끌어 자료를 이동하세요"><Icon name={item.mediaType === 'link' ? 'link' : 'image'} size={13} />{item.mediaType === 'youtube' ? `YouTube · ${item.title || '동영상'}` : item.mediaType === 'video' ? `동영상 · ${item.title || '재생'}` : '링크'}</span><button className="media-link-delete" onPointerDown={(event) => event.stopPropagation()} onClick={() => onDelete(id)} aria-label="공유 자료 삭제">×</button></div>
+    <SharedMediaContent item={item} />
+  </div>);
+  if (item.kind === 'code') return withResizeHandles(<div key={id} className={`${classes} code-object`} style={style} data-item-id={id} {...handlers} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) onStopEditing(id); }} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}><div className="code-object-head"><span className="code-file-icon"><Icon name="code" size={15} /></span>{editing ? <><input className="code-filename-input" aria-label="코드 파일 이름" value={item.filename || ''} placeholder="idea.js" maxLength={80} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'filename', event.target.value)} /><select className="code-language-select" aria-label="코드 언어" value={item.language || 'javascript'} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'language', event.target.value)}><option>javascript</option><option>typescript</option><option>python</option><option>html</option><option>css</option><option>json</option><option>text</option></select></> : <><strong>{item.filename || 'snippet.js'}</strong><small>{item.language || 'text'}</small></>}<button onClick={() => onDelete(id)} aria-label="코드 삭제">×</button></div>{editing ? <textarea className="code-shared-input" autoFocus aria-label="공동 편집 코드" value={item.code || ''} placeholder="여기에 코드를 작성하세요." onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onTextChange(id, event.target.value)} /> : <pre onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 함께 편집"><code>{item.code}</code></pre>}<div className="code-object-foot"><span><i /> {dirty ? '저장되지 않음 · Ctrl + S' : editing ? 'P2P 실시간 편집' : '두 번 클릭해 편집'}</span><button onClick={() => onCopy(item.code || '')}>복사</button></div></div>);
+  if (item.kind === 'note') return withResizeHandles(<div key={id} className={`${classes} sticky-note-object`} style={{ ...style, '--sticky-note-color': item.color || stickyNoteColors[0], '--sticky-note-rotation': `${Number(item.rotation) || -1}deg` }} data-item-id={id} {...handlers} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) onStopEditing(id); }} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}>
     <div className="sticky-note-head"><span title="끌어서 포스트잇 이동"><Icon name="sticky" size={13} /> 포스트잇</span><input type="color" aria-label="포스트잇 색상" title="포스트잇 색상 변경" value={item.color || stickyNoteColors[0]} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'color', event.target.value)} /><button onPointerDown={(event) => event.stopPropagation()} onClick={() => onDelete(id)} aria-label="포스트잇 삭제">×</button></div>
     {editing ? <textarea autoFocus aria-label="포스트잇 Markdown 편집" value={item.text || ''} placeholder={'# 메모 제목\n- 할 일\n**중요한 내용**'} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onTextChange(id, event.target.value)} /> : <div className="sticky-note-content" onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 Markdown 편집">{item.text ? <MarkdownText source={item.text} /> : <p className="sticky-note-empty">두 번 클릭해 메모를 작성하세요.</p>}</div>}
     <small className="collab-save-hint">{dirty ? '저장되지 않음 · Ctrl + S' : editing ? 'Markdown · Ctrl + S 저장' : '두 번 클릭해 편집'}</small>
-  </div>;
-  if (item.kind === 'table') return <div key={id} className={`${classes} canvas-table-object`} style={style} data-item-id={id} {...handlers}><EditableTable item={item} onChange={(location, value) => onTableChange(id, (current) => updateTableValue(current, location, value))} /><button className="canvas-table-delete" onPointerDown={(event) => event.stopPropagation()} onClick={() => onDelete(id)} aria-label="테이블 삭제">×</button></div>;
-  if (item.kind === 'shape') return <div key={id} className={`${classes} shape-object shape-vector-hit shape-${item.shapeType || 'rectangle'}`} style={style} {...handlers}><button onClick={() => onDelete(id)} aria-label="도형 삭제">×</button></div>;
-  if (item.kind === 'text') return <div key={id} className={`${classes} text-object`} style={style} data-item-id={id} {...handlers}>{editing ? <><textarea autoFocus aria-label="공동 편집 텍스트" value={item.text || ''} placeholder="여기에 텍스트를 입력하세요." onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onTextChange(id, event.target.value)} onBlur={() => onStopEditing(id)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }} /><small className="collab-save-hint">{dirty ? '저장되지 않음 · Ctrl + S' : '저장됨'}</small></> : <p onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 함께 편집">{item.text || '두 번 클릭해 편집'}</p>}<button onClick={() => onDelete(id)} aria-label="텍스트 삭제">×</button></div>;
-  if (item.kind === 'math') return <div key={id} className={`${classes} math-object`} style={style} {...handlers}><MathFormula formula={item.formula || item.text || 'x + y'} /><button onPointerDown={(event) => event.stopPropagation()} onClick={() => onDelete(id)} aria-label="수식 삭제">×</button></div>;
+  </div>);
+  if (item.kind === 'table') return withResizeHandles(<div key={id} className={`${classes} canvas-table-object`} style={style} data-item-id={id} {...handlers}><EditableTable item={item} onChange={(location, value) => onTableChange(id, (current) => updateTableValue(current, location, value))} /><button className="canvas-table-delete" onPointerDown={(event) => event.stopPropagation()} onClick={() => onDelete(id)} aria-label="테이블 삭제">×</button></div>);
+  if (item.kind === 'shape') return withResizeHandles(<div key={id} className={`${classes} shape-object shape-vector-hit shape-${item.shapeType || 'rectangle'}`} style={style} {...handlers}><button onClick={() => onDelete(id)} aria-label="도형 삭제">×</button></div>);
+  if (item.kind === 'text') return withResizeHandles(<div key={id} className={`${classes} text-object`} style={style} data-item-id={id} {...handlers}>{editing ? <><textarea autoFocus aria-label="공동 편집 텍스트" value={item.text || ''} placeholder="여기에 텍스트를 입력하세요." onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onTextChange(id, event.target.value)} onBlur={() => onStopEditing(id)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }} /><small className="collab-save-hint">{dirty ? '저장되지 않음 · Ctrl + S' : '저장됨'}</small></> : <p onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 함께 편집">{item.text || '두 번 클릭해 편집'}</p>}<button onClick={() => onDelete(id)} aria-label="텍스트 삭제">×</button></div>);
+  if (item.kind === 'math') return withResizeHandles(<div key={id} className={`${classes} math-object`} style={style} {...handlers}><MathFormula formula={item.formula || item.text || 'x + y'} /><button onPointerDown={(event) => event.stopPropagation()} onClick={() => onDelete(id)} aria-label="수식 삭제">×</button></div>);
   return null;
 }
 
@@ -227,6 +241,7 @@ function CanvasWorkspace() {
   const [connection, setConnection] = useState('connecting');
   const [error, setError] = useState('');
   const [activeTool, setActiveTool] = useState('select');
+  const [sharePosition, setSharePosition] = useState(null);
   const [color, setColor] = useState(inkColors[0]);
   const [connectorColor, setConnectorColor] = useState('#8b8f8c');
   const [connectorWidth, setConnectorWidth] = useState(1.5);
@@ -253,6 +268,7 @@ function CanvasWorkspace() {
   const [toast, setToast] = useState('');
   groupsRef.current = groups;
   dirtyItemsRef.current = dirtyItems;
+  useEffect(() => { if (activeTool !== 'link') setSharePosition(null); }, [activeTool]);
 
   const sendRaw = useCallback((payload) => {
     const socket = wsRef.current;
@@ -581,10 +597,19 @@ function CanvasWorkspace() {
       if (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)) return;
       const rotation = data.rotation == null ? item.rotation : Number(data.rotation);
       const safeRotation = Number.isFinite(rotation) ? Math.max(-180, Math.min(180, rotation)) : item.rotation;
-      const nextItem = { ...item, x: Number(data.x) || 0, y: Number(data.y) || 0, rotation: safeRotation };
+      const width = data.width == null ? item.width : Number(data.width);
+      const height = data.height == null ? item.height : Number(data.height);
+      const nextItem = {
+        ...item,
+        x: Number(data.x) || 0,
+        y: Number(data.y) || 0,
+        rotation: safeRotation,
+        ...(Number.isFinite(width) && width > 0 ? { width } : {}),
+        ...(Number.isFinite(height) && height > 0 ? { height } : {}),
+      };
       itemsRef.current = { ...itemsRef.current, [key]: nextItem };
       setItems((current) => ({ ...current, [key]: nextItem }));
-      if (item.x !== nextItem.x || item.y !== nextItem.y || item.rotation !== nextItem.rotation) refreshSpatialIndex();
+      if (item.x !== nextItem.x || item.y !== nextItem.y || item.width !== nextItem.width || item.height !== nextItem.height || item.rotation !== nextItem.rotation) refreshSpatialIndex();
       markItemDirty(key);
       return;
     }
@@ -964,15 +989,27 @@ function CanvasWorkspace() {
     '--axis-x-arrow-opacity': axisOriginX <= boardSize.width ? 1 : 0,
     '--axis-y-arrow-opacity': axisOriginY >= 0 ? 1 : 0,
   };
-  const visibleEntries = useMemo(() => spatialIndex.query(visibleBounds)
-    .map((entry) => ({ ...entry, item: items[entry.id] || entry.item })), [items, spatialIndex, visibleBounds]);
+  const visibleEntries = useMemo(() => {
+    const entries = new Map(spatialIndex.query(visibleBounds)
+      .map((entry) => [entry.id, { ...entry, item: items[entry.id] || entry.item }]));
+    const draggingId = dragRef.current?.id;
+    if (draggingId && items[draggingId]) {
+      const item = items[draggingId];
+      entries.set(draggingId, {
+        id: draggingId,
+        item,
+        bounds: objectBounds(item, items, boardSize.width, boardSize.height),
+      });
+    }
+    return [...entries.values()];
+  }, [boardSize.height, boardSize.width, items, spatialIndex, visibleBounds]);
   const visibleItemKey = visibleEntries.map((entry) => entry.id).join('\u0000');
   const visibleItemIds = useMemo(() => new Set(visibleEntries.map((entry) => entry.id)), [visibleItemKey]);
   const visibleVectorItems = useMemo(() => Object.fromEntries(visibleEntries
     .filter(({ item }) => ['stroke', 'shape', 'connector'].includes(item?.kind))
     .map(({ id, item }) => [id, item])), [visibleEntries]);
   const sortedItems = useMemo(() => visibleEntries
-    .filter(({ item }) => ['image', 'code', 'note', 'table', 'shape', 'text', 'math', 'stroke', 'connector'].includes(item?.kind))
+    .filter(({ item }) => ['image', 'link', 'code', 'note', 'table', 'shape', 'text', 'math', 'stroke', 'connector'].includes(item?.kind))
     .sort((a, b) => a.bounds.minY - b.bounds.minY)
     .map(({ id, item, bounds }) => [id, item, bounds, item.kind === 'connector' ? connectorGeometry(item, items, boardSize.width, boardSize.height) : null]), [boardSize.height, boardSize.width, items, visibleEntries]);
   const selectedTable = selectedItemId ? items[String(selectedItemId)]?.kind === 'table' ? items[String(selectedItemId)] : null : null;
@@ -1095,6 +1132,11 @@ function CanvasWorkspace() {
   const startDrawing = (event) => {
     if (event.button === 1 || spacePressedRef.current || (activeTool === 'select' && !event.target.closest?.('.canvas-object'))) { startPan(event); return; }
     if (connection !== 'connected' || (activeTool !== 'pen' && event.target.closest?.('.canvas-object'))) return;
+    if (activeTool === 'link') {
+      event.preventDefault();
+      setSharePosition(pointerPosition(event));
+      return;
+    }
     if (activeTool === 'table') {
       event.preventDefault();
       const point = pointerPosition(event);
@@ -1164,6 +1206,30 @@ function CanvasWorkspace() {
     const id = createId();
     if (!addItem(id, { kind: 'stroke', points, color, strokeWidth, permission })) setToast('실시간 서버에 연결된 뒤 그릴 수 있어요.');
   };
+  const placeSharedLink = (shared) => {
+    if (!sharePosition) return;
+    const isVideo = shared.mediaType === 'youtube' || shared.mediaType === 'video';
+    const width = isVideo ? 0.36 : 0.3;
+    const height = isVideo ? 0.36 : 0.15;
+    const media = { ...shared };
+    delete media.defaultTitle;
+    const id = createId();
+    const item = {
+      kind: 'link',
+      ...media,
+      x: sharePosition.x - width / 2,
+      y: sharePosition.y - height / 2,
+      width,
+      height,
+      permission,
+    };
+    if (!addItem(id, item)) {
+      setToast('실시간 서버에 연결된 뒤 동영상이나 링크를 공유할 수 있어요.');
+      return;
+    }
+    setSharePosition(null);
+    setActiveTool('select');
+  };
   const uploadImage = async (event) => {
     const file = event.target.files?.[0]; event.target.value = '';
     if (!file) return;
@@ -1203,26 +1269,51 @@ function CanvasWorkspace() {
     event.preventDefault(); event.stopPropagation();
     const start = pointerPosition(event);
     event.currentTarget.classList.add('object-dragging');
-    dragRef.current = { id, initial: item, offsetX: start.x - (item.x || 0), offsetY: start.y - (item.y || 0), startX: start.x, startY: start.y, element: event.currentTarget };
+    dragRef.current = { mode: 'move', id, initial: item, offsetX: start.x - (item.x || 0), offsetY: start.y - (item.y || 0), startX: start.x, startY: start.y, element: event.currentTarget };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+  const startObjectResize = (event, id, item, handle) => {
+    if (activeTool !== 'select' || item?.kind === 'connector') return;
+    const board = boardRef.current?.getBoundingClientRect();
+    if (!board) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const key = String(id);
+    const initial = itemsRef.current[key] || item;
+    const start = pointerPosition(event);
+    const element = event.currentTarget.closest('.canvas-object');
+    setSelectedItemId(key);
+    element?.classList.add('object-resizing');
+    dragRef.current = {
+      mode: 'resize',
+      id: key,
+      initial,
+      resize: captureResize(initial, handle, start, element, board),
+      viewport: { width: board.width, height: board.height },
+      element,
+    };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
   const moveObject = (event) => {
     if (!dragRef.current) return;
-    const { id, initial, offsetX, offsetY, startX, startY } = dragRef.current; const point = pointerPosition(event);
-    const next = initial.kind === 'stroke'
-      ? { ...initial, points: initial.points.map((part) => ({ ...part, x: part.x + point.x - startX, y: part.y + point.y - startY })) }
-      : { ...initial, x: point.x - offsetX, y: point.y - offsetY };
+    const { mode, id, initial, offsetX, offsetY, startX, startY, resize, viewport } = dragRef.current;
+    const point = pointerPosition(event);
+    const next = mode === 'resize'
+      ? resizeItemAtPointer(initial, resize, point, viewport)
+      : initial.kind === 'stroke'
+        ? { ...initial, points: initial.points.map((part) => ({ ...part, x: part.x + point.x - startX, y: part.y + point.y - startY })) }
+        : { ...initial, x: point.x - offsetX, y: point.y - offsetY };
     itemsRef.current = { ...itemsRef.current, [id]: next };
     setItems((current) => ({ ...current, [id]: next }));
   };
   const stopObjectDrag = () => {
     if (!dragRef.current) return;
     const { id, initial, element } = dragRef.current; dragRef.current = null;
-    element?.classList.remove('object-dragging');
+    element?.classList.remove('object-dragging', 'object-resizing');
     const item = itemsRef.current[id];
     refreshSpatialIndex();
     if (isCollaborativeItem(item)) {
-      peerMeshRef.current?.sendData({ type: 'item_geometry', item_id: String(id), x: item.x, y: item.y, rotation: item.rotation }, (peer) => canPeerAccessItem(item, peer));
+      peerMeshRef.current?.sendData({ type: 'item_geometry', item_id: String(id), x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation }, (peer) => canPeerAccessItem(item, peer));
       markItemDirty(id);
     } else if (item && !sendItemChange({ type: 'item_update', item_id: id, item }, initial)) {
       setItems((current) => ({ ...current, [id]: initial }));
@@ -1354,7 +1445,7 @@ function CanvasWorkspace() {
       <aside className="canvas-tools" aria-label="캔버스 도구">
         <div className="tool-group"><button className={`tool-button${activeTool === 'select' ? ' active' : ''}`} title="선택 및 이동" aria-label="선택 및 이동" onClick={() => setActiveTool('select')}><Icon name="select" size={19} /></button><button className={`tool-button${activeTool === 'pen' ? ' active' : ''}`} title="드로잉" aria-label="드로잉" onClick={() => setActiveTool('pen')}><Icon name="pen" size={19} /></button><button className={`tool-button${activeTool === 'connect' ? ' active' : ''}`} title="오브젝트 연결" aria-label="오브젝트 연결" onClick={() => { setConnectionStartId(null); setActiveTool('connect'); }}><Icon name="connect" size={19} /></button></div>
         <div className="tool-separator" /><div className="tool-group"><button className={`tool-button${activeTool === 'shape' ? ' active' : ''}`} title="도형" aria-label="도형" onClick={() => setActiveTool('shape')}><Icon name="shape" size={19} /></button><button className={`tool-button${activeTool === 'text' ? ' active' : ''}`} title="텍스트" aria-label="텍스트" onClick={() => setActiveTool('text')}><Icon name="text" size={19} /></button><button className={`tool-button${activeTool === 'note' ? ' active' : ''}`} title="포스트잇" aria-label="포스트잇" onClick={() => setActiveTool('note')}><Icon name="sticky" size={19} /></button><button className={`tool-button${activeTool === 'math' ? ' active' : ''}`} title="수식 작성" aria-label="수식 작성" onClick={() => setActiveTool('math')}><Icon name="math" size={19} /></button><button className={`tool-button${activeTool === 'table' ? ' active' : ''}`} title="테이블" aria-label="테이블" onClick={() => setActiveTool('table')}><Icon name="table" size={19} /></button></div>
-        <div className="tool-separator" /><div className="tool-group"><label className="tool-button file-tool" title="사진 올리기" aria-label="사진 올리기"><Icon name="image" size={19} /><input type="file" accept="image/*" onChange={uploadImage} /></label><button className={`tool-button${activeTool === 'code' ? ' active' : ''}`} title="코드 블록" aria-label="코드 블록" onClick={() => setActiveTool('code')}><Icon name="code" size={19} /></button></div>
+        <div className="tool-separator" /><div className="tool-group"><label className="tool-button file-tool" title="사진 올리기" aria-label="사진 올리기"><Icon name="image" size={19} /><input type="file" accept="image/*" onChange={uploadImage} /></label><button className={`tool-button${activeTool === 'code' ? ' active' : ''}`} title="코드 블록" aria-label="코드 블록" onClick={() => setActiveTool('code')}><Icon name="code" size={19} /></button><button className={`tool-button${activeTool === 'link' ? ' active' : ''}`} title="동영상·링크 공유" aria-label="동영상·링크 공유" onClick={() => setActiveTool('link')}><Icon name="link" size={19} /></button></div>
         <div className="tool-separator" /><div className="color-picker" aria-label="펜 및 도형 색상">{inkColors.map((ink) => <button key={ink} style={{ '--ink': ink }} className={color === ink ? 'selected' : ''} onClick={() => setColor(ink)} aria-label={`색상 ${ink}`} />)}</div><div className="tool-bottom"><span className="tool-help">CANVAS</span><span>도구</span></div>
       </aside>
       <main className="board-region"><div className="board-topline"><span className="board-section-label"><i /> 2차 좌표 캔버스</span><div className="board-toolbar-actions"><span className="board-updated"><Icon name="clock" size={14} /> P2P {peerList.filter((peer) => peer.connected).length}명 · 저장 Ctrl+S</span><button className="zoom-button" aria-label="확대" title="클릭: 한 단계 확대 · 길게 누르기: 계속 확대" onPointerDown={(event) => startZoomHold(event, 1 + 0.15 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.15 * zoomSensitivity)}>+</button><span className="zoom-value">{Math.round(camera.scale * 100)}%</span><button className="zoom-button" aria-label="축소" title="클릭: 한 단계 축소 · 길게 누르기: 계속 축소" onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.15 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.15 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => setCamera({ x: 0, y: 0, scale: 1 })}>맞춤</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />격자 {showGrid ? '켜짐' : '꺼짐'}</button></div></div>
@@ -1363,10 +1454,11 @@ function CanvasWorkspace() {
           <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true"><span className="coordinate-x" /><span className="coordinate-y" /><i className="coordinate-origin">0</i><b className="coordinate-x-label">X</b><b className="coordinate-y-label">Y</b></div>
           <VectorLayer items={visibleVectorItems} referenceItems={items} camera={camera} onReady={(setDraft) => { vectorDraftRef.current = setDraft; }} />
           <div className="canvas-scene" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}>
-            {sortedItems.map(([id, item, bounds, connectorCurve]) => <CanvasObject key={id} id={id} item={item} bounds={bounds} connectorCurve={connectorCurve} viewSize={boardSize} selected={String(selectedItemId) === String(id)} activeTool={activeTool} connectionStartId={connectionStartId} editing={editingId === id} dirty={dirtyItems.has(String(id))} onStartEditing={startEditing} onTextChange={updateCollaborativeText} onMetadataChange={updateCollaborativeMetadata} onTableChange={updateTableItem} onStopEditing={stopEditing} onSave={saveCollaborativeItem} onPointerDown={startObjectDrag} onPointerMove={moveObject} onPointerUp={stopObjectDrag} onDelete={deleteItem} onCopy={(value) => navigator.clipboard?.writeText(value)} />)}
+            {sortedItems.map(([id, item, bounds, connectorCurve]) => <CanvasObject key={id} id={id} item={item} bounds={bounds} connectorCurve={connectorCurve} viewSize={boardSize} selected={String(selectedItemId) === String(id)} activeTool={activeTool} connectionStartId={connectionStartId} editing={editingId === id} dirty={dirtyItems.has(String(id))} onStartEditing={startEditing} onTextChange={updateCollaborativeText} onMetadataChange={updateCollaborativeMetadata} onTableChange={updateTableItem} onStopEditing={stopEditing} onSave={saveCollaborativeItem} onPointerDown={startObjectDrag} onResizeStart={startObjectResize} onPointerMove={moveObject} onPointerUp={stopObjectDrag} onDelete={deleteItem} onCopy={(value) => navigator.clipboard?.writeText(value)} />)}
             {Object.entries(remoteCursors).filter(([, cursor]) => cursor.visible !== false && cursor.x >= visibleBounds.minX && cursor.x <= visibleBounds.maxX && cursor.y >= visibleBounds.minY && cursor.y <= visibleBounds.maxY).map(([peerId, cursor]) => <div className="remote-cursor" key={peerId} style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%`, '--cursor-color': cursor.color }} title={`${cursor.nickname}#${cursor.tag_number}`}><svg viewBox="0 0 18 22" aria-hidden="true"><path d="M1 1v17l4.5-4.3 3.1 7.1 3.1-1.4-3.2-6.8H15z" /></svg><span>{cursor.nickname}</span></div>)}
           </div>
-          {activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} /> 그리는 중</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? '도착 오브젝트 선택' : '시작 오브젝트 선택'}</div>}
+          {sharePosition && <ShareComposer onCancel={() => { setSharePosition(null); setActiveTool('select'); }} onSubmit={placeSharedLink} />}
+          {activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} /> 그리는 중</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? '도착 오브젝트 선택' : '시작 오브젝트 선택'}</div>}{activeTool === 'link' && !sharePosition && <div className="draw-cursor-label"><Icon name="link" size={13} /> 공유 자료를 놓을 위치 선택</div>}
         </div><div className="board-footer"><span>무한 좌표 평면 · X/Y축</span><span className="board-footer-center">드래그 이동 · 휠 이동 · Ctrl/⌘ + 휠 확대</span><span>{visibleItemIds.size}/{Object.keys(items).length}개 표시</span></div>
       </main>
       <aside className="canvas-sidepanel canvas-inspector"><div className="inspector-heading"><div><span className="section-kicker">WORKSPACE</span><h2>환경 설정</h2></div><button className="icon-button" onClick={() => setShowSettings(true)} aria-label="캔버스 세부 설정"><Icon name="settings" size={18} /></button></div>
@@ -1376,6 +1468,7 @@ function CanvasWorkspace() {
         {activeTool === 'pen' && <section className="inspector-section stroke-width-section"><div className="zoom-sensitivity-heading"><strong>선 굵기</strong><span>{strokeWidth}px</span></div><input type="range" min={MIN_STROKE_WIDTH} max={MAX_STROKE_WIDTH} step="1" value={strokeWidth} onChange={changeStrokeWidth} aria-label="드로잉 선 굵기" /><small>새로 그리는 선에 적용됩니다.</small></section>}
         {activeTool === 'shape' && <section className="inspector-section"><label className="inspector-label" htmlFor="shape-kind">도형 종류</label><select id="shape-kind" className="shape-select" value={shapeType} onChange={(event) => setShapeType(event.target.value)}><option value="rectangle">사각형</option><option value="ellipse">타원</option><option value="arrow">화살표</option></select><small className="inspector-hint">캔버스를 클릭해 도형을 놓으세요.</small></section>}
         {activeTool === 'note' && <section className="inspector-section"><span className="inspector-label">포스트잇 색상</span><div className="sticky-note-colors">{stickyNoteColors.map((swatch) => <button key={swatch} type="button" style={{ '--sticky-swatch': swatch }} className={noteColor === swatch ? 'selected' : ''} onClick={() => setNoteColor(swatch)} aria-label={`포스트잇 색상 ${swatch}`} aria-pressed={noteColor === swatch} />)}</div><small className="inspector-hint">캔버스를 클릭해 Markdown 포스트잇을 놓으세요.</small></section>}
+        {activeTool === 'link' && <section className="inspector-section"><strong className="inspector-label">동영상·링크 공유</strong><small className="inspector-hint">캔버스를 클릭하고 YouTube, 동영상 주소 또는 웹 링크를 입력하세요.</small></section>}
         {(activeTool === 'connect' || selectedConnector) && <section className="inspector-section connector-style-section"><strong className="inspector-label">{connectorToEdit ? '선택한 화살표 스타일' : '새 연결 스타일'}</strong><label className="connector-color-control">색상<input type="color" value={connectorToEdit?.color || connectorColor} onChange={(event) => connectorToEdit ? updateConnectorAppearance(selectedItemId, 'color', event.target.value) : setConnectorColor(event.target.value)} /></label><label className="connector-width-control"><span>굵기 <b>{Number(connectorToEdit?.strokeWidth) || connectorWidth}px</b></span><input type="range" min="0.8" max="4" step="0.2" value={Number(connectorToEdit?.strokeWidth) || connectorWidth} onChange={(event) => connectorToEdit ? updateConnectorAppearance(selectedItemId, 'strokeWidth', event.target.value) : setConnectorWidth(Number(event.target.value))} aria-label="연결 화살표 굵기" /></label><small className="inspector-hint">화살표는 회색으로 시작하며, 연결 도구에서 새 연결의 색과 굵기를 설정할 수 있어요.</small></section>}
         {selectedItem && <section className="inspector-section rotation-section"><div className="zoom-sensitivity-heading"><strong>{selectedConnector ? '곡선 방향' : '객체 회전'}</strong><span>{Math.round(Number(selectedItem.rotation) || 0)}°</span></div><input type="range" min="-180" max="180" step="1" value={Math.round(Number(selectedItem.rotation) || 0)} onChange={(event) => updateItemRotation(selectedItemId, event.target.value)} aria-label={selectedConnector ? '선택한 화살표 곡선 방향' : '선택한 객체 회전'} /><button type="button" onClick={() => updateItemRotation(selectedItemId, 0)}>{selectedConnector ? '방향 초기화' : '회전 초기화'}</button></section>}
         {(activeTool === 'table' || selectedTable) && <section className="inspector-section"><strong className="inspector-label">{activeTool === 'table' ? '새 테이블 설정' : '테이블 설정'}</strong><div className="table-config-grid"><label>행 수<input type="number" min="1" max={MAX_TABLE_ROWS} value={activeTool === 'table' ? tableConfig.rows : selectedTable.rows?.length || 1} onChange={(event) => changeTableCount('rows', event)} /></label><label>열 수<input type="number" min="1" max={MAX_TABLE_COLUMNS} value={activeTool === 'table' ? tableConfig.columns : selectedTable.columns?.length || 1} onChange={(event) => changeTableCount('columns', event)} /></label><label>너비 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.width : Math.round((selectedTable.width || 0.42) * 100)} onChange={(event) => changeTableSize('width', event)} /></label><label>높이 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.height : Math.round((selectedTable.height || 0.32) * 100)} onChange={(event) => changeTableSize('height', event)} /></label></div><small className="inspector-hint">{activeTool === 'table' ? '설정 후 캔버스를 클릭해 놓으세요.' : '셀이나 컬럼 이름을 두 번 클릭해 Markdown으로 편집하세요.'}</small></section>}

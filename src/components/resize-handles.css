@@ -1,0 +1,77 @@
+.canvas-stage .canvas-object.resizeable,
+.tutorial-scene .tutorial-item.resizeable {
+  box-sizing: border-box;
+  max-width: none;
+}
+
+.canvas-stage .canvas-object.object-resizing,
+.tutorial-scene .tutorial-item.object-resizing {
+  z-index: 13;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.canvas-stage .image-object.resizeable.has-custom-height > img,
+.tutorial-scene .tutorial-image-item.resizeable.has-custom-height > img {
+  box-sizing: border-box;
+  height: 100%;
+  max-height: none;
+}
+
+.canvas-stage .code-object.resizeable.has-custom-height,
+.tutorial-scene .tutorial-code-item.resizeable.has-custom-height {
+  display: flex;
+  flex-direction: column;
+}
+
+.canvas-stage .code-object.resizeable.has-custom-height > pre,
+.tutorial-scene .tutorial-code-item.resizeable.has-custom-height > pre {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: none;
+}
+
+.object-resize-handles {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+  touch-action: none;
+}
+
+.object-resize-handle {
+  position: absolute;
+  z-index: 1;
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #bc8b43;
+  border-radius: 3px;
+  background: #fffdf7;
+  box-shadow: 0 1px 4px #263b3533;
+  pointer-events: auto;
+  touch-action: none;
+  transition: background-color .12s, transform .12s;
+}
+
+.object-resize-handle:hover {
+  z-index: 2;
+  background: #f5dba9;
+  transform: scale(1.12);
+}
+
+.object-resize-handle.resize-nw { top: 0; left: 0; cursor: nwse-resize; }
+.object-resize-handle.resize-n { top: 0; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+.object-resize-handle.resize-ne { top: 0; right: 0; cursor: nesw-resize; }
+.object-resize-handle.resize-e { top: 50%; right: 0; transform: translateY(-50%); cursor: ew-resize; }
+.object-resize-handle.resize-se { right: 0; bottom: 0; cursor: nwse-resize; }
+.object-resize-handle.resize-s { bottom: 0; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+.object-resize-handle.resize-sw { bottom: 0; left: 0; cursor: nesw-resize; }
+.object-resize-handle.resize-w { top: 50%; left: 0; transform: translateY(-50%); cursor: ew-resize; }
+
+.object-resize-handle.resize-n:hover,
+.object-resize-handle.resize-s:hover { transform: translateX(-50%) scale(1.12); }
+.object-resize-handle.resize-e:hover,
+.object-resize-handle.resize-w:hover { transform: translateY(-50%) scale(1.12); }

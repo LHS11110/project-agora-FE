@@ -6,6 +6,7 @@ export const OBJECT_SIZES = {
   text: [0.22, 0.12],
   note: [0.22, 0.15],
   table: [0.42, 0.32],
+  link: [0.3, 0.15],
 };
 
 function objectRect(item, width, height) {
