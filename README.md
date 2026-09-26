@@ -10,7 +10,7 @@ cp .env.example .env
 npm run dev
 ```
 
-기본 개발 서버는 `http://127.0.0.1:8080`으로 `/api` 요청을 프록시합니다. API 주소나 WebSocket 구성이 다른 경우 `.env` 값을 조정하세요.
+Vite 개발 서버는 `http://127.0.0.1:5173`에서 실행하고, `/api` 요청을 `http://127.0.0.1:8080`으로 프록시합니다. API 주소나 WebSocket 구성이 다른 경우 `.env` 값을 조정하세요.
 
 ## 환경 변수
 
@@ -52,6 +52,26 @@ npm run preview
 ```
 
 빌드 파일은 `dist/`에 생성됩니다. 서버는 SPA 경로를 `index.html`로 fallback하고, `/mathjax/` 요청은 `dist/mathjax/` 파일로 제공해야 합니다. Vite 빌드 설정이 MathJax 런타임 파일을 `dist/mathjax/`에 복사합니다. Nginx 예시는 [백엔드 저장소 설정](https://github.com/LHS11110/project-agora-BE/blob/main/nginx/agora.conf.example)에 있습니다.
+
+## Docker
+
+개발 중에는 Vite 서버와 핫 리로드를 Docker로 실행합니다. Docker Compose는 Linux 호스트에서 `/api` 프록시를 위해 `host.docker.internal`을 호스트 게이트웨이에 연결합니다.
+
+```bash
+docker compose -f compose.dev.yaml up --build
+```
+
+앱은 `http://127.0.0.1:5173`에서 열립니다. Spring Boot가 호스트의 다른 주소나 포트에서 실행되면 `VITE_DOCKER_API_PROXY_TARGET`을 `.env`에 설정하세요. 브라우저가 개발 서버에 접속하는 주소와 C++ WebSocket 주소가 다르면 `VITE_CPP_WS_HOST`도 맞춰야 합니다.
+
+운영/통합 환경은 빌드된 정적 파일과 Nginx를 하나의 컨테이너에 넣습니다. 기본값으로 컨테이너는 호스트 loopback의 `127.0.0.1:4173`에 공개됩니다. BE 저장소의 Nginx 예시는 해당 포트로 SPA 요청을 프록시하고 `/api`와 `/wss` 요청은 기존 백엔드 경로로 보냅니다.
+
+```bash
+docker compose up -d --build
+docker compose ps
+curl -fsS http://127.0.0.1:4173/
+```
+
+Vite 환경변수는 빌드 시 브라우저 번들에 포함됩니다. 같은 도메인에서 Nginx가 `/api`와 `/wss`를 제공한다면 `VITE_API_BASE_URL`과 `VITE_WS_BASE_URL`은 비워둡니다. 컨테이너를 새로 빌드하면 프런트엔드 변경 사항을 배포합니다.
 
 인증 토큰과 사용자 정보는 현재 브라우저 `localStorage`에 저장됩니다. 운영 배포에서는 HTTPS를 사용하고, 정적 자산과 `/mathjax/` 경로가 동일한 프런트엔드 배포본에서 제공되는지 확인하세요.
 

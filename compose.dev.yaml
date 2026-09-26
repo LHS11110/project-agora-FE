@@ -1,0 +1,23 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    image: project-agora-frontend:dev
+    container_name: agora-frontend-dev
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "127.0.0.1:${VITE_PORT:-5173}:5173"
+    volumes:
+      - .:/app
+      - agora-fe-node-modules:/app/node_modules
+    environment:
+      VITE_API_PROXY_TARGET: ${VITE_DOCKER_API_PROXY_TARGET:-http://host.docker.internal:8080}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      disable: true
+
+volumes:
+  agora-fe-node-modules:
