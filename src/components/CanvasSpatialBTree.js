@@ -1,4 +1,5 @@
 import { connectorGeometry, OBJECT_SIZES } from './connectorGeometry.js';
+import { shapeArrowGeometry } from './shapeArrowGeometry.js';
 
 function unionBounds(entries) {
   return entries.reduce((bounds, entry) => ({
@@ -79,7 +80,8 @@ function objectBounds(item, items, viewportWidth = 1, viewportHeight = 1) {
     const geometry = connectorGeometry(item, items, width, height);
     if (geometry?.points.length) {
       const pad = Math.max(8, (Number(item.strokeWidth) || 1.5) / 2 + 6);
-      const bounds = geometry.points.reduce((current, point) => ({
+      const points = [...geometry.points, ...(geometry.heads || []).flatMap((head) => head.points || [])];
+      const bounds = points.reduce((current, point) => ({
         minX: Math.min(current.minX, point.x),
         minY: Math.min(current.minY, point.y),
         maxX: Math.max(current.maxX, point.x),
@@ -95,6 +97,34 @@ function objectBounds(item, items, viewportWidth = 1, viewportHeight = 1) {
   const y = Number(item?.y) || 0;
   const objectWidth = Number(item?.width) || defaultWidth;
   const objectHeight = Number(item?.height) || defaultHeight;
+  if (item?.kind === 'shape' && item.shapeType === 'arrow') {
+    const geometry = shapeArrowGeometry(objectWidth * width, objectHeight * height, item.bend, item.startHead, item.endHead);
+    const centerX = (x + objectWidth / 2) * width;
+    const centerY = (y + objectHeight / 2) * height;
+    const angle = (Number(item.rotation) || 0) * Math.PI / 180;
+    const cosine = Math.cos(angle);
+    const sine = Math.sin(angle);
+    const points = [...geometry.points, ...(geometry.heads || []).flatMap((head) => head.points || [])].map((point) => {
+      const px = x * width + point.x;
+      const py = y * height + point.y;
+      const dx = px - centerX;
+      const dy = py - centerY;
+      return { x: centerX + dx * cosine - dy * sine, y: centerY + dx * sine + dy * cosine };
+    });
+    const padding = 2.5;
+    const bounds = points.reduce((current, point) => ({
+      minX: Math.min(current.minX, point.x),
+      minY: Math.min(current.minY, point.y),
+      maxX: Math.max(current.maxX, point.x),
+      maxY: Math.max(current.maxY, point.y),
+    }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+    return {
+      minX: (bounds.minX - padding) / width,
+      minY: (bounds.minY - padding) / height,
+      maxX: (bounds.maxX + padding) / width,
+      maxY: (bounds.maxY + padding) / height,
+    };
+  }
   return rotatedBounds({ minX: x, minY: y, maxX: x + objectWidth, maxY: y + objectHeight }, item?.rotation, width, height);
 }
 

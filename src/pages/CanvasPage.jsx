@@ -8,14 +8,17 @@ import EditableTable from '../components/EditableTable.jsx';
 import ShareComposer from '../components/ShareComposer.jsx';
 import SharedMediaContent from '../components/SharedMediaContent.jsx';
 import MathFormula from '../components/MathFormula.jsx';
+import ArrowHeadControls from '../components/ArrowHeadControls.jsx';
 import VectorLayer from '../components/VectorLayer.jsx';
 import ResizeHandles from '../components/ResizeHandles.jsx';
 import RotationHandles, { rotationAtPointer } from '../components/CanvasRotationHandles.jsx';
 import { captureResize, resizeItemAtPointer } from '../components/objectResize.js';
 import CanvasPeerMesh from '../components/CanvasPeerMesh.js';
 import CanvasSpatialBTree, { objectBounds } from '../components/CanvasSpatialBTree.js';
-import { connectorGeometry } from '../components/connectorGeometry.js';
+import { connectorBendFromPointer, connectorGeometry } from '../components/connectorGeometry.js';
+import { DEFAULT_ARROW_END_HEAD, DEFAULT_ARROW_START_HEAD, normalizeArrowHead } from '../components/arrowheadGeometry.js';
 import { eraseStrokeWithEraser } from '../components/strokeGeometry.js';
+import { DEFAULT_SHAPE_ARROW_BEND, shapeArrowBendFromPointer, shapeArrowGeometry } from '../components/shapeArrowGeometry.js';
 import { createTableData, normalizeTableCount, resizeTableData, updateTableValue, MAX_TABLE_COLUMNS, MAX_TABLE_ROWS } from '../components/tableModel.js';
 import { api, apiUrl, canvasSocketUrl, rtcSocketUrl } from '../api/client.js';
 import { useAuth } from '../state/AuthContext.jsx';
@@ -154,7 +157,7 @@ function SettingsDialog({ settings, pending, onClose, onUpdate, onAddParticipant
   </section></div>;
 }
 
-function CanvasObject({ id, item, bounds, selected, activeTool, connectionStartId, editing, dirty, connectorCurve, viewSize, onStartEditing, onTextChange, onMetadataChange, onFormulaChange, onTableChange, onStopEditing, onSave, onPointerDown, onResizeStart, onPointerMove, onPointerUp, onDelete, onCopy }) {
+function CanvasObject({ id, item, bounds, selected, activeTool, connectionStartId, editing, dirty, connectorCurve, viewSize, onStartEditing, onTextChange, onMetadataChange, onFormulaChange, onTableChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy }) {
   const formula = String(item.formula ?? item.text ?? 'x + y');
   const [formulaDraft, setFormulaDraft] = useState(formula);
   useEffect(() => { setFormulaDraft(formula); }, [id, formula]);
@@ -180,28 +183,38 @@ function CanvasObject({ id, item, bounds, selected, activeTool, connectionStartI
     const offsetX = bounds.minX * viewSize.width;
     const offsetY = bounds.minY * viewSize.height;
     const curvePath = connectorCurve?.points.map((point, index) => `${index ? 'L' : 'M'}${point.x - offsetX} ${point.y - offsetY}`).join(' ');
-    const arrowTip = connectorCurve?.points.at(-1);
-    return withResizeHandles(<div key={id} className={`${classes} vector-object-hit`} style={vectorStyle} data-item-id={id} {...handlers}><button onPointerDown={(event) => event.stopPropagation()} onClick={() => onDelete(id)} aria-label="연결 화살표 삭제">×</button>{curvePath && <svg className="connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} /><circle cx={arrowTip.x - offsetX} cy={arrowTip.y - offsetY} r="9" /></svg>}</div>);
+    const connectorEnds = [connectorCurve?.start, connectorCurve?.end].filter(Boolean);
+    const bendPoints = connectorCurve?.curvePoints || connectorCurve?.points;
+    const curveMidpoint = bendPoints?.[Math.floor((bendPoints.length - 1) / 2)];
+    const bendHandle = curveMidpoint && selected && movable && !editing
+      ? <button type="button" className="shape-arrow-bend-handle" style={{ left: `${(curveMidpoint.x - offsetX) / geometryWidth * 100}%`, top: `${(curveMidpoint.y - offsetY) / geometryHeight * 100}%` }} title="몸통을 드래그해 곡률 조절" aria-label="연결 화살표 몸통 곡률 조절" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onArrowBendStart(event, id, item); }} />
+      : null;
+    return withResizeHandles(<div key={id} className={`${classes} vector-object-hit`} style={vectorStyle} data-item-id={id} {...handlers}>{curvePath && <svg className="connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} />{connectorEnds.map((point, index) => <circle key={index} cx={point.x - offsetX} cy={point.y - offsetY} r="9" />)}</svg>}{bendHandle}</div>);
   }
-  if (item.kind === 'image') return withResizeHandles(<div key={id} className={`${classes} image-object`} style={style} {...handlers}><img src={item.src} alt={item.filename || '공유된 이미지'} /><div className="object-caption"><Icon name="image" size={13} />{item.filename || '공유 이미지'}<button onClick={() => onDelete(id)} aria-label="이미지 삭제">×</button></div></div>);
+  if (item.kind === 'image') return withResizeHandles(<div key={id} className={`${classes} image-object`} style={style} {...handlers}><img src={item.src} alt={item.filename || '공유된 이미지'} /><div className="object-caption"><Icon name="image" size={13} />{item.filename || '공유 이미지'}</div></div>);
   if (item.kind === 'link') return withResizeHandles(<div key={id} className={`${classes} media-link-object${item.mediaType === 'link' ? ' external-link-object' : ' video-link-object'}`} style={style} data-item-id={id} {...handlers}>
-    <div className="shared-media-header"><span className="shared-media-drag-handle" title="여기를 끌어 자료를 이동하세요"><Icon name={item.mediaType === 'link' ? 'link' : 'image'} size={13} />{item.mediaType === 'youtube' ? `YouTube · ${item.title || '동영상'}` : item.mediaType === 'video' ? `동영상 · ${item.title || '재생'}` : '링크'}</span><button className="media-link-delete" onPointerDown={(event) => event.stopPropagation()} onClick={() => onDelete(id)} aria-label="공유 자료 삭제">×</button></div>
+    <div className="shared-media-header"><span className="shared-media-drag-handle" title="여기를 끌어 자료를 이동하세요"><Icon name={item.mediaType === 'link' ? 'link' : 'image'} size={13} />{item.mediaType === 'youtube' ? `YouTube · ${item.title || '동영상'}` : item.mediaType === 'video' ? `동영상 · ${item.title || '재생'}` : '링크'}</span></div>
     <SharedMediaContent item={item} />
   </div>);
-  if (item.kind === 'code') return withResizeHandles(<div key={id} className={`${classes} code-object`} style={style} data-item-id={id} {...handlers} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) onStopEditing(id); }} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}><div className="code-object-head"><span className="code-file-icon"><Icon name="code" size={15} /></span>{editing ? <><input className="code-filename-input" aria-label="코드 파일 이름" value={item.filename || ''} placeholder="idea.js" maxLength={80} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'filename', event.target.value)} /><select className="code-language-select" aria-label="코드 언어" value={item.language || 'javascript'} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'language', event.target.value)}><option>javascript</option><option>typescript</option><option>python</option><option>html</option><option>css</option><option>json</option><option>text</option></select></> : <><strong>{item.filename || 'snippet.js'}</strong><small>{item.language || 'text'}</small></>}<button onClick={() => onDelete(id)} aria-label="코드 삭제">×</button></div>{editing ? <textarea className="code-shared-input" autoFocus aria-label="공동 편집 코드" value={item.code || ''} placeholder="여기에 코드를 작성하세요." onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onTextChange(id, event.target.value)} /> : <pre onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 함께 편집"><code>{item.code}</code></pre>}<div className="code-object-foot"><span><i /> {dirty ? '저장되지 않음 · Ctrl + S' : editing ? 'P2P 실시간 편집' : '두 번 클릭해 편집'}</span><button onClick={() => onCopy(item.code || '')}>복사</button></div></div>);
+  if (item.kind === 'code') return withResizeHandles(<div key={id} className={`${classes} code-object`} style={style} data-item-id={id} {...handlers} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) onStopEditing(id); }} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}><div className="code-object-head"><span className="code-file-icon"><Icon name="code" size={15} /></span>{editing ? <><input className="code-filename-input" aria-label="코드 파일 이름" value={item.filename || ''} placeholder="idea.js" maxLength={80} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'filename', event.target.value)} /><select className="code-language-select" aria-label="코드 언어" value={item.language || 'javascript'} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'language', event.target.value)}><option>javascript</option><option>typescript</option><option>python</option><option>html</option><option>css</option><option>json</option><option>text</option></select></> : <><strong>{item.filename || 'snippet.js'}</strong><small>{item.language || 'text'}</small></>}</div>{editing ? <textarea className="code-shared-input" autoFocus aria-label="공동 편집 코드" value={item.code || ''} placeholder="여기에 코드를 작성하세요." onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onTextChange(id, event.target.value)} /> : <pre onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 함께 편집"><code>{item.code}</code></pre>}<div className="code-object-foot"><span><i /> {dirty ? '저장되지 않음 · Ctrl + S' : editing ? 'P2P 실시간 편집' : '두 번 클릭해 편집'}</span><button onClick={() => onCopy(item.code || '')}>복사</button></div></div>);
   if (item.kind === 'note') return withResizeHandles(<div key={id} className={`${classes} sticky-note-object`} style={{ ...style, '--sticky-note-color': item.color || stickyNoteColors[0], '--sticky-note-rotation': `${Number(item.rotation) || -1}deg` }} data-item-id={id} {...handlers} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) onStopEditing(id); }} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}>
-    <div className="sticky-note-head"><span title="끌어서 포스트잇 이동"><Icon name="sticky" size={13} /> 포스트잇</span><input type="color" aria-label="포스트잇 색상" title="포스트잇 색상 변경" value={item.color || stickyNoteColors[0]} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'color', event.target.value)} /><button onPointerDown={(event) => event.stopPropagation()} onClick={() => onDelete(id)} aria-label="포스트잇 삭제">×</button></div>
+    <div className="sticky-note-head"><span title="끌어서 포스트잇 이동"><Icon name="sticky" size={13} /> 포스트잇</span><input type="color" aria-label="포스트잇 색상" title="포스트잇 색상 변경" value={item.color || stickyNoteColors[0]} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'color', event.target.value)} /></div>
     {editing ? <textarea autoFocus aria-label="포스트잇 Markdown 편집" value={item.text || ''} placeholder={'# 메모 제목\n- 할 일\n**중요한 내용**'} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onTextChange(id, event.target.value)} /> : <div className="sticky-note-content" onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 Markdown 편집">{item.text ? <MarkdownText source={item.text} /> : <p className="sticky-note-empty">두 번 클릭해 메모를 작성하세요.</p>}</div>}
     <small className="collab-save-hint">{dirty ? '저장되지 않음 · Ctrl + S' : editing ? 'Markdown · Ctrl + S 저장' : '두 번 클릭해 편집'}</small>
   </div>);
-  if (item.kind === 'table') return withResizeHandles(<div key={id} className={`${classes} canvas-table-object`} style={style} data-item-id={id} {...handlers}><EditableTable item={item} onChange={(location, value) => onTableChange(id, (current) => updateTableValue(current, location, value))} /><button className="canvas-table-delete" onPointerDown={(event) => event.stopPropagation()} onClick={() => onDelete(id)} aria-label="테이블 삭제">×</button></div>);
-  if (item.kind === 'shape') return withResizeHandles(<div key={id} className={`${classes} shape-object shape-vector-hit shape-${item.shapeType || 'rectangle'}`} style={style} {...handlers}><button onClick={() => onDelete(id)} aria-label="도형 삭제">×</button></div>);
-  if (item.kind === 'text') return withResizeHandles(<div key={id} className={`${classes} text-object`} style={style} data-item-id={id} {...handlers}>{editing ? <><textarea autoFocus aria-label="공동 편집 텍스트" value={item.text || ''} placeholder="여기에 텍스트를 입력하세요." onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onTextChange(id, event.target.value)} onBlur={() => onStopEditing(id)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }} /><small className="collab-save-hint">{dirty ? '저장되지 않음 · Ctrl + S' : '저장됨'}</small></> : <p onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 함께 편집">{item.text || '두 번 클릭해 편집'}</p>}<button onClick={() => onDelete(id)} aria-label="텍스트 삭제">×</button></div>);
+  if (item.kind === 'table') return withResizeHandles(<div key={id} className={`${classes} canvas-table-object`} style={style} data-item-id={id} {...handlers}><EditableTable item={item} onChange={(location, value) => onTableChange(id, (current) => updateTableValue(current, location, value))} /></div>);
+  if (item.kind === 'shape') {
+    const arrowGeometry = item.shapeType === 'arrow' ? shapeArrowGeometry(width * viewSize.width, height * viewSize.height, item.bend, item.startHead, item.endHead) : null;
+    const bendHandle = arrowGeometry && selected && movable && !editing
+      ? <button type="button" className="shape-arrow-bend-handle" style={{ left: `${arrowGeometry.curveMidpoint.x / arrowGeometry.width * 100}%`, top: `${arrowGeometry.curveMidpoint.y / arrowGeometry.height * 100}%` }} title="몸통을 드래그해 곡률 조절" aria-label="화살표 몸통 곡률 조절" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onArrowBendStart(event, id, item); }} />
+      : null;
+    return withResizeHandles(<div key={id} className={`${classes} shape-object shape-vector-hit shape-${item.shapeType || 'rectangle'}`} style={style} {...handlers}>{bendHandle}</div>);
+  }
+  if (item.kind === 'text') return withResizeHandles(<div key={id} className={`${classes} text-object`} style={style} data-item-id={id} {...handlers}>{editing ? <><textarea autoFocus aria-label="공동 편집 텍스트" value={item.text || ''} placeholder="여기에 텍스트를 입력하세요." onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onTextChange(id, event.target.value)} onBlur={() => onStopEditing(id)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }} /><small className="collab-save-hint">{dirty ? '저장되지 않음 · Ctrl + S' : '저장됨'}</small></> : <p onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 함께 편집">{item.text || '두 번 클릭해 편집'}</p>}</div>);
   if (item.kind === 'math') return withResizeHandles(<div key={id} className={`${classes} math-object`} style={style} {...handlers}>
     {editing
       ? <input className="math-formula-input" autoFocus aria-label="수식 편집" value={formulaDraft} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => setFormulaDraft(event.target.value)} onBlur={() => { onFormulaChange(id, formulaDraft); onStopEditing(id); }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }} />
       : <span className="math-formula-preview" onDoubleClick={(event) => { event.stopPropagation(); onStartEditing(id); }} title="두 번 클릭해 수식 편집"><MathFormula formula={formula} /></span>}
-    <button onPointerDown={(event) => event.stopPropagation()} onClick={() => onDelete(id)} aria-label="수식 삭제">×</button>
   </div>);
   return null;
 }
@@ -260,6 +273,10 @@ function CanvasWorkspace() {
   const [color, setColor] = useState(inkColors[0]);
   const [connectorColor, setConnectorColor] = useState('#8b8f8c');
   const [connectorWidth, setConnectorWidth] = useState(1.5);
+  const [connectorStartHead, setConnectorStartHead] = useState(DEFAULT_ARROW_START_HEAD);
+  const [connectorEndHead, setConnectorEndHead] = useState(DEFAULT_ARROW_END_HEAD);
+  const [shapeArrowStartHead, setShapeArrowStartHead] = useState(DEFAULT_ARROW_START_HEAD);
+  const [shapeArrowEndHead, setShapeArrowEndHead] = useState(DEFAULT_ARROW_END_HEAD);
   const [noteColor, setNoteColor] = useState(stickyNoteColors[0]);
   const [tableConfig, setTableConfig] = useState({ rows: 3, columns: 3, width: 42, height: 32 });
   const [strokeWidth, setStrokeWidth] = useState(() => {
@@ -448,6 +465,49 @@ function CanvasWorkspace() {
       setItems((current) => ({ ...current, [key]: previous }));
       setToast('연결이 복구되면 회전을 다시 적용해주세요.');
     }
+  };
+  const updateShapeArrowBend = (id, value) => {
+    const key = String(id);
+    const previous = itemsRef.current[key];
+    if (previous?.kind !== 'shape' || previous.shapeType !== 'arrow') return;
+    const bend = Math.max(-1.5, Math.min(1.5, Number(value) || 0));
+    if ((Number(previous.bend) || DEFAULT_SHAPE_ARROW_BEND) === bend) return;
+    const nextItem = { ...previous, bend };
+    itemsRef.current = { ...itemsRef.current, [key]: nextItem };
+    setItems((current) => ({ ...current, [key]: nextItem }));
+    refreshSpatialIndex();
+    if (!sendItemChange({ type: 'item_update', item_id: key, item: nextItem }, previous)) {
+      itemsRef.current = { ...itemsRef.current, [key]: previous };
+      setItems((current) => ({ ...current, [key]: previous }));
+      refreshSpatialIndex();
+      setToast('연결이 복구되면 화살표 곡률을 다시 변경해주세요.');
+    }
+  };
+  const updateArrowHead = (id, field, value) => {
+    const key = String(id);
+    const previous = itemsRef.current[key];
+    if (!['startHead', 'endHead'].includes(field)
+      || !(previous?.kind === 'connector' || (previous?.kind === 'shape' && previous.shapeType === 'arrow'))) return;
+    const head = normalizeArrowHead(value, null);
+    if (!head || previous[field] === head) return;
+    const nextItem = { ...previous, [field]: head };
+    itemsRef.current = { ...itemsRef.current, [key]: nextItem };
+    setItems((current) => ({ ...current, [key]: nextItem }));
+    refreshSpatialIndex();
+    if (!sendItemChange({ type: 'item_update', item_id: key, item: nextItem }, previous)) {
+      itemsRef.current = { ...itemsRef.current, [key]: previous };
+      setItems((current) => ({ ...current, [key]: previous }));
+      refreshSpatialIndex();
+      setToast('연결이 복구되면 화살표 머리 모양을 다시 변경해주세요.');
+    }
+  };
+  const updateNewConnectorHead = (field, value) => {
+    if (field === 'startHead') setConnectorStartHead(value);
+    else setConnectorEndHead(value);
+  };
+  const updateNewShapeArrowHead = (field, value) => {
+    if (field === 'startHead') setShapeArrowStartHead(value);
+    else setShapeArrowEndHead(value);
   };
   const updateConnectorAppearance = (id, field, value) => {
     const key = String(id);
@@ -1045,6 +1105,7 @@ function CanvasWorkspace() {
   const selectedTable = selectedItemId ? items[String(selectedItemId)]?.kind === 'table' ? items[String(selectedItemId)] : null : null;
   const selectedItem = selectedItemId ? items[String(selectedItemId)] : null;
   const selectedConnector = selectedItem?.kind === 'connector' ? selectedItem : null;
+  const selectedArrow = selectedItem?.kind === 'shape' && selectedItem.shapeType === 'arrow' ? selectedItem : null;
   const connectorToEdit = activeTool === 'connect' ? null : selectedConnector;
   const permission = groups.includes('default') ? 'default' : groups[0] || 'admin-group';
   const startEditing = (id) => { setSelectedItemId(String(id)); setEditingId(id); };
@@ -1226,6 +1287,7 @@ function CanvasWorkspace() {
     if (clickedEmptySpace) {
       finishEditing();
       setSelectedItemId(null);
+      setConnectionStartId(null);
     }
     if (event.button === 1 || spacePressedRef.current || (activeTool === 'select' && clickedEmptySpace)) { startPan(event); return; }
     if (connection !== 'connected' || (activeTool !== 'pen' && event.target.closest?.('.canvas-object'))) return;
@@ -1260,7 +1322,7 @@ function CanvasWorkspace() {
       const x = point.x - itemWidth / 2;
       const y = point.y - (activeTool === 'code' ? 0.1 : activeTool === 'note' ? 0.08 : 0.06);
       let item;
-      if (activeTool === 'shape') item = { kind: 'shape', shapeType, x, y, width: itemWidth, height: 0.12, color, permission };
+      if (activeTool === 'shape') item = { kind: 'shape', shapeType, ...(shapeType === 'arrow' ? { bend: DEFAULT_SHAPE_ARROW_BEND, startHead: shapeArrowStartHead, endHead: shapeArrowEndHead } : {}), x, y, width: itemWidth, height: 0.12, color, permission };
       else if (activeTool === 'text') item = { kind: 'text', text: '', x, y, width: itemWidth, permission };
       else if (activeTool === 'note') item = { kind: 'note', text: '', x, y, width: itemWidth, color: noteColor, rotation: Math.random() * 3 - 1.5, permission };
       else if (activeTool === 'code') item = { kind: 'code', code: '', filename: 'idea.js', language: 'javascript', x, y, width: itemWidth, permission };
@@ -1377,7 +1439,7 @@ function CanvasWorkspace() {
       if (connectionStartId === id) { setConnectionStartId(null); return; }
       const from = itemsRef.current[connectionStartId];
       const to = itemsRef.current[id];
-      if (from && to) addItem(createId(), { kind: 'connector', from: connectionStartId, to: id, color: connectorColor, strokeWidth: connectorWidth, permission });
+      if (from && to) addItem(createId(), { kind: 'connector', from: connectionStartId, to: id, color: connectorColor, strokeWidth: connectorWidth, startHead: connectorStartHead, endHead: connectorEndHead, permission });
       setConnectionStartId(null); setActiveTool('select'); return;
     }
     setSelectedItemId(String(id));
@@ -1411,6 +1473,22 @@ function CanvasWorkspace() {
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
+  const startArrowBend = (event, id, item) => {
+    const isShapeArrow = item?.kind === 'shape' && item.shapeType === 'arrow';
+    const isConnectorArrow = item?.kind === 'connector';
+    if (event.button !== 0 || activeTool !== 'select' || (!isShapeArrow && !isConnectorArrow)) return;
+    const board = boardRef.current?.getBoundingClientRect();
+    if (!board) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const key = String(id);
+    const initial = itemsRef.current[key] || item;
+    const element = event.currentTarget.closest('.canvas-object');
+    setSelectedItemId(key);
+    element?.classList.add('object-bending');
+    dragRef.current = { mode: 'bend', id: key, initial, viewport: { width: board.width, height: board.height }, element };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
   const startObjectRotation = (event, id, item) => {
     if (activeTool !== 'select' || item?.kind === 'connector') return;
     const key = String(id);
@@ -1442,6 +1520,15 @@ function CanvasWorkspace() {
   const moveObject = (event) => {
     if (!dragRef.current) return;
     const { mode, id, initial, offsetX, offsetY, startX, startY, resize, viewport } = dragRef.current;
+    if (mode === 'bend') {
+      const point = pointerPosition(event);
+      const next = initial.kind === 'connector'
+        ? { ...initial, ...connectorBendFromPointer(connectorGeometry(initial, itemsRef.current, viewport.width, viewport.height), point, viewport) }
+        : { ...initial, bend: shapeArrowBendFromPointer(initial, point, viewport) };
+      itemsRef.current = { ...itemsRef.current, [id]: next };
+      setItems((current) => ({ ...current, [id]: next }));
+      return;
+    }
     if (mode === 'rotate') {
       const { centerX, centerY, startAngle, initialRotation } = dragRef.current;
       const next = { ...initial, rotation: rotationAtPointer(initialRotation, startAngle, event.clientX, event.clientY, centerX, centerY) };
@@ -1461,7 +1548,7 @@ function CanvasWorkspace() {
   const stopObjectDrag = () => {
     if (!dragRef.current) return;
     const { id, initial, element } = dragRef.current; dragRef.current = null;
-    element?.classList.remove('object-dragging', 'object-resizing', 'object-rotating');
+    element?.classList.remove('object-dragging', 'object-resizing', 'object-rotating', 'object-bending');
     boardRef.current?.classList.remove('rotating');
     const item = itemsRef.current[id];
     refreshSpatialIndex();
@@ -1524,10 +1611,27 @@ function CanvasWorkspace() {
     const isEditableTarget = (target) => target instanceof HTMLElement
       && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
     const onKeyDown = (event) => {
-      if (event.key === 'Escape' && editingId != null) {
+      if (event.key === 'Escape') {
+        if (event.repeat) return;
+        if (editingId != null) {
+          event.preventDefault();
+          event.stopPropagation();
+          finishEditing(editingId);
+          return;
+        }
+        if (selectedItemId != null || connectionStartId != null) {
+          event.preventDefault();
+          setSelectedItemId(null);
+          setConnectionStartId(null);
+          return;
+        }
+      }
+      if (event.key === 'Delete' && editingId == null && selectedItemId != null && !isEditableTarget(event.target)) {
         event.preventDefault();
-        event.stopPropagation();
-        finishEditing(editingId);
+        if (deleteItem(selectedItemId)) {
+          setSelectedItemId(null);
+          setConnectionStartId(null);
+        }
         return;
       }
       if (event.code === 'Space' && !isEditableTarget(event.target)) {
@@ -1546,7 +1650,7 @@ function CanvasWorkspace() {
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); };
-  }, [editingId, finishEditing, saveCollaborativeItem, selectedItemId]);
+  }, [connectionStartId, deleteItem, editingId, finishEditing, saveCollaborativeItem, selectedItemId]);
   useEffect(() => {
     if (editingId == null) return undefined;
     const onDocumentPointerDown = (event) => {
@@ -1626,7 +1730,7 @@ function CanvasWorkspace() {
           <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true"><span className="coordinate-x" /><span className="coordinate-y" /><i className="coordinate-origin">0</i><b className="coordinate-x-label">X</b><b className="coordinate-y-label">Y</b></div>
           <VectorLayer items={visibleVectorItems} referenceItems={items} camera={camera} onReady={(setDraft) => { vectorDraftRef.current = setDraft; }} />
           <div className="canvas-scene" ref={sceneRef} style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}>
-            {sortedItems.map(([id, item, bounds, connectorCurve]) => <CanvasObject key={id} id={id} item={item} bounds={bounds} connectorCurve={connectorCurve} viewSize={boardSize} selected={String(selectedItemId) === String(id)} activeTool={activeTool} connectionStartId={connectionStartId} editing={editingId === id} dirty={dirtyItems.has(String(id))} onStartEditing={startEditing} onTextChange={updateCollaborativeText} onMetadataChange={updateCollaborativeMetadata} onFormulaChange={updateFormulaItem} onTableChange={updateTableItem} onStopEditing={stopEditing} onSave={saveCollaborativeItem} onPointerDown={startObjectDrag} onResizeStart={startObjectResize} onPointerMove={moveObject} onPointerUp={stopObjectDrag} onDelete={deleteItem} onCopy={(value) => navigator.clipboard?.writeText(value)} />)}
+            {sortedItems.map(([id, item, bounds, connectorCurve]) => <CanvasObject key={id} id={id} item={item} bounds={bounds} connectorCurve={connectorCurve} viewSize={boardSize} selected={String(selectedItemId) === String(id)} activeTool={activeTool} connectionStartId={connectionStartId} editing={editingId === id} dirty={dirtyItems.has(String(id))} onStartEditing={startEditing} onTextChange={updateCollaborativeText} onMetadataChange={updateCollaborativeMetadata} onFormulaChange={updateFormulaItem} onTableChange={updateTableItem} onStopEditing={stopEditing} onSave={saveCollaborativeItem} onPointerDown={startObjectDrag} onResizeStart={startObjectResize} onArrowBendStart={startArrowBend} onPointerMove={moveObject} onPointerUp={stopObjectDrag} onCopy={(value) => navigator.clipboard?.writeText(value)} />)}
             {selectedItem && selectedItem.kind !== 'connector' && activeTool === 'select' && !editingId && <RotationHandles sceneRef={sceneRef} id={String(selectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startObjectRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
             {Object.entries(remoteCursors).filter(([, cursor]) => cursor.visible !== false && cursor.x >= visibleBounds.minX && cursor.x <= visibleBounds.maxX && cursor.y >= visibleBounds.minY && cursor.y <= visibleBounds.maxY).map(([peerId, cursor]) => <div className="remote-cursor" key={peerId} style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%`, '--cursor-color': cursor.color }} title={`${cursor.nickname}#${cursor.tag_number}`}><svg viewBox="0 0 18 22" aria-hidden="true"><path d="M1 1v17l4.5-4.3 3.1 7.1 3.1-1.4-3.2-6.8H15z" /></svg><span>{cursor.nickname}</span></div>)}
           </div>
@@ -1641,10 +1745,11 @@ function CanvasWorkspace() {
         <section className="inspector-section zoom-sensitivity-section"><div className="zoom-sensitivity-heading"><strong>줌 감도</strong><span>{Math.round(zoomSensitivity * 100)}%</span></div><input type="range" min={MIN_ZOOM_SENSITIVITY} max={MAX_ZOOM_SENSITIVITY} step="0.1" value={zoomSensitivity} onChange={changeZoomSensitivity} aria-label="줌 감도" /><small>휠과 확대·축소 버튼 반응 속도</small></section>
         {activeTool === 'pen' && <section className="inspector-section stroke-width-section"><div className="zoom-sensitivity-heading"><strong>선 굵기</strong><span>{strokeWidth}px</span></div><input type="range" min={MIN_STROKE_WIDTH} max={MAX_STROKE_WIDTH} step="1" value={strokeWidth} onChange={changeStrokeWidth} aria-label="드로잉 선 굵기" /><small>새로 그리는 선에 적용됩니다.</small></section>}
         {activeTool === 'eraser' && <section className="inspector-section"><strong className="inspector-label">드로잉 지우개</strong><small className="inspector-hint">지우려는 선 위를 드래그하면 닿은 부분만 지워집니다. 드로잉은 개체로 선택되지 않습니다.</small></section>}
-        {activeTool === 'shape' && <section className="inspector-section"><label className="inspector-label" htmlFor="shape-kind">도형 종류</label><select id="shape-kind" className="shape-select" value={shapeType} onChange={(event) => setShapeType(event.target.value)}><option value="rectangle">사각형</option><option value="ellipse">타원</option><option value="arrow">화살표</option></select><small className="inspector-hint">캔버스를 클릭해 도형을 놓으세요.</small></section>}
+        {activeTool === 'shape' && <section className="inspector-section"><label className="inspector-label" htmlFor="shape-kind">도형 종류</label><select id="shape-kind" className="shape-select" value={shapeType} onChange={(event) => setShapeType(event.target.value)}><option value="rectangle">사각형</option><option value="ellipse">타원</option><option value="arrow">화살표</option></select>{shapeType === 'arrow' && <><ArrowHeadControls item={{ startHead: shapeArrowStartHead, endHead: shapeArrowEndHead }} onChange={updateNewShapeArrowHead} /><small className="inspector-hint">이 모양은 새 화살표에 적용됩니다.</small></>}<small className="inspector-hint">캔버스를 클릭해 도형을 놓으세요.</small></section>}
         {activeTool === 'note' && <section className="inspector-section"><span className="inspector-label">포스트잇 색상</span><div className="sticky-note-colors">{stickyNoteColors.map((swatch) => <button key={swatch} type="button" style={{ '--sticky-swatch': swatch }} className={noteColor === swatch ? 'selected' : ''} onClick={() => setNoteColor(swatch)} aria-label={`포스트잇 색상 ${swatch}`} aria-pressed={noteColor === swatch} />)}</div><small className="inspector-hint">캔버스를 클릭해 Markdown 포스트잇을 놓으세요.</small></section>}
         {activeTool === 'link' && <section className="inspector-section"><strong className="inspector-label">동영상·링크 공유</strong><small className="inspector-hint">캔버스를 클릭하고 YouTube, 동영상 주소 또는 웹 링크를 입력하세요.</small></section>}
-        {(activeTool === 'connect' || selectedConnector) && <section className="inspector-section connector-style-section"><strong className="inspector-label">{connectorToEdit ? '선택한 화살표 스타일' : '새 연결 스타일'}</strong><label className="connector-color-control">색상<input type="color" value={connectorToEdit?.color || connectorColor} onChange={(event) => connectorToEdit ? updateConnectorAppearance(selectedItemId, 'color', event.target.value) : setConnectorColor(event.target.value)} /></label><label className="connector-width-control"><span>굵기 <b>{Number(connectorToEdit?.strokeWidth) || connectorWidth}px</b></span><input type="range" min="0.8" max="4" step="0.2" value={Number(connectorToEdit?.strokeWidth) || connectorWidth} onChange={(event) => connectorToEdit ? updateConnectorAppearance(selectedItemId, 'strokeWidth', event.target.value) : setConnectorWidth(Number(event.target.value))} aria-label="연결 화살표 굵기" /></label><small className="inspector-hint">화살표는 회색으로 시작하며, 연결 도구에서 새 연결의 색과 굵기를 설정할 수 있어요.</small></section>}
+        {(activeTool === 'connect' || selectedConnector) && <section className="inspector-section connector-style-section"><strong className="inspector-label">{connectorToEdit ? '선택한 화살표 스타일' : '새 연결 스타일'}</strong><label className="connector-color-control">색상<input type="color" value={connectorToEdit?.color || connectorColor} onChange={(event) => connectorToEdit ? updateConnectorAppearance(selectedItemId, 'color', event.target.value) : setConnectorColor(event.target.value)} /></label><label className="connector-width-control"><span>굵기 <b>{Number(connectorToEdit?.strokeWidth) || connectorWidth}px</b></span><input type="range" min="0.8" max="4" step="0.2" value={Number(connectorToEdit?.strokeWidth) || connectorWidth} onChange={(event) => connectorToEdit ? updateConnectorAppearance(selectedItemId, 'strokeWidth', event.target.value) : setConnectorWidth(Number(event.target.value))} aria-label="연결 화살표 굵기" /></label><ArrowHeadControls item={connectorToEdit || { startHead: connectorStartHead, endHead: connectorEndHead }} onChange={(field, value) => connectorToEdit ? updateArrowHead(selectedItemId, field, value) : updateNewConnectorHead(field, value)} /><small className="inspector-hint">화살표는 회색으로 시작하며, 연결 도구에서 새 연결의 색과 굵기를 설정할 수 있어요.</small>{selectedConnector && <small className="inspector-hint">가운데 조절점을 드래그해 몸통을 원하는 방향으로 휘어보세요.</small>}</section>}
+        {selectedArrow && <section className="inspector-section"><strong className="inspector-label">화살표 곡률 및 머리 모양</strong><small className="inspector-hint">몸통 가운데 조절점을 드래그해 원하는 방향으로 휘어보세요.</small><button type="button" onClick={() => updateShapeArrowBend(selectedItemId, 0)}>직선으로 만들기</button><ArrowHeadControls item={selectedArrow} onChange={(field, value) => updateArrowHead(selectedItemId, field, value)} /></section>}
         {selectedItem && <section className="inspector-section rotation-section"><div className="zoom-sensitivity-heading"><strong>{selectedConnector ? '곡선 방향' : '객체 회전'}</strong><span>{Math.round(Number(selectedItem.rotation) || 0)}°</span></div>{selectedConnector && <input type="range" min="-180" max="180" step="1" value={Math.round(Number(selectedItem.rotation) || 0)} onChange={(event) => updateItemRotation(selectedItemId, event.target.value)} aria-label="선택한 화살표 곡선 방향" />}{!selectedConnector && <small className="inspector-hint">선택 객체 위쪽 핸들을 드래그해 마우스 방향을 따라 회전하세요.</small>}<button type="button" onClick={() => updateItemRotation(selectedItemId, 0)}>{selectedConnector ? '방향 초기화' : '회전 초기화'}</button></section>}
         {(activeTool === 'table' || selectedTable) && <section className="inspector-section"><strong className="inspector-label">{activeTool === 'table' ? '새 테이블 설정' : '테이블 설정'}</strong><div className="table-config-grid"><label>행 수<input type="number" min="1" max={MAX_TABLE_ROWS} value={activeTool === 'table' ? tableConfig.rows : selectedTable.rows?.length || 1} onChange={(event) => changeTableCount('rows', event)} /></label><label>열 수<input type="number" min="1" max={MAX_TABLE_COLUMNS} value={activeTool === 'table' ? tableConfig.columns : selectedTable.columns?.length || 1} onChange={(event) => changeTableCount('columns', event)} /></label><label>너비 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.width : Math.round((selectedTable.width || 0.42) * 100)} onChange={(event) => changeTableSize('width', event)} /></label><label>높이 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.height : Math.round((selectedTable.height || 0.32) * 100)} onChange={(event) => changeTableSize('height', event)} /></label></div><small className="inspector-hint">{activeTool === 'table' ? '설정 후 캔버스를 클릭해 놓으세요.' : '셀이나 컬럼 이름을 두 번 클릭해 Markdown으로 편집하세요.'}</small></section>}
         {(activeTool === 'text' || activeTool === 'code') && <section className="inspector-section"><strong className="inspector-label">{activeTool === 'text' ? '텍스트 작성' : '코드 작성'}</strong><small className="inspector-hint">캔버스를 클릭하면 편집 가능한 아이템이 놓입니다.</small></section>}

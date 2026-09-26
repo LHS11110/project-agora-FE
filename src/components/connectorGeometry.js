@@ -1,3 +1,5 @@
+import { arrowPathGeometry } from './arrowheadGeometry.js';
+
 export const OBJECT_SIZES = {
   image: [0.3, 0.2],
   code: [0.32, 0.2],
@@ -81,7 +83,10 @@ export function connectorGeometry(item, items, width = 1, height = 1) {
     y: to.centerY - directionY * targetReach,
   };
   const gap = Math.max(1, (end.x - start.x) * directionX + (end.y - start.y) * directionY);
-  const bend = Math.min(72, gap * 0.18);
+  const hasCustomBend = Number.isFinite(Number(item.bend));
+  const bend = hasCustomBend
+    ? gap * Math.max(0, Math.min(1.5, Number(item.bend)))
+    : Math.min(72, gap * 0.18);
   const curve = [
     start,
     { x: start.x + directionX * gap * 0.2, y: start.y + directionY * gap * 0.2 },
@@ -90,6 +95,34 @@ export function connectorGeometry(item, items, width = 1, height = 1) {
     { x: end.x - directionX * gap * 0.2, y: end.y - directionY * gap * 0.2 },
     end,
   ];
-  const points = Array.from({ length: 33 }, (_, index) => bezierPoint(curve, index / 32));
-  return { points, directionX, directionY };
+  const curvePoints = Array.from({ length: 33 }, (_, index) => bezierPoint(curve, index / 32));
+  const headSize = Math.max(8, Math.min(15, 6 + (Number(item.strokeWidth) || 1.5) * 2.5));
+  const arrowPath = arrowPathGeometry(curvePoints, {
+    startHead: item.startHead,
+    endHead: item.endHead,
+    headSize,
+    strokeWidth: Number(item.strokeWidth) || 1.5,
+  });
+  return { ...arrowPath, directionX, directionY, normalX, normalY, start, end, gap, bend };
+}
+
+export function connectorBendFromPointer(geometry, pointer, viewSize) {
+  if (!geometry?.start || !geometry?.end || !geometry.gap) return { bend: 0, rotation: 0 };
+  const width = Math.max(1, Number(viewSize?.width) || 1);
+  const height = Math.max(1, Number(viewSize?.height) || 1);
+  const pointerX = (Number(pointer?.x) || 0) * width;
+  const pointerY = (Number(pointer?.y) || 0) * height;
+  const centerX = (geometry.start.x + geometry.end.x) / 2;
+  const centerY = (geometry.start.y + geometry.end.y) / 2;
+  const offsetX = pointerX - centerX;
+  const offsetY = pointerY - centerY;
+  const offsetLength = Math.hypot(offsetX, offsetY);
+  if (offsetLength < 1) return { bend: 0, rotation: 0 };
+  const baseAngle = Math.atan2(geometry.normalY, geometry.normalX);
+  const desiredAngle = Math.atan2(offsetY, offsetX);
+  const rotation = ((desiredAngle - baseAngle) * 180 / Math.PI + 540) % 360 - 180;
+  return {
+    bend: Math.max(0, Math.min(1.5, offsetLength / (geometry.gap * 0.625))),
+    rotation,
+  };
 }

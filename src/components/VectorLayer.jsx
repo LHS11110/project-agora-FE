@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Application, Graphics } from 'pixi.js';
 import { connectorGeometry } from './connectorGeometry.js';
+import { shapeArrowGeometry } from './shapeArrowGeometry.js';
 import './vector-layer.css';
 
 const colorNumber = (value) => {
@@ -8,21 +9,28 @@ const colorNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : 0x263b35;
 };
 
-function drawArrow(graphics, x1, y1, x2, y2, color, width = 2.5) {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const length = Math.hypot(dx, dy);
-  if (length < 1) return;
-  const ux = dx / length;
-  const uy = dy / length;
-  const headLength = Math.min(16, Math.max(8, length * 0.18));
-  const halfWidth = headLength * 0.48;
-  const baseX = x2 - ux * headLength;
-  const baseY = y2 - uy * headLength;
-  const px = -uy * halfWidth;
-  const py = ux * halfWidth;
-  graphics.moveTo(x1, y1).lineTo(x2, y2).stroke({ color, width, cap: 'round', join: 'round' });
-  graphics.poly([x2, y2, baseX + px, baseY + py, baseX - px, baseY - py]).fill(color);
+function drawArrowHead(graphics, head, color, width, transform = (point) => point) {
+  const points = (head.points || []).map(transform);
+  if (head.type === 'triangle' || head.type === 'diamond') {
+    graphics.poly(points.flatMap((point) => [point.x, point.y])).fill(color);
+    return;
+  }
+  if (head.type === 'circle') {
+    const center = transform(head.center);
+    graphics.circle(center.x, center.y, head.radius).stroke({ color, width: Math.max(1.5, width) });
+    return;
+  }
+  drawPolyline(graphics, points, color, Math.max(1.5, width));
+}
+
+function drawShapeArrow(graphics, x, y, width, height, angle, color, bend, startHead, endHead) {
+  const geometry = shapeArrowGeometry(width, height, bend, startHead, endHead);
+  const centerX = x + width / 2;
+  const centerY = y + height / 2;
+  const rotate = (point) => rotatePoint(x + point.x, y + point.y, centerX, centerY, angle);
+  const curve = geometry.points.map(rotate);
+  drawPolyline(graphics, curve, color, 2.5);
+  geometry.heads.forEach((head) => drawArrowHead(graphics, head, color, 2.5, rotate));
 }
 
 function rotatePoint(x, y, centerX, centerY, angle) {
@@ -53,19 +61,8 @@ function drawStroke(graphics, points, color, width) {
 
 function drawCurvedArrow(graphics, geometry, color, width) {
   if (!geometry?.points?.length) return;
-  const end = geometry.points[geometry.points.length - 1];
-  const headLength = Math.max(8, Math.min(15, 6 + width * 2.5));
-  const halfWidth = headLength * 0.45;
-  const baseX = end.x - geometry.directionX * headLength;
-  const baseY = end.y - geometry.directionY * headLength;
-  const perpendicularX = -geometry.directionY * halfWidth;
-  const perpendicularY = geometry.directionX * halfWidth;
   drawPolyline(graphics, geometry.points, color, width);
-  graphics.poly([
-    end.x, end.y,
-    baseX + perpendicularX, baseY + perpendicularY,
-    baseX - perpendicularX, baseY - perpendicularY,
-  ]).fill(color);
+  geometry.heads?.forEach((head) => drawArrowHead(graphics, head, color, width));
 }
 
 export function drawVectorItems(graphics, items, width, height, visibleItemIds = null, referenceItems = items) {
@@ -107,9 +104,7 @@ export function drawVectorItems(graphics, items, width, height, visibleItemIds =
       });
       graphics.poly(points.flatMap((point) => [point.x, point.y]), true).stroke({ color: ink, width: 2.5 });
     } else if (item.shapeType === 'arrow') {
-      const start = rotatePoint(x, y + h, centerX, centerY, angle);
-      const end = rotatePoint(x + w, y, centerX, centerY, angle);
-      drawArrow(graphics, start.x, start.y, end.x, end.y, ink, 3);
+      drawShapeArrow(graphics, x, y, w, h, angle, ink, item.bend, item.startHead, item.endHead);
     } else {
       if (!angle) {
         graphics.roundRect(x, y, w, h, 5).stroke({ color: ink, width: 2.5 });

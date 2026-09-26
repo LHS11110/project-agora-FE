@@ -1,6 +1,9 @@
 .canvas-stage .shape-vector-hit{display:block;min-height:0;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;overflow:visible}
 .canvas-stage .shape-vector-hit>button{position:absolute;top:-9px;right:-9px;width:21px;height:21px;display:grid;place-items:center;border:1px solid #d9e1d8;border-radius:50%;background:#fff;color:#6c7d70;font-size:14px;opacity:0;transition:opacity .16s}
 .canvas-stage .shape-vector-hit:hover>button,.canvas-stage .shape-vector-hit:focus-within>button{opacity:1}
+.canvas-stage .shape-vector-hit>.shape-arrow-bend-handle,.canvas-stage .vector-object-hit>.shape-arrow-bend-handle,.tutorial-stage .tutorial-shape-hit>.shape-arrow-bend-handle,.tutorial-stage .tutorial-vector-hit>.shape-arrow-bend-handle{position:absolute;z-index:6;top:auto;right:auto;display:block;width:12px;height:12px;padding:0;transform:translate(-50%,-50%);border:2px solid #fff;border-radius:50%;background:#c7954d;box-shadow:0 1px 5px #263b3555;opacity:1;cursor:grab;touch-action:none}
+.canvas-stage .shape-vector-hit>.shape-arrow-bend-handle:hover,.canvas-stage .vector-object-hit>.shape-arrow-bend-handle:hover,.tutorial-stage .tutorial-shape-hit>.shape-arrow-bend-handle:hover,.tutorial-stage .tutorial-vector-hit>.shape-arrow-bend-handle:hover{background:#a9752e;opacity:1}
+.canvas-stage .shape-object.object-bending>.shape-arrow-bend-handle,.tutorial-stage .tutorial-shape-hit.object-bending>.shape-arrow-bend-handle{cursor:grabbing}
 .canvas-stage .text-object{min-width:110px;min-height:38px}
 .canvas-stage .text-object p{cursor:text;white-space:pre-wrap;overflow-wrap:anywhere}
 .canvas-stage .text-object textarea{width:100%;min-height:72px;resize:both;border:1px solid #a8bbaa;border-radius:6px;background:#fffdf3;color:#514936;padding:7px;font:inherit;line-height:1.5;outline:none}
@@ -140,3 +143,10 @@
 .canvas-stage.eraser-active .canvas-scene .canvas-object{pointer-events:none!important}
 .canvas-stage.eraser-active .object-rotation-frame,.canvas-stage.eraser-active .object-rotation-handle{pointer-events:none!important}
 .sticky-note-head>span{cursor:grab}.object-dragging .sticky-note-head>span{cursor:grabbing}
+
+.arrow-head-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px;width:100%}
+.arrow-head-controls label{display:flex;min-width:0;flex-direction:column;gap:4px;color:var(--ink-muted,#758477);font-size:8px}
+.arrow-head-controls select{box-sizing:border-box;width:100%;height:30px;padding:0 7px;border:1px solid var(--line,#dce5da);border-radius:6px;background:var(--surface,#fff);color:var(--ink-strong,#536457);font:8px var(--display, sans-serif)}
+.tutorial-board-actions .tutorial-arrow-head-controls{flex:0 0 162px;gap:5px;margin:0}
+.tutorial-board-actions .tutorial-arrow-head-controls label{gap:3px;color:#758477;font-size:7px}
+.tutorial-board-actions .tutorial-arrow-head-controls select{height:25px;padding:0 4px;border-color:#dce5da;border-radius:5px;background:#fff;color:#536457;font:7px var(--display, sans-serif)}

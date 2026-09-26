@@ -6,13 +6,16 @@ import EditableTable from '../components/EditableTable.jsx';
 import ShareComposer from '../components/ShareComposer.jsx';
 import SharedMediaContent from '../components/SharedMediaContent.jsx';
 import MathFormula from '../components/MathFormula.jsx';
+import ArrowHeadControls from '../components/ArrowHeadControls.jsx';
 import VectorLayer from '../components/VectorLayer.jsx';
 import ResizeHandles from '../components/ResizeHandles.jsx';
 import RotationHandles, { rotationAtPointer } from '../components/RotationHandles.jsx';
 import { eraseStrokeWithEraser } from '../components/strokeGeometry.js';
 import { objectBounds } from '../components/CanvasSpatialBTree.js';
-import { connectorGeometry } from '../components/connectorGeometry.js';
+import { connectorBendFromPointer, connectorGeometry } from '../components/connectorGeometry.js';
+import { DEFAULT_ARROW_END_HEAD, DEFAULT_ARROW_START_HEAD, normalizeArrowHead } from '../components/arrowheadGeometry.js';
 import { captureResize, resizeItemAtPointer } from '../components/objectResize.js';
+import { DEFAULT_SHAPE_ARROW_BEND, shapeArrowBendFromPointer, shapeArrowGeometry } from '../components/shapeArrowGeometry.js';
 import { createTableData, normalizeTableCount, resizeTableData, updateTableValue, MAX_TABLE_COLUMNS, MAX_TABLE_ROWS } from '../components/tableModel.js';
 import '../tutorial.css';
 
@@ -70,6 +73,10 @@ export default function TutorialPage() {
   const [color, setColor] = useState('#d58165');
   const [connectorColor, setConnectorColor] = useState('#8b8f8c');
   const [connectorWidth, setConnectorWidth] = useState(1.5);
+  const [connectorStartHead, setConnectorStartHead] = useState(DEFAULT_ARROW_START_HEAD);
+  const [connectorEndHead, setConnectorEndHead] = useState(DEFAULT_ARROW_END_HEAD);
+  const [shapeArrowStartHead, setShapeArrowStartHead] = useState(DEFAULT_ARROW_START_HEAD);
+  const [shapeArrowEndHead, setShapeArrowEndHead] = useState(DEFAULT_ARROW_END_HEAD);
   const [noteColor, setNoteColor] = useState(stickyNoteColors[0]);
   const [tableConfig, setTableConfig] = useState({ rows: 3, columns: 3, width: 42, height: 32 });
   const [strokeWidth, setStrokeWidth] = useState(4);
@@ -97,6 +104,30 @@ export default function TutorialPage() {
 
   useEffect(() => {
     const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        if (event.repeat) return;
+        if (editingId != null) {
+          event.preventDefault();
+          event.stopPropagation();
+          const editor = [...(sceneRef.current?.querySelectorAll('[data-item-id]') || [])]
+            .find((element) => element.dataset.itemId === String(editingId));
+          if (editor?.contains(document.activeElement)) document.activeElement?.blur?.();
+          setEditingId(null);
+          return;
+        }
+        if (selectedItemId != null || connectionStartId != null) {
+          event.preventDefault();
+          setSelectedItemId(null);
+          setConnectionStartId(null);
+          return;
+        }
+      }
+      if (event.key === 'Delete' && editingId == null && selectedItemId != null && !isEditableTarget(event.target)) {
+        event.preventDefault();
+        deleteItem(selectedItemId);
+        setConnectionStartId(null);
+        return;
+      }
       if (event.code === 'Space' && !isEditableTarget(event.target)) {
         spacePressedRef.current = true;
         event.preventDefault();
@@ -109,7 +140,7 @@ export default function TutorialPage() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, []);
+  }, [connectionStartId, editingId, selectedItemId]);
 
   useEffect(() => () => {
     const hold = zoomHoldRef.current;
@@ -185,6 +216,11 @@ export default function TutorialPage() {
   const startOnBoard = (event) => {
     updateEraserCursor(event);
     const targetItem = event.target.closest?.('.tutorial-item');
+    if (event.button === 0 && !targetItem) {
+      setEditingId(null);
+      setSelectedItemId(null);
+      setConnectionStartId(null);
+    }
     if (event.button === 1 || spacePressedRef.current) { startPan(event); return; }
     if (activeTool === 'select' && !targetItem) { startPan(event); return; }
     if (activeTool === 'eraser') {
@@ -223,6 +259,7 @@ export default function TutorialPage() {
       addItem({
         kind: 'shape',
         shapeType: activeTool === 'arrow' ? 'arrow' : activeTool,
+        ...(activeTool === 'arrow' ? { bend: DEFAULT_SHAPE_ARROW_BEND, startHead: shapeArrowStartHead, endHead: shapeArrowEndHead } : {}),
         x: point.x - 0.07,
         y: point.y - 0.06,
         width: 0.14,
@@ -261,7 +298,7 @@ export default function TutorialPage() {
       if (!connectionStartId) setConnectionStartId(id);
       else if (connectionStartId === id) setConnectionStartId(null);
       else {
-        addItem({ kind: 'connector', from: connectionStartId, to: id, color: connectorColor, strokeWidth: connectorWidth });
+        addItem({ kind: 'connector', from: connectionStartId, to: id, color: connectorColor, strokeWidth: connectorWidth, startHead: connectorStartHead, endHead: connectorEndHead });
         setConnectionStartId(null);
         setActiveTool('select');
       }
@@ -307,6 +344,20 @@ export default function TutorialPage() {
       viewport: { width: board.width, height: board.height },
       element,
     };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+  const startArrowBend = (event, id, item) => {
+    const isShapeArrow = item?.kind === 'shape' && item.shapeType === 'arrow';
+    const isConnectorArrow = item?.kind === 'connector';
+    if (event.button !== 0 || activeTool !== 'select' || (!isShapeArrow && !isConnectorArrow)) return;
+    const board = boardRef.current?.getBoundingClientRect();
+    if (!board) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const element = event.currentTarget.closest('.tutorial-item');
+    setSelectedItemId(id);
+    element?.classList.add('object-bending');
+    dragRef.current = { mode: 'bend', id, initial: item, viewport: { width: board.width, height: board.height }, element };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
   const startItemRotation = (event, id, item) => {
@@ -360,6 +411,16 @@ export default function TutorialPage() {
         return;
       }
       const point = position(event);
+      if (mode === 'bend') {
+        setItems((current) => {
+          if (!current[id]) return current;
+          const bend = initial.kind === 'connector'
+            ? connectorBendFromPointer(connectorGeometry(initial, current, viewport.width, viewport.height), point, viewport)
+            : { bend: shapeArrowBendFromPointer(initial, point, viewport) };
+          return { ...current, [id]: { ...initial, ...bend } };
+        });
+        return;
+      }
       setItems((current) => {
         const item = current[id];
         if (!item) return current;
@@ -392,7 +453,7 @@ export default function TutorialPage() {
       if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
       return;
     }
-    if (dragRef.current) { dragRef.current.element?.classList.remove('object-dragging', 'object-resizing', 'object-rotating'); dragRef.current = null; return; }
+    if (dragRef.current) { dragRef.current.element?.classList.remove('object-dragging', 'object-resizing', 'object-rotating', 'object-bending'); dragRef.current = null; return; }
     if (!drawingRef.current) return;
     drawingRef.current = false;
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
@@ -570,6 +631,7 @@ export default function TutorialPage() {
   const selectedTable = selectedItemId ? items[String(selectedItemId)]?.kind === 'table' ? items[String(selectedItemId)] : null : null;
   const selectedItem = selectedItemId ? items[String(selectedItemId)] : null;
   const selectedConnector = selectedItem?.kind === 'connector' ? selectedItem : null;
+  const selectedArrow = selectedItem?.kind === 'shape' && selectedItem.shapeType === 'arrow' ? selectedItem : null;
   const connectorToEdit = activeTool === 'connect' ? null : selectedConnector;
   const changeRotation = (value) => setItems((current) => current[selectedItemId] ? { ...current, [selectedItemId]: { ...current[selectedItemId], rotation: Math.max(-180, Math.min(180, Number(value) || 0)) } } : current);
   const updateConnectorAppearance = (field, value) => {
@@ -581,6 +643,23 @@ export default function TutorialPage() {
     setItems((current) => current[selectedItemId]?.kind === 'connector'
       ? { ...current, [selectedItemId]: { ...current[selectedItemId], [field]: field === 'strokeWidth' ? Math.max(0.8, Math.min(4, Number(value) || 1.5)) : value } }
       : current);
+  };
+  const updateArrowHead = (field, value) => {
+    const head = normalizeArrowHead(value, null);
+    if (!head || !['startHead', 'endHead'].includes(field)) return;
+    setItems((current) => {
+      const item = current[selectedItemId];
+      if (!(item?.kind === 'connector' || (item?.kind === 'shape' && item.shapeType === 'arrow'))) return current;
+      return { ...current, [selectedItemId]: { ...item, [field]: head } };
+    });
+  };
+  const updateNewConnectorHead = (field, value) => {
+    if (field === 'startHead') setConnectorStartHead(value);
+    else setConnectorEndHead(value);
+  };
+  const updateNewShapeArrowHead = (field, value) => {
+    if (field === 'startHead') setShapeArrowStartHead(value);
+    else setShapeArrowEndHead(value);
   };
   const focusConnectorTarget = (connector, connectorId) => {
     const target = items[String(connector.to)];
@@ -617,7 +696,9 @@ export default function TutorialPage() {
             <span><i /> 로컬 캔버스 · 서버 연결 없음</span>
             <div className="tutorial-board-actions">
               {selectedItem && <label className="tutorial-range-control">{selectedConnector ? '곡선 방향' : '회전'} <input type="range" min="-180" max="180" step="1" value={Math.round(Number(selectedItem.rotation) || 0)} onChange={(event) => changeRotation(event.target.value)} aria-label={selectedConnector ? '선택한 화살표 곡선 방향' : '선택한 객체 회전'} /><b>{Math.round(Number(selectedItem.rotation) || 0)}°</b></label>}
-              {(activeTool === 'connect' || selectedConnector) && <><label className="tutorial-connector-color-control">색상<input type="color" value={connectorToEdit?.color || connectorColor} onChange={(event) => updateConnectorAppearance('color', event.target.value)} aria-label="연결 화살표 색상" /></label><label className="tutorial-range-control">굵기 <input type="range" min="0.8" max="4" step="0.2" value={Number(connectorToEdit?.strokeWidth) || connectorWidth} onChange={(event) => updateConnectorAppearance('strokeWidth', event.target.value)} aria-label="연결 화살표 굵기" /><b>{Number(connectorToEdit?.strokeWidth) || connectorWidth}px</b></label></>}
+              {(activeTool === 'connect' || selectedConnector) && <><label className="tutorial-connector-color-control">색상<input type="color" value={connectorToEdit?.color || connectorColor} onChange={(event) => updateConnectorAppearance('color', event.target.value)} aria-label="연결 화살표 색상" /></label><label className="tutorial-range-control">굵기 <input type="range" min="0.8" max="4" step="0.2" value={Number(connectorToEdit?.strokeWidth) || connectorWidth} onChange={(event) => updateConnectorAppearance('strokeWidth', event.target.value)} aria-label="연결 화살표 굵기" /><b>{Number(connectorToEdit?.strokeWidth) || connectorWidth}px</b></label><ArrowHeadControls className="tutorial-arrow-head-controls" item={connectorToEdit || { startHead: connectorStartHead, endHead: connectorEndHead }} onChange={(field, value) => connectorToEdit ? updateArrowHead(field, value) : updateNewConnectorHead(field, value)} /></>}
+              {activeTool === 'arrow' && <ArrowHeadControls className="tutorial-arrow-head-controls" item={{ startHead: shapeArrowStartHead, endHead: shapeArrowEndHead }} onChange={updateNewShapeArrowHead} />}
+              {activeTool === 'select' && selectedArrow && <ArrowHeadControls className="tutorial-arrow-head-controls" item={selectedArrow} onChange={updateArrowHead} />}
               {activeTool === 'pen' && <label className="tutorial-range-control">굵기 <input type="range" min="1" max="20" step="1" value={strokeWidth} onChange={(event) => setStrokeWidth(Number(event.target.value))} aria-label="드로잉 선 굵기" /><b>{strokeWidth}px</b></label>}
               <label className="tutorial-range-control">줌 감도 <input type="range" min="0.5" max="2" step="0.1" value={zoomSensitivity} onChange={(event) => setZoomSensitivity(Number(event.target.value))} aria-label="줌 감도" /><b>{Math.round(zoomSensitivity * 100)}%</b></label>
               <button className="tutorial-zoom-button" type="button" aria-label="축소" title="클릭: 한 단계 축소 · 길게 누르기: 계속 축소" onPointerDown={(event) => startZoomHold(event, 1 / zoomStep)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / zoomStep)}>−</button>
@@ -647,6 +728,14 @@ export default function TutorialPage() {
               {Object.entries(items).map(([id, item]) => {
                 const selectedClass = selectedItemId === id || connectionStartId === id ? ' selected' : '';
                 const canResize = selectedItemId === id && activeTool === 'select' && editingId !== id && item.kind !== 'connector';
+                const itemWidth = Number(item.width) || ({ shape: 0.14, table: 0.42, link: 0.3 }[item.kind] || 0.22);
+                const itemHeight = Number(item.height) || ({ shape: 0.12, table: 0.32, link: 0.15 }[item.kind] || 0.12);
+                const arrowGeometry = item.kind === 'shape' && item.shapeType === 'arrow'
+                  ? shapeArrowGeometry(itemWidth * boardSize.width, itemHeight * boardSize.height, item.bend, item.startHead, item.endHead)
+                  : null;
+                const bendHandle = arrowGeometry && selectedItemId === id && activeTool === 'select' && editingId !== id
+                  ? <button type="button" className="shape-arrow-bend-handle" style={{ left: `${arrowGeometry.curveMidpoint.x / arrowGeometry.width * 100}%`, top: `${arrowGeometry.curveMidpoint.y / arrowGeometry.height * 100}%` }} title="몸통을 드래그해 곡률 조절" aria-label="화살표 몸통 곡률 조절" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); startArrowBend(event, id, item); }} />
+                  : null;
                 const itemClass = `${selectedClass}${canResize ? ' resizeable' : ''}${item.height ? ' has-custom-height' : ''}`;
                 const resizeHandles = canResize ? <ResizeHandles onPointerDown={(event, handle) => startItemResize(event, id, handle)} /> : null;
                 const commonHandlers = {
@@ -654,7 +743,6 @@ export default function TutorialPage() {
                   onPointerDown: (event) => startItemInteraction(event, id),
                   onDoubleClick: () => { if (['text', 'code', 'note', 'math'].includes(item.kind)) { setSelectedItemId(id); setEditingId(id); } },
                 };
-                const deleteButton = <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => deleteItem(id)} aria-label="아이템 삭제">×</button>;
                 const style = {
                   left: `${(Number(item.x) || 0) * 100}%`,
                   top: `${(Number(item.y) || 0) * 100}%`,
@@ -673,28 +761,33 @@ export default function TutorialPage() {
                   const offsetX = bounds.minX * boardSize.width;
                   const offsetY = bounds.minY * boardSize.height;
                   const curvePath = curve?.points.map((point, index) => `${index ? 'L' : 'M'}${point.x - offsetX} ${point.y - offsetY}`).join(' ');
-                  const arrowTip = curve?.points.at(-1);
-                  return <div key={id} className={`tutorial-item tutorial-vector-hit${itemClass}`} style={{ ...style, left: `${bounds.minX * 100}%`, top: `${bounds.minY * 100}%`, width: `${Math.max(0.01, bounds.maxX - bounds.minX) * 100}%`, height: `${Math.max(0.01, bounds.maxY - bounds.minY) * 100}%` }} {...commonHandlers}>{deleteButton}{curvePath && <svg className="tutorial-connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} /><circle cx={arrowTip.x - offsetX} cy={arrowTip.y - offsetY} r="9" /></svg>}{resizeHandles}</div>;
+                  const connectorEnds = [curve?.start, curve?.end].filter(Boolean);
+                  const bendPoints = curve?.curvePoints || curve?.points;
+                  const curveMidpoint = bendPoints?.[Math.floor((bendPoints.length - 1) / 2)];
+                  const bendHandle = curveMidpoint && selectedItemId === id && activeTool === 'select'
+                    ? <button type="button" className="shape-arrow-bend-handle" style={{ left: `${(curveMidpoint.x - offsetX) / geometryWidth * 100}%`, top: `${(curveMidpoint.y - offsetY) / geometryHeight * 100}%` }} title="몸통을 드래그해 곡률 조절" aria-label="연결 화살표 몸통 곡률 조절" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); startArrowBend(event, id, item); }} />
+                    : null;
+                  return <div key={id} className={`tutorial-item tutorial-vector-hit${itemClass}`} style={{ ...style, left: `${bounds.minX * 100}%`, top: `${bounds.minY * 100}%`, width: `${Math.max(0.01, bounds.maxX - bounds.minX) * 100}%`, height: `${Math.max(0.01, bounds.maxY - bounds.minY) * 100}%` }} {...commonHandlers}>{curvePath && <svg className="tutorial-connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} />{connectorEnds.map((point, index) => <circle key={index} cx={point.x - offsetX} cy={point.y - offsetY} r="9" />)}</svg>}{bendHandle}{resizeHandles}</div>;
                 }
                 if (item.kind === 'link') {
                   return <div key={id} className={`tutorial-item tutorial-media-link-item ${item.mediaType === 'link' ? 'external-link-object' : 'video-link-object'}${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.3) * 100}%`, height: `${(Number(item.height) || 0.15) * 100}%` }} {...commonHandlers}>
-                    <div className="shared-media-header"><span className="shared-media-drag-handle" title="여기를 끌어 자료를 이동하세요"><Icon name={item.mediaType === 'link' ? 'link' : 'image'} size={13} />{item.mediaType === 'youtube' ? `YouTube · ${item.title || '동영상'}` : item.mediaType === 'video' ? `동영상 · ${item.title || '재생'}` : '링크'}</span>{deleteButton}</div>
+                    <div className="shared-media-header"><span className="shared-media-drag-handle" title="여기를 끌어 자료를 이동하세요"><Icon name={item.mediaType === 'link' ? 'link' : 'image'} size={13} />{item.mediaType === 'youtube' ? `YouTube · ${item.title || '동영상'}` : item.mediaType === 'video' ? `동영상 · ${item.title || '재생'}` : '링크'}</span></div>
                     <SharedMediaContent item={item} />
                     {resizeHandles}
                   </div>;
                 }
                 if (item.kind === 'table') {
-                  return <div key={id} className={`tutorial-item tutorial-table-item${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.42) * 100}%`, height: `${(Number(item.height) || 0.32) * 100}%` }} {...commonHandlers}><EditableTable item={item} onChange={(location, value) => changeTableItem(id, (current) => updateTableValue(current, location, value))} />{deleteButton}{resizeHandles}</div>;
+                  return <div key={id} className={`tutorial-item tutorial-table-item${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.42) * 100}%`, height: `${(Number(item.height) || 0.32) * 100}%` }} {...commonHandlers}><EditableTable item={item} onChange={(location, value) => changeTableItem(id, (current) => updateTableValue(current, location, value))} />{resizeHandles}</div>;
                 }
                 if (item.kind === 'shape') {
-                  return <div key={id} className={`tutorial-item tutorial-shape-hit tutorial-shape-${item.shapeType || 'rectangle'}${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.14) * 100}%`, height: `${(Number(item.height) || 0.12) * 100}%` }} {...commonHandlers}>{deleteButton}{resizeHandles}</div>;
+                  return <div key={id} className={`tutorial-item tutorial-shape-hit tutorial-shape-${item.shapeType || 'rectangle'}${itemClass}`} style={{ ...style, width: `${itemWidth * 100}%`, height: `${itemHeight * 100}%` }} {...commonHandlers}>{bendHandle}{resizeHandles}</div>;
                 }
                 if (item.kind === 'image') {
-                  return <div key={id} className={`tutorial-item tutorial-image-item${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.3) * 100}%` }} {...commonHandlers}><img src={item.src} alt={item.filename || '튜토리얼 이미지'} /><div>{item.filename || '이미지'}{deleteButton}</div>{resizeHandles}</div>;
+                  return <div key={id} className={`tutorial-item tutorial-image-item${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.3) * 100}%` }} {...commonHandlers}><img src={item.src} alt={item.filename || '튜토리얼 이미지'} /><div>{item.filename || '이미지'}</div>{resizeHandles}</div>;
                 }
                 if (item.kind === 'note') {
                   return <div key={id} className={`tutorial-item tutorial-sticky-note${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.24) * 100}%` }} {...commonHandlers} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setEditingId((current) => current === id ? null : current); }}>
-                    <div className="tutorial-sticky-head"><span title="끌어서 포스트잇 이동"><Icon name="sticky" size={13} /> 포스트잇</span><input type="color" aria-label="포스트잇 색상" title="포스트잇 색상 변경" value={item.color || stickyNoteColors[0]} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'color', event.target.value)} />{deleteButton}</div>
+                    <div className="tutorial-sticky-head"><span title="끌어서 포스트잇 이동"><Icon name="sticky" size={13} /> 포스트잇</span><input type="color" aria-label="포스트잇 색상" title="포스트잇 색상 변경" value={item.color || stickyNoteColors[0]} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'color', event.target.value)} /></div>
                     {editingId === id ? <textarea autoFocus aria-label="포스트잇 Markdown 편집" value={item.text || ''} placeholder={'# 메모 제목\n- 할 일\n**중요한 내용**'} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeText(id, event.target.value)} /> : <div className="tutorial-sticky-content" onDoubleClick={() => { setSelectedItemId(id); setEditingId(id); }} title="두 번 클릭해 Markdown 편집">{item.text ? <MarkdownText source={item.text} /> : <p className="tutorial-sticky-empty">두 번 클릭해 메모를 작성하세요.</p>}</div>}
                     <small>간단한 Markdown · 로컬 체험</small>
                     {resizeHandles}
@@ -702,7 +795,7 @@ export default function TutorialPage() {
                 }
                 if (item.kind === 'text') {
                   return <div key={id} className={`tutorial-item tutorial-text-item${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.22) * 100}%` }} {...commonHandlers}>
-                    {editingId === id ? <><textarea autoFocus value={item.text || ''} placeholder="여기에 텍스트를 입력하세요." aria-label="텍스트 편집" onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeText(id, event.target.value)} onBlur={() => setEditingId((current) => current === id ? null : current)} />{deleteButton}</> : <><span title="두 번 클릭해 편집">{item.text || '두 번 클릭해 편집'}</span>{deleteButton}</>}
+                    {editingId === id ? <textarea autoFocus value={item.text || ''} placeholder="여기에 텍스트를 입력하세요." aria-label="텍스트 편집" onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeText(id, event.target.value)} onBlur={() => setEditingId((current) => current === id ? null : current)} /> : <span title="두 번 클릭해 편집">{item.text || '두 번 클릭해 편집'}</span>}
                     {resizeHandles}
                   </div>;
                 }
@@ -711,12 +804,12 @@ export default function TutorialPage() {
                     {editingId === id
                       ? <input className="tutorial-math-input" autoFocus aria-label="수식 편집" value={String(item.formula ?? '')} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'formula', event.target.value)} onBlur={() => setEditingId((current) => current === id ? null : current)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }} />
                       : <span className="tutorial-math-preview" onDoubleClick={(event) => { event.stopPropagation(); setSelectedItemId(id); setEditingId(id); }} title="두 번 클릭해 수식 편집"><MathFormula formula={item.formula ?? ''} /></span>}
-                    {deleteButton}{resizeHandles}
+                    {resizeHandles}
                   </div>;
                 }
                 if (item.kind === 'code') {
                   return <div key={id} className={`tutorial-item tutorial-code-item${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.32) * 100}%` }} {...commonHandlers} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setEditingId((current) => current === id ? null : current); }}>
-                    <div className="tutorial-code-head"><Icon name="code" size={14} />{editingId === id ? <><input value={item.filename || ''} aria-label="파일 이름" maxLength={80} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'filename', event.target.value)} /><select value={item.language || 'javascript'} aria-label="코드 언어" onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'language', event.target.value)}><option>javascript</option><option>typescript</option><option>python</option><option>html</option><option>css</option><option>json</option><option>text</option></select></> : <><span>{item.filename || 'idea.js'}</span><small>{item.language || 'javascript'}</small></>}{deleteButton}</div>
+                    <div className="tutorial-code-head"><Icon name="code" size={14} />{editingId === id ? <><input value={item.filename || ''} aria-label="파일 이름" maxLength={80} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'filename', event.target.value)} /><select value={item.language || 'javascript'} aria-label="코드 언어" onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'language', event.target.value)}><option>javascript</option><option>typescript</option><option>python</option><option>html</option><option>css</option><option>json</option><option>text</option></select></> : <><span>{item.filename || 'idea.js'}</span><small>{item.language || 'javascript'}</small></>}</div>
                     {editingId === id ? <textarea autoFocus value={item.code || ''} placeholder="여기에 코드를 작성하세요." aria-label="코드 편집" onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeCode(id, event.target.value)} /> : <pre title="두 번 클릭해 편집">{item.code || '두 번 클릭해 편집'}</pre>}
                     {resizeHandles}
                   </div>;
@@ -728,7 +821,7 @@ export default function TutorialPage() {
             {activeTool === 'eraser' && <div className="eraser-cursor" ref={eraserCursorRef} style={{ width: `${ERASER_RADIUS * 2}px`, height: `${ERASER_RADIUS * 2}px` }} aria-hidden="true" />}
             {sharePosition && <ShareComposer onCancel={() => { setSharePosition(null); setActiveTool('select'); }} onSubmit={placeSharedLink} />}
             {composer && <form className="tutorial-editor" onPointerDown={(event) => event.stopPropagation()} onSubmit={(event) => { event.preventDefault(); placeComposer(); }}><div className="tutorial-editor-heading"><span>수식 작성</span><button type="button" onClick={() => setComposer(null)} aria-label="닫기"><Icon name="close" size={15} /></button></div><textarea autoFocus value={composer.value} onChange={(event) => setComposer((current) => ({ ...current, value: event.target.value }))} aria-label="수식 입력" /><button className="tutorial-place-button" type="submit">캔버스에 놓기 <Icon name="arrow" size={14} /></button></form>}
-            <span className="tutorial-stage-hint">{activeTool === 'select' ? '오브젝트 드래그 이동 · 빈 곳 드래그 또는 Space + 드래그 이동' : activeTool === 'eraser' ? '지우개 도구 · 드래그한 곳의 선 부분만 지우기' : `${tools.find((tool) => tool.id === activeTool)?.label} 도구 · 캔버스를 클릭`}</span>
+            <span className="tutorial-stage-hint">{activeTool === 'select' && (selectedArrow || selectedConnector) ? '가운데 조절점을 드래그해 화살표 몸통을 휘어보세요.' : activeTool === 'select' ? '오브젝트 드래그 이동 · 빈 곳 드래그 또는 Space + 드래그 이동' : activeTool === 'eraser' ? '지우개 도구 · 드래그한 곳의 선 부분만 지우기' : `${tools.find((tool) => tool.id === activeTool)?.label} 도구 · 캔버스를 클릭`}</span>
           </div>
           <div className="tutorial-board-footer"><span>{Object.keys(items).length}개 오브젝트</span><span><i /> 이 탭에서만 유지 · 저장되지 않음</span></div>
         </div>
