@@ -39,6 +39,16 @@
 .canvas-object{transform:rotate(var(--object-rotation,0deg));transform-origin:center center}
 .canvas-stage>.vector-layer{z-index:3}
 .canvas-stage>.canvas-scene{z-index:4}
+.laser-layer{position:absolute;inset:0;z-index:7;width:100%;height:100%;overflow:hidden;pointer-events:none}
+.laser-trail{opacity:1}
+.laser-trail.is-fading{animation:laser-trail-fade 1.6s ease-out forwards}
+.laser-trail-glow,.laser-trail-line,.laser-trail-core{fill:none;stroke:var(--laser-color,#ff3d67);stroke-linecap:round;stroke-linejoin:round}
+.laser-trail-glow{stroke-width:13;opacity:.2;filter:blur(4px)}
+.laser-trail-line{stroke-width:5;filter:drop-shadow(0 0 5px color-mix(in srgb,var(--laser-color,#ff3d67) 70%,transparent))}
+.laser-trail-core{stroke:#fff;stroke-width:1;opacity:.72}
+@keyframes laser-trail-fade{to{opacity:0}}
+.canvas-stage.laser-mode,.tutorial-stage.laser-mode{cursor:crosshair}
+.canvas-stage.laser-mode .canvas-object,.tutorial-stage.laser-mode .tutorial-scene .tutorial-item{cursor:crosshair!important}
 .canvas-stage .canvas-object.vector-object-hit{transform:none}
 .canvas-object.selected{outline:1px solid #d9a45c99;outline-offset:2px}
 .canvas-object-connector.selected{outline:none}

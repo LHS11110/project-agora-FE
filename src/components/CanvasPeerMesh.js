@@ -12,10 +12,11 @@ function configuredIceServers() {
 }
 
 export default class CanvasPeerMesh {
-  constructor({ sendSignal, onData, onCursor, onPeersChanged }) {
+  constructor({ sendSignal, onData, onCursor, onLaser, onPeersChanged }) {
     this.sendSignal = sendSignal;
     this.onData = onData;
     this.onCursor = onCursor;
+    this.onLaser = onLaser;
     this.onPeersChanged = onPeersChanged;
     this.selfPeerId = '';
     this.peers = new Map();
@@ -118,6 +119,7 @@ export default class CanvasPeerMesh {
       try {
         const message = JSON.parse(event.data);
         if (message?.type === 'cursor') this.onCursor?.(peer.metadata, message);
+        else if (message?.type === 'laser') this.onLaser?.(peer.metadata, message);
         else this.onData?.(peer.metadata, message, channel.label);
       } catch { /* Ignore malformed or stale peer frames. */ }
     };
@@ -139,6 +141,13 @@ export default class CanvasPeerMesh {
   }
 
   sendCursor(payload) {
+    const encoded = JSON.stringify(payload);
+    for (const peer of this.peers.values()) {
+      if (peer.cursor?.readyState === 'open') peer.cursor.send(encoded);
+    }
+  }
+
+  sendLaser(payload) {
     const encoded = JSON.stringify(payload);
     for (const peer of this.peers.values()) {
       if (peer.cursor?.readyState === 'open') peer.cursor.send(encoded);

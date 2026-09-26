@@ -16,6 +16,7 @@ import { connectorBendFromPointer, connectorGeometry } from '../components/conne
 import { DEFAULT_ARROW_END_HEAD, DEFAULT_ARROW_START_HEAD, normalizeArrowHead } from '../components/arrowheadGeometry.js';
 import { captureResize, resizeItemAtPointer } from '../components/objectResize.js';
 import { DEFAULT_SHAPE_ARROW_BEND, shapeArrowBendFromPointer, shapeArrowGeometry } from '../components/shapeArrowGeometry.js';
+import LaserLayer from '../components/LaserLayer.jsx';
 import { createTableData, normalizeTableCount, resizeTableData, updateTableValue, MAX_TABLE_COLUMNS, MAX_TABLE_ROWS } from '../components/tableModel.js';
 import '../tutorial.css';
 
@@ -34,6 +35,7 @@ const stickyNoteColors = ['#f6edcf', '#f3d8cc', '#dce9e0', '#dce6f4', '#eadff1']
 const tools = [
   { id: 'select', label: '선택 및 이동', icon: 'select' },
   { id: 'pen', label: '드로잉', icon: 'pen' },
+  { id: 'laser', label: '레이저 포인터', icon: 'laser' },
   { id: 'eraser', label: '드로잉 지우개', icon: 'eraser' },
   { id: 'connect', label: '오브젝트 연결', icon: 'connect' },
   { id: 'rectangle', label: '사각형', icon: 'rectangle' },
@@ -49,6 +51,8 @@ const tools = [
 
 const makeId = () => globalThis.crypto?.randomUUID?.() || `tutorial-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const ERASER_RADIUS = 12;
+const LASER_COLOR = '#ff3d67';
+const LASER_FADE_MS = 1600;
 const isEditableTarget = (target) => target instanceof HTMLElement
   && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
 
@@ -57,6 +61,7 @@ export default function TutorialPage() {
   const sceneRef = useRef(null);
   const draftSetterRef = useRef(null);
   const drawingRef = useRef(false);
+  const laserDrawingRef = useRef(null);
   const eraserRef = useRef(null);
   const eraserCursorRef = useRef(null);
   const pointsRef = useRef([]);
@@ -80,12 +85,25 @@ export default function TutorialPage() {
   const [noteColor, setNoteColor] = useState(stickyNoteColors[0]);
   const [tableConfig, setTableConfig] = useState({ rows: 3, columns: 3, width: 42, height: 32 });
   const [strokeWidth, setStrokeWidth] = useState(4);
+  const [laserStrokes, setLaserStrokes] = useState([]);
   const [showGrid, setShowGrid] = useState(true);
   const [camera, setCamera] = useState({ x: 0, y: 0, scale: 1 });
   const [boardSize, setBoardSize] = useState({ width: 1, height: 1 });
   const [zoomSensitivity, setZoomSensitivity] = useState(1);
   const [composer, setComposer] = useState(null);
   const [sharePosition, setSharePosition] = useState(null);
+
+  useEffect(() => {
+    if (!laserStrokes.length) return undefined;
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      setLaserStrokes((current) => {
+        const next = current.filter((stroke) => stroke.active || !stroke.endedAt || now - stroke.endedAt < LASER_FADE_MS + 120);
+        return next.length === current.length ? current : next;
+      });
+    }, 160);
+    return () => window.clearInterval(timer);
+  }, [laserStrokes.length]);
 
   useEffect(() => { if (activeTool !== 'link') setSharePosition(null); }, [activeTool]);
 
@@ -169,6 +187,25 @@ export default function TutorialPage() {
 
   const hideEraserCursor = () => eraserCursorRef.current?.classList.remove('is-visible');
 
+  const recordLaserPoint = (point, finish = false) => {
+    const active = laserDrawingRef.current;
+    if (!active) return;
+    const previous = active.points[active.points.length - 1];
+    if (point && previous && Math.hypot(point.x - previous.x, point.y - previous.y) >= 0.0008) {
+      active.points.push(point);
+      const now = Date.now();
+      setLaserStrokes((current) => current.map((stroke) => stroke.id === active.id
+        ? { ...stroke, points: [...stroke.points, point], updatedAt: now }
+        : stroke));
+    }
+    if (!finish) return;
+    const endedAt = Date.now();
+    setLaserStrokes((current) => current.map((stroke) => stroke.id === active.id
+      ? { ...stroke, active: false, endedAt, updatedAt: endedAt }
+      : stroke));
+    laserDrawingRef.current = null;
+  };
+
   const addItem = (item) => {
     const id = makeId();
     setItems((current) => ({ ...current, [id]: item }));
@@ -231,7 +268,7 @@ export default function TutorialPage() {
       eraseStrokesBetween(point, point);
       return;
     }
-    if (targetItem && activeTool !== 'pen') return;
+    if (targetItem && !['pen', 'laser'].includes(activeTool)) return;
 
     if (activeTool === 'pen') {
       event.preventDefault();
@@ -239,6 +276,17 @@ export default function TutorialPage() {
       drawingRef.current = true;
       pointsRef.current = [position(event)];
       draftSetterRef.current?.({ points: pointsRef.current, color, strokeWidth });
+      return;
+    }
+
+    if (activeTool === 'laser') {
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      const point = position(event);
+      const id = makeId();
+      const now = Date.now();
+      laserDrawingRef.current = { id, points: [point] };
+      setLaserStrokes((current) => [...current, { id, color: LASER_COLOR, points: [point], active: true, updatedAt: now, endedAt: null }]);
       return;
     }
 
@@ -286,7 +334,7 @@ export default function TutorialPage() {
 
   const startItemInteraction = (event, id) => {
     if (event.button === 1 || spacePressedRef.current) return;
-    if (activeTool === 'pen') {
+    if (activeTool === 'pen' || activeTool === 'laser') {
       if (event.target.closest?.('button, input, textarea, select')) event.stopPropagation();
       return;
     }
@@ -402,6 +450,10 @@ export default function TutorialPage() {
       eraserRef.current = point;
       return;
     }
+    if (laserDrawingRef.current) {
+      recordLaserPoint(position(event));
+      return;
+    }
     if (dragRef.current) {
       const { mode, id, initial, offsetX, offsetY, startX, startY, resize, viewport } = dragRef.current;
       if (mode === 'rotate') {
@@ -450,6 +502,11 @@ export default function TutorialPage() {
     }
     if (eraserRef.current) {
       eraserRef.current = null;
+      if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+      return;
+    }
+    if (laserDrawingRef.current) {
+      recordLaserPoint(position(event), true);
       if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
       return;
     }
@@ -585,9 +642,10 @@ export default function TutorialPage() {
     if (selectedItemId === id) setSelectedItemId(null);
     if (editingId === id) setEditingId(null);
   };
-  const clear = () => { setItems({}); setComposer(null); setSelectedItemId(null); setEditingId(null); setConnectionStartId(null); };
+  const clear = () => { setItems({}); setLaserStrokes([]); setComposer(null); setSelectedItemId(null); setEditingId(null); setConnectionStartId(null); };
   const reset = () => {
     setItems({ ...demoItems });
+    setLaserStrokes([]);
     setComposer(null);
     setActiveTool('select');
     setSelectedItemId(null);
@@ -712,7 +770,7 @@ export default function TutorialPage() {
           </div>
           {(activeTool === 'table' || selectedTable) && <div className="tutorial-table-settings" onPointerDown={(event) => event.stopPropagation()}><strong>{activeTool === 'table' ? '새 테이블 설정' : '테이블 설정'}</strong><label>행<input type="number" min="1" max={MAX_TABLE_ROWS} value={activeTool === 'table' ? tableConfig.rows : selectedTable.rows?.length || 1} onChange={(event) => changeTableCount('rows', event)} /></label><label>열<input type="number" min="1" max={MAX_TABLE_COLUMNS} value={activeTool === 'table' ? tableConfig.columns : selectedTable.columns?.length || 1} onChange={(event) => changeTableCount('columns', event)} /></label><label>너비 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.width : Math.round((selectedTable.width || 0.42) * 100)} onChange={(event) => changeTableSize('width', event)} /></label><label>높이 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.height : Math.round((selectedTable.height || 0.32) * 100)} onChange={(event) => changeTableSize('height', event)} /></label><small>{activeTool === 'table' ? '캔버스를 클릭해 놓으세요.' : '컬럼 이름과 셀을 두 번 클릭해 Markdown으로 편집하세요.'}</small></div>}
           <div
-            className={`tutorial-stage${showGrid ? '' : ' no-grid'}${activeTool === 'pen' ? ' pen-active' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}`}
+            className={`tutorial-stage${showGrid ? '' : ' no-grid'}${activeTool === 'pen' ? ' pen-active' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}`}
             ref={boardRef}
             style={stageStyle}
             onPointerDown={startOnBoard}
@@ -818,10 +876,11 @@ export default function TutorialPage() {
               })}
               {selectedItem && selectedItem.kind !== 'connector' && activeTool === 'select' && editingId !== selectedItemId && <RotationHandles sceneRef={sceneRef} id={String(selectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startItemRotation} />}
             </div>
+            <LaserLayer strokes={laserStrokes} width={boardSize.width} height={boardSize.height} camera={camera} />
             {activeTool === 'eraser' && <div className="eraser-cursor" ref={eraserCursorRef} style={{ width: `${ERASER_RADIUS * 2}px`, height: `${ERASER_RADIUS * 2}px` }} aria-hidden="true" />}
             {sharePosition && <ShareComposer onCancel={() => { setSharePosition(null); setActiveTool('select'); }} onSubmit={placeSharedLink} />}
             {composer && <form className="tutorial-editor" onPointerDown={(event) => event.stopPropagation()} onSubmit={(event) => { event.preventDefault(); placeComposer(); }}><div className="tutorial-editor-heading"><span>수식 작성</span><button type="button" onClick={() => setComposer(null)} aria-label="닫기"><Icon name="close" size={15} /></button></div><textarea autoFocus value={composer.value} onChange={(event) => setComposer((current) => ({ ...current, value: event.target.value }))} aria-label="수식 입력" /><button className="tutorial-place-button" type="submit">캔버스에 놓기 <Icon name="arrow" size={14} /></button></form>}
-            <span className="tutorial-stage-hint">{activeTool === 'select' && (selectedArrow || selectedConnector) ? '가운데 조절점을 드래그해 화살표 몸통을 휘어보세요.' : activeTool === 'select' ? '오브젝트 드래그 이동 · 빈 곳 드래그 또는 Space + 드래그 이동' : activeTool === 'eraser' ? '지우개 도구 · 드래그한 곳의 선 부분만 지우기' : `${tools.find((tool) => tool.id === activeTool)?.label} 도구 · 캔버스를 클릭`}</span>
+            <span className="tutorial-stage-hint">{activeTool === 'select' && (selectedArrow || selectedConnector) ? '가운데 조절점을 드래그해 화살표 몸통을 휘어보세요.' : activeTool === 'select' ? '오브젝트 드래그 이동 · 빈 곳 드래그 또는 Space + 드래그 이동' : activeTool === 'eraser' ? '지우개 도구 · 드래그한 곳의 선 부분만 지우기' : activeTool === 'laser' ? '드래그해 가리키면 흔적이 1.6초 동안 서서히 사라져요.' : `${tools.find((tool) => tool.id === activeTool)?.label} 도구 · 캔버스를 클릭`}</span>
           </div>
           <div className="tutorial-board-footer"><span>{Object.keys(items).length}개 오브젝트</span><span><i /> 이 탭에서만 유지 · 저장되지 않음</span></div>
         </div>
