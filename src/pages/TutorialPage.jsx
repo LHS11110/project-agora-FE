@@ -140,11 +140,16 @@ export default function TutorialPage() {
           return;
         }
       }
-      if (event.key === 'Delete' && editingId == null && selectedItemId != null && !isEditableTarget(event.target)) {
-        event.preventDefault();
-        deleteItem(selectedItemId);
-        setConnectionStartId(null);
-        return;
+      if (event.key === 'Delete') {
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        const codeEditor = target?.closest('.tutorial-code-item textarea, .tutorial-code-head input, .tutorial-code-head select');
+        if (codeEditor) return;
+        if (editingId == null && selectedItemId != null && !isEditableTarget(target)) {
+          event.preventDefault();
+          deleteItem(selectedItemId);
+          setConnectionStartId(null);
+          return;
+        }
       }
       if (event.code === 'Space' && !isEditableTarget(event.target)) {
         spacePressedRef.current = true;
@@ -358,7 +363,7 @@ export default function TutorialPage() {
     const item = items[id];
     if (!item) return;
     setSelectedItemId(id);
-    if (item.kind === 'connector') { focusConnectorTarget(item, id); return; }
+    if (item.kind === 'connector') return;
     event.currentTarget.classList.add('object-dragging');
     dragRef.current = {
       mode: 'move',
@@ -799,7 +804,16 @@ export default function TutorialPage() {
                 const commonHandlers = {
                   'data-item-id': id,
                   onPointerDown: (event) => startItemInteraction(event, id),
-                  onDoubleClick: () => { if (['text', 'code', 'note', 'math'].includes(item.kind)) { setSelectedItemId(id); setEditingId(id); } },
+                  onDoubleClick: (event) => {
+                    if (item.kind === 'connector') {
+                      if (activeTool !== 'select') return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      focusConnectorTarget(item, id);
+                      return;
+                    }
+                    if (['text', 'code', 'note', 'math'].includes(item.kind)) { setSelectedItemId(id); setEditingId(id); }
+                  },
                 };
                 const style = {
                   left: `${(Number(item.x) || 0) * 100}%`,
@@ -825,7 +839,7 @@ export default function TutorialPage() {
                   const bendHandle = curveMidpoint && selectedItemId === id && activeTool === 'select'
                     ? <button type="button" className="shape-arrow-bend-handle" style={{ left: `${(curveMidpoint.x - offsetX) / geometryWidth * 100}%`, top: `${(curveMidpoint.y - offsetY) / geometryHeight * 100}%` }} title="몸통을 드래그해 곡률 조절" aria-label="연결 화살표 몸통 곡률 조절" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); startArrowBend(event, id, item); }} />
                     : null;
-                  return <div key={id} className={`tutorial-item tutorial-vector-hit${itemClass}`} style={{ ...style, left: `${bounds.minX * 100}%`, top: `${bounds.minY * 100}%`, width: `${Math.max(0.01, bounds.maxX - bounds.minX) * 100}%`, height: `${Math.max(0.01, bounds.maxY - bounds.minY) * 100}%` }} {...commonHandlers}>{curvePath && <svg className="tutorial-connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} />{connectorEnds.map((point, index) => <circle key={index} cx={point.x - offsetX} cy={point.y - offsetY} r="9" />)}</svg>}{bendHandle}{resizeHandles}</div>;
+                  return <div key={id} className={`tutorial-item tutorial-vector-hit${itemClass}`} style={{ ...style, left: `${bounds.minX * 100}%`, top: `${bounds.minY * 100}%`, width: `${Math.max(0.01, bounds.maxX - bounds.minX) * 100}%`, height: `${Math.max(0.01, bounds.maxY - bounds.minY) * 100}%` }} {...commonHandlers} title="한 번 클릭해 선택 · 두 번 클릭해 연결된 객체로 이동">{curvePath && <svg className="tutorial-connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} />{connectorEnds.map((point, index) => <circle key={index} cx={point.x - offsetX} cy={point.y - offsetY} r="9" />)}</svg>}{bendHandle}{resizeHandles}</div>;
                 }
                 if (item.kind === 'link') {
                   return <div key={id} className={`tutorial-item tutorial-media-link-item ${item.mediaType === 'link' ? 'external-link-object' : 'video-link-object'}${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.3) * 100}%`, height: `${(Number(item.height) || 0.15) * 100}%` }} {...commonHandlers}>

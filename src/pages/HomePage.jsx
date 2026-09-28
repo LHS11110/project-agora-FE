@@ -56,7 +56,53 @@ export default function HomePage() {
           <div className="home-slide-inner page-container"><div className="home-slide-copy"><span className="home-slide-kicker"><i /> IDEAS IN GOOD COMPANY · 01</span><h1>생각이 모이면<br /><em>가능성의 모양</em>이 보여요.</h1><p>낙서부터 완성된 계획까지.<br />팀의 생각이 한 장 위에서 자라나는 협업 캔버스, 아고라.</p><div className="home-slide-actions"><button className="button button-dark button-large" onClick={() => navigate(target)}>함께 시작하기 <Icon name="arrow" size={18} /></button><button className="button button-soft button-large" onClick={() => selectSlide(1)}>어떻게 작동하나요 <Icon name="chevron" size={16} /></button></div><div className="home-slide-note"><span className="avatar-stack"><i>H</i><i>M</i><i>J</i></span>한 장의 캔버스에서, 더 멀리 생각합니다.</div></div><MiniBoard /><div className="hero-side-note"><span>01</span><span className="vertical-rule" /><span>COLLABORATION, IN FULL COLOR</span></div></div>
         </section>
         <section className="home-slide slide-vector" aria-roledescription="슬라이드" aria-label="2 / 4">
-          <div className="home-slide-inner page-container"><div className="home-slide-copy"><span className="home-slide-kicker"><i /> DRAW IT INTO VIEW · 02</span><h1>선을 그리고<br /><em>생각을 연결해요.</em></h1><p>획과 도형은 확대해도 또렷한 벡터 그래픽으로.<br />직접 그린 선과 화살표로 복잡한 생각도 빠르게 잇습니다.</p><div className="vector-slide-metrics"><span><b>GPU</b><small>가속 렌더링</small></span><span><b>∞</b><small>확대에도 선명하게</small></span><span><b>→</b><small>객체 간 연결</small></span></div><Link className="underlined-link" to="/tutorial">튜토리얼에서 직접 그려보기 <Icon name="arrow" size={15} /></Link></div><div className="vector-showcase" aria-hidden="true"><div className="vector-showcase-label">IDEA FLOW / 01</div><svg viewBox="0 0 700 440" role="presentation"><defs><marker id="home-vector-arrow-coral" viewBox="0 0 12 12" markerWidth="12" markerHeight="12" refX="1" refY="6" orient="auto" markerUnits="userSpaceOnUse"><path d="M1 1L11 6L1 11Z" fill="#d58165" /></marker><marker id="home-vector-arrow-sage" viewBox="0 0 12 12" markerWidth="12" markerHeight="12" refX="1" refY="6" orient="auto" markerUnits="userSpaceOnUse"><path d="M1 1L11 6L1 11Z" fill="#63846e" /></marker></defs><rect x="78" y="122" width="174" height="108" rx="18" fill="#f3ead0" stroke="#e5d8b9" strokeWidth="2"/><path d="M226 122v23h26" fill="#e9ddc1" stroke="#e5d8b9" strokeWidth="2" strokeLinejoin="round"/><ellipse cx="386" cy="160" rx="78" ry="54" fill="#dce9e4" stroke="#8aa899" strokeWidth="3"/><rect x="500" y="272" width="154" height="104" rx="20" fill="#e8e1ef" stroke="#ab9bbc" strokeWidth="3"/><path d="M258 176 C275 176 279 160 292 160" fill="none" stroke="#d58165" strokeWidth="4" strokeLinecap="round" markerEnd="url(#home-vector-arrow-coral)"/><path d="M448 198 C476 208 490 244 512 261" fill="none" stroke="#63846e" strokeWidth="4" strokeLinecap="round" markerEnd="url(#home-vector-arrow-sage)"/><path d="M333 250l6 13 13 6-13 5-6 13-5-13-13-5 13-6z" fill="#e2bd74"/><path d="M579 102l4 9 9 4-9 4-4 9-4-9-9-4 9-4z" fill="#d58165"/><text className="vector-eyebrow" x="101" y="158">QUESTION / 01</text><text className="vector-title" x="101" y="192">생각을 꺼내요</text><text className="vector-node-copy" x="386" y="166">새로운 방향</text><text className="vector-eyebrow" x="523" y="309">NEXT / 02</text><text className="vector-title" x="523" y="341">다음 한 걸음</text><text className="vector-small-copy" x="523" y="360">함께 정리하기</text></svg><span className="vector-showcase-caption">작은 선 하나가 협업의 시작이 되도록.</span></div></div>
+          <div className="home-slide-inner page-container"><div className="home-slide-copy"><span className="home-slide-kicker"><i /> PROJECT PLANNING · 02</span><h1>프로젝트를 나누고<br /><em>할 일을 연결해요.</em></h1><p>가입 개선 목표 아래 조사·기능·출시 단계를 두고,<br />각 단계의 실행 과제를 한눈에 정리합니다.</p><div className="vector-slide-metrics"><span><b>GOAL</b><small>목표부터 정리</small></span><span><b>TASK</b><small>실행 단위로 분해</small></span><span><b>→</b><small>다음 작업 연결</small></span></div><Link className="underlined-link" to="/tutorial">튜토리얼에서 직접 그려보기 <Icon name="arrow" size={15} /></Link></div><div className="vector-showcase" aria-hidden="true"><div className="vector-showcase-label">PROJECT STRUCTURE / 01</div><svg viewBox="0 0 700 440" role="presentation">
+  <defs><marker id="home-project-arrow" viewBox="0 0 10 10" markerWidth="10" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M1 1L9 5L1 9Z" fill="#82988a" /></marker></defs>
+  <path d="M187 220 C213 220 219 89 244 89" fill="none" stroke="#82988a" strokeWidth="2.5" strokeLinecap="round" markerEnd="url(#home-project-arrow)" />
+  <path d="M187 220 C210 220 222 220 244 220" fill="none" stroke="#82988a" strokeWidth="2.5" strokeLinecap="round" markerEnd="url(#home-project-arrow)" />
+  <path d="M187 220 C213 220 219 351 244 351" fill="none" stroke="#82988a" strokeWidth="2.5" strokeLinecap="round" markerEnd="url(#home-project-arrow)" />
+  <path d="M415 89 C442 89 457 77 486 77" fill="none" stroke="#a0b2a6" strokeWidth="2" strokeLinecap="round" markerEnd="url(#home-project-arrow)" />
+  <path d="M415 89 C446 100 450 134 486 143" fill="none" stroke="#a0b2a6" strokeWidth="2" strokeLinecap="round" markerEnd="url(#home-project-arrow)" />
+  <path d="M415 220 C444 220 456 208 486 208" fill="none" stroke="#a0b2a6" strokeWidth="2" strokeLinecap="round" markerEnd="url(#home-project-arrow)" />
+  <path d="M415 220 C444 220 456 274 486 274" fill="none" stroke="#a0b2a6" strokeWidth="2" strokeLinecap="round" markerEnd="url(#home-project-arrow)" />
+  <path d="M415 351 C444 351 456 339 486 339" fill="none" stroke="#a0b2a6" strokeWidth="2" strokeLinecap="round" markerEnd="url(#home-project-arrow)" />
+  <path d="M415 351 C444 351 456 405 486 405" fill="none" stroke="#a0b2a6" strokeWidth="2" strokeLinecap="round" markerEnd="url(#home-project-arrow)" />
+  <rect x="42" y="176" width="145" height="88" rx="15" fill="#f3ead0" stroke="#e5d8b9" strokeWidth="2" />
+  <rect x="258" y="53" width="157" height="72" rx="13" fill="#dce9e4" stroke="#a9c0b2" strokeWidth="2" />
+  <rect x="258" y="184" width="157" height="72" rx="13" fill="#f3ead0" stroke="#ddcfad" strokeWidth="2" />
+  <rect x="258" y="315" width="157" height="72" rx="13" fill="#e8e1ef" stroke="#b6a9c1" strokeWidth="2" />
+  <rect x="500" y="49" width="165" height="56" rx="10" fill="#fff" stroke="#e3e9e1" strokeWidth="2" />
+  <rect x="500" y="115" width="165" height="56" rx="10" fill="#fff" stroke="#e3e9e1" strokeWidth="2" />
+  <rect x="500" y="180" width="165" height="56" rx="10" fill="#fff" stroke="#e3e9e1" strokeWidth="2" />
+  <rect x="500" y="246" width="165" height="56" rx="10" fill="#fff" stroke="#e3e9e1" strokeWidth="2" />
+  <rect x="500" y="311" width="165" height="56" rx="10" fill="#fff" stroke="#e3e9e1" strokeWidth="2" />
+  <rect x="500" y="377" width="165" height="56" rx="10" fill="#fff" stroke="#e3e9e1" strokeWidth="2" />
+  <path d="M169 176h18v18" fill="#e9ddc1" stroke="#e5d8b9" strokeWidth="2" strokeLinejoin="round" />
+  <text className="map-root-label" x="57" y="200">PROJECT / ROOT</text>
+  <text className="map-root-title" x="57" y="224">가입 흐름 개선</text>
+  <text className="map-root-metric" x="57" y="246">전환율 목표 +15%</text>
+  <text className="map-group-label" x="274" y="73">01 / DISCOVER</text>
+  <text className="map-group-title" x="274" y="96">사용자 조사</text>
+  <text className="map-group-note" x="274" y="113">문제와 기회 찾기</text>
+  <text className="map-group-label" x="274" y="204">02 / BUILD</text>
+  <text className="map-group-title" x="274" y="227">핵심 기능</text>
+  <text className="map-group-note" x="274" y="244">가설을 빠르게 검증</text>
+  <text className="map-group-label" x="274" y="335">03 / LAUNCH</text>
+  <text className="map-group-title" x="274" y="358">출시와 측정</text>
+  <text className="map-group-note" x="274" y="375">결과를 함께 살펴보기</text>
+  <text className="map-task-index" x="515" y="69">RESEARCH / 01</text>
+  <text className="map-task-title" x="515" y="91">사용자 인터뷰 5명</text>
+  <text className="map-task-index" x="515" y="135">RESEARCH / 02</text>
+  <text className="map-task-title" x="515" y="157">가입 이탈 지점 찾기</text>
+  <text className="map-task-index" x="515" y="200">MVP / 01</text>
+  <text className="map-task-title" x="515" y="222">가입 3단계로 단축</text>
+  <text className="map-task-index" x="515" y="266">MVP / 02</text>
+  <text className="map-task-title" x="515" y="288">온보딩 A/B 실험</text>
+  <text className="map-task-index" x="515" y="331">LAUNCH / 01</text>
+  <text className="map-task-title" x="515" y="353">베타 버전 출시</text>
+  <text className="map-task-index" x="515" y="397">LAUNCH / 02</text>
+  <text className="map-task-title" x="515" y="419">전환율 주간 측정</text>
+</svg><span className="vector-showcase-caption">목표 → 단계 → 실행 과제가 이어지는 프로젝트 맵.</span></div></div>
         </section>
         <section className="home-slide slide-collab" aria-roledescription="슬라이드" aria-label="3 / 4">
           <div className="home-slide-inner page-container"><div className="home-slide-copy"><span className="home-slide-kicker"><i /> ONE CANVAS, MANY MINDS · 03</span><h1>동시에 고쳐도<br /><em>하나의 이야기로.</em></h1><p>메모와 코드 아이디어를 같은 화면에서 함께 다듬고,<br />바뀐 생각은 팀원 화면에 바로 이어집니다.</p><div className="collab-card-row"><article><span>MEMO / LIVE</span><strong>메모를<br />같이 다듬고</strong><small>한 문장도 함께 다듬어요</small></article><article><span>CODE / LIVE</span><strong>코드 생각을<br />이어 붙여요</strong><small>수식도 읽기 좋게 보여요</small></article></div><button className="button button-dark button-large" onClick={() => selectSlide(3)}>다음 장면 <Icon name="arrow" size={18} /></button></div><div className="collab-showcase-stack"><div className="live-edit-showcase"><div className="showcase-window-top"><span><i /><i /><i /></span><strong>idea.js</strong><span className="live-badge"><i /> LIVE</span></div><div className="shared-editor-demo"><div className="editor-lines"><span>01</span><span>02</span><span>03</span><span>04</span></div><code><b>const</b> <em>idea</em> = <strong>"함께 그려요"</strong>;<br />notes.add(<strong>"what if?"</strong>);<br /><b>share</b>(<em>idea</em>, <em>withTeam</em>);<br /><span>지수 · 한 줄 더하는 중</span></code></div><div className="formula-preview"><span>EXPRESSION / 02</span><strong className="formula-display">ƒ(x) = ∑ᵢ xᵢ</strong></div><div className="shared-cursor cursor-minji"><i>M</i> 민지</div></div><div className="text-edit-showcase"><div className="text-edit-showcase-head"><span><Icon name="text" size={13} /><b>공유 메모</b></span><small><i /> MARKDOWN · LIVE</small></div><p>작은 아이디어도 <strong>함께 다듬으면</strong> 더 선명해져요. <span className="remote-caret">민지</span></p></div></div></div>

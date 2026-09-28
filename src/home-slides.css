@@ -38,10 +38,14 @@
 .vector-showcase svg{position:absolute;inset:7% 3% 9%;width:94%;height:84%;overflow:visible}
 .vector-showcase svg text{fill:#607369;font:13px var(--display)}
 .slide-vector .home-slide-kicker i{display:none}
-.vector-showcase svg .vector-eyebrow{fill:#9a8c6f;font:8px var(--mono);letter-spacing:.55px}
-.vector-showcase svg .vector-title{fill:#4f5f50;font:600 17px var(--display)}
-.vector-showcase svg .vector-node-copy{fill:#526e5d;font:600 14px var(--display);text-anchor:middle}
-.vector-showcase svg .vector-small-copy{fill:#8a8b80;font:10px var(--display)}
+.vector-showcase svg .map-root-label,.vector-showcase svg .map-group-label,.vector-showcase svg .map-task-index{fill:#8b927f;font:8px var(--mono);letter-spacing:.45px}
+.vector-showcase svg .map-root-title{fill:#4f5f50;font:600 15px var(--display)}
+.vector-showcase svg .map-root-metric{fill:#7f897f;font:10px var(--display)}
+.vector-showcase svg .map-group-label{fill:#829287}
+.vector-showcase svg .map-group-title{fill:#4f5f50;font:600 14px var(--display)}
+.vector-showcase svg .map-group-note{fill:#849087;font:9px var(--display)}
+.vector-showcase svg .map-task-index{fill:#9a9b8e;font-size:7px}
+.vector-showcase svg .map-task-title{fill:#526458;font:600 11px var(--display)}
 .vector-showcase-caption{position:absolute;right:18px;bottom:15px;color:#a2aca3;font-size:8px}
 .slide-collab{background:#f5f6f2}
 .slide-collab .home-slide-inner{grid-template-columns:minmax(0,.88fr) minmax(0,1.12fr)}

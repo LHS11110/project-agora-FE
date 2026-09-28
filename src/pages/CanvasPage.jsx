@@ -160,7 +160,7 @@ function SettingsDialog({ settings, pending, onClose, onUpdate, onAddParticipant
   </section></div>;
 }
 
-function CanvasObject({ id, item, bounds, selected, activeTool, connectionStartId, editing, dirty, connectorCurve, viewSize, onStartEditing, onTextChange, onMetadataChange, onFormulaChange, onTableChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy }) {
+function CanvasObject({ id, item, bounds, selected, activeTool, connectionStartId, editing, dirty, connectorCurve, viewSize, onStartEditing, onTextChange, onMetadataChange, onFormulaChange, onTableChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
   const formula = String(item.formula ?? item.text ?? 'x + y');
   const [formulaDraft, setFormulaDraft] = useState(formula);
   useEffect(() => { setFormulaDraft(formula); }, [id, formula]);
@@ -192,7 +192,7 @@ function CanvasObject({ id, item, bounds, selected, activeTool, connectionStartI
     const bendHandle = curveMidpoint && selected && movable && !editing
       ? <button type="button" className="shape-arrow-bend-handle" style={{ left: `${(curveMidpoint.x - offsetX) / geometryWidth * 100}%`, top: `${(curveMidpoint.y - offsetY) / geometryHeight * 100}%` }} title="몸통을 드래그해 곡률 조절" aria-label="연결 화살표 몸통 곡률 조절" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onArrowBendStart(event, id, item); }} />
       : null;
-    return withResizeHandles(<div key={id} className={`${classes} vector-object-hit`} style={vectorStyle} data-item-id={id} {...handlers}>{curvePath && <svg className="connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} />{connectorEnds.map((point, index) => <circle key={index} cx={point.x - offsetX} cy={point.y - offsetY} r="9" />)}</svg>}{bendHandle}</div>);
+    return withResizeHandles(<div key={id} className={`${classes} vector-object-hit`} style={vectorStyle} data-item-id={id} {...handlers} onDoubleClick={(event) => { if (activeTool !== 'select') return; event.preventDefault(); event.stopPropagation(); onConnectorDoubleClick(id, item); }} title="한 번 클릭해 선택 · 두 번 클릭해 연결된 객체로 이동">{curvePath && <svg className="connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} />{connectorEnds.map((point, index) => <circle key={index} cx={point.x - offsetX} cy={point.y - offsetY} r="9" />)}</svg>}{bendHandle}</div>);
   }
   if (item.kind === 'image') return withResizeHandles(<div key={id} className={`${classes} image-object`} style={style} {...handlers}><img src={item.src} alt={item.filename || '공유된 이미지'} /><div className="object-caption"><Icon name="image" size={13} />{item.filename || '공유 이미지'}</div></div>);
   if (item.kind === 'link') return withResizeHandles(<div key={id} className={`${classes} media-link-object${item.mediaType === 'link' ? ' external-link-object' : ' video-link-object'}`} style={style} data-item-id={id} {...handlers}>
@@ -1574,7 +1574,7 @@ function CanvasWorkspace() {
     }
     setSelectedItemId(String(id));
     if (activeTool !== 'select' || event.target.closest('button')) { event.stopPropagation(); return; }
-    if (item?.kind === 'connector') { event.preventDefault(); event.stopPropagation(); focusConnectorTarget(item, id); return; }
+    if (item?.kind === 'connector') { event.preventDefault(); event.stopPropagation(); return; }
     event.preventDefault(); event.stopPropagation();
     const start = pointerPosition(event);
     event.currentTarget.classList.add('object-dragging');
@@ -1756,13 +1756,18 @@ function CanvasWorkspace() {
           return;
         }
       }
-      if (event.key === 'Delete' && editingId == null && selectedItemId != null && !isEditableTarget(event.target)) {
-        event.preventDefault();
-        if (deleteItem(selectedItemId)) {
-          setSelectedItemId(null);
-          setConnectionStartId(null);
+      if (event.key === 'Delete') {
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        const codeEditor = target?.closest('.code-shared-input, .code-filename-input, .code-language-select');
+        if (codeEditor) return;
+        if (editingId == null && selectedItemId != null && !isEditableTarget(target)) {
+          event.preventDefault();
+          if (deleteItem(selectedItemId)) {
+            setSelectedItemId(null);
+            setConnectionStartId(null);
+          }
+          return;
         }
-        return;
       }
       if (event.code === 'Space' && !isEditableTarget(event.target)) {
         spacePressedRef.current = true;
@@ -1860,7 +1865,7 @@ function CanvasWorkspace() {
           <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true"><span className="coordinate-x" /><span className="coordinate-y" /><i className="coordinate-origin">0</i><b className="coordinate-x-label">X</b><b className="coordinate-y-label">Y</b></div>
           <VectorLayer items={visibleVectorItems} referenceItems={items} camera={camera} onReady={(setDraft) => { vectorDraftRef.current = setDraft; }} />
           <div className="canvas-scene" ref={sceneRef} style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}>
-            {sortedItems.map(([id, item, bounds, connectorCurve]) => <CanvasObject key={id} id={id} item={item} bounds={bounds} connectorCurve={connectorCurve} viewSize={boardSize} selected={String(selectedItemId) === String(id)} activeTool={activeTool} connectionStartId={connectionStartId} editing={editingId === id} dirty={dirtyItems.has(String(id))} onStartEditing={startEditing} onTextChange={updateCollaborativeText} onMetadataChange={updateCollaborativeMetadata} onFormulaChange={updateFormulaItem} onTableChange={updateTableItem} onStopEditing={stopEditing} onSave={saveCollaborativeItem} onPointerDown={startObjectDrag} onResizeStart={startObjectResize} onArrowBendStart={startArrowBend} onPointerMove={moveObject} onPointerUp={stopObjectDrag} onCopy={(value) => navigator.clipboard?.writeText(value)} />)}
+            {sortedItems.map(([id, item, bounds, connectorCurve]) => <CanvasObject key={id} id={id} item={item} bounds={bounds} connectorCurve={connectorCurve} viewSize={boardSize} selected={String(selectedItemId) === String(id)} activeTool={activeTool} connectionStartId={connectionStartId} editing={editingId === id} dirty={dirtyItems.has(String(id))} onStartEditing={startEditing} onTextChange={updateCollaborativeText} onMetadataChange={updateCollaborativeMetadata} onFormulaChange={updateFormulaItem} onTableChange={updateTableItem} onStopEditing={stopEditing} onSave={saveCollaborativeItem} onPointerDown={startObjectDrag} onResizeStart={startObjectResize} onArrowBendStart={startArrowBend} onPointerMove={moveObject} onPointerUp={stopObjectDrag} onCopy={(value) => navigator.clipboard?.writeText(value)} onConnectorDoubleClick={focusConnectorTarget} />)}
             {selectedItem && selectedItem.kind !== 'connector' && activeTool === 'select' && !editingId && <RotationHandles sceneRef={sceneRef} id={String(selectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startObjectRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
             {Object.entries(remoteCursors).filter(([, cursor]) => cursor.visible !== false && cursor.x >= visibleBounds.minX && cursor.x <= visibleBounds.maxX && cursor.y >= visibleBounds.minY && cursor.y <= visibleBounds.maxY).map(([peerId, cursor]) => <div className="remote-cursor" key={peerId} style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%`, '--cursor-color': cursor.color }} title={`${cursor.nickname}#${cursor.tag_number}`}><svg viewBox="0 0 18 22" aria-hidden="true"><path d="M1 1v17l4.5-4.3 3.1 7.1 3.1-1.4-3.2-6.8H15z" /></svg><span>{cursor.nickname}</span></div>)}
           </div>

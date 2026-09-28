@@ -43,8 +43,8 @@
 .object-resize-handle {
   position: absolute;
   z-index: 1;
-  width: 24px;
-  height: 24px;
+  width: 4px;
+  height: 4px;
   margin: 0;
   padding: 0;
   border: 0;
@@ -63,11 +63,11 @@
   background: transparent;
 }
 
-.object-resize-handle.resize-nw { top: 0; left: 0; cursor: nwse-resize; }
-.object-resize-handle.resize-n { top: 0; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
-.object-resize-handle.resize-ne { top: 0; right: 0; cursor: nesw-resize; }
-.object-resize-handle.resize-e { top: 50%; right: 0; transform: translateY(-50%); cursor: ew-resize; }
-.object-resize-handle.resize-se { right: 0; bottom: 0; cursor: nwse-resize; }
-.object-resize-handle.resize-s { bottom: 0; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
-.object-resize-handle.resize-sw { bottom: 0; left: 0; cursor: nesw-resize; }
-.object-resize-handle.resize-w { top: 50%; left: 0; transform: translateY(-50%); cursor: ew-resize; }
+.object-resize-handle.resize-nw { top: -2px; left: -2px; cursor: nwse-resize; }
+.object-resize-handle.resize-n { top: -2px; left: 2px; right: 2px; width: auto; cursor: ns-resize; }
+.object-resize-handle.resize-ne { top: -2px; right: -2px; cursor: nesw-resize; }
+.object-resize-handle.resize-e { top: 2px; right: -2px; bottom: 2px; height: auto; cursor: ew-resize; }
+.object-resize-handle.resize-se { right: -2px; bottom: -2px; cursor: nwse-resize; }
+.object-resize-handle.resize-s { bottom: -2px; left: 2px; right: 2px; width: auto; cursor: ns-resize; }
+.object-resize-handle.resize-sw { bottom: -2px; left: -2px; cursor: nesw-resize; }
+.object-resize-handle.resize-w { top: 2px; bottom: 2px; left: -2px; height: auto; cursor: ew-resize; }
