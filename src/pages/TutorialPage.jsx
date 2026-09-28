@@ -59,6 +59,7 @@ const isEditableTarget = (target) => target instanceof HTMLElement
 export default function TutorialPage() {
   const boardRef = useRef(null);
   const sceneRef = useRef(null);
+  const stageWheelHandlerRef = useRef(null);
   const draftSetterRef = useRef(null);
   const drawingRef = useRef(false);
   const laserDrawingRef = useRef(null);
@@ -578,6 +579,14 @@ export default function TutorialPage() {
       setCamera((current) => ({ ...current, x: current.x - event.deltaX, y: current.y - event.deltaY }));
     }
   };
+  stageWheelHandlerRef.current = handleWheel;
+  useEffect(() => {
+    const stage = boardRef.current;
+    if (!stage) return undefined;
+    const onWheel = (event) => stageWheelHandlerRef.current?.(event);
+    stage.addEventListener('wheel', onWheel, { passive: false });
+    return () => stage.removeEventListener('wheel', onWheel);
+  }, []);
 
   const placeComposer = () => {
     if (!composer?.value.trim()) return;
@@ -783,7 +792,6 @@ export default function TutorialPage() {
             onPointerUp={finishInteraction}
             onPointerCancel={finishInteraction}
             onPointerLeave={hideEraserCursor}
-            onWheel={handleWheel}
           >
             <div className="tutorial-plane" style={planeStyle} aria-hidden="true"><span className="tutorial-coordinate x-axis" /><span className="tutorial-coordinate y-axis" /><span className="tutorial-origin">0</span><b className="tutorial-x-label">X</b><b className="tutorial-y-label">Y</b></div>
             <VectorLayer items={items} camera={camera} onReady={(setDraft) => { draftSetterRef.current = setDraft; }} />

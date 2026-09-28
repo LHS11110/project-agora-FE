@@ -27,7 +27,7 @@ function CreateCanvasDialog({ onClose, onCreated }) {
 }
 
 export default function SearchPage() {
-  const { token } = useAuth();
+  const { token, logout } = useAuth();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [canvases, setCanvases] = useState([]);
@@ -40,9 +40,16 @@ export default function SearchPage() {
       const path = name.trim() ? `/api/canvases/search?name=${encodeURIComponent(name.trim())}` : '/api/canvases';
       const result = await api(path, { token });
       setCanvases(Array.isArray(result) ? result : []);
-    } catch (err) { setError(err.message); }
+    } catch (err) {
+      if (err.status === 401) {
+        logout();
+        navigate('/login', { replace: true, state: { from: '/search', sessionExpired: true } });
+        return;
+      }
+      setError(err.message);
+    }
     finally { setLoading(false); }
-  }, [token]);
+  }, [logout, navigate, token]);
   useEffect(() => { load(); }, [load]);
   const search = (event) => { event.preventDefault(); load(query); };
   const created = (canvas) => { setShowCreate(false); navigate(`/canvases/${canvas.canvas_id}`); };

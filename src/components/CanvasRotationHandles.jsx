@@ -2,6 +2,8 @@ import { useLayoutEffect, useState } from 'react';
 import { rotationAtPointer } from './objectRotation.js';
 import './rotation-handles.css';
 
+const corners = ['nw', 'ne', 'se', 'sw'];
+
 function findObjectElement(scene, id) {
   return [...scene.querySelectorAll('[data-item-id]')]
     .find((element) => element.dataset.itemId === String(id));
@@ -56,9 +58,10 @@ export default function CanvasRotationHandles({ sceneRef, id, item, onPointerDow
   if (!frame) return null;
   const rotation = Number(item.rotation) || 0;
   return <div className="object-rotation-frame" style={{ ...frame, transform: `rotate(${rotation}deg)` }} aria-hidden="true">
-    <span
-      className="object-rotation-handle rotate-n"
-      title="드래그해 마우스 방향으로 회전"
+    {corners.map((corner) => <span
+      key={corner}
+      className={`object-rotation-handle rotate-${corner}`}
+      title="바깥 모서리를 드래그해 회전"
       onPointerDown={(event) => {
         if (event.button !== 0) return;
         event.preventDefault();
@@ -68,7 +71,7 @@ export default function CanvasRotationHandles({ sceneRef, id, item, onPointerDow
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
-    />
+    />)}
   </div>;
 }
 

@@ -1,0 +1,42 @@
+.chat-compose .chat-send-button {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: #3f6553;
+  color: #fff;
+  box-shadow: 0 2px 6px rgb(37 67 51 / 16%);
+  transition: background-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.chat-compose .chat-send-button:hover:not(:disabled) {
+  background: #315744;
+  box-shadow: 0 4px 9px rgb(37 67 51 / 22%);
+  transform: translateY(-1px);
+}
+
+.chat-compose .chat-send-button:active:not(:disabled) {
+  box-shadow: 0 1px 3px rgb(37 67 51 / 18%);
+  transform: translateY(0);
+}
+
+.chat-compose .chat-send-button:disabled {
+  border-color: var(--line, #e7ebe4);
+  background: var(--panel-soft, #f4f6f1);
+  color: var(--ink-muted, #a3ada3);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.chat-compose .chat-send-glyph {
+  display: block;
+  transform: translate(1px, -1px);
+}
+
+.canvas-app-page[data-theme="dark"] .chat-compose .chat-send-button:disabled {
+  color: #7f8d80;
+}

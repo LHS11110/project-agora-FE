@@ -30,6 +30,9 @@ export async function api(path, { method = 'GET', body, token, headers = {} } = 
     ? await response.json().catch(() => null)
     : await response.text().catch(() => '');
   if (!response.ok) {
+    if (response.status === 401 && token && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('agora:unauthorized'));
+    }
     throw new ApiError(payload?.message || payload?.error || '요청을 처리하지 못했습니다.', response.status, payload?.code, payload);
   }
   return payload;

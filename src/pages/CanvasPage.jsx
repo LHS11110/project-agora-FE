@@ -1,4 +1,4 @@
-import { cloneElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { cloneElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as Automerge from '@automerge/automerge/slim';
 import automergeWasmUrl from '@automerge/automerge/automerge.wasm?url';
 import { Link, useNavigate, useParams } from '../routing.jsx';
@@ -37,8 +37,53 @@ const MAX_STROKE_WIDTH = 20;
 const ERASER_RADIUS = 12;
 const LASER_COLOR = '#ff3d67';
 const LASER_FADE_MS = 1600;
+const MINIMAP_ASPECT = 1.6;
+const MINIMAP_OVERVIEW_SCALE = 1.5;
+const MINIMAP_POSITION_KEY = 'agora_canvas_minimap_position';
+const MINIMAP_ITEM_KINDS = new Set(['image', 'link', 'code', 'note', 'table', 'shape', 'text', 'math', 'stroke', 'connector']);
+const MINIMAP_ITEM_COLORS = {
+  image: '#c58b68', link: '#cf876b', code: '#708d78', note: '#d1ae62', table: '#7587a6',
+  shape: '#6d9a91', text: '#809084', math: '#9a7ea1', stroke: '#526d5f', connector: '#a0a59b',
+};
 const createId = () => globalThis.crypto?.randomUUID?.() || `item-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const automergeReady = Automerge.initializeWasm(automergeWasmUrl);
+
+function canvasPasswordGrantKey(canvasId, user) {
+  const identity = user?.email || `${user?.nickname || 'unknown'}#${user?.tag_number ?? ''}`;
+  return `agora_canvas_password_grant:${canvasId}:${encodeURIComponent(identity)}`;
+}
+
+function isUnexpiredJwt(token) {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return false;
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const claims = JSON.parse(atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')));
+    return Number.isFinite(Number(claims.exp)) && Number(claims.exp) * 1000 > Date.now() + 5000;
+  } catch {
+    return false;
+  }
+}
+
+function readCanvasPasswordGrant(key) {
+  try {
+    const grant = sessionStorage.getItem(key);
+    if (grant && isUnexpiredJwt(grant)) return grant;
+    sessionStorage.removeItem(key);
+  } catch {
+    // Storage can be disabled by the browser; the server-side password flow still works.
+  }
+  return null;
+}
+
+function saveCanvasPasswordGrant(key, grant) {
+  try {
+    if (grant && isUnexpiredJwt(grant)) sessionStorage.setItem(key, grant);
+    else sessionStorage.removeItem(key);
+  } catch {
+    // Storage can be disabled by the browser; the server-side password flow still works.
+  }
+}
 
 function toChatEntry(message, user) {
   const numericTimestamp = Number(message.created_at);
@@ -90,6 +135,28 @@ function collaborativeField(item) {
 
 function collaborativeContent(item) {
   return item?.[collaborativeField(item)] || '';
+}
+
+function textSpliceBetween(previousValue, nextValue) {
+  const previous = String(previousValue ?? '');
+  const next = String(nextValue ?? '');
+  let start = 0;
+  while (start < previous.length && start < next.length && previous[start] === next[start]) start += 1;
+  let suffix = 0;
+  while (suffix < previous.length - start && suffix < next.length - start
+    && previous[previous.length - 1 - suffix] === next[next.length - 1 - suffix]) suffix += 1;
+  return {
+    index: start,
+    deleteCount: previous.length - start - suffix,
+    insertText: next.slice(start, next.length - suffix),
+  };
+}
+
+function moveTextPosition(position, change) {
+  const end = change.index + change.deleteCount;
+  if (position <= change.index) return position;
+  if (position >= end) return position + change.insertText.length - change.deleteCount;
+  return change.index + change.insertText.length;
 }
 
 function createActorId() {
@@ -146,24 +213,79 @@ function cursorColor(nickname, tagNumber) {
   return `hsl(${(hash >>> 0) % 360} 66% 43%)`;
 }
 
+function uniqueCanvasParticipants(participants, excludedUser) {
+  const seen = new Set();
+  return (Array.isArray(participants) ? participants : []).filter((person) => {
+    const nickname = String(person?.nickname || '');
+    const tagNumber = Number(person?.tag_number);
+    if (!nickname || (excludedUser && nickname === excludedUser.nickname && tagNumber === Number(excludedUser.tag_number))) return false;
+    const identity = `${nickname}#${tagNumber}`;
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+}
+
 function SettingsDialog({ settings, pending, onClose, onUpdate, onAddParticipant, onRemoveParticipant }) {
   const [name, setName] = useState(settings?.canvas_name || '');
   const [description, setDescription] = useState(settings?.description || '');
   const [password, setPassword] = useState('');
   const [participant, setParticipant] = useState({ nickname: '', tag: '' });
   const [message, setMessage] = useState('');
+  const participants = uniqueCanvasParticipants(settings?.participants);
   useEffect(() => { setName(settings?.canvas_name || ''); setDescription(settings?.description || ''); }, [settings]);
   return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className="modal-card settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title"><button className="icon-button modal-close" onClick={onClose} aria-label="닫기"><Icon name="close" /></button><span className="section-kicker">CANVAS SETTINGS</span><h2 id="settings-title">캔버스 설정</h2><p>변경 사항은 접속 중인 멤버에게 바로 전달돼요.</p>
     <div className="settings-dialog-content"><label className="form-field"><span>캔버스 이름</span><div className="setting-row"><input className="plain-input" value={name} maxLength={255} onChange={(e) => setName(e.target.value)} /><button className="button button-outline" disabled={pending || name === settings?.canvas_name} onClick={() => onUpdate('name', name)}>저장</button></div></label><label className="form-field"><span>설명</span><div className="setting-row"><textarea className="plain-input" rows="2" value={description} onChange={(e) => setDescription(e.target.value)} /><button className="button button-outline" disabled={pending || description === (settings?.description || '')} onClick={() => onUpdate('description', description)}>저장</button></div></label><label className="form-field"><span>비밀번호 <small>{settings?.password_protected ? '현재 보호 중' : '현재 비밀번호 없음'}</small></span><div className="setting-row"><input className="plain-input" type="password" placeholder="새 비밀번호 입력" value={password} onChange={(e) => setPassword(e.target.value)} /><button className="button button-outline" disabled={pending || !password} onClick={() => { onUpdate('password', password); setPassword(''); }}>적용</button></div></label>
-      <div className="form-field"><span>참여자 <small>닉네임과 태그로 관리</small></span><div className="participant-chips">{(settings?.participants || []).map((person) => <span className="participant-chip" key={`${person.nickname}-${person.tag_number}`}><i>{person.nickname.slice(0, 1)}</i>{person.nickname}#{person.tag_number}<button onClick={() => onRemoveParticipant(person)} aria-label={`${person.nickname} 참여자 제외`} title="참여자 제외">×</button></span>)}</div><div className="setting-row participant-add-row"><input className="plain-input" placeholder="닉네임" value={participant.nickname} onChange={(e) => setParticipant({ ...participant, nickname: e.target.value })} /><input className="plain-input tag-input" inputMode="numeric" placeholder="태그" value={participant.tag} onChange={(e) => setParticipant({ ...participant, tag: e.target.value })} /><button className="button button-outline" disabled={pending || !participant.nickname || !participant.tag} onClick={() => { onAddParticipant(participant.nickname, Number(participant.tag)); setParticipant({ nickname: '', tag: '' }); }}>추가</button></div></div>
+      <div className="form-field"><span>참여자 <small>닉네임과 태그로 관리</small></span><div className="participant-chips">{participants.map((person) => <span className="participant-chip" key={`${person.nickname}-${person.tag_number}`}><i>{person.nickname.slice(0, 1)}</i>{person.nickname}#{person.tag_number}<button onClick={() => onRemoveParticipant(person)} aria-label={`${person.nickname} 참여자 제외`} title="참여자 제외">×</button></span>)}</div><div className="setting-row participant-add-row"><input className="plain-input" placeholder="닉네임" value={participant.nickname} onChange={(e) => setParticipant({ ...participant, nickname: e.target.value })} /><input className="plain-input tag-input" inputMode="numeric" placeholder="태그" value={participant.tag} onChange={(e) => setParticipant({ ...participant, tag: e.target.value })} /><button className="button button-outline" disabled={pending || !participant.nickname || !participant.tag} onClick={() => { onAddParticipant(participant.nickname, Number(participant.tag)); setParticipant({ nickname: '', tag: '' }); }}>추가</button></div></div>
     </div>{message && <p className="field-hint">{message}</p>}{pending && <div className="settings-pending"><span className="loader" /> 변경 내용을 확인하고 있어요.</div>}<div className="settings-dialog-footer"><span>revision {settings?.settings_revision ?? '—'}</span><button className="button button-dark" onClick={onClose}>완료</button></div>
   </section></div>;
 }
 
-function CanvasObject({ id, item, bounds, selected, activeTool, connectionStartId, editing, dirty, connectorCurve, viewSize, onStartEditing, onTextChange, onMetadataChange, onFormulaChange, onTableChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
+function CanvasObject({ id, item, bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, onStartEditing, onTextChange, onMetadataChange, onFormulaChange, onTableChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
   const formula = String(item.formula ?? item.text ?? 'x + y');
   const [formulaDraft, setFormulaDraft] = useState(formula);
   useEffect(() => { setFormulaDraft(formula); }, [id, formula]);
+  const collaborativeValue = String(item.kind === 'code' ? item.code || '' : item.text || '');
+  const collaborativeEditorRef = useRef(null);
+  const collaborativeSelectionRef = useRef(null);
+  const displayedCollaborativeValueRef = useRef(collaborativeValue);
+  const remoteEditorLabel = remoteEditors.length
+    ? `함께 편집 중 · ${remoteEditors.slice(0, 2).map((editor) => `${editor.nickname}#${editor.tag_number}`).join(', ')}${remoteEditors.length > 2 ? ` 외 ${remoteEditors.length - 2}명` : ''}`
+    : '';
+  const rememberCollaborativeSelection = (event) => {
+    const editor = event.currentTarget;
+    displayedCollaborativeValueRef.current = editor.value;
+    collaborativeSelectionRef.current = {
+      start: editor.selectionStart,
+      end: editor.selectionEnd,
+      direction: editor.selectionDirection || 'none',
+    };
+  };
+  const handleCollaborativeInput = (event) => {
+    const editor = event.currentTarget;
+    displayedCollaborativeValueRef.current = editor.value;
+    collaborativeSelectionRef.current = {
+      start: editor.selectionStart,
+      end: editor.selectionEnd,
+      direction: editor.selectionDirection || 'none',
+    };
+    onTextChange(id, editor.value);
+  };
+  useLayoutEffect(() => {
+    const editor = collaborativeEditorRef.current;
+    const previousValue = displayedCollaborativeValueRef.current;
+    if (editor && document.activeElement === editor && previousValue !== collaborativeValue) {
+      const change = textSpliceBetween(previousValue, collaborativeValue);
+      const selection = collaborativeSelectionRef.current;
+      if (selection) {
+        const start = Math.max(0, Math.min(collaborativeValue.length, moveTextPosition(selection.start, change)));
+        const end = Math.max(0, Math.min(collaborativeValue.length, moveTextPosition(selection.end, change)));
+        editor.setSelectionRange(start, end, selection.direction);
+        collaborativeSelectionRef.current = { start, end, direction: selection.direction };
+      }
+    }
+    displayedCollaborativeValueRef.current = collaborativeValue;
+  }, [collaborativeValue]);
   const width = Number(item.width) || ({ image: 0.3, code: 0.32, shape: 0.14, math: 0.2, text: 0.22, note: 0.22, table: 0.42, link: 0.3 }[item.kind] || 0.2);
   const height = Number(item.height) || ({ shape: 0.12, math: 0.09, text: 0.12, note: 0.15, table: 0.32, link: 0.15 }[item.kind] || 0.2);
   const style = { left: `${(Number(item.x) || 0) * 100}%`, top: `${(Number(item.y) || 0) * 100}%`, width: `${width * 100}%`, '--object-color': item.color || '#617d68', '--object-rotation': `${Number(item.rotation) || 0}deg` };
@@ -171,7 +293,7 @@ function CanvasObject({ id, item, bounds, selected, activeTool, connectionStartI
   const movable = activeTool === 'select';
   const classes = `canvas-object canvas-object-${item.kind}${movable ? ' movable' : ''}${selected ? ' selected' : ''}${connectionStartId === id ? ' connection-source' : ''}${item.height ? ' has-custom-height' : ''}`;
   const handlers = { 'data-item-id': id, onPointerDown: (event) => onPointerDown(event, id, item), onPointerMove, onPointerUp, onPointerCancel: onPointerUp };
-  const resizeHandles = selected && movable && !editing && item.kind !== 'connector'
+  const resizeHandles = selected && allowSingleSelectionControls && movable && !editing && item.kind !== 'connector'
     ? <ResizeHandles onPointerDown={(event, handle) => onResizeStart(event, id, item, handle)} />
     : null;
   const withResizeHandles = (element) => resizeHandles
@@ -189,7 +311,7 @@ function CanvasObject({ id, item, bounds, selected, activeTool, connectionStartI
     const connectorEnds = [connectorCurve?.start, connectorCurve?.end].filter(Boolean);
     const bendPoints = connectorCurve?.curvePoints || connectorCurve?.points;
     const curveMidpoint = bendPoints?.[Math.floor((bendPoints.length - 1) / 2)];
-    const bendHandle = curveMidpoint && selected && movable && !editing
+    const bendHandle = curveMidpoint && selected && allowSingleSelectionControls && movable && !editing
       ? <button type="button" className="shape-arrow-bend-handle" style={{ left: `${(curveMidpoint.x - offsetX) / geometryWidth * 100}%`, top: `${(curveMidpoint.y - offsetY) / geometryHeight * 100}%` }} title="몸통을 드래그해 곡률 조절" aria-label="연결 화살표 몸통 곡률 조절" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onArrowBendStart(event, id, item); }} />
       : null;
     return withResizeHandles(<div key={id} className={`${classes} vector-object-hit`} style={vectorStyle} data-item-id={id} {...handlers} onDoubleClick={(event) => { if (activeTool !== 'select') return; event.preventDefault(); event.stopPropagation(); onConnectorDoubleClick(id, item); }} title="한 번 클릭해 선택 · 두 번 클릭해 연결된 객체로 이동">{curvePath && <svg className="connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} />{connectorEnds.map((point, index) => <circle key={index} cx={point.x - offsetX} cy={point.y - offsetY} r="9" />)}</svg>}{bendHandle}</div>);
@@ -199,21 +321,21 @@ function CanvasObject({ id, item, bounds, selected, activeTool, connectionStartI
     <div className="shared-media-header"><span className="shared-media-drag-handle" title="여기를 끌어 자료를 이동하세요"><Icon name={item.mediaType === 'link' ? 'link' : 'image'} size={13} />{item.mediaType === 'youtube' ? `YouTube · ${item.title || '동영상'}` : item.mediaType === 'video' ? `동영상 · ${item.title || '재생'}` : '링크'}</span></div>
     <SharedMediaContent item={item} />
   </div>);
-  if (item.kind === 'code') return withResizeHandles(<div key={id} className={`${classes} code-object`} style={style} data-item-id={id} {...handlers} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) onStopEditing(id); }} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}><div className="code-object-head"><span className="code-file-icon"><Icon name="code" size={15} /></span>{editing ? <><input className="code-filename-input" aria-label="코드 파일 이름" value={item.filename || ''} placeholder="idea.js" maxLength={80} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'filename', event.target.value)} /><select className="code-language-select" aria-label="코드 언어" value={item.language || 'javascript'} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'language', event.target.value)}><option>javascript</option><option>typescript</option><option>python</option><option>html</option><option>css</option><option>json</option><option>text</option></select></> : <><strong>{item.filename || 'snippet.js'}</strong><small>{item.language || 'text'}</small></>}</div>{editing ? <textarea className="code-shared-input" autoFocus aria-label="공동 편집 코드" value={item.code || ''} placeholder="여기에 코드를 작성하세요." onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onTextChange(id, event.target.value)} /> : <pre onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 함께 편집"><code>{item.code}</code></pre>}<div className="code-object-foot"><span><i /> {dirty ? '저장되지 않음 · Ctrl + S' : editing ? 'P2P 실시간 편집' : '두 번 클릭해 편집'}</span><button onClick={() => onCopy(item.code || '')}>복사</button></div></div>);
+  if (item.kind === 'code') return withResizeHandles(<div key={id} className={`${classes} code-object`} style={style} data-item-id={id} {...handlers} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) onStopEditing(id); }} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}><div className="code-object-head"><span className="code-file-icon"><Icon name="code" size={15} /></span>{editing ? <><input className="code-filename-input" aria-label="코드 파일 이름" value={item.filename || ''} placeholder="idea.js" maxLength={80} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'filename', event.target.value)} /><select className="code-language-select" aria-label="코드 언어" value={item.language || 'javascript'} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'language', event.target.value)}><option>javascript</option><option>typescript</option><option>python</option><option>html</option><option>css</option><option>json</option><option>text</option></select></> : <><strong>{item.filename || 'snippet.js'}</strong><small>{item.language || 'text'}</small></>}</div>{editing ? <textarea ref={collaborativeEditorRef} className="code-shared-input" autoFocus aria-label="공동 편집 코드" value={item.code || ''} placeholder="여기에 코드를 작성하세요." onPointerDown={(event) => event.stopPropagation()} onSelect={rememberCollaborativeSelection} onKeyUp={rememberCollaborativeSelection} onClick={rememberCollaborativeSelection} onChange={handleCollaborativeInput} /> : <pre onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 함께 편집"><code>{item.code}</code></pre>}<div className="code-object-foot"><span><i /> {dirty ? '저장되지 않음 · Ctrl + S' : editing ? 'P2P 실시간 편집' : '두 번 클릭해 편집'}</span>{remoteEditorLabel && <small className="collab-presence-label" title={remoteEditorLabel}>{remoteEditorLabel}</small>}<button onClick={() => onCopy(item.code || '')}>복사</button></div></div>);
   if (item.kind === 'note') return withResizeHandles(<div key={id} className={`${classes} sticky-note-object`} style={{ ...style, '--sticky-note-color': item.color || stickyNoteColors[0], '--sticky-note-rotation': `${Number(item.rotation) || -1}deg` }} data-item-id={id} {...handlers} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) onStopEditing(id); }} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}>
     <div className="sticky-note-head"><span title="끌어서 포스트잇 이동"><Icon name="sticky" size={13} /> 포스트잇</span><input type="color" aria-label="포스트잇 색상" title="포스트잇 색상 변경" value={item.color || stickyNoteColors[0]} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'color', event.target.value)} /></div>
-    {editing ? <textarea autoFocus aria-label="포스트잇 Markdown 편집" value={item.text || ''} placeholder={'# 메모 제목\n- 할 일\n**중요한 내용**'} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onTextChange(id, event.target.value)} /> : <div className="sticky-note-content" onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 Markdown 편집">{item.text ? <MarkdownText source={item.text} /> : <p className="sticky-note-empty">두 번 클릭해 메모를 작성하세요.</p>}</div>}
-    <small className="collab-save-hint">{dirty ? '저장되지 않음 · Ctrl + S' : editing ? 'Markdown · Ctrl + S 저장' : '두 번 클릭해 편집'}</small>
+    {editing ? <textarea ref={collaborativeEditorRef} autoFocus aria-label="포스트잇 Markdown 편집" value={item.text || ''} placeholder={'# 메모 제목\n- 할 일\n**중요한 내용**'} onPointerDown={(event) => event.stopPropagation()} onSelect={rememberCollaborativeSelection} onKeyUp={rememberCollaborativeSelection} onClick={rememberCollaborativeSelection} onChange={handleCollaborativeInput} /> : <div className="sticky-note-content" onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 Markdown 편집">{item.text ? <MarkdownText source={item.text} /> : <p className="sticky-note-empty">두 번 클릭해 메모를 작성하세요.</p>}</div>}
+    <small className={`collab-save-hint${remoteEditorLabel ? ' collab-presence-hint' : ''}`}>{remoteEditorLabel || (dirty ? '저장되지 않음 · Ctrl + S' : editing ? 'Markdown · Ctrl + S 저장' : '두 번 클릭해 편집')}</small>
   </div>);
   if (item.kind === 'table') return withResizeHandles(<div key={id} className={`${classes} canvas-table-object`} style={style} data-item-id={id} {...handlers}><EditableTable item={item} onChange={(location, value) => onTableChange(id, (current) => updateTableValue(current, location, value))} /></div>);
   if (item.kind === 'shape') {
     const arrowGeometry = item.shapeType === 'arrow' ? shapeArrowGeometry(width * viewSize.width, height * viewSize.height, item.bend, item.startHead, item.endHead) : null;
-    const bendHandle = arrowGeometry && selected && movable && !editing
+    const bendHandle = arrowGeometry && selected && allowSingleSelectionControls && movable && !editing
       ? <button type="button" className="shape-arrow-bend-handle" style={{ left: `${arrowGeometry.curveMidpoint.x / arrowGeometry.width * 100}%`, top: `${arrowGeometry.curveMidpoint.y / arrowGeometry.height * 100}%` }} title="몸통을 드래그해 곡률 조절" aria-label="화살표 몸통 곡률 조절" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onArrowBendStart(event, id, item); }} />
       : null;
     return withResizeHandles(<div key={id} className={`${classes} shape-object shape-vector-hit shape-${item.shapeType || 'rectangle'}`} style={style} {...handlers}>{bendHandle}</div>);
   }
-  if (item.kind === 'text') return withResizeHandles(<div key={id} className={`${classes} text-object`} style={style} data-item-id={id} {...handlers}>{editing ? <><textarea autoFocus aria-label="공동 편집 텍스트" value={item.text || ''} placeholder="여기에 텍스트를 입력하세요." onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onTextChange(id, event.target.value)} onBlur={() => onStopEditing(id)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }} /><small className="collab-save-hint">{dirty ? '저장되지 않음 · Ctrl + S' : '저장됨'}</small></> : <p onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 함께 편집">{item.text || '두 번 클릭해 편집'}</p>}</div>);
+  if (item.kind === 'text') return withResizeHandles(<div key={id} className={`${classes} text-object`} style={style} data-item-id={id} {...handlers}>{editing ? <><textarea ref={collaborativeEditorRef} autoFocus aria-label="공동 편집 텍스트" value={item.text || ''} placeholder="여기에 텍스트를 입력하세요." onPointerDown={(event) => event.stopPropagation()} onSelect={rememberCollaborativeSelection} onKeyUp={rememberCollaborativeSelection} onClick={rememberCollaborativeSelection} onChange={handleCollaborativeInput} onBlur={() => onStopEditing(id)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }} /><small className={`collab-save-hint${remoteEditorLabel ? ' collab-presence-hint' : ''}`}>{remoteEditorLabel || (dirty ? '저장되지 않음 · Ctrl + S' : '저장됨')}</small></> : <p onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 함께 편집">{item.text || '두 번 클릭해 편집'}</p>}</div>);
   if (item.kind === 'math') return withResizeHandles(<div key={id} className={`${classes} math-object`} style={style} {...handlers}>
     {editing
       ? <input className="math-formula-input" autoFocus aria-label="수식 편집" value={formulaDraft} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => setFormulaDraft(event.target.value)} onBlur={() => { onFormulaChange(id, formulaDraft); onStopEditing(id); }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }} />
@@ -228,8 +350,16 @@ function CanvasWorkspace() {
   const navigate = useNavigate();
   const boardRef = useRef(null);
   const sceneRef = useRef(null);
+  const minimapWidgetRef = useRef(null);
+  const minimapPointerRef = useRef(null);
+  const minimapMoveRef = useRef(null);
+  const minimapPositionRef = useRef(null);
+  const selectionRef = useRef(null);
+  const stageWheelHandlerRef = useRef(null);
   const wsRef = useRef(null);
   const rtcWsRef = useRef(null);
+  const autoReconnectRef = useRef(false);
+  const reconnectAttemptsRef = useRef(0);
   const itemsRef = useRef({});
   const pendingItemChangesRef = useRef([]);
   const rejectedEventPongsRef = useRef(0);
@@ -240,6 +370,7 @@ function CanvasWorkspace() {
   const peerMeshRef = useRef(null);
   const syncedPeersRef = useRef(new Set());
   const newCollaborativeItemsRef = useRef(new Set());
+  const editingIdRef = useRef(null);
   const chatHistoryRequestRef = useRef(null);
   const chatHistoryPageRef = useRef({ hasMore: false, nextToSequence: null });
   const itemEditRevisionRef = useRef(new Map());
@@ -262,6 +393,7 @@ function CanvasWorkspace() {
   const [groups, setGroups] = useState([]);
   const [peerList, setPeerList] = useState([]);
   const [remoteCursors, setRemoteCursors] = useState({});
+  const [remoteEditors, setRemoteEditors] = useState({});
   const [laserStrokes, setLaserStrokes] = useState([]);
   const [dirtyItems, setDirtyItems] = useState(() => new Set());
   const [camera, setCamera] = useState({ x: 0, y: 0, scale: 1 });
@@ -272,6 +404,7 @@ function CanvasWorkspace() {
   });
   const [settings, setSettings] = useState(null);
   const [connection, setConnection] = useState('connecting');
+  const [reconnectEpoch, setReconnectEpoch] = useState(0);
   const [error, setError] = useState('');
   const [activeTool, setActiveTool] = useState('select');
   const [sharePosition, setSharePosition] = useState(null);
@@ -293,6 +426,14 @@ function CanvasWorkspace() {
   const [shapeType, setShapeType] = useState('rectangle');
   const [connectionStartId, setConnectionStartId] = useState(null);
   const [selectedItemId, setSelectedItemId] = useState(null);
+  const [selectedItemIds, setSelectedItemIds] = useState([]);
+  const [selectionBox, setSelectionBox] = useState(null);
+  const [minimapPosition, setMinimapPosition] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(MINIMAP_POSITION_KEY) || 'null');
+      return Number.isFinite(stored?.left) && Number.isFinite(stored?.top) ? stored : null;
+    } catch { return null; }
+  });
   const [editingId, setEditingId] = useState(null);
   const [imageFailed, setImageFailed] = useState(false);
   const [canvasImageSrc, setCanvasImageSrc] = useState('');
@@ -303,9 +444,30 @@ function CanvasWorkspace() {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsPending, setSettingsPending] = useState(false);
   const [toast, setToast] = useState('');
+  const selectItems = useCallback((ids, primaryId) => {
+    const normalized = [...new Set((ids || []).filter((id) => id != null).map(String))];
+    setSelectedItemIds(normalized);
+    setSelectedItemId(normalized.length ? String(primaryId ?? normalized[normalized.length - 1]) : null);
+  }, []);
   groupsRef.current = groups;
   dirtyItemsRef.current = dirtyItems;
+  minimapPositionRef.current = minimapPosition;
   useEffect(() => { if (activeTool !== 'link') setSharePosition(null); }, [activeTool]);
+  useEffect(() => {
+    if (!minimapPosition || boardSize.width <= 1 || boardSize.height <= 1) return;
+    const widget = minimapWidgetRef.current?.getBoundingClientRect();
+    if (!widget) return;
+    const next = {
+      left: Math.max(4, Math.min(Math.max(4, boardSize.width - widget.width - 4), minimapPosition.left)),
+      top: Math.max(4, Math.min(Math.max(4, boardSize.height - widget.height - 4), minimapPosition.top)),
+    };
+    if (next.left !== minimapPosition.left || next.top !== minimapPosition.top) {
+      minimapPositionRef.current = next;
+      setMinimapPosition(next);
+      try { localStorage.setItem(MINIMAP_POSITION_KEY, JSON.stringify(next)); } catch { /* Ignore unavailable local storage. */ }
+      return;
+    }
+  }, [boardSize, minimapPosition]);
 
   const sendRaw = useCallback((payload) => {
     const socket = wsRef.current;
@@ -377,7 +539,12 @@ function CanvasWorkspace() {
     const previousDoc = getCollaborativeDoc(id, item);
     let nextDoc;
     try {
-      nextDoc = Automerge.change(previousDoc, (draft) => Automerge.updateText(draft, ['content'], value));
+      const change = textSpliceBetween(previousDoc.content, value);
+      nextDoc = Automerge.change(previousDoc, (draft) => {
+        if (change.deleteCount || change.insertText) {
+          Automerge.splice(draft, ['content'], change.index, change.deleteCount, change.insertText);
+        }
+      });
     } catch {
       return;
     }
@@ -395,17 +562,25 @@ function CanvasWorkspace() {
   const updateCollaborativeMetadata = useCallback((id, field, value) => {
     const key = String(id);
     const item = itemsRef.current[key];
-    const nextValue = String(value ?? '');
-    const validField = field === 'color'
+    const nextValue = field === 'groupId' ? String(value || '') : String(value ?? '');
+    const validField = field === 'groupId'
+      ? isCollaborativeItem(item) && nextValue.length <= 128
+      : field === 'color'
       ? item?.kind === 'note' && /^#[0-9a-f]{6}$/i.test(nextValue)
       : item?.kind === 'code' && ['filename', 'language'].includes(field);
     if (!isCollaborativeItem(item) || !validField) return;
-    const nextItem = { ...item, [field]: nextValue };
+    const nextItem = { ...item, [field]: field === 'groupId' ? nextValue || null : nextValue };
     itemsRef.current = { ...itemsRef.current, [key]: nextItem };
     setItems((current) => ({ ...current, [key]: nextItem }));
     markItemDirty(key);
     peerMeshRef.current?.sendData({ type: 'item_metadata', item_id: key, field, value: nextValue }, (peer) => canPeerAccessItem(nextItem, peer));
   }, [markItemDirty]);
+  const broadcastEditorPresence = useCallback((id, editing) => {
+    const key = String(id);
+    const item = itemsRef.current[key];
+    if (!isCollaborativeItem(item)) return;
+    peerMeshRef.current?.sendData({ type: 'editor_presence', item_id: key, editing: Boolean(editing) }, (peer) => canPeerAccessItem(item, peer));
+  }, []);
   const sendItemChange = useCallback((payload, previous) => {
     const socket = wsRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) return false;
@@ -542,7 +717,7 @@ function CanvasWorkspace() {
       collaborativeBaseDocsRef.current.set(String(id), baseDoc);
       newCollaborativeItemsRef.current.add(String(id));
       setItems((current) => ({ ...current, [id]: sharedItem }));
-      setSelectedItemId(String(id));
+      selectItems([id], id);
       refreshSpatialIndex();
       markItemDirty(id);
       peerMeshRef.current?.sendData({ type: 'item_create', item_id: String(id), item: sharedItem }, (peer) => canPeerAccessItem(sharedItem, peer));
@@ -553,7 +728,7 @@ function CanvasWorkspace() {
     setItems((current) => ({ ...current, [id]: sharedItem }));
     refreshSpatialIndex();
     return true;
-  }, [itemsInitialized, markItemDirty, refreshSpatialIndex, sendItemChange]);
+  }, [itemsInitialized, markItemDirty, refreshSpatialIndex, selectItems, sendItemChange]);
   const deleteItem = useCallback((id) => {
     const previous = itemsRef.current[id];
     const key = String(id);
@@ -604,6 +779,26 @@ function CanvasWorkspace() {
   const receivePeerData = useCallback((peer, data) => {
     if (!data || typeof data !== 'object') return;
     const localPeer = { groups: groupsRef.current, is_admin: groupsRef.current.includes('admin-group') };
+    if (data.type === 'editor_presence' && data.item_id && typeof data.editing === 'boolean' && peer?.peer_id) {
+      const key = String(data.item_id);
+      const item = itemsRef.current[key];
+      if (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)) return;
+      setRemoteEditors((current) => {
+        const next = { ...current };
+        if (data.editing) {
+          next[peer.peer_id] = {
+            peerId: peer.peer_id,
+            itemId: key,
+            nickname: String(peer.nickname || '참여자'),
+            tag_number: peer.tag_number ?? '?',
+          };
+        } else if (next[peer.peer_id]?.itemId === key) {
+          delete next[peer.peer_id];
+        }
+        return next;
+      });
+      return;
+    }
     if (data.type === 'item_create' && data.item_id && isCollaborativeItem(data.item)) {
       const key = String(data.item_id);
       if (!canPeerAccessItem(data.item, localPeer) || !canPeerAccessItem(data.item, peer)) return;
@@ -673,14 +868,18 @@ function CanvasWorkspace() {
       } catch { /* A later snapshot can recover an interrupted peer sync. */ }
       return;
     }
-    if (data.type === 'item_metadata' && data.item_id && ['filename', 'language', 'color'].includes(data.field)) {
+    if (data.type === 'item_metadata' && data.item_id && ['filename', 'language', 'color', 'groupId'].includes(data.field)) {
       const key = String(data.item_id);
       const item = itemsRef.current[key];
       if (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)) return;
       const value = String(data.value ?? '');
-      if (data.field === 'color' ? item.kind !== 'note' || !/^#[0-9a-f]{6}$/i.test(value) : item.kind !== 'code') return;
-      if (item[data.field] === value) return;
-      const nextItem = { ...item, [data.field]: value };
+      const validMetadata = data.field === 'groupId'
+        ? value.length <= 128
+        : data.field === 'color' ? item.kind === 'note' && /^#[0-9a-f]{6}$/i.test(value) : item.kind === 'code';
+      if (!validMetadata) return;
+      const nextValue = data.field === 'groupId' ? value || null : value;
+      if (item[data.field] === nextValue) return;
+      const nextItem = { ...item, [data.field]: nextValue };
       itemsRef.current = { ...itemsRef.current, [key]: nextItem };
       setItems((current) => ({ ...current, [key]: nextItem }));
       markItemDirty(key);
@@ -721,6 +920,7 @@ function CanvasWorkspace() {
       setItems(next);
       refreshSpatialIndex();
       setDirtyItems((current) => { const dirty = new Set(current); dirty.delete(key); return dirty; });
+      setRemoteEditors((current) => Object.fromEntries(Object.entries(current).filter(([, editor]) => editor.itemId !== key)));
     }
   }, [getCollaborativeDoc, markItemDirty, refreshSpatialIndex]);
 
@@ -785,10 +985,34 @@ function CanvasWorkspace() {
     let cancelled = false;
     let socket;
     let rtcSocket;
+    let reconnectTimer = null;
     let rtcReady = false;
     let canvasConnectionId = '';
     let canvasConnectionHash = '';
     let joinedCanvasConnectionId = '';
+    const nextReconnectDelay = () => {
+      const attempt = Math.min(reconnectAttemptsRef.current, 5);
+      reconnectAttemptsRef.current += 1;
+      return Math.min(1000 * (2 ** attempt), 15000);
+    };
+    const scheduleReconnect = (delayMs = 0) => {
+      if (cancelled || reconnectTimer !== null || !autoReconnectRef.current) return false;
+      const delay = Number.isFinite(Number(delayMs)) ? Math.max(0, Math.min(30000, Number(delayMs))) : 0;
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = null;
+        if (!cancelled) setReconnectEpoch((current) => current + 1);
+      }, delay);
+      return true;
+    };
+    const requestServerReconnect = (signal = {}) => {
+      if (cancelled) return;
+      if (!autoReconnectRef.current) reconnectAttemptsRef.current = 0;
+      autoReconnectRef.current = true;
+      setConnection('connecting');
+      setError('');
+      setToast('서버가 재시작되어 캔버스에 다시 연결하고 있어요.');
+      scheduleReconnect(signal.retry_after_ms ?? 0);
+    };
     const joinRtcSocket = () => {
       if (!rtcReady || !canvasConnectionId || !canvasConnectionHash || !rtcSocket || rtcSocket.readyState !== WebSocket.OPEN
         || joinedCanvasConnectionId === canvasConnectionId) return;
@@ -805,6 +1029,7 @@ function CanvasWorkspace() {
       syncedPeersRef.current.clear();
       setPeerList([]);
       setRemoteCursors({});
+      setRemoteEditors({});
     };
     async function connect() {
       setConnection('connecting'); setError(''); setItemsInitialized(false);
@@ -817,13 +1042,60 @@ function CanvasWorkspace() {
         const summary = await api(`/api/canvases/${canvasId}`, { token });
         if (cancelled) return;
         setCanvas(summary);
+        const canvasSettings = await api(`/api/canvases/${canvasId}/settings`, { token });
+        if (cancelled) return;
+        setSettings(canvasSettings);
+
+        const passwordGrantKey = canvasPasswordGrantKey(canvasId, user);
+        let passwordGrant = canvasSettings.password_protected
+          ? readCanvasPasswordGrant(passwordGrantKey)
+          : null;
+        if (!canvasSettings.password_protected) saveCanvasPasswordGrant(passwordGrantKey, null);
+
+        let password;
+        if (canvasSettings.password_protected) {
+          if (!passwordGrant) {
+            password = window.prompt('이 캔버스의 비밀번호를 입력해주세요.');
+            if (password === null) { navigate('/search'); return; }
+          }
+        }
+
         let access;
-        try { access = await api(`/api/canvases/${canvasId}/access`, { method: 'POST', token }); }
-        catch (err) {
-          if (err.code !== 'CANVAS_004') throw err;
-          const password = window.prompt('이 캔버스의 비밀번호를 입력해주세요.');
-          if (password === null) { navigate('/search'); return; }
-          access = await api(`/api/canvases/${canvasId}/access`, { method: 'POST', token, body: { password } });
+        let serverAccessRetry = 0;
+        while (!access) {
+          const usingPasswordGrant = Boolean(passwordGrant);
+          const body = usingPasswordGrant
+            ? { canvas_password_token: passwordGrant }
+            : password === undefined ? undefined : { password };
+          try {
+            access = await api(`/api/canvases/${canvasId}/access`, {
+              method: 'POST', token, ...(body ? { body } : {}),
+            });
+            serverAccessRetry = 0;
+            if (canvasSettings.password_protected) {
+              saveCanvasPasswordGrant(passwordGrantKey, access.canvas_password_token);
+            }
+          } catch (err) {
+            if (['LB_001', 'LB_003'].includes(err.code) && serverAccessRetry < 5) {
+              const retryDelay = Math.min(300 * (2 ** serverAccessRetry), 2000);
+              serverAccessRetry += 1;
+              setToast('실시간 서버가 준비 중이에요. 잠시 후 자동으로 다시 연결합니다.');
+              await new Promise((resolve) => window.setTimeout(resolve, retryDelay));
+              if (cancelled) return;
+              continue;
+            }
+            if (!['CANVAS_004', 'CANVAS_005'].includes(err.code)) throw err;
+            if (usingPasswordGrant) {
+              passwordGrant = null;
+              saveCanvasPasswordGrant(passwordGrantKey, null);
+            }
+            const prompt = err.code === 'CANVAS_005'
+              && !usingPasswordGrant
+              ? '비밀번호가 올바르지 않습니다. 다시 입력해주세요.'
+              : '이 캔버스의 비밀번호를 입력해주세요.';
+            password = window.prompt(prompt);
+            if (password === null) { navigate('/search'); return; }
+          }
         }
         if (cancelled) return;
         socket = new WebSocket(canvasSocketUrl(canvasId, access.ws_port, access.canvas_access_token));
@@ -833,6 +1105,10 @@ function CanvasWorkspace() {
         const handleRtcMessage = (event) => {
           let data;
           try { data = JSON.parse(event.data); } catch { return; }
+          if (data.type === 'server_reconnect') {
+            requestServerReconnect(data);
+            return;
+          }
           if (data.type === 'rtc_ready') {
             rtcReady = true;
             joinRtcSocket();
@@ -860,9 +1136,12 @@ function CanvasWorkspace() {
                   setPeerList(peers);
                   const activeIds = new Set(peers.map((peer) => peer.peer_id));
                   setRemoteCursors((current) => Object.fromEntries(Object.entries(current).filter(([peerId]) => activeIds.has(peerId))));
+                  setRemoteEditors((current) => Object.fromEntries(Object.entries(current).filter(([peerId]) => activeIds.has(peerId))));
                   setLaserStrokes((current) => current.filter((stroke) => !stroke.peerId || activeIds.has(stroke.peerId)));
                   for (const peer of peers) {
-                    if (!peer.connected || syncedPeersRef.current.has(peer.peer_id)) continue;
+                    if (!peer.connected) continue;
+                    if (editingIdRef.current) broadcastEditorPresence(editingIdRef.current, true);
+                    if (syncedPeersRef.current.has(peer.peer_id)) continue;
                     syncedPeersRef.current.add(peer.peer_id);
                     for (const [id, item] of Object.entries(itemsRef.current)) {
                       if (!isCollaborativeItem(item) || !canPeerAccessItem(item, peer)) continue;
@@ -893,6 +1172,7 @@ function CanvasWorkspace() {
             peerMeshRef.current?.removePeer(data.peer_id);
             syncedPeersRef.current.delete(data.peer_id);
             setRemoteCursors((current) => { const next = { ...current }; delete next[data.peer_id]; return next; });
+            setRemoteEditors((current) => { const next = { ...current }; delete next[data.peer_id]; return next; });
             return;
           }
           if (data.type === 'rtc_signal') {
@@ -916,10 +1196,22 @@ function CanvasWorkspace() {
           resetPeerMesh();
           if (!cancelled && wsRef.current?.readyState === WebSocket.OPEN) setToast('P2P 신호 연결이 종료되었습니다.');
         };
-        socket.onopen = () => { if (!cancelled) setConnection('connected'); };
+        socket.onopen = () => {
+          if (cancelled) return;
+          const wasReconnecting = autoReconnectRef.current;
+          autoReconnectRef.current = false;
+          reconnectAttemptsRef.current = 0;
+          setConnection('connected');
+          setError('');
+          if (wasReconnecting) setToast('캔버스에 다시 연결되었습니다.');
+        };
         socket.onmessage = (event) => {
           let data;
           try { data = JSON.parse(event.data); } catch { return; }
+          if (data.type === 'server_reconnect') {
+            requestServerReconnect(data);
+            return;
+          }
           if (data.type === 'init_items') {
             const initialItems = data.items && typeof data.items === 'object' ? data.items : {};
             collaborativeDocsRef.current.clear();
@@ -1021,12 +1313,16 @@ function CanvasWorkspace() {
           if (data.type === 'item_delete' || data.type === 'delete_item') {
             const id = data.item_id ?? data['item-id'];
             if (id != null) {
+              const key = String(id);
               const next = { ...itemsRef.current };
-              delete next[id];
+              delete next[key];
               itemsRef.current = next;
-              collaborativeDocsRef.current.delete(String(id));
+              collaborativeDocsRef.current.delete(key);
+              collaborativeBaseDocsRef.current.delete(key);
+              newCollaborativeItemsRef.current.delete(key);
               setItems(next);
               refreshSpatialIndex();
+              setRemoteEditors((current) => Object.fromEntries(Object.entries(current).filter(([, editor]) => editor.itemId !== key)));
             }
             return;
           }
@@ -1087,7 +1383,15 @@ function CanvasWorkspace() {
             setToast(data.code === 'ITEM_ACCESS_DENIED' ? '이 아이템을 수정할 권한이 없습니다.' : data.code === 'ITEM_SAVE_REQUIRED' ? 'Ctrl + S로 저장한 뒤 서버에 반영할 수 있습니다.' : data.message || data.code || '서버 오류가 발생했습니다.');
           }
         };
-        socket.onerror = () => { if (!cancelled) setError('실시간 서버에 연결할 수 없습니다. 서버 주소와 WebSocket 설정을 확인해주세요.'); };
+        socket.onerror = () => {
+          if (cancelled) return;
+          if (autoReconnectRef.current) {
+            setToast('캔버스 서버를 다시 찾고 있어요.');
+            if (reconnectTimer === null) scheduleReconnect(nextReconnectDelay());
+          } else {
+            setError('실시간 서버에 연결할 수 없습니다. 서버 주소와 WebSocket 설정을 확인해주세요.');
+          }
+        };
         socket.onclose = (event) => {
           if (wsRef.current === socket) wsRef.current = null;
           chatHistoryRequestRef.current = null;
@@ -1107,15 +1411,30 @@ function CanvasWorkspace() {
           joinedCanvasConnectionId = '';
           resetPeerMesh();
           setItemsInitialized(false);
-          if (!cancelled) { setConnection('disconnected'); if (event.code === 1008) setError('캔버스 권한이나 설정이 변경되었습니다. 다시 접속해주세요.'); }
+          if (!cancelled && event.code === 1012) requestServerReconnect({ retry_after_ms: 0 });
+          if (!cancelled && autoReconnectRef.current) {
+            setConnection('connecting');
+            if (reconnectTimer === null) scheduleReconnect(nextReconnectDelay());
+          } else if (!cancelled) {
+            setConnection('disconnected');
+            if (event.code === 1008) setError('캔버스 권한이나 설정이 변경되었습니다. 다시 접속해주세요.');
+          }
         };
       } catch (err) {
-        if (!cancelled) { setConnection('disconnected'); setError(err.message || '캔버스에 접속할 수 없습니다.'); }
+        if (!cancelled && autoReconnectRef.current) {
+          setConnection('connecting');
+          setToast('캔버스 서버를 다시 찾고 있어요.');
+          if (reconnectTimer === null) scheduleReconnect(nextReconnectDelay());
+        } else if (!cancelled) {
+          setConnection('disconnected');
+          setError(err.message || '캔버스에 접속할 수 없습니다.');
+        }
       }
     }
     connect();
     return () => {
       cancelled = true;
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       rtcReady = false;
       canvasConnectionId = '';
       canvasConnectionHash = '';
@@ -1126,15 +1445,86 @@ function CanvasWorkspace() {
       if (socket) socket.close();
       if (wsRef.current === socket) wsRef.current = null;
     };
-  }, [canvasId, getCollaborativeDoc, markItemDirty, navigate, receiveLaser, receivePeerData, refreshSpatialIndex, requestChatHistory, sendRaw, sendRtcRaw, token, user]);
+  }, [broadcastEditorPresence, canvasId, getCollaborativeDoc, markItemDirty, navigate, receiveLaser, receivePeerData, reconnectEpoch, refreshSpatialIndex, requestChatHistory, sendRaw, sendRtcRaw, token, user]);
 
   const spatialIndex = useMemo(() => new CanvasSpatialBTree(items, boardSize), [spatialRevision, boardSize]);
+  const visibleWorldBounds = useMemo(() => {
+    const width = Math.max(1, boardSize.width);
+    const height = Math.max(1, boardSize.height);
+    const scale = Math.max(0.001, camera.scale);
+    return {
+      minX: -camera.x / scale,
+      minY: -camera.y / scale,
+      maxX: (width - camera.x) / scale,
+      maxY: (height - camera.y) / scale,
+    };
+  }, [boardSize, camera]);
   const visibleBounds = useMemo(() => ({
-    minX: -camera.x / (Math.max(1, boardSize.width) * camera.scale),
-    minY: -camera.y / (Math.max(1, boardSize.height) * camera.scale),
-    maxX: (boardSize.width - camera.x) / (Math.max(1, boardSize.width) * camera.scale),
-    maxY: (boardSize.height - camera.y) / (Math.max(1, boardSize.height) * camera.scale),
-  }), [boardSize, camera]);
+    minX: visibleWorldBounds.minX / Math.max(1, boardSize.width),
+    minY: visibleWorldBounds.minY / Math.max(1, boardSize.height),
+    maxX: visibleWorldBounds.maxX / Math.max(1, boardSize.width),
+    maxY: visibleWorldBounds.maxY / Math.max(1, boardSize.height),
+  }), [boardSize, visibleWorldBounds]);
+  const minimap = useMemo(() => {
+    const viewportWidth = Math.max(1, boardSize.width);
+    const viewportHeight = Math.max(1, boardSize.height);
+    const minimapItems = Object.entries(items)
+      .filter(([, item]) => MINIMAP_ITEM_KINDS.has(item?.kind))
+      .map(([id, item]) => {
+        const normalizedBounds = objectBounds(item, items, viewportWidth, viewportHeight);
+        return {
+          id,
+          item,
+          bounds: {
+            minX: normalizedBounds.minX * viewportWidth,
+            minY: normalizedBounds.minY * viewportHeight,
+            maxX: normalizedBounds.maxX * viewportWidth,
+            maxY: normalizedBounds.maxY * viewportHeight,
+          },
+        };
+      });
+    const viewport = visibleWorldBounds;
+    const bounds = {
+      minX: -viewportWidth,
+      minY: -viewportHeight,
+      maxX: viewportWidth * 2,
+      maxY: viewportHeight * 2,
+    };
+    const include = (next) => {
+      bounds.minX = Math.min(bounds.minX, next.minX);
+      bounds.minY = Math.min(bounds.minY, next.minY);
+      bounds.maxX = Math.max(bounds.maxX, next.maxX);
+      bounds.maxY = Math.max(bounds.maxY, next.maxY);
+    };
+    minimapItems.forEach(({ bounds: itemBounds }) => include(itemBounds));
+    include(viewport);
+
+    const padding = Math.max((bounds.maxX - bounds.minX), (bounds.maxY - bounds.minY)) * 0.1;
+    bounds.minX -= padding;
+    bounds.minY -= padding;
+    bounds.maxX += padding;
+    bounds.maxY += padding;
+    let width = bounds.maxX - bounds.minX;
+    let height = bounds.maxY - bounds.minY;
+    if (width / height < MINIMAP_ASPECT) {
+      const expandedWidth = height * MINIMAP_ASPECT;
+      bounds.minX -= (expandedWidth - width) / 2;
+      width = expandedWidth;
+    } else {
+      const expandedHeight = width / MINIMAP_ASPECT;
+      bounds.minY -= (expandedHeight - height) / 2;
+      height = expandedHeight;
+    }
+    const overviewWidth = width * MINIMAP_OVERVIEW_SCALE;
+    const overviewHeight = height * MINIMAP_OVERVIEW_SCALE;
+    bounds.minX -= (overviewWidth - width) / 2;
+    bounds.minY -= (overviewHeight - height) / 2;
+    width = overviewWidth;
+    height = overviewHeight;
+    bounds.maxX = bounds.minX + width;
+    bounds.maxY = bounds.minY + height;
+    return { bounds: { ...bounds, width, height }, viewport, items: minimapItems };
+  }, [boardSize, items, visibleWorldBounds]);
   const axisOriginX = boardSize.width * camera.scale / 2 + camera.x;
   const axisOriginY = boardSize.height * camera.scale / 2 + camera.y;
   const coordinatePlaneStyle = {
@@ -1166,22 +1556,77 @@ function CanvasWorkspace() {
     .filter(({ item }) => ['image', 'link', 'code', 'note', 'table', 'shape', 'text', 'math', 'stroke', 'connector'].includes(item?.kind))
     .sort((a, b) => a.bounds.minY - b.bounds.minY)
     .map(({ id, item, bounds }) => [id, item, bounds, item.kind === 'connector' ? connectorGeometry(item, items, boardSize.width, boardSize.height) : null]), [boardSize.height, boardSize.width, items, visibleEntries]);
-  const selectedTable = selectedItemId ? items[String(selectedItemId)]?.kind === 'table' ? items[String(selectedItemId)] : null : null;
-  const selectedItem = selectedItemId ? items[String(selectedItemId)] : null;
+  const selectedObjectIds = selectedItemIds.filter((id) => Boolean(items[id]));
+  const selectedObjectIdsKey = selectedObjectIds.join('|');
+  const selectedObjectIdSet = new Set(selectedObjectIds);
+  const hasSingleSelection = selectedObjectIds.length === 1;
+  const primarySelectedItemId = selectedObjectIdSet.has(String(selectedItemId)) ? String(selectedItemId) : selectedObjectIds[selectedObjectIds.length - 1] || null;
+  const selectedTable = hasSingleSelection && items[primarySelectedItemId]?.kind === 'table' ? items[primarySelectedItemId] : null;
+  const selectedItem = hasSingleSelection ? items[primarySelectedItemId] : null;
   const selectedConnector = selectedItem?.kind === 'connector' ? selectedItem : null;
   const selectedArrow = selectedItem?.kind === 'shape' && selectedItem.shapeType === 'arrow' ? selectedItem : null;
   const connectorToEdit = activeTool === 'connect' ? null : selectedConnector;
   const permission = groups.includes('default') ? 'default' : groups[0] || 'admin-group';
-  const startEditing = (id) => { setSelectedItemId(String(id)); setEditingId(id); };
-  const stopEditing = (id) => setEditingId((current) => current === id ? null : current);
+  const selectedGroupIds = new Set(selectedObjectIds.map((id) => items[id]?.groupId).filter(Boolean));
+  const selectionIsSingleGroup = selectedObjectIds.length > 0 && selectedGroupIds.size === 1
+    && selectedObjectIds.every((id) => items[id]?.groupId === [...selectedGroupIds][0]);
+  const changeSelectionGroup = (shouldGroup) => {
+    const ids = selectedObjectIds.filter((id) => itemsRef.current[id] && !['stroke', 'connector'].includes(itemsRef.current[id].kind));
+    if (shouldGroup && ids.length < 2) return;
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      setToast('실시간 서버에 연결된 뒤 오브젝트를 그룹화할 수 있어요.');
+      return;
+    }
+    const groupId = shouldGroup ? createId() : null;
+    const nextItems = { ...itemsRef.current };
+    for (const id of ids) {
+      const previous = nextItems[id];
+      const nextItem = { ...previous };
+      if (groupId) nextItem.groupId = groupId;
+      else delete nextItem.groupId;
+      if (isCollaborativeItem(nextItem)) {
+        nextItems[id] = nextItem;
+        markItemDirty(id);
+        peerMeshRef.current?.sendData({ type: 'item_metadata', item_id: id, field: 'groupId', value: groupId || '' }, (peer) => canPeerAccessItem(nextItem, peer));
+      } else if (sendItemChange({ type: 'item_update', item_id: id, item: nextItem }, previous)) {
+        nextItems[id] = nextItem;
+      }
+    }
+    itemsRef.current = nextItems;
+    setItems(nextItems);
+    if (shouldGroup) selectItems(ids, ids[ids.length - 1]);
+    setToast(shouldGroup ? `${ids.length}개 오브젝트를 그룹화했습니다.` : '그룹을 해제했습니다.');
+  };
+  const startEditing = (id) => {
+    const key = String(id);
+    const previous = editingIdRef.current;
+    if (previous && previous !== key) broadcastEditorPresence(previous, false);
+    editingIdRef.current = key;
+    broadcastEditorPresence(key, true);
+    selectItems([key], key);
+    setEditingId(key);
+  };
+  const stopEditing = (id) => {
+    const key = String(id);
+    if (editingIdRef.current === key) {
+      editingIdRef.current = null;
+      broadcastEditorPresence(key, false);
+    }
+    setEditingId((current) => String(current) === key ? null : current);
+  };
   const finishEditing = useCallback((id = editingId) => {
     if (id == null) return;
+    const key = String(id);
     const editor = [...(sceneRef.current?.querySelectorAll('[data-item-id]') || [])]
-      .find((element) => element.dataset.itemId === String(id));
+      .find((element) => element.dataset.itemId === key);
     const focusedElement = document.activeElement;
     if (editor?.contains(focusedElement) && typeof focusedElement.blur === 'function') focusedElement.blur();
-    setEditingId((current) => String(current) === String(id) ? null : current);
-  }, [editingId]);
+    if (editingIdRef.current === key) {
+      editingIdRef.current = null;
+      broadcastEditorPresence(key, false);
+    }
+    setEditingId((current) => String(current) === key ? null : current);
+  }, [broadcastEditorPresence, editingId]);
   const focusConnectorTarget = (connector, connectorId) => {
     if (activeTool !== 'select') return;
     const target = itemsRef.current[String(connector.to)];
@@ -1190,12 +1635,85 @@ function CanvasWorkspace() {
     const bounds = objectBounds(target, itemsRef.current, board.width, board.height);
     const centerX = (bounds.minX + bounds.maxX) / 2;
     const centerY = (bounds.minY + bounds.maxY) / 2;
-    setSelectedItemId(String(connectorId ?? connector.to));
+    selectItems([connectorId ?? connector.to], connectorId ?? connector.to);
     setCamera((current) => ({
       ...current,
       x: board.width / 2 - centerX * board.width * current.scale,
       y: board.height / 2 - centerY * board.height * current.scale,
     }));
+  };
+  const moveCameraFromMinimap = (event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const xRatio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const yRatio = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+    const worldX = minimap.bounds.minX + xRatio * minimap.bounds.width;
+    const worldY = minimap.bounds.minY + yRatio * minimap.bounds.height;
+    setCamera((current) => ({
+      ...current,
+      x: boardSize.width / 2 - worldX * current.scale,
+      y: boardSize.height / 2 - worldY * current.scale,
+    }));
+  };
+  const startMinimapWidgetMove = (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const widget = minimapWidgetRef.current?.getBoundingClientRect();
+    const stage = boardRef.current?.getBoundingClientRect();
+    if (!widget || !stage) return;
+    minimapMoveRef.current = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - widget.left,
+      offsetY: event.clientY - widget.top,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+  const moveMinimapWidget = (event) => {
+    event.stopPropagation();
+    const drag = minimapMoveRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const widget = minimapWidgetRef.current?.getBoundingClientRect();
+    const stage = boardRef.current?.getBoundingClientRect();
+    if (!widget || !stage) return;
+    const maxLeft = Math.max(4, stage.width - widget.width - 4);
+    const maxTop = Math.max(4, stage.height - widget.height - 4);
+    const next = {
+      left: Math.max(4, Math.min(maxLeft, event.clientX - stage.left - drag.offsetX)),
+      top: Math.max(4, Math.min(maxTop, event.clientY - stage.top - drag.offsetY)),
+    };
+    minimapPositionRef.current = next;
+    setMinimapPosition(next);
+  };
+  const stopMinimapWidgetMove = (event) => {
+    event.stopPropagation();
+    if (minimapMoveRef.current?.pointerId !== event.pointerId) return;
+    minimapMoveRef.current = null;
+    if (event.type === 'pointerup' && minimapPositionRef.current) {
+      try { localStorage.setItem(MINIMAP_POSITION_KEY, JSON.stringify(minimapPositionRef.current)); } catch { /* Ignore unavailable local storage. */ }
+    }
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+  const startMinimapPan = (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    minimapPointerRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+  const moveMinimapPan = (event) => {
+    event.stopPropagation();
+    const press = minimapPointerRef.current;
+    if (press?.pointerId !== event.pointerId) return;
+    if (Math.hypot(event.clientX - press.startX, event.clientY - press.startY) > 4) press.moved = true;
+  };
+  const stopMinimapPan = (event) => {
+    event.stopPropagation();
+    const press = minimapPointerRef.current;
+    if (press?.pointerId !== event.pointerId) return;
+    minimapPointerRef.current = null;
+    if (event.type === 'pointerup' && !press.moved) moveCameraFromMinimap(event);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
   const sendSettings = (field, value, participant) => {
     if (!settings || settingsPending) return;
@@ -1337,6 +1855,10 @@ function CanvasWorkspace() {
     if (hold?.repeat) window.clearInterval(hold.repeat);
   }, []);
   const handleStageWheel = (event) => {
+    if (event.target.closest?.('.canvas-minimap')) {
+      event.preventDefault();
+      return;
+    }
     if (event.target.closest?.('.canvas-object')) return;
     event.preventDefault();
     if (event.ctrlKey || event.metaKey) {
@@ -1345,6 +1867,14 @@ function CanvasWorkspace() {
       setCamera((current) => ({ ...current, x: current.x - event.deltaX, y: current.y - event.deltaY }));
     }
   };
+  stageWheelHandlerRef.current = handleStageWheel;
+  useEffect(() => {
+    const stage = boardRef.current;
+    if (!stage) return undefined;
+    const onWheel = (event) => stageWheelHandlerRef.current?.(event);
+    stage.addEventListener('wheel', onWheel, { passive: false });
+    return () => stage.removeEventListener('wheel', onWheel);
+  }, []);
   const recordLaserPoint = (point, finish = false) => {
     const active = laserDrawingRef.current;
     if (!active) return;
@@ -1385,15 +1915,77 @@ function CanvasWorkspace() {
     laserDrawingRef.current = null;
   };
 
+  const startMarqueeSelection = (event) => {
+    const stage = boardRef.current;
+    const bounds = stage?.getBoundingClientRect();
+    if (!bounds) return;
+    stage.focus({ preventScroll: true });
+    const start = pointerPosition(event);
+    const startClient = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+    const baseIds = event.shiftKey ? selectedItemIds : [];
+    selectionRef.current = { pointerId: event.pointerId, start, startClient, baseIds };
+    setSelectionBox({ left: startClient.x, top: startClient.y, width: 0, height: 0 });
+    if (!event.shiftKey) selectItems([]);
+    event.preventDefault();
+    event.stopPropagation();
+    stage.setPointerCapture?.(event.pointerId);
+  };
+  const moveMarqueeSelection = (event) => {
+    const selection = selectionRef.current;
+    if (!selection || selection.pointerId !== event.pointerId) return;
+    const bounds = boardRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    const x = event.clientX - bounds.left;
+    const y = event.clientY - bounds.top;
+    setSelectionBox({
+      left: Math.min(selection.startClient.x, x),
+      top: Math.min(selection.startClient.y, y),
+      width: Math.abs(x - selection.startClient.x),
+      height: Math.abs(y - selection.startClient.y),
+    });
+  };
+  const finishMarqueeSelection = (event) => {
+    const selection = selectionRef.current;
+    if (!selection || selection.pointerId !== event.pointerId) return;
+    selectionRef.current = null;
+    setSelectionBox(null);
+    if (event.type !== 'pointercancel') {
+      const end = pointerPosition(event);
+      const marquee = {
+        minX: Math.min(selection.start.x, end.x),
+        minY: Math.min(selection.start.y, end.y),
+        maxX: Math.max(selection.start.x, end.x),
+        maxY: Math.max(selection.start.y, end.y),
+      };
+      const hits = Object.entries(itemsRef.current).filter(([, item]) => item && !['stroke', 'connector'].includes(item.kind))
+        .filter(([, item]) => {
+          const bounds = objectBounds(item, itemsRef.current, boardSize.width, boardSize.height);
+          return bounds && bounds.minX >= marquee.minX && bounds.maxX <= marquee.maxX
+            && bounds.minY >= marquee.minY && bounds.maxY <= marquee.maxY;
+        }).map(([id]) => id);
+      const expanded = new Set([...selection.baseIds, ...hits]);
+      const selectedGroups = new Set([...expanded].map((id) => itemsRef.current[id]?.groupId).filter(Boolean));
+      if (selectedGroups.size) {
+        Object.entries(itemsRef.current).forEach(([id, item]) => {
+          if (!item?.groupId || !selectedGroups.has(item.groupId) || ['stroke', 'connector'].includes(item.kind)) return;
+          const bounds = objectBounds(item, itemsRef.current, boardSize.width, boardSize.height);
+          if (bounds && bounds.minX >= marquee.minX && bounds.maxX <= marquee.maxX
+            && bounds.minY >= marquee.minY && bounds.maxY <= marquee.maxY) expanded.add(id);
+        });
+      }
+      selectItems([...expanded]);
+    }
+    if (boardRef.current?.hasPointerCapture?.(event.pointerId)) boardRef.current.releasePointerCapture(event.pointerId);
+  };
   const startDrawing = (event) => {
     updateEraserCursor(event);
-    const clickedEmptySpace = event.button === 0 && !event.target.closest?.('.canvas-object');
+    const clickedEmptySpace = event.button === 0 && !event.target.closest?.('.canvas-object, .canvas-minimap, .stage-label, .draw-cursor-label, .eraser-cursor');
     if (clickedEmptySpace) {
       finishEditing();
-      setSelectedItemId(null);
       setConnectionStartId(null);
     }
-    if (event.button === 1 || spacePressedRef.current || (activeTool === 'select' && clickedEmptySpace)) { startPan(event); return; }
+    if (event.button === 1 || spacePressedRef.current) { startPan(event); return; }
+    if (activeTool === 'select' && clickedEmptySpace) { startMarqueeSelection(event); return; }
     if (connection !== 'connected' || (!['pen', 'laser'].includes(activeTool) && event.target.closest?.('.canvas-object'))) return;
     if (activeTool === 'eraser') {
       event.preventDefault();
@@ -1468,6 +2060,7 @@ function CanvasWorkspace() {
   const moveDrawing = (event) => {
     updateEraserCursor(event);
     sendCursorPosition(event);
+    if (selectionRef.current) { moveMarqueeSelection(event); return; }
     if (panRef.current) {
       const pan = panRef.current;
       setCamera((current) => ({ ...current, x: pan.cameraX + event.clientX - pan.x, y: pan.cameraY + event.clientY - pan.y }));
@@ -1491,6 +2084,7 @@ function CanvasWorkspace() {
     vectorDraftRef.current?.({ points: draftRef.current, color, strokeWidth });
   };
   const stopDrawing = (event) => {
+    if (selectionRef.current) { finishMarqueeSelection(event); return; }
     if (panRef.current) {
       panRef.current = null;
       boardRef.current?.classList.remove('panning');
@@ -1572,13 +2166,43 @@ function CanvasWorkspace() {
       if (from && to) addItem(createId(), { kind: 'connector', from: connectionStartId, to: id, color: connectorColor, strokeWidth: connectorWidth, startHead: connectorStartHead, endHead: connectorEndHead, permission });
       setConnectionStartId(null); setActiveTool('select'); return;
     }
-    setSelectedItemId(String(id));
-    if (activeTool !== 'select' || event.target.closest('button')) { event.stopPropagation(); return; }
+    const key = String(id);
+    if (activeTool !== 'select') { event.stopPropagation(); return; }
+    const focusCanvas = () => boardRef.current?.focus({ preventScroll: true });
+    const groupedIds = item?.groupId
+      ? Object.entries(itemsRef.current).filter(([, candidate]) => candidate?.groupId === item.groupId && !['stroke', 'connector'].includes(candidate.kind)).map(([groupedId]) => groupedId)
+      : [];
+    if (event.shiftKey) {
+      const toggleIds = groupedIds.length ? groupedIds : [key];
+      const alreadySelected = selectedObjectIdSet.has(key);
+      const nextSelection = alreadySelected
+        ? selectedObjectIds.filter((selectedId) => !toggleIds.includes(selectedId))
+        : [...selectedObjectIds, ...toggleIds];
+      selectItems(nextSelection, alreadySelected ? nextSelection[nextSelection.length - 1] : key);
+      if (!event.target.closest('button, input, textarea, select')) focusCanvas();
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    const targetIds = selectedObjectIdSet.has(key)
+      ? selectedObjectIds
+      : groupedIds.length ? groupedIds : [key];
+    selectItems(targetIds, key);
+    if (event.target.closest('button')) { event.stopPropagation(); return; }
+    focusCanvas();
     if (item?.kind === 'connector') { event.preventDefault(); event.stopPropagation(); return; }
     event.preventDefault(); event.stopPropagation();
     const start = pointerPosition(event);
-    event.currentTarget.classList.add('object-dragging');
-    dragRef.current = { mode: 'move', id, initial: item, offsetX: start.x - (item.x || 0), offsetY: start.y - (item.y || 0), startX: start.x, startY: start.y, element: event.currentTarget };
+    const movableIds = targetIds.filter((targetId) => itemsRef.current[targetId] && !['stroke', 'connector'].includes(itemsRef.current[targetId].kind));
+    if (movableIds.length > 1) {
+      const initialItems = Object.fromEntries(movableIds.map((targetId) => [targetId, itemsRef.current[targetId]]));
+      const elements = movableIds.map((targetId) => [...(sceneRef.current?.querySelectorAll('[data-item-id]') || [])].find((node) => node.dataset.itemId === targetId)).filter(Boolean);
+      elements.forEach((element) => element.classList.add('object-dragging', 'multi-object-dragging'));
+      dragRef.current = { mode: 'multi-move', ids: movableIds, initialItems, startPoint: start, elements };
+    } else {
+      event.currentTarget.classList.add('object-dragging');
+      dragRef.current = { mode: 'move', id, initial: item, offsetX: start.x - (item.x || 0), offsetY: start.y - (item.y || 0), startX: start.x, startY: start.y, element: event.currentTarget };
+    }
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
   const startObjectResize = (event, id, item, handle) => {
@@ -1591,7 +2215,7 @@ function CanvasWorkspace() {
     const initial = itemsRef.current[key] || item;
     const start = pointerPosition(event);
     const element = event.currentTarget.closest('.canvas-object');
-    setSelectedItemId(key);
+    selectItems([key], key);
     element?.classList.add('object-resizing');
     dragRef.current = {
       mode: 'resize',
@@ -1614,7 +2238,7 @@ function CanvasWorkspace() {
     const key = String(id);
     const initial = itemsRef.current[key] || item;
     const element = event.currentTarget.closest('.canvas-object');
-    setSelectedItemId(key);
+    selectItems([key], key);
     element?.classList.add('object-bending');
     dragRef.current = { mode: 'bend', id: key, initial, viewport: { width: board.width, height: board.height }, element };
     event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -1632,7 +2256,7 @@ function CanvasWorkspace() {
     event.stopPropagation();
     const centerX = frameBounds.left + frameBounds.width / 2;
     const centerY = frameBounds.top + frameBounds.height / 2;
-    setSelectedItemId(key);
+    selectItems([key], key);
     element.classList.add('object-rotating');
     boardRef.current?.classList.add('rotating');
     dragRef.current = {
@@ -1650,6 +2274,20 @@ function CanvasWorkspace() {
   const moveObject = (event) => {
     if (!dragRef.current) return;
     const { mode, id, initial, offsetX, offsetY, startX, startY, resize, viewport } = dragRef.current;
+    if (mode === 'multi-move') {
+      const { ids, initialItems, startPoint } = dragRef.current;
+      const point = pointerPosition(event);
+      const dx = point.x - startPoint.x;
+      const dy = point.y - startPoint.y;
+      const nextItems = { ...itemsRef.current };
+      ids.forEach((itemId) => {
+        const original = initialItems[itemId];
+        nextItems[itemId] = { ...original, x: (Number(original.x) || 0) + dx, y: (Number(original.y) || 0) + dy };
+      });
+      itemsRef.current = nextItems;
+      setItems(nextItems);
+      return;
+    }
     if (mode === 'bend') {
       const point = pointerPosition(event);
       const next = initial.kind === 'connector'
@@ -1677,7 +2315,27 @@ function CanvasWorkspace() {
   };
   const stopObjectDrag = () => {
     if (!dragRef.current) return;
-    const { id, initial, element } = dragRef.current; dragRef.current = null;
+    const drag = dragRef.current;
+    dragRef.current = null;
+    if (drag.mode === 'multi-move') {
+      drag.elements.forEach((element) => element.classList.remove('object-dragging', 'multi-object-dragging'));
+      refreshSpatialIndex();
+      for (const id of drag.ids) {
+        const initial = drag.initialItems[id];
+        const item = itemsRef.current[id];
+        if (isCollaborativeItem(item)) {
+          peerMeshRef.current?.sendData({ type: 'item_geometry', item_id: String(id), x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation }, (peer) => canPeerAccessItem(item, peer));
+          markItemDirty(id);
+        } else if (item && !sendItemChange({ type: 'item_update', item_id: id, item }, initial)) {
+          const rolledBack = { ...itemsRef.current, [id]: initial };
+          itemsRef.current = rolledBack;
+          setItems(rolledBack);
+          setToast('연결이 복구되면 선택한 오브젝트를 다시 이동해주세요.');
+        }
+      }
+      return;
+    }
+    const { id, initial, element } = drag;
     element?.classList.remove('object-dragging', 'object-resizing', 'object-rotating', 'object-bending');
     boardRef.current?.classList.remove('rotating');
     const item = itemsRef.current[id];
@@ -1710,7 +2368,7 @@ function CanvasWorkspace() {
       return;
     }
     if (!selectedTable) return;
-    updateTableItem(selectedItemId, (current) => resizeTableData(
+    updateTableItem(primarySelectedItemId, (current) => resizeTableData(
       current,
       field === 'rows' ? nextCount : current.rows?.length || 1,
       field === 'columns' ? nextCount : current.columns?.length || 1,
@@ -1723,7 +2381,7 @@ function CanvasWorkspace() {
       setTableConfig((current) => ({ ...current, [field]: nextSize }));
       return;
     }
-    if (selectedTable) updateTableItem(selectedItemId, { [field]: nextSize / 100 });
+    if (selectedTable) updateTableItem(primarySelectedItemId, { [field]: nextSize / 100 });
   };
   useEffect(() => {
     const host = boardRef.current;
@@ -1740,32 +2398,39 @@ function CanvasWorkspace() {
   useEffect(() => {
     const isEditableTarget = (target) => target instanceof HTMLElement
       && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+    const onDeleteKeyDown = (event) => {
+      if (event.repeat) return;
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (target?.closest('.code-shared-input, .code-filename-input, .code-language-select')) return;
+      if (editingId != null || isEditableTarget(target) || !selectedObjectIds.length) return;
+      event.preventDefault();
+      const remainingIds = [];
+      for (const id of selectedObjectIds) {
+        if (!deleteItem(id)) remainingIds.push(id);
+      }
+      selectItems(remainingIds.filter((id) => itemsRef.current[id]));
+      setConnectionStartId(null);
+      if (remainingIds.length) setToast('일부 오브젝트를 삭제하지 못했습니다. 연결 상태와 삭제 권한을 확인해주세요.');
+    };
     const onKeyDown = (event) => {
       if (event.key === 'Escape') {
         if (event.repeat) return;
+        if (selectionRef.current) {
+          selectionRef.current = null;
+          setSelectionBox(null);
+          return;
+        }
         if (editingId != null) {
           event.preventDefault();
           event.stopPropagation();
           finishEditing(editingId);
           return;
         }
-        if (selectedItemId != null || connectionStartId != null) {
+        if (selectedObjectIds.length || connectionStartId != null) {
           event.preventDefault();
-          setSelectedItemId(null);
+          selectItems([]);
           setConnectionStartId(null);
-          return;
-        }
-      }
-      if (event.key === 'Delete') {
-        const target = event.target instanceof HTMLElement ? event.target : null;
-        const codeEditor = target?.closest('.code-shared-input, .code-filename-input, .code-language-select');
-        if (codeEditor) return;
-        if (editingId == null && selectedItemId != null && !isEditableTarget(target)) {
-          event.preventDefault();
-          if (deleteItem(selectedItemId)) {
-            setSelectedItemId(null);
-            setConnectionStartId(null);
-          }
           return;
         }
       }
@@ -1774,18 +2439,20 @@ function CanvasWorkspace() {
         event.preventDefault();
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
-        const targetId = editingId || selectedItemId;
-        if (targetId && isCollaborativeItem(itemsRef.current[targetId]) && dirtyItemsRef.current.has(String(targetId))) {
+        const targetIds = selectedObjectIds.length > 1 ? selectedObjectIds : [editingId || primarySelectedItemId].filter(Boolean);
+        const unsavedIds = targetIds.filter((id) => isCollaborativeItem(itemsRef.current[id]) && dirtyItemsRef.current.has(String(id)));
+        if (unsavedIds.length) {
           event.preventDefault();
-          saveCollaborativeItem(targetId);
+          unsavedIds.forEach((id) => saveCollaborativeItem(id));
         }
       }
     };
     const onKeyUp = (event) => { if (event.code === 'Space') spacePressedRef.current = false; };
+    document.addEventListener('keydown', onDeleteKeyDown, true);
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
-    return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); };
-  }, [connectionStartId, deleteItem, editingId, finishEditing, saveCollaborativeItem, selectedItemId]);
+    return () => { document.removeEventListener('keydown', onDeleteKeyDown, true); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); };
+  }, [connectionStartId, deleteItem, editingId, finishEditing, saveCollaborativeItem, selectItems, selectedObjectIdsKey, selectedItemId]);
   useEffect(() => {
     if (editingId == null) return undefined;
     const onDocumentPointerDown = (event) => {
@@ -1847,10 +2514,13 @@ function CanvasWorkspace() {
     };
   }, [canvas?.image, token]);
 
+  const canvasParticipants = uniqueCanvasParticipants(settings?.participants);
+  const otherParticipants = uniqueCanvasParticipants(settings?.participants, user);
+
   return <div className="canvas-app-page" data-theme={theme}>
     <header className="canvas-topbar">
       <div className="canvas-title-group"><Link to="/search" className="canvas-back" aria-label="캔버스 목록"><Icon name="back" size={19} /></Link><div className="canvas-cover-image">{canvas?.image && !imageFailed && canvasImageSrc ? <img src={canvasImageSrc} alt="캔버스 대표 이미지" onError={() => setImageFailed(true)} /> : <div className="canvas-cover-art"><i /><i /><i /><span>AG</span></div>}</div><div className="canvas-title-copy"><span>AGORA CANVAS · #{canvasId}</span><h1>{canvas?.canvas_name || `캔버스 ${canvasId}`}</h1></div></div>
-      <div className="canvas-header-right"><div className="canvas-description-card"><span>캔버스 설명</span><p>{canvas?.description || '함께 아이디어를 모으고 실시간으로 만들어가는 공간입니다.'}</p></div><div className="canvas-top-right"><span className={`connection-pill ${connection}`}><i />{connection === 'connected' ? '실시간 연결됨' : connection === 'connecting' ? '연결 중' : '연결 끊김'}</span><div className="collaborator-avatars"><span>{(user?.nickname || 'A').slice(0, 1)}</span>{settings?.participants?.slice(0, 2).map((person) => <span key={`${person.nickname}-${person.tag_number}`}>{person.nickname.slice(0, 1)}</span>)}</div><button className="button button-outline canvas-settings-button" onClick={() => setShowSettings(true)}><Icon name="settings" size={17} /><span>설정</span></button></div></div>
+      <div className="canvas-header-right"><div className="canvas-description-card"><span>캔버스 설명</span><p>{canvas?.description || '함께 아이디어를 모으고 실시간으로 만들어가는 공간입니다.'}</p></div><div className="canvas-top-right"><span className={`connection-pill ${connection}`}><i />{connection === 'connected' ? '실시간 연결됨' : connection === 'connecting' ? '연결 중' : '연결 끊김'}</span><div className="collaborator-avatars"><span>{(user?.nickname || 'A').slice(0, 1)}</span>{otherParticipants.slice(0, 2).map((person) => <span key={`${person.nickname}-${person.tag_number}`}>{person.nickname.slice(0, 1)}</span>)}</div><button className="button button-outline canvas-settings-button" onClick={() => setShowSettings(true)}><Icon name="settings" size={17} /><span>설정</span></button></div></div>
     </header>
     {error ? <div className="canvas-error-state"><div className="error-art"><Icon name="grid" size={30} /></div><span className="section-kicker">CANVAS CONNECTION</span><h1>캔버스를 열 수 없어요.</h1><p>{error}</p><div><button className="button button-dark" onClick={() => window.location.reload()}>다시 연결하기</button><Link className="button button-outline" to="/search">캔버스 목록</Link></div></div> : <div className="canvas-workspace">
       <aside className="canvas-tools" aria-label="캔버스 도구">
@@ -1860,40 +2530,62 @@ function CanvasWorkspace() {
         <div className="tool-separator" /><div className="color-picker" aria-label="펜 및 도형 색상">{inkColors.map((ink) => <button key={ink} style={{ '--ink': ink }} className={color === ink ? 'selected' : ''} onClick={() => setColor(ink)} aria-label={`색상 ${ink}`} />)}</div><div className="tool-bottom"><span className="tool-help">CANVAS</span><span>도구</span></div>
       </aside>
       <main className="board-region"><div className="board-topline"><span className="board-section-label"><i /> 2차 좌표 캔버스</span><div className="board-toolbar-actions"><span className="board-updated"><Icon name="clock" size={14} /> P2P {peerList.filter((peer) => peer.connected).length}명 · 저장 Ctrl+S</span><button className="zoom-button" aria-label="확대" title="클릭: 한 단계 확대 · 길게 누르기: 계속 확대" onPointerDown={(event) => startZoomHold(event, 1 + 0.15 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.15 * zoomSensitivity)}>+</button><span className="zoom-value">{Math.round(camera.scale * 100)}%</span><button className="zoom-button" aria-label="축소" title="클릭: 한 단계 축소 · 길게 누르기: 계속 축소" onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.15 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.15 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => setCamera({ x: 0, y: 0, scale: 1 })}>맞춤</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />격자 {showGrid ? '켜짐' : '꺼짐'}</button></div></div>
-        <div className={`canvas-stage ${activeTool === 'pen' ? 'drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ '--grid-size': `${20 * camera.scale}px`, '--grid-dot-radius': `${camera.scale}px`, '--grid-position-x': `${camera.x}px`, '--grid-position-y': `${camera.y}px` }} ref={boardRef} onPointerDown={startDrawing} onPointerMove={moveDrawing} onPointerUp={stopDrawing} onPointerCancel={stopDrawing} onPointerLeave={hideCursor} onWheel={handleStageWheel}>
+        <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ '--grid-size': `${20 * camera.scale}px`, '--grid-dot-radius': `${camera.scale}px`, '--grid-position-x': `${camera.x}px`, '--grid-position-y': `${camera.y}px` }} ref={boardRef} tabIndex={-1} onPointerDown={startDrawing} onPointerMove={moveDrawing} onPointerUp={stopDrawing} onPointerCancel={stopDrawing} onPointerLeave={hideCursor}>
           <div className="stage-label"><span>AGORA / {String(canvasId).padStart(2, '0')}</span><b>{canvas?.canvas_name || '공유 캔버스'}</b></div>
           <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true"><span className="coordinate-x" /><span className="coordinate-y" /><i className="coordinate-origin">0</i><b className="coordinate-x-label">X</b><b className="coordinate-y-label">Y</b></div>
           <VectorLayer items={visibleVectorItems} referenceItems={items} camera={camera} onReady={(setDraft) => { vectorDraftRef.current = setDraft; }} />
           <div className="canvas-scene" ref={sceneRef} style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}>
-            {sortedItems.map(([id, item, bounds, connectorCurve]) => <CanvasObject key={id} id={id} item={item} bounds={bounds} connectorCurve={connectorCurve} viewSize={boardSize} selected={String(selectedItemId) === String(id)} activeTool={activeTool} connectionStartId={connectionStartId} editing={editingId === id} dirty={dirtyItems.has(String(id))} onStartEditing={startEditing} onTextChange={updateCollaborativeText} onMetadataChange={updateCollaborativeMetadata} onFormulaChange={updateFormulaItem} onTableChange={updateTableItem} onStopEditing={stopEditing} onSave={saveCollaborativeItem} onPointerDown={startObjectDrag} onResizeStart={startObjectResize} onArrowBendStart={startArrowBend} onPointerMove={moveObject} onPointerUp={stopObjectDrag} onCopy={(value) => navigator.clipboard?.writeText(value)} onConnectorDoubleClick={focusConnectorTarget} />)}
-            {selectedItem && selectedItem.kind !== 'connector' && activeTool === 'select' && !editingId && <RotationHandles sceneRef={sceneRef} id={String(selectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startObjectRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
+            {sortedItems.map(([id, item, bounds, connectorCurve]) => <CanvasObject key={id} id={id} item={item} bounds={bounds} connectorCurve={connectorCurve} viewSize={boardSize} selected={selectedObjectIdSet.has(String(id))} allowSingleSelectionControls={hasSingleSelection} activeTool={activeTool} connectionStartId={connectionStartId} editing={editingId === id} dirty={dirtyItems.has(String(id))} remoteEditors={Object.values(remoteEditors).filter((editor) => editor.itemId === String(id))} onStartEditing={startEditing} onTextChange={updateCollaborativeText} onMetadataChange={updateCollaborativeMetadata} onFormulaChange={updateFormulaItem} onTableChange={updateTableItem} onStopEditing={stopEditing} onSave={saveCollaborativeItem} onPointerDown={startObjectDrag} onResizeStart={startObjectResize} onArrowBendStart={startArrowBend} onPointerMove={moveObject} onPointerUp={stopObjectDrag} onCopy={(value) => navigator.clipboard?.writeText(value)} onConnectorDoubleClick={focusConnectorTarget} />)}
+            {selectedItem && selectedItem.kind !== 'connector' && activeTool === 'select' && !editingId && <RotationHandles sceneRef={sceneRef} id={String(primarySelectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startObjectRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
             {Object.entries(remoteCursors).filter(([, cursor]) => cursor.visible !== false && cursor.x >= visibleBounds.minX && cursor.x <= visibleBounds.maxX && cursor.y >= visibleBounds.minY && cursor.y <= visibleBounds.maxY).map(([peerId, cursor]) => <div className="remote-cursor" key={peerId} style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%`, '--cursor-color': cursor.color }} title={`${cursor.nickname}#${cursor.tag_number}`}><svg viewBox="0 0 18 22" aria-hidden="true"><path d="M1 1v17l4.5-4.3 3.1 7.1 3.1-1.4-3.2-6.8H15z" /></svg><span>{cursor.nickname}</span></div>)}
           </div>
           <LaserLayer strokes={laserStrokes} width={boardSize.width} height={boardSize.height} camera={camera} />
+          {selectionBox && <div className="canvas-selection-marquee" style={{ left: selectionBox.left, top: selectionBox.top, width: selectionBox.width, height: selectionBox.height }} aria-hidden="true" />}
+          <div className="canvas-minimap" ref={minimapWidgetRef} style={minimapPosition ? { left: `${minimapPosition.left}px`, top: `${minimapPosition.top}px`, right: 'auto', bottom: 'auto' } : undefined} role="group" aria-label="캔버스 미니맵">
+            <div className="canvas-minimap-heading" onPointerDown={startMinimapWidgetMove} onPointerMove={moveMinimapWidget} onPointerUp={stopMinimapWidgetMove} onPointerCancel={stopMinimapWidgetMove} onLostPointerCapture={stopMinimapWidgetMove}><strong>미니맵</strong><span>잡고 이동</span></div>
+            <div className="canvas-minimap-map" title="클릭해 해당 위치로 이동 · 안쪽을 드래그해도 캔버스는 움직이지 않습니다" onPointerDown={startMinimapPan} onPointerMove={moveMinimapPan} onPointerUp={stopMinimapPan} onPointerCancel={stopMinimapPan} onLostPointerCapture={stopMinimapPan}>
+              <svg className="canvas-minimap-svg" viewBox={`${minimap.bounds.minX} ${minimap.bounds.minY} ${minimap.bounds.width} ${minimap.bounds.height}`} preserveAspectRatio="none" aria-label="전체 오브젝트와 현재 화면 위치">
+                <line className="canvas-minimap-axis" x1={boardSize.width / 2} y1={minimap.bounds.minY} x2={boardSize.width / 2} y2={minimap.bounds.maxY} />
+                <line className="canvas-minimap-axis" x1={minimap.bounds.minX} y1={boardSize.height / 2} x2={minimap.bounds.maxX} y2={boardSize.height / 2} />
+                {minimap.items.map(({ id, item, bounds }) => {
+                  const itemWidth = Math.max(bounds.maxX - bounds.minX, minimap.bounds.width * 0.008);
+                  const itemHeight = Math.max(bounds.maxY - bounds.minY, minimap.bounds.height * 0.008);
+                  return <rect key={id} className={`canvas-minimap-item${selectedObjectIdSet.has(String(id)) ? ' selected' : ''}`} x={(bounds.minX + bounds.maxX - itemWidth) / 2} y={(bounds.minY + bounds.maxY - itemHeight) / 2} width={itemWidth} height={itemHeight} rx={Math.min(itemWidth, itemHeight) * 0.22} style={{ fill: item.color || MINIMAP_ITEM_COLORS[item.kind] }} />;
+                })}
+                <rect className="canvas-minimap-viewport" x={minimap.viewport.minX} y={minimap.viewport.minY} width={minimap.viewport.maxX - minimap.viewport.minX} height={minimap.viewport.maxY - minimap.viewport.minY} rx="2" />
+              </svg>
+            </div>
+          </div>
           {activeTool === 'eraser' && <div className="eraser-cursor" ref={eraserCursorRef} style={{ width: `${ERASER_RADIUS * 2}px`, height: `${ERASER_RADIUS * 2}px` }} aria-hidden="true" />}
           {sharePosition && <ShareComposer onCancel={() => { setSharePosition(null); setActiveTool('select'); }} onSubmit={placeSharedLink} />}
           {activeTool === 'laser' && <div className="draw-cursor-label laser-cursor-label"><Icon name="laser" size={13} /> 가리키는 중 · 1.6초 후 사라짐</div>}{activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} /> 그리는 중</div>}{activeTool === 'eraser' && <div className="draw-cursor-label"><Icon name="eraser" size={13} /> 드로잉을 드래그해 지우기</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? '도착 오브젝트 선택' : '시작 오브젝트 선택'}</div>}{activeTool === 'link' && !sharePosition && <div className="draw-cursor-label"><Icon name="link" size={13} /> 공유 자료를 놓을 위치 선택</div>}
-        </div><div className="board-footer"><span>무한 좌표 평면 · X/Y축</span><span className="board-footer-center">드래그 이동 · 휠 이동 · Ctrl/⌘ + 휠 확대</span><span>{visibleItemIds.size}/{Object.keys(items).length}개 표시</span></div>
+        </div><div className="board-footer"><span>무한 좌표 평면 · X/Y축</span><span className="board-footer-center">빈 공간 드래그 선택 · 오브젝트 드래그 이동 · Space+드래그 화면 이동</span><span>{visibleItemIds.size}/{Object.keys(items).length}개 표시</span></div>
       </main>
-      <aside className="canvas-sidepanel canvas-inspector"><div className="inspector-heading"><div><span className="section-kicker">WORKSPACE</span><h2>환경 설정</h2></div><button className="icon-button" onClick={() => setShowSettings(true)} aria-label="캔버스 세부 설정"><Icon name="settings" size={18} /></button></div>
+      <aside className={`canvas-sidepanel canvas-inspector${activeTool === 'select' ? ' server-settings-mode' : ' tool-settings-mode'}`}><div className="inspector-heading"><div><span className="section-kicker">{activeTool === 'select' ? 'WORKSPACE' : 'TOOL SETTINGS'}</span><h2>{activeTool === 'select' ? '환경 설정' : `${({ pen: '드로잉', laser: '레이저 포인터', eraser: '지우개', connect: '연결', shape: '도형', text: '텍스트', note: '포스트잇', math: '수식', table: '테이블', code: '코드', link: '동영상·링크' })[activeTool] || '도구'} 설정`}</h2></div>{activeTool === 'select' && <button className="icon-button" onClick={() => setShowSettings(true)} aria-label="캔버스 세부 설정"><Icon name="settings" size={18} /></button>}</div>
+        {activeTool === 'select' && <>
         <section className="inspector-section"><div className="inspector-label">화면 모드</div><div className="theme-switch" role="group" aria-label="테마 선택"><button className={theme === 'light' ? 'active' : ''} aria-pressed={theme === 'light'} onClick={() => changeTheme('light')}><Icon name="sun" size={16} />라이트</button><button className={theme === 'dark' ? 'active' : ''} aria-pressed={theme === 'dark'} onClick={() => changeTheme('dark')}><Icon name="moon" size={16} />다크</button></div></section>
         <section className="inspector-section"><div className="inspector-switch-row"><span><strong>좌표 격자</strong><small>2차 평면 가이드라인</small></span><button className={`toggle-switch${showGrid ? ' on' : ''}`} role="switch" aria-checked={showGrid} onClick={toggleGrid}><i /></button></div><div className="axis-preview"><span>X축</span><i /><span>Y축</span><i className="axis-preview-origin" /></div></section>
         <section className="inspector-section zoom-sensitivity-section"><div className="zoom-sensitivity-heading"><strong>줌 감도</strong><span>{Math.round(zoomSensitivity * 100)}%</span></div><input type="range" min={MIN_ZOOM_SENSITIVITY} max={MAX_ZOOM_SENSITIVITY} step="0.1" value={zoomSensitivity} onChange={changeZoomSensitivity} aria-label="줌 감도" /><small>휠과 확대·축소 버튼 반응 속도</small></section>
-        {activeTool === 'pen' && <section className="inspector-section stroke-width-section"><div className="zoom-sensitivity-heading"><strong>선 굵기</strong><span>{strokeWidth}px</span></div><input type="range" min={MIN_STROKE_WIDTH} max={MAX_STROKE_WIDTH} step="1" value={strokeWidth} onChange={changeStrokeWidth} aria-label="드로잉 선 굵기" /><small>새로 그리는 선에 적용됩니다.</small></section>}
+        {(selectedObjectIds.length > 1 || selectedObjectIds.some((id) => items[id]?.groupId)) && <section className="inspector-section selection-actions-section"><div className="selection-actions-heading"><strong>{selectedObjectIds.length}개 오브젝트 선택됨</strong><button type="button" onClick={() => selectItems([])}>선택 해제</button></div><small className="inspector-hint">빈 공간을 드래그해 여러 개를 선택하고, Shift를 누른 채 개별 선택을 더할 수 있어요.</small>{selectedObjectIds.some((id) => isCollaborativeItem(items[id])) && <small className="inspector-hint">텍스트·포스트잇·코드가 포함된 선택은 Ctrl + S로 함께 저장할 수 있어요.</small>}<div className="selection-actions-buttons"><button type="button" className="button button-dark" disabled={!selectionIsSingleGroup && selectedObjectIds.filter((id) => !['stroke', 'connector'].includes(items[id]?.kind)).length < 2} onClick={() => changeSelectionGroup(!selectionIsSingleGroup)}>{selectionIsSingleGroup ? '그룹 해제' : '그룹화'}</button></div></section>}
+        </>}
+        {activeTool !== 'select' && <section className="inspector-section tool-settings-summary"><strong className="inspector-label">선택한 도구</strong><small className="inspector-hint">캔버스에서 사용할 도구의 설정을 조정하세요. 커서 도구를 선택하면 워크스페이스 설정으로 돌아갑니다.</small></section>}
+        {activeTool === 'pen' && <><section className="inspector-section"><span className="inspector-label">선 색상</span><div className="color-picker inspector-color-picker" aria-label="드로잉 색상">{inkColors.map((ink) => <button key={ink} style={{ '--ink': ink }} className={color === ink ? 'selected' : ''} onClick={() => setColor(ink)} aria-label={`색상 ${ink}`} />)}</div></section><section className="inspector-section stroke-width-section"><div className="zoom-sensitivity-heading"><strong>선 굵기</strong><span>{strokeWidth}px</span></div><input type="range" min={MIN_STROKE_WIDTH} max={MAX_STROKE_WIDTH} step="1" value={strokeWidth} onChange={changeStrokeWidth} aria-label="드로잉 선 굵기" /><small>새로 그리는 선에 적용됩니다.</small></section></>}
         {activeTool === 'laser' && <section className="inspector-section"><strong className="inspector-label">레이저 포인터</strong><small className="inspector-hint">드래그해 가리키면 흔적이 1.6초 동안 서서히 사라집니다. 다른 참여자에게도 실시간으로 보여요.</small></section>}{activeTool === 'eraser' && <section className="inspector-section"><strong className="inspector-label">드로잉 지우개</strong><small className="inspector-hint">지우려는 선 위를 드래그하면 닿은 부분만 지워집니다. 드로잉은 개체로 선택되지 않습니다.</small></section>}
-        {activeTool === 'shape' && <section className="inspector-section"><label className="inspector-label" htmlFor="shape-kind">도형 종류</label><select id="shape-kind" className="shape-select" value={shapeType} onChange={(event) => setShapeType(event.target.value)}><option value="rectangle">사각형</option><option value="ellipse">타원</option><option value="arrow">화살표</option></select>{shapeType === 'arrow' && <><ArrowHeadControls item={{ startHead: shapeArrowStartHead, endHead: shapeArrowEndHead }} onChange={updateNewShapeArrowHead} /><small className="inspector-hint">이 모양은 새 화살표에 적용됩니다.</small></>}<small className="inspector-hint">캔버스를 클릭해 도형을 놓으세요.</small></section>}
+        {activeTool === 'shape' && <><section className="inspector-section"><span className="inspector-label">도형 색상</span><div className="color-picker inspector-color-picker" aria-label="도형 색상">{inkColors.map((ink) => <button key={ink} style={{ '--ink': ink }} className={color === ink ? 'selected' : ''} onClick={() => setColor(ink)} aria-label={`색상 ${ink}`} />)}</div></section><section className="inspector-section"><label className="inspector-label" htmlFor="shape-kind">도형 종류</label><select id="shape-kind" className="shape-select" value={shapeType} onChange={(event) => setShapeType(event.target.value)}><option value="rectangle">사각형</option><option value="ellipse">타원</option><option value="arrow">화살표</option></select>{shapeType === 'arrow' && <><ArrowHeadControls item={{ startHead: shapeArrowStartHead, endHead: shapeArrowEndHead }} onChange={updateNewShapeArrowHead} /><small className="inspector-hint">이 모양은 새 화살표에 적용됩니다.</small></>}<small className="inspector-hint">캔버스를 클릭해 도형을 놓으세요.</small></section></>}
         {activeTool === 'note' && <section className="inspector-section"><span className="inspector-label">포스트잇 색상</span><div className="sticky-note-colors">{stickyNoteColors.map((swatch) => <button key={swatch} type="button" style={{ '--sticky-swatch': swatch }} className={noteColor === swatch ? 'selected' : ''} onClick={() => setNoteColor(swatch)} aria-label={`포스트잇 색상 ${swatch}`} aria-pressed={noteColor === swatch} />)}</div><small className="inspector-hint">캔버스를 클릭해 Markdown 포스트잇을 놓으세요.</small></section>}
         {activeTool === 'link' && <section className="inspector-section"><strong className="inspector-label">동영상·링크 공유</strong><small className="inspector-hint">캔버스를 클릭하고 YouTube, 동영상 주소 또는 웹 링크를 입력하세요.</small></section>}
-        {(activeTool === 'connect' || selectedConnector) && <section className="inspector-section connector-style-section"><strong className="inspector-label">{connectorToEdit ? '선택한 화살표 스타일' : '새 연결 스타일'}</strong><label className="connector-color-control">색상<input type="color" value={connectorToEdit?.color || connectorColor} onChange={(event) => connectorToEdit ? updateConnectorAppearance(selectedItemId, 'color', event.target.value) : setConnectorColor(event.target.value)} /></label><label className="connector-width-control"><span>굵기 <b>{Number(connectorToEdit?.strokeWidth) || connectorWidth}px</b></span><input type="range" min="0.8" max="4" step="0.2" value={Number(connectorToEdit?.strokeWidth) || connectorWidth} onChange={(event) => connectorToEdit ? updateConnectorAppearance(selectedItemId, 'strokeWidth', event.target.value) : setConnectorWidth(Number(event.target.value))} aria-label="연결 화살표 굵기" /></label><ArrowHeadControls item={connectorToEdit || { startHead: connectorStartHead, endHead: connectorEndHead }} onChange={(field, value) => connectorToEdit ? updateArrowHead(selectedItemId, field, value) : updateNewConnectorHead(field, value)} /><small className="inspector-hint">화살표는 회색으로 시작하며, 연결 도구에서 새 연결의 색과 굵기를 설정할 수 있어요.</small>{selectedConnector && <small className="inspector-hint">가운데 조절점을 드래그해 몸통을 원하는 방향으로 휘어보세요.</small>}</section>}
-        {selectedArrow && <section className="inspector-section"><strong className="inspector-label">화살표 곡률 및 머리 모양</strong><small className="inspector-hint">몸통 가운데 조절점을 드래그해 원하는 방향으로 휘어보세요.</small><button type="button" onClick={() => updateShapeArrowBend(selectedItemId, 0)}>직선으로 만들기</button><ArrowHeadControls item={selectedArrow} onChange={(field, value) => updateArrowHead(selectedItemId, field, value)} /></section>}
-        {selectedItem && <section className="inspector-section rotation-section"><div className="zoom-sensitivity-heading"><strong>{selectedConnector ? '곡선 방향' : '객체 회전'}</strong><span>{Math.round(Number(selectedItem.rotation) || 0)}°</span></div>{selectedConnector && <input type="range" min="-180" max="180" step="1" value={Math.round(Number(selectedItem.rotation) || 0)} onChange={(event) => updateItemRotation(selectedItemId, event.target.value)} aria-label="선택한 화살표 곡선 방향" />}{!selectedConnector && <small className="inspector-hint">선택 객체 위쪽 핸들을 드래그해 마우스 방향을 따라 회전하세요.</small>}<button type="button" onClick={() => updateItemRotation(selectedItemId, 0)}>{selectedConnector ? '방향 초기화' : '회전 초기화'}</button></section>}
-        {(activeTool === 'table' || selectedTable) && <section className="inspector-section"><strong className="inspector-label">{activeTool === 'table' ? '새 테이블 설정' : '테이블 설정'}</strong><div className="table-config-grid"><label>행 수<input type="number" min="1" max={MAX_TABLE_ROWS} value={activeTool === 'table' ? tableConfig.rows : selectedTable.rows?.length || 1} onChange={(event) => changeTableCount('rows', event)} /></label><label>열 수<input type="number" min="1" max={MAX_TABLE_COLUMNS} value={activeTool === 'table' ? tableConfig.columns : selectedTable.columns?.length || 1} onChange={(event) => changeTableCount('columns', event)} /></label><label>너비 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.width : Math.round((selectedTable.width || 0.42) * 100)} onChange={(event) => changeTableSize('width', event)} /></label><label>높이 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.height : Math.round((selectedTable.height || 0.32) * 100)} onChange={(event) => changeTableSize('height', event)} /></label></div><small className="inspector-hint">{activeTool === 'table' ? '설정 후 캔버스를 클릭해 놓으세요.' : '셀이나 컬럼 이름을 두 번 클릭해 Markdown으로 편집하세요.'}</small></section>}
+        {(activeTool === 'connect' || (activeTool === 'select' && selectedConnector)) && <section className="inspector-section connector-style-section"><strong className="inspector-label">{connectorToEdit ? '선택한 화살표 스타일' : '새 연결 스타일'}</strong><label className="connector-color-control">색상<input type="color" value={connectorToEdit?.color || connectorColor} onChange={(event) => connectorToEdit ? updateConnectorAppearance(primarySelectedItemId, 'color', event.target.value) : setConnectorColor(event.target.value)} /></label><label className="connector-width-control"><span>굵기 <b>{Number(connectorToEdit?.strokeWidth) || connectorWidth}px</b></span><input type="range" min="0.8" max="4" step="0.2" value={Number(connectorToEdit?.strokeWidth) || connectorWidth} onChange={(event) => connectorToEdit ? updateConnectorAppearance(primarySelectedItemId, 'strokeWidth', event.target.value) : setConnectorWidth(Number(event.target.value))} aria-label="연결 화살표 굵기" /></label><ArrowHeadControls item={connectorToEdit || { startHead: connectorStartHead, endHead: connectorEndHead }} onChange={(field, value) => connectorToEdit ? updateArrowHead(primarySelectedItemId, field, value) : updateNewConnectorHead(field, value)} /><small className="inspector-hint">화살표는 회색으로 시작하며, 연결 도구에서 새 연결의 색과 굵기를 설정할 수 있어요.</small>{selectedConnector && <small className="inspector-hint">가운데 조절점을 드래그해 몸통을 원하는 방향으로 휘어보세요.</small>}</section>}
+        {activeTool === 'select' && selectedArrow && <section className="inspector-section"><strong className="inspector-label">화살표 곡률 및 머리 모양</strong><small className="inspector-hint">몸통 가운데 조절점을 드래그해 원하는 방향으로 휘어보세요.</small><button type="button" onClick={() => updateShapeArrowBend(primarySelectedItemId, 0)}>직선으로 만들기</button><ArrowHeadControls item={selectedArrow} onChange={(field, value) => updateArrowHead(primarySelectedItemId, field, value)} /></section>}
+        {activeTool === 'select' && selectedItem && <section className="inspector-section rotation-section"><div className="zoom-sensitivity-heading"><strong>{selectedConnector ? '곡선 방향' : '객체 회전'}</strong><span>{Math.round(Number(selectedItem.rotation) || 0)}°</span></div>{selectedConnector && <input type="range" min="-180" max="180" step="1" value={Math.round(Number(selectedItem.rotation) || 0)} onChange={(event) => updateItemRotation(primarySelectedItemId, event.target.value)} aria-label="선택한 화살표 곡선 방향" />}{!selectedConnector && <small className="inspector-hint">선택 객체 위쪽 핸들을 드래그해 마우스 방향을 따라 회전하세요.</small>}<button type="button" onClick={() => updateItemRotation(primarySelectedItemId, 0)}>{selectedConnector ? '방향 초기화' : '회전 초기화'}</button></section>}
+        {(activeTool === 'table' || (activeTool === 'select' && selectedTable)) && <section className="inspector-section"><strong className="inspector-label">{activeTool === 'table' ? '새 테이블 설정' : '테이블 설정'}</strong><div className="table-config-grid"><label>행 수<input type="number" min="1" max={MAX_TABLE_ROWS} value={activeTool === 'table' ? tableConfig.rows : selectedTable.rows?.length || 1} onChange={(event) => changeTableCount('rows', event)} /></label><label>열 수<input type="number" min="1" max={MAX_TABLE_COLUMNS} value={activeTool === 'table' ? tableConfig.columns : selectedTable.columns?.length || 1} onChange={(event) => changeTableCount('columns', event)} /></label><label>너비 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.width : Math.round((selectedTable.width || 0.42) * 100)} onChange={(event) => changeTableSize('width', event)} /></label><label>높이 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.height : Math.round((selectedTable.height || 0.32) * 100)} onChange={(event) => changeTableSize('height', event)} /></label></div><small className="inspector-hint">{activeTool === 'table' ? '설정 후 캔버스를 클릭해 놓으세요.' : '셀이나 컬럼 이름을 두 번 클릭해 Markdown으로 편집하세요.'}</small></section>}
         {(activeTool === 'text' || activeTool === 'code') && <section className="inspector-section"><strong className="inspector-label">{activeTool === 'text' ? '텍스트 작성' : '코드 작성'}</strong><small className="inspector-hint">캔버스를 클릭하면 편집 가능한 아이템이 놓입니다.</small></section>}
+        {activeTool === 'select' && <>
         <section className="inspector-section inspector-stats"><div><span>캔버스 ID</span><strong>#{canvasId}</strong></div><div><span>오브젝트</span><strong>{Object.keys(items).length}</strong></div><div><span>설정 revision</span><strong>{settings?.settings_revision ?? '—'}</strong></div></section>
-        <section className="inspector-members"><div className="member-panel-title"><strong>참여자</strong><span>{settings?.participants?.length || 0}명</span></div>{(settings?.participants || []).slice(0, 5).map((person, index) => <div className="member-row" key={`${person.nickname}-${person.tag_number}`}><span className={`avatar member-avatar avatar-tone-${index % 4}`}>{person.nickname.slice(0, 1)}</span><span><strong>{person.nickname} <small>#{person.tag_number}</small></strong><small>{index === 0 ? '캔버스 멤버' : '참여자'}</small></span></div>)}<button className="manage-members-button" onClick={() => setShowSettings(true)}>참여자 관리 <Icon name="arrow" size={14} /></button></section>
+        <section className="inspector-members"><div className="member-panel-title"><strong>참여자</strong><span>{canvasParticipants.length}명</span></div>{canvasParticipants.slice(0, 5).map((person, index) => <div className="member-row" key={`${person.nickname}-${person.tag_number}`}><span className={`avatar member-avatar avatar-tone-${index % 4}`}>{person.nickname.slice(0, 1)}</span><span><strong>{person.nickname} <small>#{person.tag_number}</small></strong><small>{index === 0 ? '캔버스 멤버' : '참여자'}</small></span></div>)}<button className="manage-members-button" onClick={() => setShowSettings(true)}>참여자 관리 <Icon name="arrow" size={14} /></button></section>
+        </>}
         <div className="sidepanel-bottom"><span className="online-indicator"><i /> {connection === 'connected' ? '동기화됨' : '연결 확인 중'}</span></div>
       </aside>
-      <section className="canvas-chat-panel" aria-label="캔버스 채팅"><div className="chat-dock-heading"><span className="conversation-icon"><Icon name="chat" size={16} /></span><div><strong>캔버스 채팅</strong><small>아이디어를 바로 나눠보세요</small></div><span className="chat-message-count">{messages.length}개 표시</span>{hasOlderMessages && <button type="button" className="chat-load-more" style={{ padding: '5px 7px', border: '1px solid var(--line)', borderRadius: 6, background: 'var(--panel-soft)', color: 'var(--ink-muted)', fontSize: 7, whiteSpace: 'nowrap' }} onClick={loadOlderMessages} disabled={chatHistoryLoading}>{chatHistoryLoading ? '불러오는 중' : '이전 메시지'}</button>}</div><div className="message-list">{messages.length ? messages.map((entry) => <div className={`chat-entry${entry.own ? ' own' : ''}`} key={entry.id}><div className="chat-entry-avatar">{entry.sender.slice(0, 1)}</div><div className="chat-entry-content"><div><strong>{entry.sender}</strong><time>{entry.time.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</time></div><div className="chat-message-bubble"><MarkdownText source={entry.text} /></div></div></div>) : <div className="chat-empty"><span>✳</span><strong>첫 대화를 시작해보세요.</strong><small>캔버스에 대한 생각을 멤버들과 나눠요.</small></div>}</div><form className="chat-compose" onSubmit={submitMessage}><textarea rows="2" placeholder="Markdown 메시지를 남겨보세요..." value={message} onChange={(event) => setMessage(event.target.value)} disabled={connection !== 'connected'} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit(); } }} /><div><span>Markdown 지원 · Enter 전송 · Shift + Enter 줄바꿈</span><button type="submit" disabled={!message.trim() || connection !== 'connected'} aria-label="메시지 전송"><Icon name="send" size={16} /></button></div></form></section>
+      <section className="canvas-chat-panel" aria-label="캔버스 채팅"><div className="chat-dock-heading"><span className="conversation-icon"><Icon name="chat" size={16} /></span><div><strong>캔버스 채팅</strong><small>아이디어를 바로 나눠보세요</small></div><span className="chat-message-count">{messages.length}개 표시</span>{hasOlderMessages && <button type="button" className="chat-load-more" style={{ padding: '5px 7px', border: '1px solid var(--line)', borderRadius: 6, background: 'var(--panel-soft)', color: 'var(--ink-muted)', fontSize: 7, whiteSpace: 'nowrap' }} onClick={loadOlderMessages} disabled={chatHistoryLoading}>{chatHistoryLoading ? '불러오는 중' : '이전 메시지'}</button>}</div><div className="message-list">{messages.length ? messages.map((entry) => <div className={`chat-entry${entry.own ? ' own' : ''}`} key={entry.id}><div className="chat-entry-avatar">{entry.sender.slice(0, 1)}</div><div className="chat-entry-content"><div><strong>{entry.sender}</strong><time>{entry.time.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</time></div><div className="chat-message-bubble"><MarkdownText source={entry.text} /></div></div></div>) : <div className="chat-empty"><span>✳</span><strong>첫 대화를 시작해보세요.</strong><small>캔버스에 대한 생각을 멤버들과 나눠요.</small></div>}</div><form className="chat-compose" onSubmit={submitMessage}><textarea rows="2" placeholder="Markdown 메시지를 남겨보세요..." value={message} onChange={(event) => setMessage(event.target.value)} disabled={connection !== 'connected'} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit(); } }} /><div><span>Markdown 지원 · Enter 전송 · Shift + Enter 줄바꿈</span><button type="submit" className="chat-send-button" disabled={!message.trim() || connection !== 'connected'} aria-label="메시지 전송"><Icon name="send" size={16} strokeWidth={2} className="chat-send-glyph" /></button></div></form></section>
     </div>}
     {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{toast}</div>}
     {showSettings && <SettingsDialog settings={settings} pending={settingsPending} onClose={() => setShowSettings(false)} onUpdate={sendSettings} onAddParticipant={(nickname, tag) => sendSettings('participant_add', null, { nickname, tag_number: tag })} onRemoveParticipant={(person) => sendSettings('participant_remove', null, { nickname: person.nickname, tag_number: person.tag_number })} />}

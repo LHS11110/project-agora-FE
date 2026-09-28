@@ -22,7 +22,7 @@ const publicEndpoints = [
   ['PATCH', '/api/canvases/{canvasId}/description', 'Bearer JWT', '비활성 캔버스 설명 변경. JSON { description }; 성공 시 204.'],
   ['PATCH', '/api/canvases/{canvasId}/password', 'Bearer JWT', '비활성 캔버스 비밀번호 설정·해제. JSON { canvas_password }; 빈 값은 해제, 저장 전 해시화, 성공 시 204.'],
   ['POST · DELETE', '/api/canvases/{canvasId}/people', 'Bearer JWT', '참여자 추가(POST)·제외(DELETE). JSON { nickname, tag_number }; 성공 시 204. 활성 캔버스에는 WebSocket 설정을 사용합니다.'],
-  ['POST', '/api/canvases/{canvasId}/access', 'Bearer JWT', '접속 권한 확인. 보호된 캔버스는 JSON { password }. { server_id, ws_port, canvas_access_token } 반환. 다른 캔버스에 활성 접속 중이면 409 CANVAS_003.'],
+  ['POST', '/api/canvases/{canvasId}/access', 'Bearer JWT', '접속 권한 확인. 보호된 캔버스는 JSON { password } 또는 30분간 유효한 { canvas_password_token }을 받습니다. { server_id, ws_port, canvas_access_token, canvas_password_token } 반환. 비밀번호 토큰은 사용자·캔버스·설정 revision에 묶입니다. 다른 캔버스에 활성 접속 중이면 409 CANVAS_003.'],
   ['DELETE', '/api/canvases/{canvasId}', 'Bearer JWT', '소유자 또는 관리자만 삭제할 수 있습니다. 활성 세션이 있으면 409, 성공은 204입니다.'],
 ];
 
