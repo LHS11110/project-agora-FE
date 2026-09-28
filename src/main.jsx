@@ -6,7 +6,9 @@ import App from './App.jsx';
 import './styles.css';
 import './workspace-docs.css';
 import './vector-editor.css';
+import './cursor-smoothing.css';
 import './chat-compose.css';
+import './image-display.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

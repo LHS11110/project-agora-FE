@@ -133,6 +133,15 @@ function drawDraft(graphics, draft, width, height) {
   drawStroke(graphics, draft.points.map((point) => ({ x: point.x * width, y: point.y * height })), colorNumber(draft.color), Number(draft.strokeWidth) || 3.5);
 }
 
+function drawLiveStrokes(graphics, strokes, width, height) {
+  graphics.clear();
+  for (const stroke of strokes || []) {
+    if (!Array.isArray(stroke?.points) || !stroke.points.length) continue;
+    const points = stroke.points.map((point) => ({ x: point.x * width, y: point.y * height }));
+    drawStroke(graphics, points, colorNumber(stroke.color), Number(stroke.strokeWidth) || 3.5);
+  }
+}
+
 function vectorSceneChanged(previous, current) {
   if (!previous) return true;
   const oldKeys = Object.keys(previous);
@@ -149,13 +158,15 @@ function vectorSceneChanged(previous, current) {
   return false;
 }
 
-export default function VectorLayer({ items, referenceItems = items, visibleItemIds, camera, onReady }) {
+export default function VectorLayer({ items, referenceItems = items, visibleItemIds, previewStrokes = [], camera, onReady }) {
   const hostRef = useRef(null);
   const appRef = useRef(null);
   const sceneRef = useRef(null);
+  const liveDrawingRef = useRef(null);
   const draftRef = useRef(null);
   const itemsRef = useRef(items);
   const referenceItemsRef = useRef(referenceItems);
+  const previewStrokesRef = useRef(previewStrokes);
   const visibleItemIdsRef = useRef(visibleItemIds);
   const cameraRef = useRef(camera || { x: 0, y: 0, scale: 1 });
   const lastSceneItemsRef = useRef(null);
@@ -175,6 +186,7 @@ export default function VectorLayer({ items, referenceItems = items, visibleItem
     app.stage.position.set(currentCamera.x, currentCamera.y);
     app.stage.scale.set(currentCamera.scale);
     drawVectorItems(scene, itemsRef.current, width, height, visibleItemIdsRef.current, referenceItemsRef.current);
+    drawLiveStrokes(liveDrawingRef.current, previewStrokesRef.current, width, height);
     if (draft) drawDraft(draftRef.current, hostRef.current.__agoraDraft, width, height);
     app.renderer.render(app.stage);
   };
@@ -199,6 +211,11 @@ export default function VectorLayer({ items, referenceItems = items, visibleItem
   }, [camera]);
 
   useEffect(() => {
+    previewStrokesRef.current = previewStrokes;
+    renderScene();
+  }, [previewStrokes]);
+
+  useEffect(() => {
     let disposed = false;
     let appInitialized = false;
     let observer;
@@ -220,11 +237,13 @@ export default function VectorLayer({ items, referenceItems = items, visibleItem
         return;
       }
       const scene = new Graphics();
+      const liveDrawing = new Graphics();
       const draft = new Graphics();
-      app.stage.addChild(scene, draft);
+      app.stage.addChild(scene, liveDrawing, draft);
       host.appendChild(app.canvas);
       appRef.current = app;
       sceneRef.current = scene;
+      liveDrawingRef.current = liveDrawing;
       draftRef.current = draft;
       let draftPointCount = 0;
       let draftColor = null;
@@ -267,6 +286,7 @@ export default function VectorLayer({ items, referenceItems = items, visibleItem
       if (appRef.current === app) {
         appRef.current = null;
         sceneRef.current = null;
+        liveDrawingRef.current = null;
         draftRef.current = null;
       }
       if (appInitialized) {

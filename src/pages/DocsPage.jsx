@@ -93,6 +93,7 @@ const socketEvents = [
   ['텍스트·코드 저장', '클라이언트 → 서버 · Canvas 소켓', '{ type: "item_save", item_id, item: { automerge_snapshot, automerge_changes } }', 'Ctrl + S에서만 공통 base 스냅샷과 변경 이력을 저장합니다. 같은 아이템 변경은 중복 제거해 합치며 JSON payload 상한은 12 MiB입니다.'],
   ['WebRTC 신호 교환', '클라이언트 ↔ 서버 ↔ 지정 피어 · RTC 소켓', '{ type: "rtc_signal", peer_id, action, description|candidate }', '인증된 같은 캔버스의 대상 소켓 하나에만 SDP/ICE를 전달합니다. 신호는 저장하지 않으며 커서·CRDT 본문은 이 경로를 통과하지 않습니다.'],
   ['커서·Automerge 변경', '피어 ↔ 피어', 'RTCDataChannel: cursor · doc_change · doc_snapshot', '커서는 비신뢰 전달 채널, 문서 변경은 신뢰성 있는 채널로 직접 전송합니다. 서버는 이 데이터 트래픽을 중계하지 않습니다.'],
+  ['실시간 드로잉', '피어 ↔ 피어', 'RTCDataChannel: stroke_preview (start · points · end · cancel)', '신뢰성 있는 agora-sync 채널로 포인트 묶음을 그리는 동안 전송합니다. end 시 피어 화면에 획을 확정하고, 원본 항목은 Canvas WebSocket으로 저장합니다.'],
   ['항목 삭제', '클라이언트 → 서버', '{ type: "item_delete", item_id }', '항목 권한 확인 후 삭제 이벤트를 브로드캐스트합니다.'],
   ['설정 조회', '클라이언트 → 서버', '{ type: "canvas_settings_get" }', '요청자에게 canvas_settings_snapshot을 반환합니다.'],
   ['설정 변경', '클라이언트 → 서버', 'canvas_settings_update', 'request_id, expected_revision, field, value. name·description·password 또는 participant_add/remove를 지정하며 변경은 admin-group 전용입니다.'],

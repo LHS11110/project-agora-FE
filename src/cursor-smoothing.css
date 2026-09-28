@@ -1,0 +1,11 @@
+.remote-cursor {
+  transition: left 45ms linear, top 45ms linear;
+  will-change: left, top;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remote-cursor {
+    transition: none;
+    will-change: auto;
+  }
+}

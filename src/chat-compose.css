@@ -34,7 +34,10 @@
 
 .chat-compose .chat-send-glyph {
   display: block;
-  transform: translate(1px, -1px);
+  justify-self: center;
+  align-self: center;
+  margin: 0;
+  transform: none;
 }
 
 .canvas-app-page[data-theme="dark"] .chat-compose .chat-send-button:disabled {

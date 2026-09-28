@@ -3,6 +3,7 @@ import * as Automerge from '@automerge/automerge/slim';
 import automergeWasmUrl from '@automerge/automerge/automerge.wasm?url';
 import { Link, useNavigate, useParams } from '../routing.jsx';
 import Icon from '../components/Icon.jsx';
+import AuthenticatedImage from '../components/AuthenticatedImage.jsx';
 import MarkdownText from '../components/MarkdownText.jsx';
 import EditableTable from '../components/EditableTable.jsx';
 import ShareComposer from '../components/ShareComposer.jsx';
@@ -21,7 +22,7 @@ import { DEFAULT_ARROW_END_HEAD, DEFAULT_ARROW_START_HEAD, normalizeArrowHead } 
 import { eraseStrokeWithEraser } from '../components/strokeGeometry.js';
 import { DEFAULT_SHAPE_ARROW_BEND, shapeArrowBendFromPointer, shapeArrowGeometry } from '../components/shapeArrowGeometry.js';
 import { createTableData, normalizeTableCount, resizeTableData, updateTableValue, MAX_TABLE_COLUMNS, MAX_TABLE_ROWS } from '../components/tableModel.js';
-import { api, apiUrl, canvasSocketUrl, rtcSocketUrl } from '../api/client.js';
+import { api, canvasSocketUrl, rtcSocketUrl } from '../api/client.js';
 import { useAuth } from '../state/AuthContext.jsx';
 
 const inkColors = ['#263b35', '#d9785e', '#617db2', '#d8a443', '#7e6b9d'];
@@ -37,6 +38,9 @@ const MAX_STROKE_WIDTH = 20;
 const ERASER_RADIUS = 12;
 const LASER_COLOR = '#ff3d67';
 const LASER_FADE_MS = 1600;
+const REALTIME_STROKE_INTERVAL_MS = 32;
+const REALTIME_STROKE_BATCH_SIZE = 128;
+const MAX_REALTIME_STROKE_POINTS = 50000;
 const MINIMAP_ASPECT = 1.6;
 const MINIMAP_OVERVIEW_SCALE = 1.5;
 const MINIMAP_POSITION_KEY = 'agora_canvas_minimap_position';
@@ -203,6 +207,60 @@ function canPeerAccessItem(item, peer) {
   return required.some((group) => allowedGroups.has(String(group)));
 }
 
+function sendStrokePreviewPoints(mesh, session, points) {
+  if (!mesh || !session || !points?.length) return;
+  for (let offset = 0; offset < points.length; offset += REALTIME_STROKE_BATCH_SIZE) {
+    session.sequence += 1;
+    mesh.sendData({
+      type: 'stroke_preview',
+      phase: 'points',
+      stroke_id: session.id,
+      sequence: session.sequence,
+      points: points.slice(offset, offset + REALTIME_STROKE_BATCH_SIZE),
+    }, (peer) => canPeerAccessItem(session.aclItem, peer));
+  }
+}
+
+function sendStrokePreviewStart(mesh, session, firstPoint) {
+  if (!mesh || !session || !firstPoint) return;
+  mesh.sendData({
+    type: 'stroke_preview',
+    phase: 'start',
+    stroke_id: session.id,
+    sequence: 0,
+    points: [firstPoint],
+    color: session.color,
+    stroke_width: session.strokeWidth,
+    permission: session.permission,
+  }, (peer) => canPeerAccessItem(session.aclItem, peer));
+}
+
+function sendStrokePreviewSnapshot(mesh, peer, session, points) {
+  if (!mesh || !peer?.peer_id || !session || !points?.length || !canPeerAccessItem(session.aclItem, peer)) return;
+  mesh.sendToPeer(peer.peer_id, {
+    type: 'stroke_preview',
+    phase: 'start',
+    stroke_id: session.id,
+    sequence: 0,
+    points: [points[0]],
+    color: session.color,
+    stroke_width: session.strokeWidth,
+    permission: session.permission,
+  });
+  let sequence = 0;
+  for (let offset = 1; offset < points.length; offset += REALTIME_STROKE_BATCH_SIZE) {
+    sequence += 1;
+    mesh.sendToPeer(peer.peer_id, {
+      type: 'stroke_preview',
+      phase: 'points',
+      stroke_id: session.id,
+      sequence,
+      points: points.slice(offset, offset + REALTIME_STROKE_BATCH_SIZE),
+    });
+  }
+  session.sequence = Math.max(session.sequence, sequence);
+}
+
 function cursorColor(nickname, tagNumber) {
   const identity = `${nickname || ''}#${tagNumber ?? ''}`;
   let hash = 2166136261;
@@ -241,7 +299,7 @@ function SettingsDialog({ settings, pending, onClose, onUpdate, onAddParticipant
   </section></div>;
 }
 
-function CanvasObject({ id, item, bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, onStartEditing, onTextChange, onMetadataChange, onFormulaChange, onTableChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
+function CanvasObject({ id, item, bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, token, onStartEditing, onTextChange, onMetadataChange, onFormulaChange, onTableChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
   const formula = String(item.formula ?? item.text ?? 'x + y');
   const [formulaDraft, setFormulaDraft] = useState(formula);
   useEffect(() => { setFormulaDraft(formula); }, [id, formula]);
@@ -316,7 +374,7 @@ function CanvasObject({ id, item, bounds, selected, allowSingleSelectionControls
       : null;
     return withResizeHandles(<div key={id} className={`${classes} vector-object-hit`} style={vectorStyle} data-item-id={id} {...handlers} onDoubleClick={(event) => { if (activeTool !== 'select') return; event.preventDefault(); event.stopPropagation(); onConnectorDoubleClick(id, item); }} title="한 번 클릭해 선택 · 두 번 클릭해 연결된 객체로 이동">{curvePath && <svg className="connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} />{connectorEnds.map((point, index) => <circle key={index} cx={point.x - offsetX} cy={point.y - offsetY} r="9" />)}</svg>}{bendHandle}</div>);
   }
-  if (item.kind === 'image') return withResizeHandles(<div key={id} className={`${classes} image-object`} style={style} {...handlers}><img src={item.src} alt={item.filename || '공유된 이미지'} /><div className="object-caption"><Icon name="image" size={13} />{item.filename || '공유 이미지'}</div></div>);
+  if (item.kind === 'image') return withResizeHandles(<div key={id} className={`${classes} image-object`} style={style} {...handlers}><AuthenticatedImage src={item.src} token={token} alt={item.filename || '공유된 이미지'} fallback={<div className="image-object-fallback"><Icon name="image" size={19} /><span>이미지를 표시할 수 없어요</span></div>} loadingFallback={<div className="image-object-fallback"><Icon name="image" size={19} /><span>이미지를 불러오는 중…</span></div>} /><div className="object-caption"><Icon name="image" size={13} />{item.filename || '공유 이미지'}</div></div>);
   if (item.kind === 'link') return withResizeHandles(<div key={id} className={`${classes} media-link-object${item.mediaType === 'link' ? ' external-link-object' : ' video-link-object'}`} style={style} data-item-id={id} {...handlers}>
     <div className="shared-media-header"><span className="shared-media-drag-handle" title="여기를 끌어 자료를 이동하세요"><Icon name={item.mediaType === 'link' ? 'link' : 'image'} size={13} />{item.mediaType === 'youtube' ? `YouTube · ${item.title || '동영상'}` : item.mediaType === 'video' ? `동영상 · ${item.title || '재생'}` : '링크'}</span></div>
     <SharedMediaContent item={item} />
@@ -381,6 +439,8 @@ function CanvasWorkspace() {
   const spacePressedRef = useRef(false);
   const lastCursorSentAtRef = useRef(0);
   const drawingRef = useRef(false);
+  const drawingSessionRef = useRef(null);
+  const remoteDrawingStrokesRef = useRef(new Map());
   const laserDrawingRef = useRef(null);
   const eraserRef = useRef(null);
   const eraserCursorRef = useRef(null);
@@ -394,6 +454,7 @@ function CanvasWorkspace() {
   const [peerList, setPeerList] = useState([]);
   const [remoteCursors, setRemoteCursors] = useState({});
   const [remoteEditors, setRemoteEditors] = useState({});
+  const [remoteDrawingStrokes, setRemoteDrawingStrokes] = useState([]);
   const [laserStrokes, setLaserStrokes] = useState([]);
   const [dirtyItems, setDirtyItems] = useState(() => new Set());
   const [camera, setCamera] = useState({ x: 0, y: 0, scale: 1 });
@@ -435,8 +496,6 @@ function CanvasWorkspace() {
     } catch { return null; }
   });
   const [editingId, setEditingId] = useState(null);
-  const [imageFailed, setImageFailed] = useState(false);
-  const [canvasImageSrc, setCanvasImageSrc] = useState('');
   const [messages, setMessages] = useState([]);
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const [chatHistoryLoading, setChatHistoryLoading] = useState(false);
@@ -776,9 +835,76 @@ function CanvasWorkspace() {
     window.setTimeout(() => setToast(''), 2400);
     return true;
   }, [getCollaborativeBaseDoc, getCollaborativeDoc, sendItemChange]);
-  const receivePeerData = useCallback((peer, data) => {
+  const receivePeerData = useCallback((peer, data, channelName) => {
     if (!data || typeof data !== 'object') return;
     const localPeer = { groups: groupsRef.current, is_admin: groupsRef.current.includes('admin-group') };
+    if (data.type === 'stroke_preview') {
+      if (channelName !== 'agora-sync') return;
+      const strokeId = String(data.stroke_id || '');
+      const phase = data.phase;
+      const sequence = Number(data.sequence);
+      const points = data.points;
+      if (!peer?.peer_id || !strokeId || strokeId.length > 100
+        || !['start', 'points', 'end', 'cancel'].includes(phase)
+        || !Number.isSafeInteger(sequence) || sequence < 0 || sequence > 1000000
+        || !Array.isArray(points) || points.length > REALTIME_STROKE_BATCH_SIZE
+        || points.some((point) => !point || typeof point.x !== 'number' || typeof point.y !== 'number'
+          || !Number.isFinite(point.x) || !Number.isFinite(point.y) || Math.abs(point.x) > 1e6 || Math.abs(point.y) > 1e6)) return;
+
+      const key = `${peer.peer_id}:${strokeId}`;
+      const remoteStrokes = remoteDrawingStrokesRef.current;
+      if (phase === 'start') {
+        if (sequence !== 0 || points.length !== 1 || typeof data.permission !== 'string'
+          || !data.permission || data.permission.length > 128
+          || typeof data.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(data.color)
+          || typeof data.stroke_width !== 'number' || !Number.isFinite(data.stroke_width)) return;
+        const strokeItem = { kind: 'stroke', permission: data.permission };
+        if (!canPeerAccessItem(strokeItem, localPeer) || !canPeerAccessItem(strokeItem, peer)) return;
+        if (remoteStrokes.get(key)?.sequence >= sequence) return;
+        remoteStrokes.set(key, {
+          id: strokeId,
+          peerId: peer.peer_id,
+          sequence,
+          points,
+          color: data.color,
+          strokeWidth: Math.max(1, Math.min(MAX_STROKE_WIDTH, data.stroke_width)),
+          permission: data.permission,
+        });
+        setRemoteDrawingStrokes([...remoteStrokes.values()]);
+        return;
+      }
+
+      const previous = remoteStrokes.get(key);
+      if (!previous || sequence <= previous.sequence
+        || previous.points.length + points.length > MAX_REALTIME_STROKE_POINTS) return;
+      if (phase === 'cancel') {
+        remoteStrokes.delete(key);
+        setRemoteDrawingStrokes([...remoteStrokes.values()]);
+        return;
+      }
+      const nextPoints = [...previous.points, ...points];
+      if (phase === 'points') {
+        remoteStrokes.set(key, { ...previous, sequence, points: nextPoints });
+        setRemoteDrawingStrokes([...remoteStrokes.values()]);
+        return;
+      }
+
+      remoteStrokes.delete(key);
+      setRemoteDrawingStrokes([...remoteStrokes.values()]);
+      const item = {
+        kind: 'stroke',
+        points: nextPoints,
+        color: previous.color,
+        strokeWidth: previous.strokeWidth,
+        permission: previous.permission,
+      };
+      if (!itemsRef.current[strokeId]) {
+        itemsRef.current = { ...itemsRef.current, [strokeId]: item };
+        setItems((current) => ({ ...current, [strokeId]: item }));
+        refreshSpatialIndex();
+      }
+      return;
+    }
     if (data.type === 'editor_presence' && data.item_id && typeof data.editing === 'boolean' && peer?.peer_id) {
       const key = String(data.item_id);
       const item = itemsRef.current[key];
@@ -1027,9 +1153,11 @@ function CanvasWorkspace() {
       if (peerMeshRef.current) peerMeshRef.current.close();
       peerMeshRef.current = null;
       syncedPeersRef.current.clear();
+      remoteDrawingStrokesRef.current.clear();
       setPeerList([]);
       setRemoteCursors({});
       setRemoteEditors({});
+      setRemoteDrawingStrokes([]);
     };
     async function connect() {
       setConnection('connecting'); setError(''); setItemsInitialized(false);
@@ -1138,11 +1266,24 @@ function CanvasWorkspace() {
                   setRemoteCursors((current) => Object.fromEntries(Object.entries(current).filter(([peerId]) => activeIds.has(peerId))));
                   setRemoteEditors((current) => Object.fromEntries(Object.entries(current).filter(([peerId]) => activeIds.has(peerId))));
                   setLaserStrokes((current) => current.filter((stroke) => !stroke.peerId || activeIds.has(stroke.peerId)));
+                  let drawingsChanged = false;
+                  for (const [key, stroke] of remoteDrawingStrokesRef.current) {
+                    if (activeIds.has(stroke.peerId)) continue;
+                    remoteDrawingStrokesRef.current.delete(key);
+                    drawingsChanged = true;
+                  }
+                  if (drawingsChanged) setRemoteDrawingStrokes([...remoteDrawingStrokesRef.current.values()]);
                   for (const peer of peers) {
                     if (!peer.connected) continue;
                     if (editingIdRef.current) broadcastEditorPresence(editingIdRef.current, true);
                     if (syncedPeersRef.current.has(peer.peer_id)) continue;
                     syncedPeersRef.current.add(peer.peer_id);
+                    const activeStroke = drawingSessionRef.current;
+                    if (activeStroke) {
+                      const pendingPoints = activeStroke.pendingPoints.splice(0);
+                      if (pendingPoints.length) sendStrokePreviewPoints(mesh, activeStroke, pendingPoints);
+                      sendStrokePreviewSnapshot(mesh, peer, activeStroke, draftRef.current);
+                    }
                     for (const [id, item] of Object.entries(itemsRef.current)) {
                       if (!isCollaborativeItem(item) || !canPeerAccessItem(item, peer)) continue;
                       try {
@@ -2055,7 +2196,23 @@ function CanvasWorkspace() {
     }
     if (activeTool !== 'pen') return;
     event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId);
-    drawingRef.current = true; draftRef.current = [pointerPosition(event)];
+    const point = pointerPosition(event);
+    const strokeId = createId();
+    const session = {
+      id: strokeId,
+      sequence: 0,
+      color,
+      strokeWidth,
+      permission,
+      aclItem: { kind: 'stroke', permission },
+      lastSentAt: performance.now(),
+      pendingPoints: [],
+    };
+    drawingRef.current = true;
+    drawingSessionRef.current = session;
+    draftRef.current = [point];
+    vectorDraftRef.current?.({ points: draftRef.current, color: session.color, strokeWidth: session.strokeWidth });
+    sendStrokePreviewStart(peerMeshRef.current, session, point);
   };
   const moveDrawing = (event) => {
     updateEraserCursor(event);
@@ -2080,8 +2237,17 @@ function CanvasWorkspace() {
     const point = pointerPosition(event);
     const previous = draftRef.current[draftRef.current.length - 1];
     if (previous && Math.hypot(point.x - previous.x, point.y - previous.y) < 0.0018) return;
+    if (draftRef.current.length >= MAX_REALTIME_STROKE_POINTS) return;
     draftRef.current.push(point);
-    vectorDraftRef.current?.({ points: draftRef.current, color, strokeWidth });
+    const session = drawingSessionRef.current;
+    if (!session) return;
+    session.pendingPoints.push(point);
+    vectorDraftRef.current?.({ points: draftRef.current, color: session.color, strokeWidth: session.strokeWidth });
+    const now = performance.now();
+    if (now - session.lastSentAt >= REALTIME_STROKE_INTERVAL_MS || session.pendingPoints.length >= REALTIME_STROKE_BATCH_SIZE) {
+      sendStrokePreviewPoints(peerMeshRef.current, session, session.pendingPoints.splice(0));
+      session.lastSentAt = now;
+    }
   };
   const stopDrawing = (event) => {
     if (selectionRef.current) { finishMarqueeSelection(event); return; }
@@ -2103,11 +2269,33 @@ function CanvasWorkspace() {
     }
     if (!drawingRef.current) return;
     drawingRef.current = false; event.currentTarget.releasePointerCapture?.(event.pointerId);
-    const points = draftRef.current; draftRef.current = [];
+    const points = draftRef.current;
+    const session = drawingSessionRef.current;
+    drawingSessionRef.current = null;
+    draftRef.current = [];
     vectorDraftRef.current?.(null);
     if (!points.length) return;
-    const id = createId();
-    if (!addItem(id, { kind: 'stroke', points, color, strokeWidth, permission })) setToast('실시간 서버에 연결된 뒤 그릴 수 있어요.');
+    const id = session?.id || createId();
+    const item = {
+      kind: 'stroke',
+      points,
+      color: session?.color || color,
+      strokeWidth: session?.strokeWidth || strokeWidth,
+      permission: session?.permission || permission,
+    };
+    if (session) sendStrokePreviewPoints(peerMeshRef.current, session, session.pendingPoints.splice(0));
+    const added = addItem(id, item);
+    if (!added) setToast('실시간 서버에 연결된 뒤 그릴 수 있어요.');
+    if (session) {
+      session.sequence += 1;
+      peerMeshRef.current?.sendData({
+        type: 'stroke_preview',
+        phase: added ? 'end' : 'cancel',
+        stroke_id: session.id,
+        sequence: session.sequence,
+        points: [],
+      }, (peer) => canPeerAccessItem(session.aclItem, peer));
+    }
   };
   const placeSharedLink = (shared) => {
     if (!sharePosition) return;
@@ -2466,60 +2654,12 @@ function CanvasWorkspace() {
     document.addEventListener('pointerdown', onDocumentPointerDown, true);
     return () => document.removeEventListener('pointerdown', onDocumentPointerDown, true);
   }, [editingId, finishEditing]);
-  useEffect(() => {
-    let cancelled = false;
-    let objectUrl = '';
-    const image = canvas?.image;
-    setImageFailed(false);
-    setCanvasImageSrc('');
-    if (!image) return undefined;
-
-    if (image.startsWith('data:') || image.startsWith('blob:')) {
-      setCanvasImageSrc(image);
-      return undefined;
-    }
-
-    let imageUrl;
-    try {
-      imageUrl = new URL(apiUrl(image), window.location.href);
-    } catch {
-      setImageFailed(true);
-      return undefined;
-    }
-    const apiOrigin = new URL(apiUrl('/'), window.location.href).origin;
-    if (imageUrl.origin !== apiOrigin) {
-      setCanvasImageSrc(imageUrl.href);
-      return undefined;
-    }
-
-    fetch(imageUrl.href, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then((response) => {
-        if (!response.ok) throw new Error(`대표 이미지 요청 실패 (${response.status})`);
-        return response.blob();
-      })
-      .then((blob) => {
-        if (cancelled) return;
-        objectUrl = URL.createObjectURL(blob);
-        setCanvasImageSrc(objectUrl);
-      })
-      .catch(() => {
-        if (!cancelled) setImageFailed(true);
-      });
-
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [canvas?.image, token]);
-
   const canvasParticipants = uniqueCanvasParticipants(settings?.participants);
   const otherParticipants = uniqueCanvasParticipants(settings?.participants, user);
 
   return <div className="canvas-app-page" data-theme={theme}>
     <header className="canvas-topbar">
-      <div className="canvas-title-group"><Link to="/search" className="canvas-back" aria-label="캔버스 목록"><Icon name="back" size={19} /></Link><div className="canvas-cover-image">{canvas?.image && !imageFailed && canvasImageSrc ? <img src={canvasImageSrc} alt="캔버스 대표 이미지" onError={() => setImageFailed(true)} /> : <div className="canvas-cover-art"><i /><i /><i /><span>AG</span></div>}</div><div className="canvas-title-copy"><span>AGORA CANVAS · #{canvasId}</span><h1>{canvas?.canvas_name || `캔버스 ${canvasId}`}</h1></div></div>
+      <div className="canvas-title-group"><Link to="/search" className="canvas-back" aria-label="캔버스 목록"><Icon name="back" size={19} /></Link><div className="canvas-cover-image"><AuthenticatedImage src={canvas?.image} token={token} alt="캔버스 대표 이미지" fallback={<div className="canvas-cover-art"><i /><i /><i /><span>AG</span></div>} loadingFallback={<div className="canvas-cover-art"><i /><i /><i /><span>AG</span></div>} /></div><div className="canvas-title-copy"><span>AGORA CANVAS · #{canvasId}</span><h1>{canvas?.canvas_name || `캔버스 ${canvasId}`}</h1></div></div>
       <div className="canvas-header-right"><div className="canvas-description-card"><span>캔버스 설명</span><p>{canvas?.description || '함께 아이디어를 모으고 실시간으로 만들어가는 공간입니다.'}</p></div><div className="canvas-top-right"><span className={`connection-pill ${connection}`}><i />{connection === 'connected' ? '실시간 연결됨' : connection === 'connecting' ? '연결 중' : '연결 끊김'}</span><div className="collaborator-avatars"><span>{(user?.nickname || 'A').slice(0, 1)}</span>{otherParticipants.slice(0, 2).map((person) => <span key={`${person.nickname}-${person.tag_number}`}>{person.nickname.slice(0, 1)}</span>)}</div><button className="button button-outline canvas-settings-button" onClick={() => setShowSettings(true)}><Icon name="settings" size={17} /><span>설정</span></button></div></div>
     </header>
     {error ? <div className="canvas-error-state"><div className="error-art"><Icon name="grid" size={30} /></div><span className="section-kicker">CANVAS CONNECTION</span><h1>캔버스를 열 수 없어요.</h1><p>{error}</p><div><button className="button button-dark" onClick={() => window.location.reload()}>다시 연결하기</button><Link className="button button-outline" to="/search">캔버스 목록</Link></div></div> : <div className="canvas-workspace">
@@ -2533,9 +2673,9 @@ function CanvasWorkspace() {
         <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ '--grid-size': `${20 * camera.scale}px`, '--grid-dot-radius': `${camera.scale}px`, '--grid-position-x': `${camera.x}px`, '--grid-position-y': `${camera.y}px` }} ref={boardRef} tabIndex={-1} onPointerDown={startDrawing} onPointerMove={moveDrawing} onPointerUp={stopDrawing} onPointerCancel={stopDrawing} onPointerLeave={hideCursor}>
           <div className="stage-label"><span>AGORA / {String(canvasId).padStart(2, '0')}</span><b>{canvas?.canvas_name || '공유 캔버스'}</b></div>
           <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true"><span className="coordinate-x" /><span className="coordinate-y" /><i className="coordinate-origin">0</i><b className="coordinate-x-label">X</b><b className="coordinate-y-label">Y</b></div>
-          <VectorLayer items={visibleVectorItems} referenceItems={items} camera={camera} onReady={(setDraft) => { vectorDraftRef.current = setDraft; }} />
+          <VectorLayer items={visibleVectorItems} referenceItems={items} previewStrokes={remoteDrawingStrokes} camera={camera} onReady={(setDraft) => { vectorDraftRef.current = setDraft; }} />
           <div className="canvas-scene" ref={sceneRef} style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}>
-            {sortedItems.map(([id, item, bounds, connectorCurve]) => <CanvasObject key={id} id={id} item={item} bounds={bounds} connectorCurve={connectorCurve} viewSize={boardSize} selected={selectedObjectIdSet.has(String(id))} allowSingleSelectionControls={hasSingleSelection} activeTool={activeTool} connectionStartId={connectionStartId} editing={editingId === id} dirty={dirtyItems.has(String(id))} remoteEditors={Object.values(remoteEditors).filter((editor) => editor.itemId === String(id))} onStartEditing={startEditing} onTextChange={updateCollaborativeText} onMetadataChange={updateCollaborativeMetadata} onFormulaChange={updateFormulaItem} onTableChange={updateTableItem} onStopEditing={stopEditing} onSave={saveCollaborativeItem} onPointerDown={startObjectDrag} onResizeStart={startObjectResize} onArrowBendStart={startArrowBend} onPointerMove={moveObject} onPointerUp={stopObjectDrag} onCopy={(value) => navigator.clipboard?.writeText(value)} onConnectorDoubleClick={focusConnectorTarget} />)}
+            {sortedItems.map(([id, item, bounds, connectorCurve]) => <CanvasObject key={id} id={id} item={item} bounds={bounds} connectorCurve={connectorCurve} viewSize={boardSize} token={token} selected={selectedObjectIdSet.has(String(id))} allowSingleSelectionControls={hasSingleSelection} activeTool={activeTool} connectionStartId={connectionStartId} editing={editingId === id} dirty={dirtyItems.has(String(id))} remoteEditors={Object.values(remoteEditors).filter((editor) => editor.itemId === String(id))} onStartEditing={startEditing} onTextChange={updateCollaborativeText} onMetadataChange={updateCollaborativeMetadata} onFormulaChange={updateFormulaItem} onTableChange={updateTableItem} onStopEditing={stopEditing} onSave={saveCollaborativeItem} onPointerDown={startObjectDrag} onResizeStart={startObjectResize} onArrowBendStart={startArrowBend} onPointerMove={moveObject} onPointerUp={stopObjectDrag} onCopy={(value) => navigator.clipboard?.writeText(value)} onConnectorDoubleClick={focusConnectorTarget} />)}
             {selectedItem && selectedItem.kind !== 'connector' && activeTool === 'select' && !editingId && <RotationHandles sceneRef={sceneRef} id={String(primarySelectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startObjectRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
             {Object.entries(remoteCursors).filter(([, cursor]) => cursor.visible !== false && cursor.x >= visibleBounds.minX && cursor.x <= visibleBounds.maxX && cursor.y >= visibleBounds.minY && cursor.y <= visibleBounds.maxY).map(([peerId, cursor]) => <div className="remote-cursor" key={peerId} style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%`, '--cursor-color': cursor.color }} title={`${cursor.nickname}#${cursor.tag_number}`}><svg viewBox="0 0 18 22" aria-hidden="true"><path d="M1 1v17l4.5-4.3 3.1 7.1 3.1-1.4-3.2-6.8H15z" /></svg><span>{cursor.nickname}</span></div>)}
           </div>
