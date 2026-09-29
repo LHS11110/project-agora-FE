@@ -39,6 +39,10 @@ export default function AuthenticatedImage({ src, token, alt = '', className, fa
     }
 
     fetch(imageUrl.href, {
+      // Canvas representative-image URLs are stable by canvas ID, while the
+      // backing file can be replaced (for example after restoring/reusing IDs).
+      // Do not let the browser reuse a previous canvas's bytes for that URL.
+      cache: 'no-store',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then((response) => {

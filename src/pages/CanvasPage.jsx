@@ -1,4 +1,4 @@
-import { cloneElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { cloneElement, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as Automerge from '@automerge/automerge/slim';
 import automergeWasmUrl from '@automerge/automerge/automerge.wasm?url';
 import { Link, useNavigate, useParams } from '../routing.jsx';
@@ -195,6 +195,56 @@ function isCollaborativeItem(item) {
   return ['text', 'note', 'code'].includes(item?.kind);
 }
 
+function isCanvasSyncItem(item) {
+  return ['image', 'link', 'code', 'note', 'table', 'shape', 'text', 'math', 'stroke', 'connector'].includes(item?.kind);
+}
+
+const INITIAL_SYNC_VERSION = Object.freeze({ clock: 0, actor: 'server' });
+const MAX_PENDING_PEER_EVENT_SIZE = 2 * 1024 * 1024;
+const MAX_PENDING_PEER_EVENTS_SIZE = 16 * 1024 * 1024;
+const MAX_PENDING_PEER_EVENTS_PER_ITEM = 128;
+
+function normalizeSyncVersion(version) {
+  if (!version || !Number.isSafeInteger(version.clock) || version.clock < 0
+    || version.clock > Date.now() + 30 * 24 * 60 * 60 * 1000
+    || typeof version.actor !== 'string' || !version.actor || version.actor.length > 128) return null;
+  return { clock: version.clock, actor: version.actor };
+}
+
+function compareSyncVersions(left, right) {
+  const a = normalizeSyncVersion(left) || INITIAL_SYNC_VERSION;
+  const b = normalizeSyncVersion(right) || INITIAL_SYNC_VERSION;
+  if (a.clock !== b.clock) return a.clock < b.clock ? -1 : 1;
+  return a.actor === b.actor ? 0 : a.actor < b.actor ? -1 : 1;
+}
+
+function nextPeerSyncVersion(clockRef, actorRef) {
+  const clock = Math.max(Date.now(), clockRef.current + 1);
+  clockRef.current = clock;
+  return { clock, actor: actorRef.current };
+}
+
+function queuePendingPeerEvent(eventsRef, sizeRef, itemId, peer, data, channelName) {
+  const size = typeof data.change === 'string' ? data.change.length : JSON.stringify(data).length;
+  if (size > MAX_PENDING_PEER_EVENT_SIZE || sizeRef.current + size > MAX_PENDING_PEER_EVENTS_SIZE) return false;
+  let events = eventsRef.current.get(itemId);
+  if (!events) {
+    events = [];
+    eventsRef.current.set(itemId, events);
+  }
+  if (events.length >= MAX_PENDING_PEER_EVENTS_PER_ITEM) return false;
+  events.push({ peer, data, channelName, size });
+  sizeRef.current += size;
+  return true;
+}
+
+function takePendingPeerEvents(eventsRef, sizeRef, itemId) {
+  const events = eventsRef.current.get(itemId) || [];
+  eventsRef.current.delete(itemId);
+  for (const event of events) sizeRef.current = Math.max(0, sizeRef.current - event.size);
+  return events.sort((left, right) => compareSyncVersions(left.data.version, right.data.version));
+}
+
 function canPeerAccessItem(item, peer) {
   if (peer?.is_admin) return true;
   const allowedGroups = new Set(Array.isArray(peer?.groups) ? peer.groups : []);
@@ -270,6 +320,52 @@ function cursorColor(nickname, tagNumber) {
   }
   return `hsl(${(hash >>> 0) % 360} 66% 43%)`;
 }
+
+const RemoteCursorLayer = memo(function RemoteCursorLayer({ updaterRef, activePeerIds, visibleBounds }) {
+  const [cursors, setCursors] = useState({});
+
+  useEffect(() => {
+    const updateCursor = (peer, cursor) => {
+      if (!peer?.peer_id) return;
+      if (cursor.visible === false) {
+        setCursors((current) => {
+          if (!current[peer.peer_id]) return current;
+          const next = { ...current };
+          delete next[peer.peer_id];
+          return next;
+        });
+        return;
+      }
+      const x = Number(cursor.x);
+      const y = Number(cursor.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+      setCursors((current) => {
+        const previous = current[peer.peer_id];
+        const color = cursorColor(peer.nickname, peer.tag_number);
+        if (previous?.x === x && previous?.y === y && previous?.color === color
+          && previous?.nickname === peer.nickname && previous?.tag_number === peer.tag_number) return current;
+        return { ...current, [peer.peer_id]: { ...peer, x, y, color } };
+      });
+    };
+    updaterRef.current = updateCursor;
+    return () => {
+      if (updaterRef.current === updateCursor) updaterRef.current = null;
+    };
+  }, [updaterRef]);
+
+  useEffect(() => {
+    const active = new Set(activePeerIds.split('\n').filter(Boolean));
+    setCursors((current) => {
+      const nextEntries = Object.entries(current).filter(([peerId]) => active.has(peerId));
+      return nextEntries.length === Object.keys(current).length ? current : Object.fromEntries(nextEntries);
+    });
+  }, [activePeerIds]);
+
+  return Object.entries(cursors)
+    .filter(([, cursor]) => cursor.x >= visibleBounds.minX && cursor.x <= visibleBounds.maxX
+      && cursor.y >= visibleBounds.minY && cursor.y <= visibleBounds.maxY)
+    .map(([peerId, cursor]) => <div className="remote-cursor" key={peerId} style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%`, '--cursor-color': cursor.color }} title={`${cursor.nickname}#${cursor.tag_number}`}><svg viewBox="0 0 18 22" aria-hidden="true"><path d="M1 1v17l4.5-4.3 3.1 7.1 3.1-1.4-3.2-6.8H15z" /></svg><span>{cursor.nickname}</span></div>);
+});
 
 function uniqueCanvasParticipants(participants, excludedUser) {
   const seen = new Set();
@@ -421,11 +517,19 @@ function CanvasWorkspace() {
   const itemsRef = useRef({});
   const pendingItemChangesRef = useRef([]);
   const rejectedEventPongsRef = useRef(0);
+  const syncClockRef = useRef(Date.now());
+  const syncActorRef = useRef(null);
+  if (!syncActorRef.current) syncActorRef.current = createId();
+  const itemSyncVersionsRef = useRef(new Map());
+  const deletedItemSyncVersionsRef = useRef(new Map());
+  const pendingPeerItemEventsRef = useRef(new Map());
+  const pendingPeerItemEventsSizeRef = useRef(0);
   const collaborativeDocsRef = useRef(new Map());
   const collaborativeBaseDocsRef = useRef(new Map());
   const groupsRef = useRef([]);
   const dirtyItemsRef = useRef(new Set());
   const peerMeshRef = useRef(null);
+  const remoteCursorUpdaterRef = useRef(null);
   const syncedPeersRef = useRef(new Set());
   const newCollaborativeItemsRef = useRef(new Set());
   const editingIdRef = useRef(null);
@@ -452,7 +556,6 @@ function CanvasWorkspace() {
   const [spatialRevision, setSpatialRevision] = useState(0);
   const [groups, setGroups] = useState([]);
   const [peerList, setPeerList] = useState([]);
-  const [remoteCursors, setRemoteCursors] = useState({});
   const [remoteEditors, setRemoteEditors] = useState({});
   const [remoteDrawingStrokes, setRemoteDrawingStrokes] = useState([]);
   const [laserStrokes, setLaserStrokes] = useState([]);
@@ -615,7 +718,11 @@ function CanvasWorkspace() {
     const nextItem = { ...item, [field]: nextDoc.content };
     itemsRef.current = { ...itemsRef.current, [id]: nextItem };
     setItems((current) => ({ ...current, [id]: nextItem }));
-    if (change) peerMeshRef.current?.sendData({ type: 'doc_change', item_id: String(id), field, change }, (peer) => canPeerAccessItem(item, peer));
+    if (change) {
+      const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
+      itemSyncVersionsRef.current.set(String(id), version);
+      peerMeshRef.current?.sendData({ type: 'doc_change', item_id: String(id), field, change, version }, (peer) => canPeerAccessItem(item, peer));
+    }
     markItemDirty(id);
   }, [getCollaborativeDoc, markItemDirty]);
   const updateCollaborativeMetadata = useCallback((id, field, value) => {
@@ -632,7 +739,9 @@ function CanvasWorkspace() {
     itemsRef.current = { ...itemsRef.current, [key]: nextItem };
     setItems((current) => ({ ...current, [key]: nextItem }));
     markItemDirty(key);
-    peerMeshRef.current?.sendData({ type: 'item_metadata', item_id: key, field, value: nextValue }, (peer) => canPeerAccessItem(nextItem, peer));
+    const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
+    itemSyncVersionsRef.current.set(key, version);
+    peerMeshRef.current?.sendData({ type: 'item_metadata', item_id: key, field, value: nextValue, version }, (peer) => canPeerAccessItem(nextItem, peer));
   }, [markItemDirty]);
   const broadcastEditorPresence = useCallback((id, editing) => {
     const key = String(id);
@@ -640,18 +749,73 @@ function CanvasWorkspace() {
     if (!isCollaborativeItem(item)) return;
     peerMeshRef.current?.sendData({ type: 'editor_presence', item_id: key, editing: Boolean(editing) }, (peer) => canPeerAccessItem(item, peer));
   }, []);
+  const broadcastPeerItemState = useCallback((change) => {
+    const mesh = peerMeshRef.current;
+    if (!mesh || !change?.syncVersion) return;
+    if (change.syncAction === 'delete') {
+      const permission = change.previous?.permission ?? change.permission;
+      const accessItem = { permission };
+      const queued = mesh.sendData({
+        type: 'item_sync_state', action: 'delete', item_id: change.id,
+        permission, version: change.syncVersion,
+      }, (peer) => canPeerAccessItem(accessItem, peer));
+      if (!queued) setToast('WebRTC 동기화 대기열이 가득 차 일부 변경을 전달하지 못했습니다. 재접속하면 다시 동기화됩니다.');
+      return;
+    }
+    const item = change.item;
+    if (!item || !isCanvasSyncItem(item) || isCollaborativeItem(item)) return;
+    let queued = mesh.sendData({
+      type: 'item_sync_state', action: 'upsert', item_id: change.id,
+      item, version: change.syncVersion,
+    }, (peer) => canPeerAccessItem(item, peer));
+    if (change.previous) {
+      const previous = change.previous;
+      queued = mesh.sendData({
+        type: 'item_sync_state', action: 'delete', item_id: change.id,
+        permission: previous.permission, version: change.syncVersion,
+      }, (peer) => canPeerAccessItem(previous, peer) && !canPeerAccessItem(item, peer)) && queued;
+    }
+    if (!queued) setToast('WebRTC 동기화 대기열이 가득 차 일부 변경을 전달하지 못했습니다. 재접속하면 다시 동기화됩니다.');
+  }, []);
   const sendItemChange = useCallback((payload, previous) => {
     const socket = wsRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) return false;
     const id = String(payload.item_id);
+    const syncItem = payload.type === 'item_update' && isCanvasSyncItem(payload.item) && !isCollaborativeItem(payload.item)
+      ? payload.item : null;
+    const syncDeleteItem = payload.type === 'item_delete' && isCanvasSyncItem(previous) ? previous : null;
+    const syncVersion = syncItem || syncDeleteItem ? nextPeerSyncVersion(syncClockRef, syncActorRef) : null;
+    const previousSyncVersion = itemSyncVersionsRef.current.get(id) || null;
+    const previousTombstone = deletedItemSyncVersionsRef.current.get(id) || null;
+    if (syncVersion) {
+      itemSyncVersionsRef.current.set(id, syncVersion);
+      if (syncDeleteItem) deletedItemSyncVersionsRef.current.set(id, { version: syncVersion, permission: syncDeleteItem.permission });
+      else deletedItemSyncVersionsRef.current.delete(id);
+    }
     pendingItemChangesRef.current.push({
       id,
       previous,
+      item: syncItem,
       type: payload.type,
       wasNewCollaborative: payload.type === 'item_save' && newCollaborativeItemsRef.current.has(id),
+      syncAction: syncDeleteItem ? 'delete' : syncItem ? 'upsert' : null,
+      syncVersion,
+      previousSyncVersion,
+      previousTombstone,
     });
-    socket.send(JSON.stringify(payload));
-    socket.send(JSON.stringify({ type: 'ping' }));
+    try {
+      socket.send(JSON.stringify(payload));
+      socket.send(JSON.stringify({ type: 'ping' }));
+    } catch {
+      pendingItemChangesRef.current.pop();
+      if (syncVersion) {
+        if (previousSyncVersion) itemSyncVersionsRef.current.set(id, previousSyncVersion);
+        else itemSyncVersionsRef.current.delete(id);
+        if (previousTombstone) deletedItemSyncVersionsRef.current.set(id, previousTombstone);
+        else deletedItemSyncVersionsRef.current.delete(id);
+      }
+      return false;
+    }
     return true;
   }, []);
   const updateTableItem = useCallback((id, update) => {
@@ -666,6 +830,7 @@ function CanvasWorkspace() {
     if (!sendItemChange({ type: 'item_update', item_id: key, item: nextItem }, previous)) {
       itemsRef.current = { ...itemsRef.current, [key]: previous };
       setItems((current) => ({ ...current, [key]: previous }));
+      refreshSpatialIndex();
       setToast('연결이 복구되면 테이블을 다시 편집해주세요.');
       return false;
     }
@@ -697,11 +862,14 @@ function CanvasWorkspace() {
     setItems((current) => ({ ...current, [key]: nextItem }));
     refreshSpatialIndex();
     if (isCollaborativeItem(nextItem)) {
-      peerMeshRef.current?.sendData({ type: 'item_geometry', item_id: key, x: nextItem.x, y: nextItem.y, rotation }, (peer) => canPeerAccessItem(nextItem, peer));
+      const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
+      itemSyncVersionsRef.current.set(key, version);
+      peerMeshRef.current?.sendData({ type: 'item_geometry', item_id: key, x: nextItem.x, y: nextItem.y, rotation, version }, (peer) => canPeerAccessItem(nextItem, peer));
       markItemDirty(key);
     } else if (!sendItemChange({ type: 'item_update', item_id: key, item: nextItem }, previous)) {
       itemsRef.current = { ...itemsRef.current, [key]: previous };
       setItems((current) => ({ ...current, [key]: previous }));
+      refreshSpatialIndex();
       setToast('연결이 복구되면 회전을 다시 적용해주세요.');
     }
   };
@@ -763,6 +931,7 @@ function CanvasWorkspace() {
     if (!sendItemChange({ type: 'item_update', item_id: key, item: nextItem }, previous)) {
       itemsRef.current = { ...itemsRef.current, [key]: previous };
       setItems((current) => ({ ...current, [key]: previous }));
+      refreshSpatialIndex();
       setToast('연결이 복구되면 화살표 모양을 다시 변경해주세요.');
     }
   };
@@ -771,6 +940,9 @@ function CanvasWorkspace() {
     const sharedItem = makeCollaborativeItem(item);
     if (isCollaborativeItem(sharedItem)) {
       const baseDoc = Automerge.load(decodeBase64(sharedItem.automerge_snapshot), { actor: createActorId() });
+      const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
+      itemSyncVersionsRef.current.set(String(id), version);
+      deletedItemSyncVersionsRef.current.delete(String(id));
       itemsRef.current = { ...itemsRef.current, [id]: sharedItem };
       collaborativeDocsRef.current.set(String(id), baseDoc);
       collaborativeBaseDocsRef.current.set(String(id), baseDoc);
@@ -779,7 +951,7 @@ function CanvasWorkspace() {
       selectItems([id], id);
       refreshSpatialIndex();
       markItemDirty(id);
-      peerMeshRef.current?.sendData({ type: 'item_create', item_id: String(id), item: sharedItem }, (peer) => canPeerAccessItem(sharedItem, peer));
+      peerMeshRef.current?.sendData({ type: 'item_create', item_id: String(id), item: sharedItem, version }, (peer) => canPeerAccessItem(sharedItem, peer));
       return true;
     }
     if (!sendItemChange({ type: 'item_update', item_id: id, item: sharedItem }, null)) return false;
@@ -792,7 +964,12 @@ function CanvasWorkspace() {
     const previous = itemsRef.current[id];
     const key = String(id);
     const isUnsavedCollaborative = isCollaborativeItem(previous) && newCollaborativeItemsRef.current.has(key);
-    if (isUnsavedCollaborative) peerMeshRef.current?.sendData({ type: 'item_delete', item_id: key }, (peer) => canPeerAccessItem(previous, peer));
+    if (isUnsavedCollaborative) {
+      const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
+      itemSyncVersionsRef.current.set(key, version);
+      deletedItemSyncVersionsRef.current.set(key, { version, permission: previous.permission });
+      peerMeshRef.current?.sendData({ type: 'item_delete', item_id: key, permission: previous.permission, version }, (peer) => canPeerAccessItem(previous, peer));
+    }
     else if (!sendItemChange({ type: 'item_delete', item_id: id }, previous)) return false;
     const next = { ...itemsRef.current };
     delete next[id];
@@ -838,6 +1015,63 @@ function CanvasWorkspace() {
   const receivePeerData = useCallback((peer, data, channelName) => {
     if (!data || typeof data !== 'object') return;
     const localPeer = { groups: groupsRef.current, is_admin: groupsRef.current.includes('admin-group') };
+    const replayPendingPeerEvents = (itemId) => {
+      const queued = takePendingPeerEvents(pendingPeerItemEventsRef, pendingPeerItemEventsSizeRef, itemId);
+      for (const entry of queued) receivePeerData(entry.peer, entry.data, entry.channelName);
+    };
+    if (data.type === 'item_sync_state') {
+      if (!['agora-sync', 'agora-bulk'].includes(channelName) || !peer?.peer_id || typeof data.item_id !== 'string'
+        || !data.item_id || data.item_id.length > 128) return;
+      const key = data.item_id;
+      const version = normalizeSyncVersion(data.version);
+      if (!version) return;
+      const currentVersion = itemSyncVersionsRef.current.get(key)
+        || deletedItemSyncVersionsRef.current.get(key)?.version
+        || INITIAL_SYNC_VERSION;
+      if (compareSyncVersions(version, currentVersion) <= 0) return;
+      if (data.action === 'upsert') {
+        const item = data.item;
+        const previous = itemsRef.current[key];
+        if (!isCanvasSyncItem(item) || isCollaborativeItem(item)
+          || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)
+          || (previous && previous.kind !== item.kind)
+          || (previous && (!canPeerAccessItem(previous, localPeer) || !canPeerAccessItem(previous, peer)))) return;
+        syncClockRef.current = Math.max(syncClockRef.current, version.clock);
+        const next = { ...itemsRef.current, [key]: item };
+        itemsRef.current = next;
+        itemSyncVersionsRef.current.set(key, version);
+        deletedItemSyncVersionsRef.current.delete(key);
+        setItems(next);
+        if (!previous || previous.x !== item.x || previous.y !== item.y || previous.width !== item.width
+          || previous.height !== item.height || previous.rotation !== item.rotation
+          || previous.kind !== item.kind || previous.points !== item.points) refreshSpatialIndex();
+        return;
+      }
+      if (data.action === 'delete') {
+        const accessItem = { permission: data.permission };
+        const previous = itemsRef.current[key];
+        if (!canPeerAccessItem(accessItem, localPeer) || !canPeerAccessItem(accessItem, peer)
+          || (previous && (!canPeerAccessItem(previous, localPeer) || !canPeerAccessItem(previous, peer)))) return;
+        syncClockRef.current = Math.max(syncClockRef.current, version.clock);
+        const next = { ...itemsRef.current };
+        delete next[key];
+        itemsRef.current = next;
+        itemSyncVersionsRef.current.set(key, version);
+        deletedItemSyncVersionsRef.current.set(key, { version, permission: data.permission });
+        if (previous) {
+          collaborativeDocsRef.current.delete(key);
+          collaborativeBaseDocsRef.current.delete(key);
+          newCollaborativeItemsRef.current.delete(key);
+          itemEditRevisionRef.current.delete(key);
+          setItems(next);
+          refreshSpatialIndex();
+          setDirtyItems((current) => { const dirty = new Set(current); dirty.delete(key); return dirty; });
+          setRemoteEditors((current) => Object.fromEntries(Object.entries(current).filter(([, editor]) => editor.itemId !== key)));
+        }
+        takePendingPeerEvents(pendingPeerItemEventsRef, pendingPeerItemEventsSizeRef, key);
+      }
+      return;
+    }
     if (data.type === 'stroke_preview') {
       if (channelName !== 'agora-sync') return;
       const strokeId = String(data.stroke_id || '');
@@ -927,8 +1161,16 @@ function CanvasWorkspace() {
     }
     if (data.type === 'item_create' && data.item_id && isCollaborativeItem(data.item)) {
       const key = String(data.item_id);
-      if (!canPeerAccessItem(data.item, localPeer) || !canPeerAccessItem(data.item, peer)) return;
       const existing = itemsRef.current[key];
+      if (!canPeerAccessItem(data.item, localPeer) || !canPeerAccessItem(data.item, peer)
+        || (existing && existing.kind !== data.item.kind)
+        || (existing && (!canPeerAccessItem(existing, localPeer) || !canPeerAccessItem(existing, peer)))) return;
+      const version = normalizeSyncVersion(data.version) || INITIAL_SYNC_VERSION;
+      const tombstone = deletedItemSyncVersionsRef.current.get(key);
+      if (tombstone && compareSyncVersions(version, tombstone.version) <= 0) return;
+      syncClockRef.current = Math.max(syncClockRef.current, version.clock);
+      const localVersion = itemSyncVersionsRef.current.get(key) || INITIAL_SYNC_VERSION;
+      const incomingIsNewer = compareSyncVersions(version, localVersion) > 0;
       let item = data.item;
       if (existing && isCollaborativeItem(existing)) {
         try {
@@ -936,7 +1178,9 @@ function CanvasWorkspace() {
           const incomingDoc = Automerge.load(decodeBase64(data.item.automerge_snapshot), { actor: createActorId() });
           const mergedDoc = Automerge.merge(localDoc, incomingDoc);
           collaborativeDocsRef.current.set(key, mergedDoc);
-          item = { ...existing, ...data.item, [collaborativeField(data.item)]: mergedDoc.content };
+          item = incomingIsNewer
+            ? { ...existing, ...data.item, [collaborativeField(data.item)]: mergedDoc.content }
+            : { ...data.item, ...existing, [collaborativeField(data.item)]: mergedDoc.content };
         } catch { return; }
       } else {
         try {
@@ -947,46 +1191,84 @@ function CanvasWorkspace() {
         catch { return; }
       }
       itemsRef.current = { ...itemsRef.current, [key]: item };
+      itemSyncVersionsRef.current.set(key, incomingIsNewer ? version : localVersion);
+      if (tombstone && compareSyncVersions(version, tombstone.version) > 0) deletedItemSyncVersionsRef.current.delete(key);
       newCollaborativeItemsRef.current.add(key);
       setItems((current) => ({ ...current, [key]: item }));
-      if (!existing) refreshSpatialIndex();
+      if (!existing || existing.x !== item.x || existing.y !== item.y || existing.width !== item.width
+        || existing.height !== item.height || existing.rotation !== item.rotation) refreshSpatialIndex();
       markItemDirty(key);
+      replayPendingPeerEvents(key);
       return;
     }
     if (data.type === 'doc_snapshot' && data.item_id && data.snapshot) {
       const key = String(data.item_id);
       const item = data.item || itemsRef.current[key];
-      if (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)) return;
+      const currentItem = itemsRef.current[key];
+      if (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)
+        || (currentItem && currentItem.kind !== item.kind)
+        || (currentItem && (!canPeerAccessItem(currentItem, localPeer) || !canPeerAccessItem(currentItem, peer)))) return;
+      const version = normalizeSyncVersion(data.version) || INITIAL_SYNC_VERSION;
+      const tombstone = deletedItemSyncVersionsRef.current.get(key);
+      if (tombstone && compareSyncVersions(version, tombstone.version) <= 0) return;
+      syncClockRef.current = Math.max(syncClockRef.current, version.clock);
       try {
         const incomingDoc = Automerge.load(decodeBase64(data.snapshot), { actor: createActorId() });
-        const localItem = itemsRef.current[key];
+        const localItem = currentItem;
+        const localVersion = itemSyncVersionsRef.current.get(key) || INITIAL_SYNC_VERSION;
+        const incomingIsNewer = compareSyncVersions(version, localVersion) > 0;
         const localDoc = localItem ? getCollaborativeDoc(key, localItem) : incomingDoc;
         const mergedDoc = localItem ? Automerge.merge(localDoc, incomingDoc) : incomingDoc;
         if (!localItem && item.automerge_snapshot) {
           collaborativeBaseDocsRef.current.set(key, Automerge.load(decodeBase64(item.automerge_snapshot), { actor: createActorId() }));
         }
         const field = collaborativeField(item);
-        const mergedItem = { ...item, ...localItem, [field]: mergedDoc.content };
+        const mergedItem = incomingIsNewer
+          ? { ...localItem, ...item, [field]: mergedDoc.content }
+          : { ...item, ...localItem, [field]: mergedDoc.content };
         collaborativeDocsRef.current.set(key, mergedDoc);
         itemsRef.current = { ...itemsRef.current, [key]: mergedItem };
+        itemSyncVersionsRef.current.set(key, incomingIsNewer ? version : localVersion);
+        if (tombstone && compareSyncVersions(version, tombstone.version) > 0) deletedItemSyncVersionsRef.current.delete(key);
         setItems((current) => ({ ...current, [key]: mergedItem }));
         if (!localItem) {
           newCollaborativeItemsRef.current.add(key);
-          refreshSpatialIndex();
         }
+        if (!localItem || localItem.x !== mergedItem.x || localItem.y !== mergedItem.y
+          || localItem.width !== mergedItem.width || localItem.height !== mergedItem.height
+          || localItem.rotation !== mergedItem.rotation) refreshSpatialIndex();
         if (data.dirty) markItemDirty(key);
+        replayPendingPeerEvents(key);
       } catch { /* Ignore an invalid/stale Automerge snapshot. */ }
       return;
     }
     if (data.type === 'doc_change' && data.item_id && data.change) {
       const key = String(data.item_id);
       const item = itemsRef.current[key];
+      if (!item) {
+        const tombstone = deletedItemSyncVersionsRef.current.get(key);
+        const version = normalizeSyncVersion(data.version);
+        if (!tombstone || (version && compareSyncVersions(version, tombstone.version) > 0)) {
+          if (!queuePendingPeerEvent(pendingPeerItemEventsRef, pendingPeerItemEventsSizeRef, key, peer, data, channelName)) {
+            setToast('새 객체의 WebRTC 동기화가 지연되고 있습니다. 연결을 유지해 다시 동기화해주세요.');
+          }
+        }
+        return;
+      }
       if (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)) return;
+      const version = normalizeSyncVersion(data.version);
+      const tombstone = deletedItemSyncVersionsRef.current.get(key);
+      if (tombstone && (!version || compareSyncVersions(version, tombstone.version) <= 0)) return;
       const expectedField = collaborativeField(item);
       if (data.field !== expectedField) return;
       try {
         const doc = Automerge.loadIncremental(getCollaborativeDoc(key, item), decodeBase64(data.change));
         collaborativeDocsRef.current.set(key, doc);
+        if (version) {
+          syncClockRef.current = Math.max(syncClockRef.current, version.clock);
+          const currentVersion = itemSyncVersionsRef.current.get(key) || INITIAL_SYNC_VERSION;
+          if (compareSyncVersions(version, currentVersion) > 0) itemSyncVersionsRef.current.set(key, version);
+        }
         const nextItem = { ...item, [expectedField]: doc.content };
         itemsRef.current = { ...itemsRef.current, [key]: nextItem };
         setItems((current) => ({ ...current, [key]: nextItem }));
@@ -997,12 +1279,34 @@ function CanvasWorkspace() {
     if (data.type === 'item_metadata' && data.item_id && ['filename', 'language', 'color', 'groupId'].includes(data.field)) {
       const key = String(data.item_id);
       const item = itemsRef.current[key];
+      if (!item) {
+        const tombstone = deletedItemSyncVersionsRef.current.get(key);
+        const version = normalizeSyncVersion(data.version);
+        if (!tombstone || (version && compareSyncVersions(version, tombstone.version) > 0)) {
+          if (!queuePendingPeerEvent(pendingPeerItemEventsRef, pendingPeerItemEventsSizeRef, key, peer, data, channelName)) {
+            setToast('새 객체의 WebRTC 동기화가 지연되고 있습니다. 연결을 유지해 다시 동기화해주세요.');
+          }
+        }
+        return;
+      }
       if (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)) return;
-      const value = String(data.value ?? '');
+      const version = normalizeSyncVersion(data.version);
+      const tombstone = deletedItemSyncVersionsRef.current.get(key);
+      if (tombstone && (!version || compareSyncVersions(version, tombstone.version) <= 0)) return;
+      if (version && compareSyncVersions(version, itemSyncVersionsRef.current.get(key) || INITIAL_SYNC_VERSION) <= 0) return;
+      if (typeof data.value !== 'string') return;
+      const value = data.value;
       const validMetadata = data.field === 'groupId'
         ? value.length <= 128
-        : data.field === 'color' ? item.kind === 'note' && /^#[0-9a-f]{6}$/i.test(value) : item.kind === 'code';
+        : data.field === 'color' ? item.kind === 'note' && /^#[0-9a-f]{6}$/i.test(value)
+          : item.kind === 'code' && (data.field === 'filename'
+            ? value.length <= 80
+            : ['javascript', 'typescript', 'python', 'html', 'css', 'json', 'text'].includes(value));
       if (!validMetadata) return;
+      if (version) {
+        syncClockRef.current = Math.max(syncClockRef.current, version.clock);
+        itemSyncVersionsRef.current.set(key, version);
+      }
       const nextValue = data.field === 'groupId' ? value || null : value;
       if (item[data.field] === nextValue) return;
       const nextItem = { ...item, [data.field]: nextValue };
@@ -1014,19 +1318,42 @@ function CanvasWorkspace() {
     if (data.type === 'item_geometry' && data.item_id) {
       const key = String(data.item_id);
       const item = itemsRef.current[key];
+      if (!item) {
+        const tombstone = deletedItemSyncVersionsRef.current.get(key);
+        const version = normalizeSyncVersion(data.version);
+        if (!tombstone || (version && compareSyncVersions(version, tombstone.version) > 0)) {
+          if (!queuePendingPeerEvent(pendingPeerItemEventsRef, pendingPeerItemEventsSizeRef, key, peer, data, channelName)) {
+            setToast('새 객체의 WebRTC 동기화가 지연되고 있습니다. 연결을 유지해 다시 동기화해주세요.');
+          }
+        }
+        return;
+      }
       if (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)) return;
+      const version = normalizeSyncVersion(data.version);
+      const tombstone = deletedItemSyncVersionsRef.current.get(key);
+      if (tombstone && (!version || compareSyncVersions(version, tombstone.version) <= 0)) return;
+      if (version && compareSyncVersions(version, itemSyncVersionsRef.current.get(key) || INITIAL_SYNC_VERSION) <= 0) return;
+      const x = Number(data.x);
+      const y = Number(data.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x) > 1e9 || Math.abs(y) > 1e9) return;
       const rotation = data.rotation == null ? item.rotation : Number(data.rotation);
       const safeRotation = Number.isFinite(rotation) ? Math.max(-180, Math.min(180, rotation)) : item.rotation;
       const width = data.width == null ? item.width : Number(data.width);
       const height = data.height == null ? item.height : Number(data.height);
+      if ((data.width != null && (!Number.isFinite(width) || width <= 0))
+        || (data.height != null && (!Number.isFinite(height) || height <= 0))) return;
       const nextItem = {
         ...item,
-        x: Number(data.x) || 0,
-        y: Number(data.y) || 0,
+        x,
+        y,
         rotation: safeRotation,
         ...(Number.isFinite(width) && width > 0 ? { width } : {}),
         ...(Number.isFinite(height) && height > 0 ? { height } : {}),
       };
+      if (version) {
+        syncClockRef.current = Math.max(syncClockRef.current, version.clock);
+        itemSyncVersionsRef.current.set(key, version);
+      }
       itemsRef.current = { ...itemsRef.current, [key]: nextItem };
       setItems((current) => ({ ...current, [key]: nextItem }));
       if (item.x !== nextItem.x || item.y !== nextItem.y || item.width !== nextItem.width || item.height !== nextItem.height || item.rotation !== nextItem.rotation) refreshSpatialIndex();
@@ -1036,7 +1363,18 @@ function CanvasWorkspace() {
     if (data.type === 'item_delete' && data.item_id) {
       const key = String(data.item_id);
       const item = itemsRef.current[key];
-      if (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)) return;
+      const permission = data.permission ?? item?.permission;
+      const accessItem = { permission };
+      const version = normalizeSyncVersion(data.version);
+      const currentVersion = itemSyncVersionsRef.current.get(key) || INITIAL_SYNC_VERSION;
+      if (!version || !canPeerAccessItem(accessItem, localPeer) || !canPeerAccessItem(accessItem, peer)
+        || (item && (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)))
+        || compareSyncVersions(version, currentVersion) <= 0) return;
+      syncClockRef.current = Math.max(syncClockRef.current, version.clock);
+      itemSyncVersionsRef.current.set(key, version);
+      deletedItemSyncVersionsRef.current.set(key, { version, permission });
+      takePendingPeerEvents(pendingPeerItemEventsRef, pendingPeerItemEventsSizeRef, key);
+      if (!item) return;
       const next = { ...itemsRef.current };
       delete next[key];
       itemsRef.current = next;
@@ -1155,7 +1493,6 @@ function CanvasWorkspace() {
       syncedPeersRef.current.clear();
       remoteDrawingStrokesRef.current.clear();
       setPeerList([]);
-      setRemoteCursors({});
       setRemoteEditors({});
       setRemoteDrawingStrokes([]);
     };
@@ -1249,23 +1586,15 @@ function CanvasWorkspace() {
                 sendSignal: sendRtcRaw,
                 onData: receivePeerData,
                 onLaser: receiveLaser,
-                onCursor: (peer, cursor) => {
-                  if (cursor.visible === false) {
-                    setRemoteCursors((current) => { const next = { ...current }; delete next[peer.peer_id]; return next; });
-                    return;
-                  }
-                  if (!Number.isFinite(Number(cursor.x)) || !Number.isFinite(Number(cursor.y))) return;
-                  setRemoteCursors((current) => ({
-                    ...current,
-                    [peer.peer_id]: { ...peer, x: Number(cursor.x), y: Number(cursor.y), color: cursorColor(peer.nickname, peer.tag_number) },
-                  }));
-                },
+                onCursor: (peer, cursor) => remoteCursorUpdaterRef.current?.(peer, cursor),
                 onPeersChanged: (peers) => {
                   setPeerList(peers);
                   const activeIds = new Set(peers.map((peer) => peer.peer_id));
-                  setRemoteCursors((current) => Object.fromEntries(Object.entries(current).filter(([peerId]) => activeIds.has(peerId))));
                   setRemoteEditors((current) => Object.fromEntries(Object.entries(current).filter(([peerId]) => activeIds.has(peerId))));
                   setLaserStrokes((current) => current.filter((stroke) => !stroke.peerId || activeIds.has(stroke.peerId)));
+                  for (const peer of peers) {
+                    if (!peer.connected) syncedPeersRef.current.delete(peer.peer_id);
+                  }
                   let drawingsChanged = false;
                   for (const [key, stroke] of remoteDrawingStrokesRef.current) {
                     if (activeIds.has(stroke.peerId)) continue;
@@ -1284,19 +1613,37 @@ function CanvasWorkspace() {
                       if (pendingPoints.length) sendStrokePreviewPoints(mesh, activeStroke, pendingPoints);
                       sendStrokePreviewSnapshot(mesh, peer, activeStroke, draftRef.current);
                     }
+                    let snapshotSendFailed = false;
                     for (const [id, item] of Object.entries(itemsRef.current)) {
-                      if (!isCollaborativeItem(item) || !canPeerAccessItem(item, peer)) continue;
-                      try {
-                        const doc = getCollaborativeDoc(id, item);
-                        const field = collaborativeField(item);
-                        mesh.sendToPeer(peer.peer_id, {
-                          type: 'doc_snapshot', item_id: id,
-                          item: { ...item, [field]: doc.content },
-                          snapshot: encodeBase64(Automerge.save(doc)),
-                          dirty: dirtyItemsRef.current.has(String(id)),
-                        });
-                      } catch { /* A later snapshot can recover an interrupted peer sync. */ }
+                      if (!isCanvasSyncItem(item) || !canPeerAccessItem(item, peer)) continue;
+                      if (isCollaborativeItem(item)) {
+                        try {
+                          const doc = getCollaborativeDoc(id, item);
+                          const field = collaborativeField(item);
+                          snapshotSendFailed = !mesh.sendToPeer(peer.peer_id, {
+                            type: 'doc_snapshot', item_id: id,
+                            item: { ...item, [field]: doc.content },
+                            snapshot: encodeBase64(Automerge.save(doc)),
+                            version: itemSyncVersionsRef.current.get(String(id)) || INITIAL_SYNC_VERSION,
+                            dirty: dirtyItemsRef.current.has(String(id)),
+                          }) || snapshotSendFailed;
+                        } catch { /* A later snapshot can recover an interrupted peer sync. */ }
+                        continue;
+                      }
+                      snapshotSendFailed = !mesh.sendToPeer(peer.peer_id, {
+                        type: 'item_sync_state', action: 'upsert', item_id: id, item,
+                        version: itemSyncVersionsRef.current.get(String(id)) || INITIAL_SYNC_VERSION,
+                      }) || snapshotSendFailed;
                     }
+                    for (const [id, tombstone] of deletedItemSyncVersionsRef.current) {
+                      const accessItem = { permission: tombstone.permission };
+                      if (!canPeerAccessItem(accessItem, peer)) continue;
+                      snapshotSendFailed = !mesh.sendToPeer(peer.peer_id, {
+                        type: 'item_sync_state', action: 'delete', item_id: id,
+                        permission: tombstone.permission, version: tombstone.version,
+                      }) || snapshotSendFailed;
+                    }
+                    if (snapshotSendFailed) setToast('일부 객체가 너무 커서 WebRTC 초기 동기화 대기열에 추가되지 않았습니다. 다시 접속해 동기화를 재시도해주세요.');
                   }
                 },
               });
@@ -1312,7 +1659,6 @@ function CanvasWorkspace() {
           if (data.type === 'rtc_peer_left') {
             peerMeshRef.current?.removePeer(data.peer_id);
             syncedPeersRef.current.delete(data.peer_id);
-            setRemoteCursors((current) => { const next = { ...current }; delete next[data.peer_id]; return next; });
             setRemoteEditors((current) => { const next = { ...current }; delete next[data.peer_id]; return next; });
             return;
           }
@@ -1355,6 +1701,11 @@ function CanvasWorkspace() {
           }
           if (data.type === 'init_items') {
             const initialItems = data.items && typeof data.items === 'object' ? data.items : {};
+            itemSyncVersionsRef.current = new Map(Object.keys(initialItems).map((id) => [String(id), INITIAL_SYNC_VERSION]));
+            deletedItemSyncVersionsRef.current.clear();
+            pendingPeerItemEventsRef.current.clear();
+            pendingPeerItemEventsSizeRef.current = 0;
+            syncClockRef.current = Math.max(syncClockRef.current, Date.now());
             collaborativeDocsRef.current.clear();
             collaborativeBaseDocsRef.current.clear();
             const hydratedItems = { ...initialItems };
@@ -1485,7 +1836,10 @@ function CanvasWorkspace() {
           }
           if (data.type === 'pong') {
             if (rejectedEventPongsRef.current > 0) rejectedEventPongsRef.current -= 1;
-            else pendingItemChangesRef.current.shift();
+            else {
+              const accepted = pendingItemChangesRef.current.shift();
+              if (accepted?.syncAction) broadcastPeerItemState(accepted);
+            }
             return;
           }
           if (data.type === 'error') {
@@ -1512,12 +1866,29 @@ function CanvasWorkspace() {
                   markItemDirty(rejected.id);
                   if (rejected.wasNewCollaborative) newCollaborativeItemsRef.current.add(rejected.id);
                 } else {
-                  const next = { ...itemsRef.current };
-                  if (rejected.previous == null) delete next[rejected.id];
-                  else next[rejected.id] = rejected.previous;
-                  itemsRef.current = next;
-                  setItems(next);
-                  refreshSpatialIndex();
+                  const currentVersion = itemSyncVersionsRef.current.get(rejected.id);
+                  const isLatestRejectedChange = rejected.syncVersion
+                    && compareSyncVersions(currentVersion, rejected.syncVersion) === 0;
+                  if (!rejected.syncVersion || isLatestRejectedChange) {
+                    const next = { ...itemsRef.current };
+                    if (rejected.previous == null) delete next[rejected.id];
+                    else next[rejected.id] = rejected.previous;
+                    itemsRef.current = next;
+                    setItems(next);
+                    refreshSpatialIndex();
+                    if (isLatestRejectedChange) {
+                      const correctionVersion = nextPeerSyncVersion(syncClockRef, syncActorRef);
+                      itemSyncVersionsRef.current.set(rejected.id, correctionVersion);
+                      if (rejected.previous == null) {
+                        const permission = rejected.item?.permission;
+                        deletedItemSyncVersionsRef.current.set(rejected.id, { version: correctionVersion, permission });
+                        broadcastPeerItemState({ id: rejected.id, syncAction: 'delete', syncVersion: correctionVersion, permission });
+                      } else {
+                        deletedItemSyncVersionsRef.current.delete(rejected.id);
+                        broadcastPeerItemState({ id: rejected.id, syncAction: 'upsert', syncVersion: correctionVersion, item: rejected.previous, previous: rejected.item });
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -1586,7 +1957,7 @@ function CanvasWorkspace() {
       if (socket) socket.close();
       if (wsRef.current === socket) wsRef.current = null;
     };
-  }, [broadcastEditorPresence, canvasId, getCollaborativeDoc, markItemDirty, navigate, receiveLaser, receivePeerData, reconnectEpoch, refreshSpatialIndex, requestChatHistory, sendRaw, sendRtcRaw, token, user]);
+  }, [broadcastEditorPresence, broadcastPeerItemState, canvasId, getCollaborativeDoc, markItemDirty, navigate, receiveLaser, receivePeerData, reconnectEpoch, refreshSpatialIndex, requestChatHistory, sendRaw, sendRtcRaw, token, user]);
 
   const spatialIndex = useMemo(() => new CanvasSpatialBTree(items, boardSize), [spatialRevision, boardSize]);
   const visibleWorldBounds = useMemo(() => {
@@ -1606,6 +1977,7 @@ function CanvasWorkspace() {
     maxX: visibleWorldBounds.maxX / Math.max(1, boardSize.width),
     maxY: visibleWorldBounds.maxY / Math.max(1, boardSize.height),
   }), [boardSize, visibleWorldBounds]);
+  const activePeerIds = useMemo(() => peerList.filter((peer) => peer.connected).map((peer) => peer.peer_id).sort().join('\n'), [peerList]);
   const minimap = useMemo(() => {
     const viewportWidth = Math.max(1, boardSize.width);
     const viewportHeight = Math.max(1, boardSize.height);
@@ -1728,7 +2100,9 @@ function CanvasWorkspace() {
       if (isCollaborativeItem(nextItem)) {
         nextItems[id] = nextItem;
         markItemDirty(id);
-        peerMeshRef.current?.sendData({ type: 'item_metadata', item_id: id, field: 'groupId', value: groupId || '' }, (peer) => canPeerAccessItem(nextItem, peer));
+        const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
+        itemSyncVersionsRef.current.set(String(id), version);
+        peerMeshRef.current?.sendData({ type: 'item_metadata', item_id: id, field: 'groupId', value: groupId || '', version }, (peer) => canPeerAccessItem(nextItem, peer));
       } else if (sendItemChange({ type: 'item_update', item_id: id, item: nextItem }, previous)) {
         nextItems[id] = nextItem;
       }
@@ -2512,7 +2886,9 @@ function CanvasWorkspace() {
         const initial = drag.initialItems[id];
         const item = itemsRef.current[id];
         if (isCollaborativeItem(item)) {
-          peerMeshRef.current?.sendData({ type: 'item_geometry', item_id: String(id), x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation }, (peer) => canPeerAccessItem(item, peer));
+          const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
+          itemSyncVersionsRef.current.set(String(id), version);
+          peerMeshRef.current?.sendData({ type: 'item_geometry', item_id: String(id), x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, version }, (peer) => canPeerAccessItem(item, peer));
           markItemDirty(id);
         } else if (item && !sendItemChange({ type: 'item_update', item_id: id, item }, initial)) {
           const rolledBack = { ...itemsRef.current, [id]: initial };
@@ -2529,10 +2905,14 @@ function CanvasWorkspace() {
     const item = itemsRef.current[id];
     refreshSpatialIndex();
     if (isCollaborativeItem(item)) {
-      peerMeshRef.current?.sendData({ type: 'item_geometry', item_id: String(id), x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation }, (peer) => canPeerAccessItem(item, peer));
+      const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
+      itemSyncVersionsRef.current.set(String(id), version);
+      peerMeshRef.current?.sendData({ type: 'item_geometry', item_id: String(id), x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, version }, (peer) => canPeerAccessItem(item, peer));
       markItemDirty(id);
     } else if (item && !sendItemChange({ type: 'item_update', item_id: id, item }, initial)) {
+      itemsRef.current = { ...itemsRef.current, [id]: initial };
       setItems((current) => ({ ...current, [id]: initial }));
+      refreshSpatialIndex();
     }
   };
   const changeTheme = (nextTheme) => { localStorage.setItem('agora_canvas_theme', nextTheme); setTheme(nextTheme); };
@@ -2677,7 +3057,7 @@ function CanvasWorkspace() {
           <div className="canvas-scene" ref={sceneRef} style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}>
             {sortedItems.map(([id, item, bounds, connectorCurve]) => <CanvasObject key={id} id={id} item={item} bounds={bounds} connectorCurve={connectorCurve} viewSize={boardSize} token={token} selected={selectedObjectIdSet.has(String(id))} allowSingleSelectionControls={hasSingleSelection} activeTool={activeTool} connectionStartId={connectionStartId} editing={editingId === id} dirty={dirtyItems.has(String(id))} remoteEditors={Object.values(remoteEditors).filter((editor) => editor.itemId === String(id))} onStartEditing={startEditing} onTextChange={updateCollaborativeText} onMetadataChange={updateCollaborativeMetadata} onFormulaChange={updateFormulaItem} onTableChange={updateTableItem} onStopEditing={stopEditing} onSave={saveCollaborativeItem} onPointerDown={startObjectDrag} onResizeStart={startObjectResize} onArrowBendStart={startArrowBend} onPointerMove={moveObject} onPointerUp={stopObjectDrag} onCopy={(value) => navigator.clipboard?.writeText(value)} onConnectorDoubleClick={focusConnectorTarget} />)}
             {selectedItem && selectedItem.kind !== 'connector' && activeTool === 'select' && !editingId && <RotationHandles sceneRef={sceneRef} id={String(primarySelectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startObjectRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
-            {Object.entries(remoteCursors).filter(([, cursor]) => cursor.visible !== false && cursor.x >= visibleBounds.minX && cursor.x <= visibleBounds.maxX && cursor.y >= visibleBounds.minY && cursor.y <= visibleBounds.maxY).map(([peerId, cursor]) => <div className="remote-cursor" key={peerId} style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%`, '--cursor-color': cursor.color }} title={`${cursor.nickname}#${cursor.tag_number}`}><svg viewBox="0 0 18 22" aria-hidden="true"><path d="M1 1v17l4.5-4.3 3.1 7.1 3.1-1.4-3.2-6.8H15z" /></svg><span>{cursor.nickname}</span></div>)}
+            <RemoteCursorLayer updaterRef={remoteCursorUpdaterRef} activePeerIds={activePeerIds} visibleBounds={visibleBounds} />
           </div>
           <LaserLayer strokes={laserStrokes} width={boardSize.width} height={boardSize.height} camera={camera} />
           {selectionBox && <div className="canvas-selection-marquee" style={{ left: selectionBox.left, top: selectionBox.top, width: selectionBox.width, height: selectionBox.height }} aria-hidden="true" />}

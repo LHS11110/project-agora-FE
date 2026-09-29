@@ -5,6 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f5f6f2" />
     <meta name="description" content="Agora — 아이디어와 사람이 한곳에서 만나는 협업 캔버스" />
+    <script>
+      (() => {
+        const reloadKey = 'agora:stale-vite-chunk-reload-at';
+        window.addEventListener('vite:preloadError', (event) => {
+          let lastReloadAt = 0;
+          try {
+            lastReloadAt = Number(sessionStorage.getItem(reloadKey)) || 0;
+            if (Date.now() - lastReloadAt < 15000) return;
+            sessionStorage.setItem(reloadKey, String(Date.now()));
+          } catch {
+            return;
+          }
+          event.preventDefault();
+          window.location.reload();
+        });
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

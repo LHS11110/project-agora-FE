@@ -1,0 +1,81 @@
+.home-slide-window{overscroll-behavior:contain;touch-action:pan-y}
+.home-slide-track{width:300%;height:300%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr));transition:transform .68s cubic-bezier(.2,.75,.2,1)}
+.home-slide{width:auto;height:auto;min-width:0;min-height:0;flex:none;overflow:hidden}
+.home-scroll-hint{display:inline-block;margin-top:18px;color:#829286;font-size:9px;letter-spacing:.15px}
+
+.slide-architecture{background:linear-gradient(135deg,#eef2ed 0%,#e7eee8 100%)}
+.slide-architecture .home-slide-inner{grid-template-columns:minmax(0,.78fr) minmax(0,1.22fr);gap:clamp(24px,4vw,58px)}
+.slide-architecture .home-slide-copy h1{font-size:clamp(38px,4.3vw,59px)}
+.architecture-slide-note{display:flex;align-items:center;gap:8px;margin-top:30px;color:#728378;font-size:8px;white-space:nowrap}
+.architecture-slide-note span:nth-of-type(odd){color:#52745d;font:600 8px var(--mono)}
+.architecture-slide-note i{width:17px;height:1px;background:#cad6cb}
+.architecture-showcase{position:relative;width:100%;max-width:760px;padding:30px 23px 15px;border:1px solid #dbe5dc;border-radius:18px;background:linear-gradient(150deg,#fcfdfa,#f6f9f5);box-shadow:0 23px 55px #31453814;overflow:hidden}
+.architecture-showcase:before{content:'';position:absolute;width:250px;height:250px;right:-100px;top:-142px;border:1px solid #e2eae2;border-radius:50%;box-shadow:0 0 0 22px #f8faf71a,0 0 0 44px #f8faf71a}
+.architecture-showcase-label{position:absolute;top:14px;left:21px;color:#9aa79b;font:7px var(--mono);letter-spacing:.8px}
+.architecture-main-flow{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 44px minmax(0,1.08fr);align-items:stretch;margin-top:8px}
+.architecture-node{position:relative;z-index:1;min-height:190px;padding:17px 15px 14px;border:1px solid #e0e8df;border-radius:12px;background:#fff;box-shadow:0 7px 18px #3046390b;display:flex;flex-direction:column;align-items:flex-start}
+.architecture-client{background:#fffefa;border-color:#ece4d1}
+.architecture-server{background:#f7fbf7;border-color:#dce8dc}
+.architecture-node-kicker{color:#92a094;font:7px var(--mono);letter-spacing:.65px}
+.architecture-node h3{margin:14px 0 3px;color:#324b3b;font:600 18px var(--display);letter-spacing:-.4px}
+.architecture-node>strong{color:#6d8172;font:600 10px var(--mono)}
+.architecture-node p{margin:9px 0 10px;color:#78877b;font-size:8px;line-height:1.65}
+.architecture-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:auto}
+.architecture-tags i{padding:4px 6px;border:1px solid #e4ebe3;border-radius:10px;background:#f7faf6;color:#718376;font:6px var(--mono);font-style:normal}
+.architecture-client .architecture-tags i:first-child{background:#f7edda;border-color:#efe2c7;color:#9a8058}
+.architecture-flow-arrow{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:#8a9b8d}
+.architecture-flow-arrow span{font:6px var(--mono);white-space:nowrap}
+.architecture-flow-arrow svg{width:17px;height:17px}
+.architecture-storage-connector{height:39px;display:flex;align-items:center;justify-content:center;gap:9px;color:#91a095;font:7px var(--mono)}
+.architecture-storage-connector:before,.architecture-storage-connector:after{content:'';width:17%;height:1px;background:#dce5dc}
+.architecture-storage-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.architecture-storage-grid article{min-width:0;min-height:74px;padding:10px 9px 8px;border:1px solid #e3e9e1;border-radius:9px;background:#fff;display:flex;flex-direction:column;gap:5px}
+.architecture-storage-grid article>span{color:#a0aaa0;font:6px var(--mono);letter-spacing:.4px}
+.architecture-storage-grid article strong{color:#526c59;font:600 10px var(--mono);white-space:nowrap}
+.architecture-storage-grid article small{color:#849087;font-size:7px;line-height:1.4}
+.architecture-showcase-foot{display:flex;align-items:center;justify-content:center;gap:9px;margin-top:13px;color:#8b988c;font-size:7px}
+.architecture-showcase-foot b{color:#bc826b;font:10px var(--mono)}
+
+@media(max-width:1000px){
+  .slide-architecture .home-slide-inner{grid-template-columns:minmax(0,.74fr) minmax(0,1.26fr);gap:22px}
+  .slide-architecture .home-slide-copy h1{font-size:clamp(36px,4.4vw,52px)}
+  .architecture-showcase{padding-inline:15px}
+  .architecture-node{padding-inline:11px}
+}
+
+@media(max-width:700px){
+  .home-slides-page{height:100svh;min-height:500px;overflow:hidden}
+  .home-slide-window{flex:1;min-height:0;overflow:hidden}
+  .home-slide-track{width:300%;height:300%;min-height:0}
+  .home-slide{height:100%;min-height:0;overflow:hidden}
+  .home-slide-inner{width:calc(100% - 36px);height:100%;min-height:0;padding:12px 0;overflow-y:auto;overscroll-behavior:contain}
+  .slide-architecture .home-slide-inner{gap:7px}
+  .home-scroll-hint{margin-top:10px;font-size:8px}
+  .slide-architecture .home-slide-copy{flex:none;padding:0}
+  .slide-architecture .home-slide-copy h1{margin:9px 0 7px;font-size:clamp(27px,7.6vw,37px);line-height:1.13;letter-spacing:-.055em}
+  .slide-architecture .home-slide-copy>p{font-size:8px;line-height:1.65}
+  .architecture-slide-note{display:none}
+  .architecture-showcase{flex:none;width:100%;max-width:none;margin:1px auto 0;padding:23px 9px 9px;border-radius:12px}
+  .architecture-showcase-label{top:10px;left:12px;font-size:6px}
+  .architecture-main-flow{grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr);margin-top:3px}
+  .architecture-node{min-height:133px;padding:10px 8px 8px;border-radius:8px}
+  .architecture-node-kicker{font-size:6px}
+  .architecture-node h3{margin:9px 0 2px;font-size:14px}
+  .architecture-node>strong{font-size:8px}
+  .architecture-node p{margin:6px 0 7px;font-size:7.5px;line-height:1.5}
+  .architecture-tags{gap:3px}
+  .architecture-tags i{padding:3px 4px;font-size:6px}
+  .architecture-flow-arrow{gap:4px}
+  .architecture-flow-arrow span{font-size:6px}
+  .architecture-flow-arrow svg{width:13px;height:13px}
+  .architecture-storage-connector{height:25px;font-size:6.5px}
+  .architecture-storage-grid{gap:4px}
+  .architecture-storage-grid article{min-height:61px;padding:7px 5px 6px;gap:4px;border-radius:6px}
+  .architecture-storage-grid article>span{font-size:5.5px;letter-spacing:0}
+  .architecture-storage-grid article strong{font-size:7.5px;letter-spacing:-.3px}
+  .architecture-storage-grid article small{font-size:6.5px;line-height:1.3}
+  .architecture-showcase-foot{gap:5px;margin-top:8px;font-size:6.5px}
+  .architecture-showcase-foot b{font-size:8px}
+}
+
+@media(prefers-reduced-motion:reduce){.home-slide-track{transition:none}}

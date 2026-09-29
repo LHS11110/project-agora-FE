@@ -1,4 +1,10 @@
 const DEFAULT_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+const TRANSFER_CHUNK_SIZE = 8 * 1024;
+const MAX_TRANSFER_SIZE = 16 * 1024 * 1024;
+const MAX_QUEUED_SIZE = 64 * 1024 * 1024;
+const QUEUE_HIGH_WATER = 512 * 1024;
+const QUEUE_LOW_WATER = 128 * 1024;
+const TRANSFER_CHUNK_TYPE = '__agora_transfer_chunk';
 
 function configuredIceServers() {
   const raw = import.meta.env.VITE_WEBRTC_ICE_SERVERS;
@@ -40,7 +46,11 @@ export default class CanvasPeerMesh {
     }
 
     const pc = new RTCPeerConnection({ iceServers: this.iceServers });
-    const peer = { metadata, pc, sync: null, cursor: null, pendingCandidates: [] };
+    const peer = {
+      metadata, pc, sync: null, bulk: null, cursor: null, pendingCandidates: [],
+      syncQueue: [], bulkQueue: [], syncQueuedSize: 0, bulkQueuedSize: 0,
+      incomingTransfers: new Map(),
+    };
     this.peers.set(metadata.peer_id, peer);
     pc.onicecandidate = (event) => {
       if (event.candidate) this.#signal(metadata.peer_id, 'candidate', { candidate: event.candidate.toJSON() });
@@ -54,6 +64,7 @@ export default class CanvasPeerMesh {
     const shouldOffer = this.selfPeerId && this.selfPeerId.localeCompare(metadata.peer_id) < 0;
     if (shouldOffer) {
       this.#attachChannel(peer, pc.createDataChannel('agora-sync', { ordered: true }));
+      this.#attachChannel(peer, pc.createDataChannel('agora-bulk', { ordered: true }));
       this.#attachChannel(peer, pc.createDataChannel('agora-cursor', { ordered: false, maxRetransmits: 0 }));
       void this.#createOffer(peer);
     }
@@ -111,13 +122,26 @@ export default class CanvasPeerMesh {
 
   #attachChannel(peer, channel) {
     if (channel.label === 'agora-sync') peer.sync = channel;
+    else if (channel.label === 'agora-bulk') peer.bulk = channel;
     else if (channel.label === 'agora-cursor') peer.cursor = channel;
-    channel.onopen = () => this.#emitPeersChanged();
+    if (channel.label === 'agora-sync' || channel.label === 'agora-bulk') {
+      channel.bufferedAmountLowThreshold = QUEUE_LOW_WATER;
+      channel.onbufferedamountlow = () => this.#flushQueue(peer, channel.label);
+    }
+    channel.onopen = () => {
+      this.#flushQueue(peer, channel.label);
+      this.#emitPeersChanged();
+    };
     channel.onclose = () => this.#emitPeersChanged();
     channel.onerror = () => this.#emitPeersChanged();
     channel.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
+        if (message?.type === TRANSFER_CHUNK_TYPE) {
+          const completed = this.#receiveTransferChunk(peer, message);
+          if (completed) this.onData?.(peer.metadata, completed, channel.label);
+          return;
+        }
         if (message?.type === 'cursor') this.onCursor?.(peer.metadata, message);
         else if (message?.type === 'laser') this.onLaser?.(peer.metadata, message);
         else this.onData?.(peer.metadata, message, channel.label);
@@ -127,17 +151,103 @@ export default class CanvasPeerMesh {
 
   sendData(payload, canSend = () => true) {
     const encoded = JSON.stringify(payload);
+    let queued = true;
     for (const peer of this.peers.values()) {
-      if (peer.sync?.readyState === 'open' && canSend(peer.metadata)) peer.sync.send(encoded);
+      if (peer.sync?.readyState === 'open' && canSend(peer.metadata)) {
+        const channel = encoded.length > TRANSFER_CHUNK_SIZE && peer.bulk?.readyState === 'open' ? 'agora-bulk' : 'agora-sync';
+        queued = this.#enqueue(peer, channel, encoded) && queued;
+      }
     }
+    return queued;
   }
 
   sendToPeer(peerId, payload, channelName = 'agora-sync') {
     const peer = this.peers.get(peerId);
-    const channel = channelName === 'agora-cursor' ? peer?.cursor : peer?.sync;
+    if (channelName === 'agora-cursor') {
+      const channel = peer?.cursor;
+      if (!channel || channel.readyState !== 'open') return false;
+      try { channel.send(JSON.stringify(payload)); return true; } catch { return false; }
+    }
+    const encoded = JSON.stringify(payload);
+    const target = channelName === 'agora-bulk' || (encoded.length > TRANSFER_CHUNK_SIZE && peer?.bulk?.readyState === 'open')
+      ? 'agora-bulk' : 'agora-sync';
+    return Boolean(peer && this.#enqueue(peer, target, encoded));
+  }
+
+  #enqueue(peer, channelName, encoded) {
+    if (encoded.length > MAX_TRANSFER_SIZE) return false;
+    const isBulk = channelName === 'agora-bulk';
+    const channel = isBulk ? peer.bulk : peer.sync;
     if (!channel || channel.readyState !== 'open') return false;
-    channel.send(JSON.stringify(payload));
+    const queueName = isBulk ? 'bulkQueue' : 'syncQueue';
+    const sizeName = isBulk ? 'bulkQueuedSize' : 'syncQueuedSize';
+    const frames = [];
+    if (encoded.length <= TRANSFER_CHUNK_SIZE) frames.push(encoded);
+    else {
+      const transferId = globalThis.crypto?.randomUUID?.() || `transfer-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const count = Math.ceil(encoded.length / TRANSFER_CHUNK_SIZE);
+      for (let index = 0; index < count; index += 1) {
+        frames.push(JSON.stringify({
+          type: TRANSFER_CHUNK_TYPE,
+          transfer_id: transferId,
+          chunk_index: index,
+          chunk_count: count,
+          chunk: encoded.slice(index * TRANSFER_CHUNK_SIZE, (index + 1) * TRANSFER_CHUNK_SIZE),
+        }));
+      }
+    }
+    const queuedSize = frames.reduce((total, frame) => total + frame.length, 0);
+    if (peer[sizeName] + queuedSize > MAX_QUEUED_SIZE) return false;
+    peer[queueName].push(...frames);
+    peer[sizeName] += queuedSize;
+    this.#flushQueue(peer, channelName);
     return true;
+  }
+
+  #flushQueue(peer, channelName) {
+    const isBulk = channelName === 'agora-bulk';
+    const channel = isBulk ? peer.bulk : peer.sync;
+    const queue = isBulk ? peer.bulkQueue : peer.syncQueue;
+    const sizeName = isBulk ? 'bulkQueuedSize' : 'syncQueuedSize';
+    if (!channel || channel.readyState !== 'open') return;
+    while (queue.length && channel.bufferedAmount < QUEUE_HIGH_WATER) {
+      const frame = queue[0];
+      try { channel.send(frame); } catch { return; }
+      queue.shift();
+      peer[sizeName] = Math.max(0, peer[sizeName] - frame.length);
+    }
+  }
+
+  #receiveTransferChunk(peer, message) {
+    const transferId = message.transfer_id;
+    const index = message.chunk_index;
+    const count = message.chunk_count;
+    const chunk = message.chunk;
+    if (typeof transferId !== 'string' || transferId.length > 128
+      || !Number.isSafeInteger(index) || !Number.isSafeInteger(count)
+      || count < 2 || count > Math.ceil(MAX_TRANSFER_SIZE / TRANSFER_CHUNK_SIZE)
+      || index < 0 || index >= count || typeof chunk !== 'string' || chunk.length > TRANSFER_CHUNK_SIZE) return null;
+    const now = Date.now();
+    for (const [id, transfer] of peer.incomingTransfers) {
+      if (now - transfer.startedAt > 30000) peer.incomingTransfers.delete(id);
+    }
+    let transfer = peer.incomingTransfers.get(transferId);
+    if (!transfer) {
+      if (peer.incomingTransfers.size >= 4) peer.incomingTransfers.delete(peer.incomingTransfers.keys().next().value);
+      transfer = { count, parts: new Array(count), received: 0, size: 0, startedAt: now };
+      peer.incomingTransfers.set(transferId, transfer);
+    }
+    if (transfer.count !== count || transfer.parts[index] !== undefined) return null;
+    transfer.parts[index] = chunk;
+    transfer.received += 1;
+    transfer.size += chunk.length;
+    if (transfer.size > MAX_TRANSFER_SIZE) {
+      peer.incomingTransfers.delete(transferId);
+      return null;
+    }
+    if (transfer.received !== transfer.count) return null;
+    peer.incomingTransfers.delete(transferId);
+    try { return JSON.parse(transfer.parts.join('')); } catch { return null; }
   }
 
   sendCursor(payload) {
@@ -156,7 +266,9 @@ export default class CanvasPeerMesh {
 
   getOpenPeerCount() {
     let count = 0;
-    for (const peer of this.peers.values()) if (peer.sync?.readyState === 'open') count += 1;
+    for (const peer of this.peers.values()) {
+      if (peer.sync?.readyState === 'open' && peer.bulk?.readyState === 'open') count += 1;
+    }
     return count;
   }
 
@@ -166,7 +278,10 @@ export default class CanvasPeerMesh {
     this.peers.delete(peerId);
     peer.pc.onicecandidate = null;
     peer.pc.ondatachannel = null;
-    try { peer.sync?.close(); peer.cursor?.close(); peer.pc.close(); } catch { /* already closed */ }
+    peer.syncQueue.length = 0;
+    peer.bulkQueue.length = 0;
+    peer.incomingTransfers.clear();
+    try { peer.sync?.close(); peer.bulk?.close(); peer.cursor?.close(); peer.pc.close(); } catch { /* already closed */ }
     this.#emitPeersChanged();
   }
 
@@ -175,9 +290,9 @@ export default class CanvasPeerMesh {
   }
 
   #emitPeersChanged() {
-    this.onPeersChanged?.([...this.peers.values()].map(({ metadata, sync }) => ({
+    this.onPeersChanged?.([...this.peers.values()].map(({ metadata, sync, bulk }) => ({
       ...metadata,
-      connected: sync?.readyState === 'open',
+      connected: sync?.readyState === 'open' && bulk?.readyState === 'open',
     })));
   }
 
