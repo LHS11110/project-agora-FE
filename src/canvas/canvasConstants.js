@@ -1,0 +1,12 @@
+export const inkColors = ['#263b35', '#d9785e', '#617db2', '#d8a443', '#7e6b9d'];
+export const stickyNoteColors = ['#f6edcf', '#f3d8cc', '#dce9e0', '#dce6f4', '#eadff1'];
+export const ERASER_RADIUS = 12;
+export const LASER_COLOR = '#ff3d67';
+export const LASER_FADE_MS = 1600;
+export const REALTIME_STROKE_INTERVAL_MS = 32;
+export const REALTIME_STROKE_BATCH_SIZE = 128;
+export const MAX_REALTIME_STROKE_POINTS = 50000;
+export const MIN_STROKE_WIDTH = 1;
+export const MAX_STROKE_WIDTH = 20;
+export const MIN_ZOOM_SENSITIVITY = 0.5;
+export const MAX_ZOOM_SENSITIVITY = 2;

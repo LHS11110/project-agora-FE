@@ -1,502 +1,52 @@
-import { cloneElement, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Automerge from '@automerge/automerge/slim';
 import automergeWasmUrl from '@automerge/automerge/automerge.wasm?url';
 import { Link, useNavigate, useParams } from '../routing.jsx';
 import Icon from '../components/Icon.jsx';
 import AuthenticatedImage from '../components/AuthenticatedImage.jsx';
-import MarkdownText from '../components/MarkdownText.jsx';
-import EditableTable from '../components/EditableTable.jsx';
 import ShareComposer from '../components/ShareComposer.jsx';
-import SharedMediaContent from '../components/SharedMediaContent.jsx';
-import MathFormula from '../components/MathFormula.jsx';
-import ArrowHeadControls from '../components/ArrowHeadControls.jsx';
 import VectorLayer from '../components/VectorLayer.jsx';
 import LaserLayer from '../components/LaserLayer.jsx';
-import ResizeHandles from '../components/ResizeHandles.jsx';
-import RotationHandles, { rotationAtPointer } from '../components/CanvasRotationHandles.jsx';
-import { captureResize, resizeItemAtPointer } from '../components/objectResize.js';
-import CanvasPeerMesh from '../components/CanvasPeerMesh.js';
+import RotationHandles from '../components/CanvasRotationHandles.jsx';
 import CanvasSpatialBTree, { objectBounds } from '../components/CanvasSpatialBTree.js';
-import { connectorBendFromPointer, connectorGeometry } from '../components/connectorGeometry.js';
+import CanvasObject from '../canvas/CanvasObject.jsx';
+import RemoteCursorLayer from '../components/canvas/RemoteCursorLayer.jsx';
+import SettingsDialog from '../components/canvas/CanvasSettingsDialog.jsx';
+import CanvasInspectorPanel from '../components/canvas/CanvasInspectorPanel.jsx';
+import CanvasChatPanel from '../components/canvas/CanvasChatPanel.jsx';
+import { CHAT_HISTORY_LIMIT, CHAT_ROOM_ID } from '../canvas/canvasChat.js';
+import { createId } from '../canvas/canvasIds.js';
+import { uniqueCanvasParticipants } from '../canvas/canvasParticipants.js';
+import {
+  canPeerAccessItem,
+  collaborativeContent,
+  collaborativeField,
+  createActorId,
+  decodeBase64,
+  encodeBase64,
+  isCollaborativeItem,
+  makeCollaborativeItem,
+  nextPeerSyncVersion,
+} from '../canvas/collaborativeSync.js';
+import { ERASER_RADIUS, LASER_FADE_MS, MAX_STROKE_WIDTH, MIN_STROKE_WIDTH, stickyNoteColors, inkColors, MIN_ZOOM_SENSITIVITY, MAX_ZOOM_SENSITIVITY } from '../canvas/canvasConstants.js';
+import { textSpliceBetween } from '../canvas/collaborativeText.js';
+import { isCanvasSyncItem, useCanvasPeerGeometry } from '../canvas/useCanvasPeerGeometry.js';
+import { useCanvasNoteAutoSave } from '../canvas/useCanvasNoteAutoSave.js';
+import { useCanvasStageInteractions } from '../canvas/useCanvasStageInteractions.js';
+import { useCanvasPeerEvents } from '../canvas/useCanvasPeerEvents.js';
+import { useCanvasObjectInteractions } from '../canvas/useCanvasObjectInteractions.js';
+import { useCanvasConnection } from '../canvas/useCanvasConnection.js';
+import { useCanvasMinimap } from '../canvas/useCanvasMinimap.js';
+import { useCanvasServerChangeQueue } from '../canvas/useCanvasServerChangeQueue.js';
+import { connectorGeometry } from '../components/connectorGeometry.js';
 import { DEFAULT_ARROW_END_HEAD, DEFAULT_ARROW_START_HEAD, normalizeArrowHead } from '../components/arrowheadGeometry.js';
-import { eraseStrokeWithEraser } from '../components/strokeGeometry.js';
-import { DEFAULT_SHAPE_ARROW_BEND, shapeArrowBendFromPointer, shapeArrowGeometry } from '../components/shapeArrowGeometry.js';
-import { createTableData, normalizeTableCount, resizeTableData, updateTableValue, MAX_TABLE_COLUMNS, MAX_TABLE_ROWS } from '../components/tableModel.js';
-import { api, canvasSocketUrl, rtcSocketUrl } from '../api/client.js';
+import { DEFAULT_SHAPE_ARROW_BEND, shapeArrowGeometry } from '../components/shapeArrowGeometry.js';
+import { normalizeTableCount, resizeTableData, MAX_TABLE_COLUMNS, MAX_TABLE_ROWS } from '../components/tableModel.js';
 import { useAuth } from '../state/AuthContext.jsx';
 
-const inkColors = ['#263b35', '#d9785e', '#617db2', '#d8a443', '#7e6b9d'];
-const stickyNoteColors = ['#f6edcf', '#f3d8cc', '#dce9e0', '#dce6f4', '#eadff1'];
-const CHAT_ROOM_ID = 'general';
-const CHAT_HISTORY_LIMIT = 50;
 const ZOOM_SENSITIVITY_KEY = 'agora_canvas_zoom_sensitivity';
-const MIN_ZOOM_SENSITIVITY = 0.5;
-const MAX_ZOOM_SENSITIVITY = 2;
 const STROKE_WIDTH_KEY = 'agora_canvas_stroke_width';
-const MIN_STROKE_WIDTH = 1;
-const MAX_STROKE_WIDTH = 20;
-const ERASER_RADIUS = 12;
-const LASER_COLOR = '#ff3d67';
-const LASER_FADE_MS = 1600;
-const REALTIME_STROKE_INTERVAL_MS = 32;
-const REALTIME_STROKE_BATCH_SIZE = 128;
-const MAX_REALTIME_STROKE_POINTS = 50000;
-const MINIMAP_ASPECT = 1.6;
-const MINIMAP_OVERVIEW_SCALE = 1.5;
-const MINIMAP_POSITION_KEY = 'agora_canvas_minimap_position';
-const MINIMAP_ITEM_KINDS = new Set(['image', 'link', 'code', 'note', 'table', 'shape', 'text', 'math', 'stroke', 'connector']);
-const MINIMAP_ITEM_COLORS = {
-  image: '#c58b68', link: '#cf876b', code: '#708d78', note: '#d1ae62', table: '#7587a6',
-  shape: '#6d9a91', text: '#809084', math: '#9a7ea1', stroke: '#526d5f', connector: '#a0a59b',
-};
-const createId = () => globalThis.crypto?.randomUUID?.() || `item-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const automergeReady = Automerge.initializeWasm(automergeWasmUrl);
-
-function canvasPasswordGrantKey(canvasId, user) {
-  const identity = user?.email || `${user?.nickname || 'unknown'}#${user?.tag_number ?? ''}`;
-  return `agora_canvas_password_grant:${canvasId}:${encodeURIComponent(identity)}`;
-}
-
-function isUnexpiredJwt(token) {
-  try {
-    const payload = token.split('.')[1];
-    if (!payload) return false;
-    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const claims = JSON.parse(atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')));
-    return Number.isFinite(Number(claims.exp)) && Number(claims.exp) * 1000 > Date.now() + 5000;
-  } catch {
-    return false;
-  }
-}
-
-function readCanvasPasswordGrant(key) {
-  try {
-    const grant = sessionStorage.getItem(key);
-    if (grant && isUnexpiredJwt(grant)) return grant;
-    sessionStorage.removeItem(key);
-  } catch {
-    // Storage can be disabled by the browser; the server-side password flow still works.
-  }
-  return null;
-}
-
-function saveCanvasPasswordGrant(key, grant) {
-  try {
-    if (grant && isUnexpiredJwt(grant)) sessionStorage.setItem(key, grant);
-    else sessionStorage.removeItem(key);
-  } catch {
-    // Storage can be disabled by the browser; the server-side password flow still works.
-  }
-}
-
-function toChatEntry(message, user) {
-  const numericTimestamp = Number(message.created_at);
-  const timestamp = Number.isFinite(numericTimestamp) && String(message.created_at ?? '').trim() !== ''
-    ? new Date(numericTimestamp < 1e12 ? numericTimestamp * 1000 : numericTimestamp)
-    : new Date(message.created_at || Date.now());
-  const sequence = Number(message.sequence);
-  const hasSequence = Number.isFinite(sequence) && sequence > 0;
-  const nickname = message.sender || '알 수 없는 사용자';
-  const tagNumber = message.tag_number;
-  return {
-    id: hasSequence ? `${CHAT_ROOM_ID}-${sequence}` : createId(),
-    sequence: hasSequence ? sequence : null,
-    sender: `${nickname}#${tagNumber ?? '?'}`,
-    text: message.text || '',
-    time: Number.isNaN(timestamp.getTime()) ? new Date() : timestamp,
-    own: nickname === user?.nickname && Number(tagNumber) === Number(user?.tag_number),
-  };
-}
-
-function mergeChatEntries(current, incoming) {
-  const entries = new Map();
-  for (const entry of [...current, ...incoming]) {
-    entries.set(entry.sequence == null ? entry.id : `sequence-${entry.sequence}`, entry);
-  }
-  return [...entries.values()].sort((left, right) => {
-    if (left.sequence == null) return 1;
-    if (right.sequence == null) return -1;
-    return left.sequence - right.sequence;
-  });
-}
-
-function encodeBase64(bytes) {
-  let binary = '';
-  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-  }
-  return btoa(binary);
-}
-
-function decodeBase64(encoded) {
-  const binary = atob(encoded);
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
-}
-
-function collaborativeField(item) {
-  return item.kind === 'code' ? 'code' : 'text';
-}
-
-function collaborativeContent(item) {
-  return item?.[collaborativeField(item)] || '';
-}
-
-function textSpliceBetween(previousValue, nextValue) {
-  const previous = String(previousValue ?? '');
-  const next = String(nextValue ?? '');
-  let start = 0;
-  while (start < previous.length && start < next.length && previous[start] === next[start]) start += 1;
-  let suffix = 0;
-  while (suffix < previous.length - start && suffix < next.length - start
-    && previous[previous.length - 1 - suffix] === next[next.length - 1 - suffix]) suffix += 1;
-  return {
-    index: start,
-    deleteCount: previous.length - start - suffix,
-    insertText: next.slice(start, next.length - suffix),
-  };
-}
-
-function moveTextPosition(position, change) {
-  const end = change.index + change.deleteCount;
-  if (position <= change.index) return position;
-  if (position >= end) return position + change.insertText.length - change.deleteCount;
-  return change.index + change.insertText.length;
-}
-
-function createActorId() {
-  return globalThis.crypto?.randomUUID?.().replaceAll('-', '') || `${Math.random().toString(16).slice(2)}${Date.now().toString(16)}`;
-}
-
-function makeCollaborativeItem(item) {
-  if (!['text', 'note', 'code'].includes(item.kind)) return item;
-  const doc = Automerge.from({ content: collaborativeContent(item) });
-  return {
-    ...item,
-    automerge_snapshot: encodeBase64(Automerge.save(doc)),
-    automerge_changes: [],
-  };
-}
-
-function mergeCollaborativeHistory(...histories) {
-  const seen = new Set();
-  const merged = [];
-  for (const history of histories) {
-    for (const entry of history || []) {
-      const change = typeof entry === 'string' ? entry : entry?.change;
-      if (!change || seen.has(change)) continue;
-      seen.add(change);
-      merged.push(typeof entry === 'string' ? { change } : entry);
-    }
-  }
-  return merged;
-}
-
-function isCollaborativeItem(item) {
-  return ['text', 'note', 'code'].includes(item?.kind);
-}
-
-function isCanvasSyncItem(item) {
-  return ['image', 'link', 'code', 'note', 'table', 'shape', 'text', 'math', 'stroke', 'connector'].includes(item?.kind);
-}
-
-const INITIAL_SYNC_VERSION = Object.freeze({ clock: 0, actor: 'server' });
-const MAX_PENDING_PEER_EVENT_SIZE = 2 * 1024 * 1024;
-const MAX_PENDING_PEER_EVENTS_SIZE = 16 * 1024 * 1024;
-const MAX_PENDING_PEER_EVENTS_PER_ITEM = 128;
-
-function normalizeSyncVersion(version) {
-  if (!version || !Number.isSafeInteger(version.clock) || version.clock < 0
-    || version.clock > Date.now() + 30 * 24 * 60 * 60 * 1000
-    || typeof version.actor !== 'string' || !version.actor || version.actor.length > 128) return null;
-  return { clock: version.clock, actor: version.actor };
-}
-
-function compareSyncVersions(left, right) {
-  const a = normalizeSyncVersion(left) || INITIAL_SYNC_VERSION;
-  const b = normalizeSyncVersion(right) || INITIAL_SYNC_VERSION;
-  if (a.clock !== b.clock) return a.clock < b.clock ? -1 : 1;
-  return a.actor === b.actor ? 0 : a.actor < b.actor ? -1 : 1;
-}
-
-function nextPeerSyncVersion(clockRef, actorRef) {
-  const clock = Math.max(Date.now(), clockRef.current + 1);
-  clockRef.current = clock;
-  return { clock, actor: actorRef.current };
-}
-
-function queuePendingPeerEvent(eventsRef, sizeRef, itemId, peer, data, channelName) {
-  const size = typeof data.change === 'string' ? data.change.length : JSON.stringify(data).length;
-  if (size > MAX_PENDING_PEER_EVENT_SIZE || sizeRef.current + size > MAX_PENDING_PEER_EVENTS_SIZE) return false;
-  let events = eventsRef.current.get(itemId);
-  if (!events) {
-    events = [];
-    eventsRef.current.set(itemId, events);
-  }
-  if (events.length >= MAX_PENDING_PEER_EVENTS_PER_ITEM) return false;
-  events.push({ peer, data, channelName, size });
-  sizeRef.current += size;
-  return true;
-}
-
-function takePendingPeerEvents(eventsRef, sizeRef, itemId) {
-  const events = eventsRef.current.get(itemId) || [];
-  eventsRef.current.delete(itemId);
-  for (const event of events) sizeRef.current = Math.max(0, sizeRef.current - event.size);
-  return events.sort((left, right) => compareSyncVersions(left.data.version, right.data.version));
-}
-
-function canPeerAccessItem(item, peer) {
-  if (peer?.is_admin) return true;
-  const allowedGroups = new Set(Array.isArray(peer?.groups) ? peer.groups : []);
-  const permission = item?.permission;
-  const required = typeof permission === 'string' ? [permission]
-    : Array.isArray(permission) ? permission
-      : permission && typeof permission === 'object'
-        ? Object.entries(permission).filter(([, level]) => Number(level) > 0).map(([group]) => group)
-        : [];
-  return required.some((group) => allowedGroups.has(String(group)));
-}
-
-function sendStrokePreviewPoints(mesh, session, points) {
-  if (!mesh || !session || !points?.length) return;
-  for (let offset = 0; offset < points.length; offset += REALTIME_STROKE_BATCH_SIZE) {
-    session.sequence += 1;
-    mesh.sendData({
-      type: 'stroke_preview',
-      phase: 'points',
-      stroke_id: session.id,
-      sequence: session.sequence,
-      points: points.slice(offset, offset + REALTIME_STROKE_BATCH_SIZE),
-    }, (peer) => canPeerAccessItem(session.aclItem, peer));
-  }
-}
-
-function sendStrokePreviewStart(mesh, session, firstPoint) {
-  if (!mesh || !session || !firstPoint) return;
-  mesh.sendData({
-    type: 'stroke_preview',
-    phase: 'start',
-    stroke_id: session.id,
-    sequence: 0,
-    points: [firstPoint],
-    color: session.color,
-    stroke_width: session.strokeWidth,
-    permission: session.permission,
-  }, (peer) => canPeerAccessItem(session.aclItem, peer));
-}
-
-function sendStrokePreviewSnapshot(mesh, peer, session, points) {
-  if (!mesh || !peer?.peer_id || !session || !points?.length || !canPeerAccessItem(session.aclItem, peer)) return;
-  mesh.sendToPeer(peer.peer_id, {
-    type: 'stroke_preview',
-    phase: 'start',
-    stroke_id: session.id,
-    sequence: 0,
-    points: [points[0]],
-    color: session.color,
-    stroke_width: session.strokeWidth,
-    permission: session.permission,
-  });
-  let sequence = 0;
-  for (let offset = 1; offset < points.length; offset += REALTIME_STROKE_BATCH_SIZE) {
-    sequence += 1;
-    mesh.sendToPeer(peer.peer_id, {
-      type: 'stroke_preview',
-      phase: 'points',
-      stroke_id: session.id,
-      sequence,
-      points: points.slice(offset, offset + REALTIME_STROKE_BATCH_SIZE),
-    });
-  }
-  session.sequence = Math.max(session.sequence, sequence);
-}
-
-function cursorColor(nickname, tagNumber) {
-  const identity = `${nickname || ''}#${tagNumber ?? ''}`;
-  let hash = 2166136261;
-  for (let index = 0; index < identity.length; index += 1) {
-    hash ^= identity.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return `hsl(${(hash >>> 0) % 360} 66% 43%)`;
-}
-
-const RemoteCursorLayer = memo(function RemoteCursorLayer({ updaterRef, activePeerIds, visibleBounds }) {
-  const [cursors, setCursors] = useState({});
-
-  useEffect(() => {
-    const updateCursor = (peer, cursor) => {
-      if (!peer?.peer_id) return;
-      if (cursor.visible === false) {
-        setCursors((current) => {
-          if (!current[peer.peer_id]) return current;
-          const next = { ...current };
-          delete next[peer.peer_id];
-          return next;
-        });
-        return;
-      }
-      const x = Number(cursor.x);
-      const y = Number(cursor.y);
-      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-      setCursors((current) => {
-        const previous = current[peer.peer_id];
-        const color = cursorColor(peer.nickname, peer.tag_number);
-        if (previous?.x === x && previous?.y === y && previous?.color === color
-          && previous?.nickname === peer.nickname && previous?.tag_number === peer.tag_number) return current;
-        return { ...current, [peer.peer_id]: { ...peer, x, y, color } };
-      });
-    };
-    updaterRef.current = updateCursor;
-    return () => {
-      if (updaterRef.current === updateCursor) updaterRef.current = null;
-    };
-  }, [updaterRef]);
-
-  useEffect(() => {
-    const active = new Set(activePeerIds.split('\n').filter(Boolean));
-    setCursors((current) => {
-      const nextEntries = Object.entries(current).filter(([peerId]) => active.has(peerId));
-      return nextEntries.length === Object.keys(current).length ? current : Object.fromEntries(nextEntries);
-    });
-  }, [activePeerIds]);
-
-  return Object.entries(cursors)
-    .filter(([, cursor]) => cursor.x >= visibleBounds.minX && cursor.x <= visibleBounds.maxX
-      && cursor.y >= visibleBounds.minY && cursor.y <= visibleBounds.maxY)
-    .map(([peerId, cursor]) => <div className="remote-cursor" key={peerId} style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%`, '--cursor-color': cursor.color }} title={`${cursor.nickname}#${cursor.tag_number}`}><svg viewBox="0 0 18 22" aria-hidden="true"><path d="M1 1v17l4.5-4.3 3.1 7.1 3.1-1.4-3.2-6.8H15z" /></svg><span>{cursor.nickname}</span></div>);
-});
-
-function uniqueCanvasParticipants(participants, excludedUser) {
-  const seen = new Set();
-  return (Array.isArray(participants) ? participants : []).filter((person) => {
-    const nickname = String(person?.nickname || '');
-    const tagNumber = Number(person?.tag_number);
-    if (!nickname || (excludedUser && nickname === excludedUser.nickname && tagNumber === Number(excludedUser.tag_number))) return false;
-    const identity = `${nickname}#${tagNumber}`;
-    if (seen.has(identity)) return false;
-    seen.add(identity);
-    return true;
-  });
-}
-
-function SettingsDialog({ settings, pending, onClose, onUpdate, onAddParticipant, onRemoveParticipant }) {
-  const [name, setName] = useState(settings?.canvas_name || '');
-  const [description, setDescription] = useState(settings?.description || '');
-  const [password, setPassword] = useState('');
-  const [participant, setParticipant] = useState({ nickname: '', tag: '' });
-  const [message, setMessage] = useState('');
-  const participants = uniqueCanvasParticipants(settings?.participants);
-  useEffect(() => { setName(settings?.canvas_name || ''); setDescription(settings?.description || ''); }, [settings]);
-  return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className="modal-card settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title"><button className="icon-button modal-close" onClick={onClose} aria-label="닫기"><Icon name="close" /></button><span className="section-kicker">CANVAS SETTINGS</span><h2 id="settings-title">캔버스 설정</h2><p>변경 사항은 접속 중인 멤버에게 바로 전달돼요.</p>
-    <div className="settings-dialog-content"><label className="form-field"><span>캔버스 이름</span><div className="setting-row"><input className="plain-input" value={name} maxLength={255} onChange={(e) => setName(e.target.value)} /><button className="button button-outline" disabled={pending || name === settings?.canvas_name} onClick={() => onUpdate('name', name)}>저장</button></div></label><label className="form-field"><span>설명</span><div className="setting-row"><textarea className="plain-input" rows="2" value={description} onChange={(e) => setDescription(e.target.value)} /><button className="button button-outline" disabled={pending || description === (settings?.description || '')} onClick={() => onUpdate('description', description)}>저장</button></div></label><label className="form-field"><span>비밀번호 <small>{settings?.password_protected ? '현재 보호 중' : '현재 비밀번호 없음'}</small></span><div className="setting-row"><input className="plain-input" type="password" placeholder="새 비밀번호 입력" value={password} onChange={(e) => setPassword(e.target.value)} /><button className="button button-outline" disabled={pending || !password} onClick={() => { onUpdate('password', password); setPassword(''); }}>적용</button></div></label>
-      <div className="form-field"><span>참여자 <small>닉네임과 태그로 관리</small></span><div className="participant-chips">{participants.map((person) => <span className="participant-chip" key={`${person.nickname}-${person.tag_number}`}><i>{person.nickname.slice(0, 1)}</i>{person.nickname}#{person.tag_number}<button onClick={() => onRemoveParticipant(person)} aria-label={`${person.nickname} 참여자 제외`} title="참여자 제외">×</button></span>)}</div><div className="setting-row participant-add-row"><input className="plain-input" placeholder="닉네임" value={participant.nickname} onChange={(e) => setParticipant({ ...participant, nickname: e.target.value })} /><input className="plain-input tag-input" inputMode="numeric" placeholder="태그" value={participant.tag} onChange={(e) => setParticipant({ ...participant, tag: e.target.value })} /><button className="button button-outline" disabled={pending || !participant.nickname || !participant.tag} onClick={() => { onAddParticipant(participant.nickname, Number(participant.tag)); setParticipant({ nickname: '', tag: '' }); }}>추가</button></div></div>
-    </div>{message && <p className="field-hint">{message}</p>}{pending && <div className="settings-pending"><span className="loader" /> 변경 내용을 확인하고 있어요.</div>}<div className="settings-dialog-footer"><span>revision {settings?.settings_revision ?? '—'}</span><button className="button button-dark" onClick={onClose}>완료</button></div>
-  </section></div>;
-}
-
-function CanvasObject({ id, item, bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, token, onStartEditing, onTextChange, onMetadataChange, onFormulaChange, onTableChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
-  const formula = String(item.formula ?? item.text ?? 'x + y');
-  const [formulaDraft, setFormulaDraft] = useState(formula);
-  useEffect(() => { setFormulaDraft(formula); }, [id, formula]);
-  const collaborativeValue = String(item.kind === 'code' ? item.code || '' : item.text || '');
-  const collaborativeEditorRef = useRef(null);
-  const collaborativeSelectionRef = useRef(null);
-  const displayedCollaborativeValueRef = useRef(collaborativeValue);
-  const remoteEditorLabel = remoteEditors.length
-    ? `함께 편집 중 · ${remoteEditors.slice(0, 2).map((editor) => `${editor.nickname}#${editor.tag_number}`).join(', ')}${remoteEditors.length > 2 ? ` 외 ${remoteEditors.length - 2}명` : ''}`
-    : '';
-  const rememberCollaborativeSelection = (event) => {
-    const editor = event.currentTarget;
-    displayedCollaborativeValueRef.current = editor.value;
-    collaborativeSelectionRef.current = {
-      start: editor.selectionStart,
-      end: editor.selectionEnd,
-      direction: editor.selectionDirection || 'none',
-    };
-  };
-  const handleCollaborativeInput = (event) => {
-    const editor = event.currentTarget;
-    displayedCollaborativeValueRef.current = editor.value;
-    collaborativeSelectionRef.current = {
-      start: editor.selectionStart,
-      end: editor.selectionEnd,
-      direction: editor.selectionDirection || 'none',
-    };
-    onTextChange(id, editor.value);
-  };
-  useLayoutEffect(() => {
-    const editor = collaborativeEditorRef.current;
-    const previousValue = displayedCollaborativeValueRef.current;
-    if (editor && document.activeElement === editor && previousValue !== collaborativeValue) {
-      const change = textSpliceBetween(previousValue, collaborativeValue);
-      const selection = collaborativeSelectionRef.current;
-      if (selection) {
-        const start = Math.max(0, Math.min(collaborativeValue.length, moveTextPosition(selection.start, change)));
-        const end = Math.max(0, Math.min(collaborativeValue.length, moveTextPosition(selection.end, change)));
-        editor.setSelectionRange(start, end, selection.direction);
-        collaborativeSelectionRef.current = { start, end, direction: selection.direction };
-      }
-    }
-    displayedCollaborativeValueRef.current = collaborativeValue;
-  }, [collaborativeValue]);
-  const width = Number(item.width) || ({ image: 0.3, code: 0.32, shape: 0.14, math: 0.2, text: 0.22, note: 0.22, table: 0.42, link: 0.3 }[item.kind] || 0.2);
-  const height = Number(item.height) || ({ shape: 0.12, math: 0.09, text: 0.12, note: 0.15, table: 0.32, link: 0.15 }[item.kind] || 0.2);
-  const style = { left: `${(Number(item.x) || 0) * 100}%`, top: `${(Number(item.y) || 0) * 100}%`, width: `${width * 100}%`, '--object-color': item.color || '#617d68', '--object-rotation': `${Number(item.rotation) || 0}deg` };
-  if (item.height) style.height = `${height * 100}%`;
-  const movable = activeTool === 'select';
-  const classes = `canvas-object canvas-object-${item.kind}${movable ? ' movable' : ''}${selected ? ' selected' : ''}${connectionStartId === id ? ' connection-source' : ''}${item.height ? ' has-custom-height' : ''}`;
-  const handlers = { 'data-item-id': id, onPointerDown: (event) => onPointerDown(event, id, item), onPointerMove, onPointerUp, onPointerCancel: onPointerUp };
-  const resizeHandles = selected && allowSingleSelectionControls && movable && !editing && item.kind !== 'connector'
-    ? <ResizeHandles onPointerDown={(event, handle) => onResizeStart(event, id, item, handle)} />
-    : null;
-  const withResizeHandles = (element) => resizeHandles
-    ? cloneElement(element, { className: `${element.props.className} resizeable` }, <>{element.props.children}{resizeHandles}</>)
-    : element;
-
-  if (item.kind === 'stroke') return null;
-  if (item.kind === 'connector') {
-    const vectorStyle = { ...style, left: `${(bounds?.minX ?? 0) * 100}%`, top: `${(bounds?.minY ?? 0) * 100}%`, width: `${Math.max(0.01, (bounds?.maxX ?? 0.2) - (bounds?.minX ?? 0)) * 100}%`, height: `${Math.max(0.01, (bounds?.maxY ?? 0.12) - (bounds?.minY ?? 0)) * 100}%` };
-    const geometryWidth = Math.max(1, (bounds.maxX - bounds.minX) * viewSize.width);
-    const geometryHeight = Math.max(1, (bounds.maxY - bounds.minY) * viewSize.height);
-    const offsetX = bounds.minX * viewSize.width;
-    const offsetY = bounds.minY * viewSize.height;
-    const curvePath = connectorCurve?.points.map((point, index) => `${index ? 'L' : 'M'}${point.x - offsetX} ${point.y - offsetY}`).join(' ');
-    const connectorEnds = [connectorCurve?.start, connectorCurve?.end].filter(Boolean);
-    const bendPoints = connectorCurve?.curvePoints || connectorCurve?.points;
-    const curveMidpoint = bendPoints?.[Math.floor((bendPoints.length - 1) / 2)];
-    const bendHandle = curveMidpoint && selected && allowSingleSelectionControls && movable && !editing
-      ? <button type="button" className="shape-arrow-bend-handle" style={{ left: `${(curveMidpoint.x - offsetX) / geometryWidth * 100}%`, top: `${(curveMidpoint.y - offsetY) / geometryHeight * 100}%` }} title="몸통을 드래그해 곡률 조절" aria-label="연결 화살표 몸통 곡률 조절" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onArrowBendStart(event, id, item); }} />
-      : null;
-    return withResizeHandles(<div key={id} className={`${classes} vector-object-hit`} style={vectorStyle} data-item-id={id} {...handlers} onDoubleClick={(event) => { if (activeTool !== 'select') return; event.preventDefault(); event.stopPropagation(); onConnectorDoubleClick(id, item); }} title="한 번 클릭해 선택 · 두 번 클릭해 연결된 객체로 이동">{curvePath && <svg className="connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} />{connectorEnds.map((point, index) => <circle key={index} cx={point.x - offsetX} cy={point.y - offsetY} r="9" />)}</svg>}{bendHandle}</div>);
-  }
-  if (item.kind === 'image') return withResizeHandles(<div key={id} className={`${classes} image-object`} style={style} {...handlers}><AuthenticatedImage src={item.src} token={token} alt={item.filename || '공유된 이미지'} fallback={<div className="image-object-fallback"><Icon name="image" size={19} /><span>이미지를 표시할 수 없어요</span></div>} loadingFallback={<div className="image-object-fallback"><Icon name="image" size={19} /><span>이미지를 불러오는 중…</span></div>} /><div className="object-caption"><Icon name="image" size={13} />{item.filename || '공유 이미지'}</div></div>);
-  if (item.kind === 'link') return withResizeHandles(<div key={id} className={`${classes} media-link-object${item.mediaType === 'link' ? ' external-link-object' : ' video-link-object'}`} style={style} data-item-id={id} {...handlers}>
-    <div className="shared-media-header"><span className="shared-media-drag-handle" title="여기를 끌어 자료를 이동하세요"><Icon name={item.mediaType === 'link' ? 'link' : 'image'} size={13} />{item.mediaType === 'youtube' ? `YouTube · ${item.title || '동영상'}` : item.mediaType === 'video' ? `동영상 · ${item.title || '재생'}` : '링크'}</span></div>
-    <SharedMediaContent item={item} />
-  </div>);
-  if (item.kind === 'code') return withResizeHandles(<div key={id} className={`${classes} code-object`} style={style} data-item-id={id} {...handlers} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) onStopEditing(id); }} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}><div className="code-object-head"><span className="code-file-icon"><Icon name="code" size={15} /></span>{editing ? <><input className="code-filename-input" aria-label="코드 파일 이름" value={item.filename || ''} placeholder="idea.js" maxLength={80} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'filename', event.target.value)} /><select className="code-language-select" aria-label="코드 언어" value={item.language || 'javascript'} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'language', event.target.value)}><option>javascript</option><option>typescript</option><option>python</option><option>html</option><option>css</option><option>json</option><option>text</option></select></> : <><strong>{item.filename || 'snippet.js'}</strong><small>{item.language || 'text'}</small></>}</div>{editing ? <textarea ref={collaborativeEditorRef} className="code-shared-input" autoFocus aria-label="공동 편집 코드" value={item.code || ''} placeholder="여기에 코드를 작성하세요." onPointerDown={(event) => event.stopPropagation()} onSelect={rememberCollaborativeSelection} onKeyUp={rememberCollaborativeSelection} onClick={rememberCollaborativeSelection} onChange={handleCollaborativeInput} /> : <pre onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 함께 편집"><code>{item.code}</code></pre>}<div className="code-object-foot"><span><i /> {dirty ? '저장되지 않음 · Ctrl + S' : editing ? 'P2P 실시간 편집' : '두 번 클릭해 편집'}</span>{remoteEditorLabel && <small className="collab-presence-label" title={remoteEditorLabel}>{remoteEditorLabel}</small>}<button onClick={() => onCopy(item.code || '')}>복사</button></div></div>);
-  if (item.kind === 'note') return withResizeHandles(<div key={id} className={`${classes} sticky-note-object`} style={{ ...style, '--sticky-note-color': item.color || stickyNoteColors[0], '--sticky-note-rotation': `${Number(item.rotation) || -1}deg` }} data-item-id={id} {...handlers} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) onStopEditing(id); }} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}>
-    <div className="sticky-note-head"><span title="끌어서 포스트잇 이동"><Icon name="sticky" size={13} /> 포스트잇</span><input type="color" aria-label="포스트잇 색상" title="포스트잇 색상 변경" value={item.color || stickyNoteColors[0]} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'color', event.target.value)} /></div>
-    {editing ? <textarea ref={collaborativeEditorRef} autoFocus aria-label="포스트잇 Markdown 편집" value={item.text || ''} placeholder={'# 메모 제목\n- 할 일\n**중요한 내용**'} onPointerDown={(event) => event.stopPropagation()} onSelect={rememberCollaborativeSelection} onKeyUp={rememberCollaborativeSelection} onClick={rememberCollaborativeSelection} onChange={handleCollaborativeInput} /> : <div className="sticky-note-content" onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 Markdown 편집">{item.text ? <MarkdownText source={item.text} /> : <p className="sticky-note-empty">두 번 클릭해 메모를 작성하세요.</p>}</div>}
-    <small className={`collab-save-hint${remoteEditorLabel ? ' collab-presence-hint' : ''}`}>{remoteEditorLabel || (dirty ? '저장되지 않음 · Ctrl + S' : editing ? 'Markdown · Ctrl + S 저장' : '두 번 클릭해 편집')}</small>
-  </div>);
-  if (item.kind === 'table') return withResizeHandles(<div key={id} className={`${classes} canvas-table-object`} style={style} data-item-id={id} {...handlers}><EditableTable item={item} onChange={(location, value) => onTableChange(id, (current) => updateTableValue(current, location, value))} /></div>);
-  if (item.kind === 'shape') {
-    const arrowGeometry = item.shapeType === 'arrow' ? shapeArrowGeometry(width * viewSize.width, height * viewSize.height, item.bend, item.startHead, item.endHead) : null;
-    const bendHandle = arrowGeometry && selected && allowSingleSelectionControls && movable && !editing
-      ? <button type="button" className="shape-arrow-bend-handle" style={{ left: `${arrowGeometry.curveMidpoint.x / arrowGeometry.width * 100}%`, top: `${arrowGeometry.curveMidpoint.y / arrowGeometry.height * 100}%` }} title="몸통을 드래그해 곡률 조절" aria-label="화살표 몸통 곡률 조절" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onArrowBendStart(event, id, item); }} />
-      : null;
-    return withResizeHandles(<div key={id} className={`${classes} shape-object shape-vector-hit shape-${item.shapeType || 'rectangle'}`} style={style} {...handlers}>{bendHandle}</div>);
-  }
-  if (item.kind === 'text') return withResizeHandles(<div key={id} className={`${classes} text-object`} style={style} data-item-id={id} {...handlers}>{editing ? <><textarea ref={collaborativeEditorRef} autoFocus aria-label="공동 편집 텍스트" value={item.text || ''} placeholder="여기에 텍스트를 입력하세요." onPointerDown={(event) => event.stopPropagation()} onSelect={rememberCollaborativeSelection} onKeyUp={rememberCollaborativeSelection} onClick={rememberCollaborativeSelection} onChange={handleCollaborativeInput} onBlur={() => onStopEditing(id)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }} /><small className={`collab-save-hint${remoteEditorLabel ? ' collab-presence-hint' : ''}`}>{remoteEditorLabel || (dirty ? '저장되지 않음 · Ctrl + S' : '저장됨')}</small></> : <p onDoubleClick={() => onStartEditing(id)} title="두 번 클릭해 함께 편집">{item.text || '두 번 클릭해 편집'}</p>}</div>);
-  if (item.kind === 'math') return withResizeHandles(<div key={id} className={`${classes} math-object`} style={style} {...handlers}>
-    {editing
-      ? <input className="math-formula-input" autoFocus aria-label="수식 편집" value={formulaDraft} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => setFormulaDraft(event.target.value)} onBlur={() => { onFormulaChange(id, formulaDraft); onStopEditing(id); }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }} />
-      : <span className="math-formula-preview" onDoubleClick={(event) => { event.stopPropagation(); onStartEditing(id); }} title="두 번 클릭해 수식 편집"><MathFormula formula={formula} /></span>}
-  </div>);
-  return null;
-}
 
 function CanvasWorkspace() {
   const { canvasId } = useParams();
@@ -504,18 +54,25 @@ function CanvasWorkspace() {
   const navigate = useNavigate();
   const boardRef = useRef(null);
   const sceneRef = useRef(null);
-  const minimapWidgetRef = useRef(null);
-  const minimapPointerRef = useRef(null);
-  const minimapMoveRef = useRef(null);
-  const minimapPositionRef = useRef(null);
   const selectionRef = useRef(null);
   const stageWheelHandlerRef = useRef(null);
   const wsRef = useRef(null);
   const rtcWsRef = useRef(null);
   const autoReconnectRef = useRef(false);
+  const serverReconnectRequestedRef = useRef(false);
+  const reconnectRequestRef = useRef(null);
+  const canvasSnapshotLoadedRef = useRef(false);
   const reconnectAttemptsRef = useRef(0);
   const itemsRef = useRef({});
   const pendingItemChangesRef = useRef([]);
+  const {
+    enqueue: enqueueServerChange,
+    markSent: markServerChangeSent,
+    acknowledge: acknowledgeServerChange,
+    reject: rejectServerChange,
+    pending: getPendingServerChanges,
+    replacePersistedItems,
+  } = useCanvasServerChangeQueue();
   const rejectedEventPongsRef = useRef(0);
   const syncClockRef = useRef(Date.now());
   const syncActorRef = useRef(null);
@@ -529,9 +86,24 @@ function CanvasWorkspace() {
   const groupsRef = useRef([]);
   const dirtyItemsRef = useRef(new Set());
   const peerMeshRef = useRef(null);
+  const stageOfflineGeometryRef = useRef(null);
+  const {
+    sendPeerItemGeometry,
+    sendRealtimePeerItemGeometry,
+    clearPeerItemGeometryBroadcast,
+  } = useCanvasPeerGeometry({
+    peerMeshRef,
+    syncClockRef,
+    syncActorRef,
+    itemSyncVersionsRef,
+    canPeerAccessItem,
+    nextPeerSyncVersion,
+    onLocalGeometryRef: stageOfflineGeometryRef,
+  });
   const remoteCursorUpdaterRef = useRef(null);
   const syncedPeersRef = useRef(new Set());
   const newCollaborativeItemsRef = useRef(new Set());
+  const saveCollaborativeItemRef = useRef(null);
   const editingIdRef = useRef(null);
   const chatHistoryRequestRef = useRef(null);
   const chatHistoryPageRef = useRef({ hasMore: false, nextToSequence: null });
@@ -551,7 +123,6 @@ function CanvasWorkspace() {
   const draftRef = useRef([]);
   const vectorDraftRef = useRef(null);
   const [canvas, setCanvas] = useState(null);
-  const [itemsInitialized, setItemsInitialized] = useState(false);
   const [items, setItems] = useState({});
   const [spatialRevision, setSpatialRevision] = useState(0);
   const [groups, setGroups] = useState([]);
@@ -592,12 +163,6 @@ function CanvasWorkspace() {
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [selectedItemIds, setSelectedItemIds] = useState([]);
   const [selectionBox, setSelectionBox] = useState(null);
-  const [minimapPosition, setMinimapPosition] = useState(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem(MINIMAP_POSITION_KEY) || 'null');
-      return Number.isFinite(stored?.left) && Number.isFinite(stored?.top) ? stored : null;
-    } catch { return null; }
-  });
   const [editingId, setEditingId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
@@ -613,33 +178,20 @@ function CanvasWorkspace() {
   }, []);
   groupsRef.current = groups;
   dirtyItemsRef.current = dirtyItems;
-  minimapPositionRef.current = minimapPosition;
   useEffect(() => { if (activeTool !== 'link') setSharePosition(null); }, [activeTool]);
-  useEffect(() => {
-    if (!minimapPosition || boardSize.width <= 1 || boardSize.height <= 1) return;
-    const widget = minimapWidgetRef.current?.getBoundingClientRect();
-    if (!widget) return;
-    const next = {
-      left: Math.max(4, Math.min(Math.max(4, boardSize.width - widget.width - 4), minimapPosition.left)),
-      top: Math.max(4, Math.min(Math.max(4, boardSize.height - widget.height - 4), minimapPosition.top)),
-    };
-    if (next.left !== minimapPosition.left || next.top !== minimapPosition.top) {
-      minimapPositionRef.current = next;
-      setMinimapPosition(next);
-      try { localStorage.setItem(MINIMAP_POSITION_KEY, JSON.stringify(next)); } catch { /* Ignore unavailable local storage. */ }
-      return;
-    }
-  }, [boardSize, minimapPosition]);
 
   const sendRaw = useCallback((payload) => {
     const socket = wsRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) return false;
-    socket.send(JSON.stringify(payload)); return true;
+    const request = payload?.type === 'ping' || payload?.type === 'pong' || payload?.request_id
+      ? payload : { ...payload, request_id: createId() };
+    socket.send(JSON.stringify(request)); return true;
   }, []);
   const sendRtcRaw = useCallback((payload) => {
     const socket = rtcWsRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) return false;
-    socket.send(JSON.stringify(payload)); return true;
+    const request = payload?.request_id ? payload : { ...payload, request_id: createId() };
+    socket.send(JSON.stringify(request)); return true;
   }, []);
   const requestChatHistory = useCallback((toSequence) => {
     if (chatHistoryRequestRef.current) return false;
@@ -662,8 +214,29 @@ function CanvasWorkspace() {
   const markItemDirty = useCallback((id) => {
     const key = String(id);
     itemEditRevisionRef.current.set(key, (itemEditRevisionRef.current.get(key) || 0) + 1);
+    dirtyItemsRef.current = new Set(dirtyItemsRef.current).add(key);
     setDirtyItems((current) => new Set(current).add(key));
   }, []);
+  stageOfflineGeometryRef.current = (rawId, item) => {
+    if (!serverReconnectRequestedRef.current || !item) return;
+    const id = String(rawId);
+    if (isCollaborativeItem(item)) {
+      if (!dirtyItemsRef.current.has(id)) markItemDirty(id);
+      return;
+    }
+    if (!isCanvasSyncItem(item)) return;
+    const payload = { type: 'item_update', item_id: id, item };
+    enqueueServerChange({
+      id,
+      payload,
+      previous: itemsRef.current[id],
+      item,
+      type: 'item_update',
+      wasNewCollaborative: false,
+      syncAction: 'upsert',
+      syncVersion: itemSyncVersionsRef.current.get(id) || null,
+    });
+  };
   const refreshSpatialIndex = useCallback(() => setSpatialRevision((revision) => revision + 1), []);
   const getCollaborativeDoc = useCallback((id, item) => {
     const key = String(id);
@@ -742,6 +315,7 @@ function CanvasWorkspace() {
     const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
     itemSyncVersionsRef.current.set(key, version);
     peerMeshRef.current?.sendData({ type: 'item_metadata', item_id: key, field, value: nextValue, version }, (peer) => canPeerAccessItem(nextItem, peer));
+    if (item.kind === 'note' && field === 'groupId') saveCollaborativeItemRef.current?.(key, { silent: true });
   }, [markItemDirty]);
   const broadcastEditorPresence = useCallback((id, editing) => {
     const key = String(id);
@@ -759,7 +333,7 @@ function CanvasWorkspace() {
         type: 'item_sync_state', action: 'delete', item_id: change.id,
         permission, version: change.syncVersion,
       }, (peer) => canPeerAccessItem(accessItem, peer));
-      if (!queued) setToast('WebRTC 동기화 대기열이 가득 차 일부 변경을 전달하지 못했습니다. 재접속하면 다시 동기화됩니다.');
+      if (!queued && !serverReconnectRequestedRef.current) setToast('WebRTC 동기화 대기열이 가득 차 일부 변경을 전달하지 못했습니다. 재접속하면 다시 동기화됩니다.');
       return;
     }
     const item = change.item;
@@ -775,15 +349,15 @@ function CanvasWorkspace() {
         permission: previous.permission, version: change.syncVersion,
       }, (peer) => canPeerAccessItem(previous, peer) && !canPeerAccessItem(item, peer)) && queued;
     }
-    if (!queued) setToast('WebRTC 동기화 대기열이 가득 차 일부 변경을 전달하지 못했습니다. 재접속하면 다시 동기화됩니다.');
+    if (!queued && !serverReconnectRequestedRef.current) setToast('WebRTC 동기화 대기열이 가득 차 일부 변경을 전달하지 못했습니다. 재접속하면 다시 동기화됩니다.');
   }, []);
   const sendItemChange = useCallback((payload, previous) => {
+    const requestPayload = payload?.request_id ? payload : { ...payload, request_id: createId() };
     const socket = wsRef.current;
-    if (!socket || socket.readyState !== WebSocket.OPEN) return false;
-    const id = String(payload.item_id);
-    const syncItem = payload.type === 'item_update' && isCanvasSyncItem(payload.item) && !isCollaborativeItem(payload.item)
-      ? payload.item : null;
-    const syncDeleteItem = payload.type === 'item_delete' && isCanvasSyncItem(previous) ? previous : null;
+    const id = String(requestPayload.item_id);
+    const syncItem = requestPayload.type === 'item_update' && isCanvasSyncItem(requestPayload.item) && !isCollaborativeItem(requestPayload.item)
+      ? requestPayload.item : null;
+    const syncDeleteItem = requestPayload.type === 'item_delete' && isCanvasSyncItem(previous) ? previous : null;
     const syncVersion = syncItem || syncDeleteItem ? nextPeerSyncVersion(syncClockRef, syncActorRef) : null;
     const previousSyncVersion = itemSyncVersionsRef.current.get(id) || null;
     const previousTombstone = deletedItemSyncVersionsRef.current.get(id) || null;
@@ -792,32 +366,37 @@ function CanvasWorkspace() {
       if (syncDeleteItem) deletedItemSyncVersionsRef.current.set(id, { version: syncVersion, permission: syncDeleteItem.permission });
       else deletedItemSyncVersionsRef.current.delete(id);
     }
-    pendingItemChangesRef.current.push({
+    const entry = enqueueServerChange({
       id,
+      payload: requestPayload,
       previous,
       item: syncItem,
-      type: payload.type,
-      wasNewCollaborative: payload.type === 'item_save' && newCollaborativeItemsRef.current.has(id),
+      type: requestPayload.type,
+      wasNewCollaborative: newCollaborativeItemsRef.current.has(id),
       syncAction: syncDeleteItem ? 'delete' : syncItem ? 'upsert' : null,
       syncVersion,
       previousSyncVersion,
       previousTombstone,
     });
+    if (entry.syncAction) broadcastPeerItemState(entry);
+    if (entry.canceled) return true;
+    if (serverReconnectRequestedRef.current || !socket || socket.readyState !== WebSocket.OPEN) {
+      if (!autoReconnectRef.current) reconnectRequestRef.current?.();
+      return true;
+    }
+
+    pendingItemChangesRef.current.push(entry);
     try {
-      socket.send(JSON.stringify(payload));
+      socket.send(JSON.stringify(requestPayload));
+      markServerChangeSent(entry);
       socket.send(JSON.stringify({ type: 'ping' }));
     } catch {
-      pendingItemChangesRef.current.pop();
-      if (syncVersion) {
-        if (previousSyncVersion) itemSyncVersionsRef.current.set(id, previousSyncVersion);
-        else itemSyncVersionsRef.current.delete(id);
-        if (previousTombstone) deletedItemSyncVersionsRef.current.set(id, previousTombstone);
-        else deletedItemSyncVersionsRef.current.delete(id);
-      }
-      return false;
+      const pendingIndex = pendingItemChangesRef.current.lastIndexOf(entry);
+      if (pendingIndex >= 0) pendingItemChangesRef.current.splice(pendingIndex, 1);
+      if (!autoReconnectRef.current) reconnectRequestRef.current?.();
     }
     return true;
-  }, []);
+  }, [broadcastPeerItemState, enqueueServerChange, markServerChangeSent]);
   const updateTableItem = useCallback((id, update) => {
     const key = String(id);
     const previous = itemsRef.current[key];
@@ -866,6 +445,7 @@ function CanvasWorkspace() {
       itemSyncVersionsRef.current.set(key, version);
       peerMeshRef.current?.sendData({ type: 'item_geometry', item_id: key, x: nextItem.x, y: nextItem.y, rotation, version }, (peer) => canPeerAccessItem(nextItem, peer));
       markItemDirty(key);
+      if (nextItem.kind === 'note') saveCollaborativeItemRef.current?.(key, { silent: true });
     } else if (!sendItemChange({ type: 'item_update', item_id: key, item: nextItem }, previous)) {
       itemsRef.current = { ...itemsRef.current, [key]: previous };
       setItems((current) => ({ ...current, [key]: previous }));
@@ -936,7 +516,7 @@ function CanvasWorkspace() {
     }
   };
   const addItem = useCallback((id, item) => {
-    if (!itemsInitialized || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return false;
+    if (!canvasSnapshotLoadedRef.current) return false;
     const sharedItem = makeCollaborativeItem(item);
     if (isCollaborativeItem(sharedItem)) {
       const baseDoc = Automerge.load(decodeBase64(sharedItem.automerge_snapshot), { actor: createActorId() });
@@ -952,6 +532,7 @@ function CanvasWorkspace() {
       refreshSpatialIndex();
       markItemDirty(id);
       peerMeshRef.current?.sendData({ type: 'item_create', item_id: String(id), item: sharedItem, version }, (peer) => canPeerAccessItem(sharedItem, peer));
+      if (sharedItem.kind === 'note') saveCollaborativeItemRef.current?.(id, { silent: true });
       return true;
     }
     if (!sendItemChange({ type: 'item_update', item_id: id, item: sharedItem }, null)) return false;
@@ -959,18 +540,11 @@ function CanvasWorkspace() {
     setItems((current) => ({ ...current, [id]: sharedItem }));
     refreshSpatialIndex();
     return true;
-  }, [itemsInitialized, markItemDirty, refreshSpatialIndex, selectItems, sendItemChange]);
+  }, [markItemDirty, refreshSpatialIndex, selectItems, sendItemChange]);
   const deleteItem = useCallback((id) => {
     const previous = itemsRef.current[id];
     const key = String(id);
-    const isUnsavedCollaborative = isCollaborativeItem(previous) && newCollaborativeItemsRef.current.has(key);
-    if (isUnsavedCollaborative) {
-      const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
-      itemSyncVersionsRef.current.set(key, version);
-      deletedItemSyncVersionsRef.current.set(key, { version, permission: previous.permission });
-      peerMeshRef.current?.sendData({ type: 'item_delete', item_id: key, permission: previous.permission, version }, (peer) => canPeerAccessItem(previous, peer));
-    }
-    else if (!sendItemChange({ type: 'item_delete', item_id: id }, previous)) return false;
+    if (!sendItemChange({ type: 'item_delete', item_id: id }, previous)) return false;
     const next = { ...itemsRef.current };
     delete next[id];
     itemsRef.current = next;
@@ -983,7 +557,7 @@ function CanvasWorkspace() {
     refreshSpatialIndex();
     return true;
   }, [refreshSpatialIndex, sendItemChange]);
-  const saveCollaborativeItem = useCallback((id) => {
+  const saveCollaborativeItem = useCallback((id, { silent = false } = {}) => {
     const key = String(id);
     const item = itemsRef.current[key];
     if (!isCollaborativeItem(item)) return false;
@@ -999,429 +573,46 @@ function CanvasWorkspace() {
     };
     const revision = itemEditRevisionRef.current.get(key) || 0;
     if (!sendItemChange({ type: 'item_save', item_id: key, item: savedItem }, item)) {
-      setToast('서버 연결이 복구되면 Ctrl + S로 다시 저장해주세요.');
+      if (!silent) setToast(item.kind === 'note' ? '서버 연결이 복구되면 포스트잇을 다시 저장해주세요.' : '서버 연결이 복구되면 Ctrl + S로 다시 저장해주세요.');
       return false;
     }
     itemsRef.current = { ...itemsRef.current, [key]: savedItem };
     setItems((current) => ({ ...current, [key]: savedItem }));
-    newCollaborativeItemsRef.current.delete(key);
-    if ((itemEditRevisionRef.current.get(key) || 0) === revision) {
+    if ((itemEditRevisionRef.current.get(key) || 0) === revision
+      && !serverReconnectRequestedRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
       setDirtyItems((current) => { const next = new Set(current); next.delete(key); return next; });
     }
-    setToast('텍스트 저장 요청을 서버에 보냈습니다.');
-    window.setTimeout(() => setToast(''), 2400);
+    if (!silent) {
+      setToast('저장 요청을 처리했습니다.');
+      window.setTimeout(() => setToast(''), 2400);
+    }
     return true;
   }, [getCollaborativeBaseDoc, getCollaborativeDoc, sendItemChange]);
-  const receivePeerData = useCallback((peer, data, channelName) => {
-    if (!data || typeof data !== 'object') return;
-    const localPeer = { groups: groupsRef.current, is_admin: groupsRef.current.includes('admin-group') };
-    const replayPendingPeerEvents = (itemId) => {
-      const queued = takePendingPeerEvents(pendingPeerItemEventsRef, pendingPeerItemEventsSizeRef, itemId);
-      for (const entry of queued) receivePeerData(entry.peer, entry.data, entry.channelName);
-    };
-    if (data.type === 'item_sync_state') {
-      if (!['agora-sync', 'agora-bulk'].includes(channelName) || !peer?.peer_id || typeof data.item_id !== 'string'
-        || !data.item_id || data.item_id.length > 128) return;
-      const key = data.item_id;
-      const version = normalizeSyncVersion(data.version);
-      if (!version) return;
-      const currentVersion = itemSyncVersionsRef.current.get(key)
-        || deletedItemSyncVersionsRef.current.get(key)?.version
-        || INITIAL_SYNC_VERSION;
-      if (compareSyncVersions(version, currentVersion) <= 0) return;
-      if (data.action === 'upsert') {
-        const item = data.item;
-        const previous = itemsRef.current[key];
-        if (!isCanvasSyncItem(item) || isCollaborativeItem(item)
-          || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)
-          || (previous && previous.kind !== item.kind)
-          || (previous && (!canPeerAccessItem(previous, localPeer) || !canPeerAccessItem(previous, peer)))) return;
-        syncClockRef.current = Math.max(syncClockRef.current, version.clock);
-        const next = { ...itemsRef.current, [key]: item };
-        itemsRef.current = next;
-        itemSyncVersionsRef.current.set(key, version);
-        deletedItemSyncVersionsRef.current.delete(key);
-        setItems(next);
-        if (!previous || previous.x !== item.x || previous.y !== item.y || previous.width !== item.width
-          || previous.height !== item.height || previous.rotation !== item.rotation
-          || previous.kind !== item.kind || previous.points !== item.points) refreshSpatialIndex();
-        return;
-      }
-      if (data.action === 'delete') {
-        const accessItem = { permission: data.permission };
-        const previous = itemsRef.current[key];
-        if (!canPeerAccessItem(accessItem, localPeer) || !canPeerAccessItem(accessItem, peer)
-          || (previous && (!canPeerAccessItem(previous, localPeer) || !canPeerAccessItem(previous, peer)))) return;
-        syncClockRef.current = Math.max(syncClockRef.current, version.clock);
-        const next = { ...itemsRef.current };
-        delete next[key];
-        itemsRef.current = next;
-        itemSyncVersionsRef.current.set(key, version);
-        deletedItemSyncVersionsRef.current.set(key, { version, permission: data.permission });
-        if (previous) {
-          collaborativeDocsRef.current.delete(key);
-          collaborativeBaseDocsRef.current.delete(key);
-          newCollaborativeItemsRef.current.delete(key);
-          itemEditRevisionRef.current.delete(key);
-          setItems(next);
-          refreshSpatialIndex();
-          setDirtyItems((current) => { const dirty = new Set(current); dirty.delete(key); return dirty; });
-          setRemoteEditors((current) => Object.fromEntries(Object.entries(current).filter(([, editor]) => editor.itemId !== key)));
-        }
-        takePendingPeerEvents(pendingPeerItemEventsRef, pendingPeerItemEventsSizeRef, key);
-      }
-      return;
-    }
-    if (data.type === 'stroke_preview') {
-      if (channelName !== 'agora-sync') return;
-      const strokeId = String(data.stroke_id || '');
-      const phase = data.phase;
-      const sequence = Number(data.sequence);
-      const points = data.points;
-      if (!peer?.peer_id || !strokeId || strokeId.length > 100
-        || !['start', 'points', 'end', 'cancel'].includes(phase)
-        || !Number.isSafeInteger(sequence) || sequence < 0 || sequence > 1000000
-        || !Array.isArray(points) || points.length > REALTIME_STROKE_BATCH_SIZE
-        || points.some((point) => !point || typeof point.x !== 'number' || typeof point.y !== 'number'
-          || !Number.isFinite(point.x) || !Number.isFinite(point.y) || Math.abs(point.x) > 1e6 || Math.abs(point.y) > 1e6)) return;
-
-      const key = `${peer.peer_id}:${strokeId}`;
-      const remoteStrokes = remoteDrawingStrokesRef.current;
-      if (phase === 'start') {
-        if (sequence !== 0 || points.length !== 1 || typeof data.permission !== 'string'
-          || !data.permission || data.permission.length > 128
-          || typeof data.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(data.color)
-          || typeof data.stroke_width !== 'number' || !Number.isFinite(data.stroke_width)) return;
-        const strokeItem = { kind: 'stroke', permission: data.permission };
-        if (!canPeerAccessItem(strokeItem, localPeer) || !canPeerAccessItem(strokeItem, peer)) return;
-        if (remoteStrokes.get(key)?.sequence >= sequence) return;
-        remoteStrokes.set(key, {
-          id: strokeId,
-          peerId: peer.peer_id,
-          sequence,
-          points,
-          color: data.color,
-          strokeWidth: Math.max(1, Math.min(MAX_STROKE_WIDTH, data.stroke_width)),
-          permission: data.permission,
-        });
-        setRemoteDrawingStrokes([...remoteStrokes.values()]);
-        return;
-      }
-
-      const previous = remoteStrokes.get(key);
-      if (!previous || sequence <= previous.sequence
-        || previous.points.length + points.length > MAX_REALTIME_STROKE_POINTS) return;
-      if (phase === 'cancel') {
-        remoteStrokes.delete(key);
-        setRemoteDrawingStrokes([...remoteStrokes.values()]);
-        return;
-      }
-      const nextPoints = [...previous.points, ...points];
-      if (phase === 'points') {
-        remoteStrokes.set(key, { ...previous, sequence, points: nextPoints });
-        setRemoteDrawingStrokes([...remoteStrokes.values()]);
-        return;
-      }
-
-      remoteStrokes.delete(key);
-      setRemoteDrawingStrokes([...remoteStrokes.values()]);
-      const item = {
-        kind: 'stroke',
-        points: nextPoints,
-        color: previous.color,
-        strokeWidth: previous.strokeWidth,
-        permission: previous.permission,
-      };
-      if (!itemsRef.current[strokeId]) {
-        itemsRef.current = { ...itemsRef.current, [strokeId]: item };
-        setItems((current) => ({ ...current, [strokeId]: item }));
-        refreshSpatialIndex();
-      }
-      return;
-    }
-    if (data.type === 'editor_presence' && data.item_id && typeof data.editing === 'boolean' && peer?.peer_id) {
-      const key = String(data.item_id);
-      const item = itemsRef.current[key];
-      if (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)) return;
-      setRemoteEditors((current) => {
-        const next = { ...current };
-        if (data.editing) {
-          next[peer.peer_id] = {
-            peerId: peer.peer_id,
-            itemId: key,
-            nickname: String(peer.nickname || '참여자'),
-            tag_number: peer.tag_number ?? '?',
-          };
-        } else if (next[peer.peer_id]?.itemId === key) {
-          delete next[peer.peer_id];
-        }
-        return next;
-      });
-      return;
-    }
-    if (data.type === 'item_create' && data.item_id && isCollaborativeItem(data.item)) {
-      const key = String(data.item_id);
-      const existing = itemsRef.current[key];
-      if (!canPeerAccessItem(data.item, localPeer) || !canPeerAccessItem(data.item, peer)
-        || (existing && existing.kind !== data.item.kind)
-        || (existing && (!canPeerAccessItem(existing, localPeer) || !canPeerAccessItem(existing, peer)))) return;
-      const version = normalizeSyncVersion(data.version) || INITIAL_SYNC_VERSION;
-      const tombstone = deletedItemSyncVersionsRef.current.get(key);
-      if (tombstone && compareSyncVersions(version, tombstone.version) <= 0) return;
-      syncClockRef.current = Math.max(syncClockRef.current, version.clock);
-      const localVersion = itemSyncVersionsRef.current.get(key) || INITIAL_SYNC_VERSION;
-      const incomingIsNewer = compareSyncVersions(version, localVersion) > 0;
-      let item = data.item;
-      if (existing && isCollaborativeItem(existing)) {
-        try {
-          const localDoc = getCollaborativeDoc(key, existing);
-          const incomingDoc = Automerge.load(decodeBase64(data.item.automerge_snapshot), { actor: createActorId() });
-          const mergedDoc = Automerge.merge(localDoc, incomingDoc);
-          collaborativeDocsRef.current.set(key, mergedDoc);
-          item = incomingIsNewer
-            ? { ...existing, ...data.item, [collaborativeField(data.item)]: mergedDoc.content }
-            : { ...data.item, ...existing, [collaborativeField(data.item)]: mergedDoc.content };
-        } catch { return; }
-      } else {
-        try {
-          const baseDoc = Automerge.load(decodeBase64(item.automerge_snapshot), { actor: createActorId() });
-          collaborativeBaseDocsRef.current.set(key, baseDoc);
-          collaborativeDocsRef.current.set(key, baseDoc);
-        }
-        catch { return; }
-      }
-      itemsRef.current = { ...itemsRef.current, [key]: item };
-      itemSyncVersionsRef.current.set(key, incomingIsNewer ? version : localVersion);
-      if (tombstone && compareSyncVersions(version, tombstone.version) > 0) deletedItemSyncVersionsRef.current.delete(key);
-      newCollaborativeItemsRef.current.add(key);
-      setItems((current) => ({ ...current, [key]: item }));
-      if (!existing || existing.x !== item.x || existing.y !== item.y || existing.width !== item.width
-        || existing.height !== item.height || existing.rotation !== item.rotation) refreshSpatialIndex();
-      markItemDirty(key);
-      replayPendingPeerEvents(key);
-      return;
-    }
-    if (data.type === 'doc_snapshot' && data.item_id && data.snapshot) {
-      const key = String(data.item_id);
-      const item = data.item || itemsRef.current[key];
-      const currentItem = itemsRef.current[key];
-      if (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)
-        || (currentItem && currentItem.kind !== item.kind)
-        || (currentItem && (!canPeerAccessItem(currentItem, localPeer) || !canPeerAccessItem(currentItem, peer)))) return;
-      const version = normalizeSyncVersion(data.version) || INITIAL_SYNC_VERSION;
-      const tombstone = deletedItemSyncVersionsRef.current.get(key);
-      if (tombstone && compareSyncVersions(version, tombstone.version) <= 0) return;
-      syncClockRef.current = Math.max(syncClockRef.current, version.clock);
-      try {
-        const incomingDoc = Automerge.load(decodeBase64(data.snapshot), { actor: createActorId() });
-        const localItem = currentItem;
-        const localVersion = itemSyncVersionsRef.current.get(key) || INITIAL_SYNC_VERSION;
-        const incomingIsNewer = compareSyncVersions(version, localVersion) > 0;
-        const localDoc = localItem ? getCollaborativeDoc(key, localItem) : incomingDoc;
-        const mergedDoc = localItem ? Automerge.merge(localDoc, incomingDoc) : incomingDoc;
-        if (!localItem && item.automerge_snapshot) {
-          collaborativeBaseDocsRef.current.set(key, Automerge.load(decodeBase64(item.automerge_snapshot), { actor: createActorId() }));
-        }
-        const field = collaborativeField(item);
-        const mergedItem = incomingIsNewer
-          ? { ...localItem, ...item, [field]: mergedDoc.content }
-          : { ...item, ...localItem, [field]: mergedDoc.content };
-        collaborativeDocsRef.current.set(key, mergedDoc);
-        itemsRef.current = { ...itemsRef.current, [key]: mergedItem };
-        itemSyncVersionsRef.current.set(key, incomingIsNewer ? version : localVersion);
-        if (tombstone && compareSyncVersions(version, tombstone.version) > 0) deletedItemSyncVersionsRef.current.delete(key);
-        setItems((current) => ({ ...current, [key]: mergedItem }));
-        if (!localItem) {
-          newCollaborativeItemsRef.current.add(key);
-        }
-        if (!localItem || localItem.x !== mergedItem.x || localItem.y !== mergedItem.y
-          || localItem.width !== mergedItem.width || localItem.height !== mergedItem.height
-          || localItem.rotation !== mergedItem.rotation) refreshSpatialIndex();
-        if (data.dirty) markItemDirty(key);
-        replayPendingPeerEvents(key);
-      } catch { /* Ignore an invalid/stale Automerge snapshot. */ }
-      return;
-    }
-    if (data.type === 'doc_change' && data.item_id && data.change) {
-      const key = String(data.item_id);
-      const item = itemsRef.current[key];
-      if (!item) {
-        const tombstone = deletedItemSyncVersionsRef.current.get(key);
-        const version = normalizeSyncVersion(data.version);
-        if (!tombstone || (version && compareSyncVersions(version, tombstone.version) > 0)) {
-          if (!queuePendingPeerEvent(pendingPeerItemEventsRef, pendingPeerItemEventsSizeRef, key, peer, data, channelName)) {
-            setToast('새 객체의 WebRTC 동기화가 지연되고 있습니다. 연결을 유지해 다시 동기화해주세요.');
-          }
-        }
-        return;
-      }
-      if (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)) return;
-      const version = normalizeSyncVersion(data.version);
-      const tombstone = deletedItemSyncVersionsRef.current.get(key);
-      if (tombstone && (!version || compareSyncVersions(version, tombstone.version) <= 0)) return;
-      const expectedField = collaborativeField(item);
-      if (data.field !== expectedField) return;
-      try {
-        const doc = Automerge.loadIncremental(getCollaborativeDoc(key, item), decodeBase64(data.change));
-        collaborativeDocsRef.current.set(key, doc);
-        if (version) {
-          syncClockRef.current = Math.max(syncClockRef.current, version.clock);
-          const currentVersion = itemSyncVersionsRef.current.get(key) || INITIAL_SYNC_VERSION;
-          if (compareSyncVersions(version, currentVersion) > 0) itemSyncVersionsRef.current.set(key, version);
-        }
-        const nextItem = { ...item, [expectedField]: doc.content };
-        itemsRef.current = { ...itemsRef.current, [key]: nextItem };
-        setItems((current) => ({ ...current, [key]: nextItem }));
-        markItemDirty(key);
-      } catch { /* A later snapshot can recover an interrupted peer sync. */ }
-      return;
-    }
-    if (data.type === 'item_metadata' && data.item_id && ['filename', 'language', 'color', 'groupId'].includes(data.field)) {
-      const key = String(data.item_id);
-      const item = itemsRef.current[key];
-      if (!item) {
-        const tombstone = deletedItemSyncVersionsRef.current.get(key);
-        const version = normalizeSyncVersion(data.version);
-        if (!tombstone || (version && compareSyncVersions(version, tombstone.version) > 0)) {
-          if (!queuePendingPeerEvent(pendingPeerItemEventsRef, pendingPeerItemEventsSizeRef, key, peer, data, channelName)) {
-            setToast('새 객체의 WebRTC 동기화가 지연되고 있습니다. 연결을 유지해 다시 동기화해주세요.');
-          }
-        }
-        return;
-      }
-      if (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)) return;
-      const version = normalizeSyncVersion(data.version);
-      const tombstone = deletedItemSyncVersionsRef.current.get(key);
-      if (tombstone && (!version || compareSyncVersions(version, tombstone.version) <= 0)) return;
-      if (version && compareSyncVersions(version, itemSyncVersionsRef.current.get(key) || INITIAL_SYNC_VERSION) <= 0) return;
-      if (typeof data.value !== 'string') return;
-      const value = data.value;
-      const validMetadata = data.field === 'groupId'
-        ? value.length <= 128
-        : data.field === 'color' ? item.kind === 'note' && /^#[0-9a-f]{6}$/i.test(value)
-          : item.kind === 'code' && (data.field === 'filename'
-            ? value.length <= 80
-            : ['javascript', 'typescript', 'python', 'html', 'css', 'json', 'text'].includes(value));
-      if (!validMetadata) return;
-      if (version) {
-        syncClockRef.current = Math.max(syncClockRef.current, version.clock);
-        itemSyncVersionsRef.current.set(key, version);
-      }
-      const nextValue = data.field === 'groupId' ? value || null : value;
-      if (item[data.field] === nextValue) return;
-      const nextItem = { ...item, [data.field]: nextValue };
-      itemsRef.current = { ...itemsRef.current, [key]: nextItem };
-      setItems((current) => ({ ...current, [key]: nextItem }));
-      markItemDirty(key);
-      return;
-    }
-    if (data.type === 'item_geometry' && data.item_id) {
-      const key = String(data.item_id);
-      const item = itemsRef.current[key];
-      if (!item) {
-        const tombstone = deletedItemSyncVersionsRef.current.get(key);
-        const version = normalizeSyncVersion(data.version);
-        if (!tombstone || (version && compareSyncVersions(version, tombstone.version) > 0)) {
-          if (!queuePendingPeerEvent(pendingPeerItemEventsRef, pendingPeerItemEventsSizeRef, key, peer, data, channelName)) {
-            setToast('새 객체의 WebRTC 동기화가 지연되고 있습니다. 연결을 유지해 다시 동기화해주세요.');
-          }
-        }
-        return;
-      }
-      if (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)) return;
-      const version = normalizeSyncVersion(data.version);
-      const tombstone = deletedItemSyncVersionsRef.current.get(key);
-      if (tombstone && (!version || compareSyncVersions(version, tombstone.version) <= 0)) return;
-      if (version && compareSyncVersions(version, itemSyncVersionsRef.current.get(key) || INITIAL_SYNC_VERSION) <= 0) return;
-      const x = Number(data.x);
-      const y = Number(data.y);
-      if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x) > 1e9 || Math.abs(y) > 1e9) return;
-      const rotation = data.rotation == null ? item.rotation : Number(data.rotation);
-      const safeRotation = Number.isFinite(rotation) ? Math.max(-180, Math.min(180, rotation)) : item.rotation;
-      const width = data.width == null ? item.width : Number(data.width);
-      const height = data.height == null ? item.height : Number(data.height);
-      if ((data.width != null && (!Number.isFinite(width) || width <= 0))
-        || (data.height != null && (!Number.isFinite(height) || height <= 0))) return;
-      const nextItem = {
-        ...item,
-        x,
-        y,
-        rotation: safeRotation,
-        ...(Number.isFinite(width) && width > 0 ? { width } : {}),
-        ...(Number.isFinite(height) && height > 0 ? { height } : {}),
-      };
-      if (version) {
-        syncClockRef.current = Math.max(syncClockRef.current, version.clock);
-        itemSyncVersionsRef.current.set(key, version);
-      }
-      itemsRef.current = { ...itemsRef.current, [key]: nextItem };
-      setItems((current) => ({ ...current, [key]: nextItem }));
-      if (item.x !== nextItem.x || item.y !== nextItem.y || item.width !== nextItem.width || item.height !== nextItem.height || item.rotation !== nextItem.rotation) refreshSpatialIndex();
-      markItemDirty(key);
-      return;
-    }
-    if (data.type === 'item_delete' && data.item_id) {
-      const key = String(data.item_id);
-      const item = itemsRef.current[key];
-      const permission = data.permission ?? item?.permission;
-      const accessItem = { permission };
-      const version = normalizeSyncVersion(data.version);
-      const currentVersion = itemSyncVersionsRef.current.get(key) || INITIAL_SYNC_VERSION;
-      if (!version || !canPeerAccessItem(accessItem, localPeer) || !canPeerAccessItem(accessItem, peer)
-        || (item && (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)))
-        || compareSyncVersions(version, currentVersion) <= 0) return;
-      syncClockRef.current = Math.max(syncClockRef.current, version.clock);
-      itemSyncVersionsRef.current.set(key, version);
-      deletedItemSyncVersionsRef.current.set(key, { version, permission });
-      takePendingPeerEvents(pendingPeerItemEventsRef, pendingPeerItemEventsSizeRef, key);
-      if (!item) return;
-      const next = { ...itemsRef.current };
-      delete next[key];
-      itemsRef.current = next;
-      collaborativeDocsRef.current.delete(key);
-      collaborativeBaseDocsRef.current.delete(key);
-      newCollaborativeItemsRef.current.delete(key);
-      setItems(next);
-      refreshSpatialIndex();
-      setDirtyItems((current) => { const dirty = new Set(current); dirty.delete(key); return dirty; });
-      setRemoteEditors((current) => Object.fromEntries(Object.entries(current).filter(([, editor]) => editor.itemId !== key)));
-    }
-  }, [getCollaborativeDoc, markItemDirty, refreshSpatialIndex]);
-
-  const receiveLaser = useCallback((peer, data) => {
-    const strokeId = String(data?.stroke_id || '');
-    const phase = data?.phase;
-    const sequence = Number(data?.sequence);
-    const x = Number(data?.x);
-    const y = Number(data?.y);
-    if (!peer?.peer_id || !strokeId || strokeId.length > 100
-      || !['start', 'point', 'end'].includes(phase)
-      || !Number.isSafeInteger(sequence) || sequence < 0 || sequence > 10000
-      || !Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x) > 1e6 || Math.abs(y) > 1e6) return;
-
-    const key = `remote-${peer.peer_id}-${strokeId}`;
-    const now = Date.now();
-    setLaserStrokes((current) => {
-      const index = current.findIndex((stroke) => stroke.id === key);
-      const previous = index >= 0 ? current[index] : null;
-      const pointBySequence = { ...(previous?.pointBySequence || {}), [sequence]: { x, y } };
-      const points = Object.keys(pointBySequence)
-        .sort((a, b) => Number(a) - Number(b))
-        .map((pointSequence) => pointBySequence[pointSequence]);
-      const next = {
-        id: key,
-        peerId: peer.peer_id,
-        color: LASER_COLOR,
-        pointBySequence,
-        points,
-        active: previous?.endedAt ? false : phase !== 'end',
-        updatedAt: now,
-        endedAt: phase === 'end' ? previous?.endedAt || now : previous?.endedAt || null,
-      };
-      if (index < 0) return [...current, next];
-      return current.map((stroke, strokeIndex) => strokeIndex === index ? next : stroke);
-    });
-  }, []);
+  saveCollaborativeItemRef.current = saveCollaborativeItem;
+  useCanvasNoteAutoSave({ canSave: canvasSnapshotLoadedRef.current && connection !== 'disconnected', dirtyItems, itemsRef, itemEditRevisionRef, saveCollaborativeItem });
+  const { receivePeerData, receiveLaser } = useCanvasPeerEvents({
+    collaborativeBaseDocsRef,
+    collaborativeDocsRef,
+    deletedItemSyncVersionsRef,
+    getCollaborativeDoc,
+    groupsRef,
+    itemEditRevisionRef,
+    itemSyncVersionsRef,
+    itemsRef,
+    markItemDirty,
+    newCollaborativeItemsRef,
+    pendingPeerItemEventsRef,
+    pendingPeerItemEventsSizeRef,
+    refreshSpatialIndex,
+    remoteDrawingStrokesRef,
+    setDirtyItems,
+    setItems,
+    setLaserStrokes,
+    setRemoteDrawingStrokes,
+    setRemoteEditors,
+    setToast,
+    syncClockRef,
+  });
 
   useEffect(() => {
     if (!laserStrokes.length) return undefined;
@@ -1445,599 +636,102 @@ function CanvasWorkspace() {
     return () => window.clearInterval(timer);
   }, [laserStrokes.length]);
 
-  useEffect(() => {
-    let cancelled = false;
-    let socket;
-    let rtcSocket;
-    let reconnectTimer = null;
-    let rtcReady = false;
-    let canvasConnectionId = '';
-    let canvasConnectionHash = '';
-    let joinedCanvasConnectionId = '';
-    const nextReconnectDelay = () => {
-      const attempt = Math.min(reconnectAttemptsRef.current, 5);
-      reconnectAttemptsRef.current += 1;
-      return Math.min(1000 * (2 ** attempt), 15000);
-    };
-    const scheduleReconnect = (delayMs = 0) => {
-      if (cancelled || reconnectTimer !== null || !autoReconnectRef.current) return false;
-      const delay = Number.isFinite(Number(delayMs)) ? Math.max(0, Math.min(30000, Number(delayMs))) : 0;
-      reconnectTimer = window.setTimeout(() => {
-        reconnectTimer = null;
-        if (!cancelled) setReconnectEpoch((current) => current + 1);
-      }, delay);
-      return true;
-    };
-    const requestServerReconnect = (signal = {}) => {
-      if (cancelled) return;
-      if (!autoReconnectRef.current) reconnectAttemptsRef.current = 0;
-      autoReconnectRef.current = true;
-      setConnection('connecting');
-      setError('');
-      setToast('서버가 재시작되어 캔버스에 다시 연결하고 있어요.');
-      scheduleReconnect(signal.retry_after_ms ?? 0);
-    };
-    const joinRtcSocket = () => {
-      if (!rtcReady || !canvasConnectionId || !canvasConnectionHash || !rtcSocket || rtcSocket.readyState !== WebSocket.OPEN
-        || joinedCanvasConnectionId === canvasConnectionId) return;
-      rtcSocket.send(JSON.stringify({
-        type: 'rtc_join',
-        canvas_connection_id: canvasConnectionId,
-        canvas_connection_hash: canvasConnectionHash,
-      }));
-      joinedCanvasConnectionId = canvasConnectionId;
-    };
-    const resetPeerMesh = () => {
-      if (peerMeshRef.current) peerMeshRef.current.close();
-      peerMeshRef.current = null;
-      syncedPeersRef.current.clear();
-      remoteDrawingStrokesRef.current.clear();
-      setPeerList([]);
-      setRemoteEditors({});
-      setRemoteDrawingStrokes([]);
-    };
-    async function connect() {
-      setConnection('connecting'); setError(''); setItemsInitialized(false);
-      setMessages([]);
-      setHasOlderMessages(false);
-      setChatHistoryLoading(false);
-      chatHistoryRequestRef.current = null;
-      chatHistoryPageRef.current = { hasMore: false, nextToSequence: null };
-      try {
-        const summary = await api(`/api/canvases/${canvasId}`, { token });
-        if (cancelled) return;
-        setCanvas(summary);
-        const canvasSettings = await api(`/api/canvases/${canvasId}/settings`, { token });
-        if (cancelled) return;
-        setSettings(canvasSettings);
-
-        const passwordGrantKey = canvasPasswordGrantKey(canvasId, user);
-        let passwordGrant = canvasSettings.password_protected
-          ? readCanvasPasswordGrant(passwordGrantKey)
-          : null;
-        if (!canvasSettings.password_protected) saveCanvasPasswordGrant(passwordGrantKey, null);
-
-        let password;
-        if (canvasSettings.password_protected) {
-          if (!passwordGrant) {
-            password = window.prompt('이 캔버스의 비밀번호를 입력해주세요.');
-            if (password === null) { navigate('/search'); return; }
-          }
-        }
-
-        let access;
-        let serverAccessRetry = 0;
-        while (!access) {
-          const usingPasswordGrant = Boolean(passwordGrant);
-          const body = usingPasswordGrant
-            ? { canvas_password_token: passwordGrant }
-            : password === undefined ? undefined : { password };
-          try {
-            access = await api(`/api/canvases/${canvasId}/access`, {
-              method: 'POST', token, ...(body ? { body } : {}),
-            });
-            serverAccessRetry = 0;
-            if (canvasSettings.password_protected) {
-              saveCanvasPasswordGrant(passwordGrantKey, access.canvas_password_token);
-            }
-          } catch (err) {
-            if (['LB_001', 'LB_003'].includes(err.code) && serverAccessRetry < 5) {
-              const retryDelay = Math.min(300 * (2 ** serverAccessRetry), 2000);
-              serverAccessRetry += 1;
-              setToast('실시간 서버가 준비 중이에요. 잠시 후 자동으로 다시 연결합니다.');
-              await new Promise((resolve) => window.setTimeout(resolve, retryDelay));
-              if (cancelled) return;
-              continue;
-            }
-            if (!['CANVAS_004', 'CANVAS_005'].includes(err.code)) throw err;
-            if (usingPasswordGrant) {
-              passwordGrant = null;
-              saveCanvasPasswordGrant(passwordGrantKey, null);
-            }
-            const prompt = err.code === 'CANVAS_005'
-              && !usingPasswordGrant
-              ? '비밀번호가 올바르지 않습니다. 다시 입력해주세요.'
-              : '이 캔버스의 비밀번호를 입력해주세요.';
-            password = window.prompt(prompt);
-            if (password === null) { navigate('/search'); return; }
-          }
-        }
-        if (cancelled) return;
-        socket = new WebSocket(canvasSocketUrl(canvasId, access.ws_port, access.canvas_access_token));
-        wsRef.current = socket;
-        rtcSocket = new WebSocket(rtcSocketUrl(canvasId, access.ws_port, access.canvas_access_token));
-        rtcWsRef.current = rtcSocket;
-        const handleRtcMessage = (event) => {
-          let data;
-          try { data = JSON.parse(event.data); } catch { return; }
-          if (data.type === 'server_reconnect') {
-            requestServerReconnect(data);
-            return;
-          }
-          if (data.type === 'rtc_ready') {
-            rtcReady = true;
-            joinRtcSocket();
-            return;
-          }
-          if (data.type === 'rtc_peers') {
-            let mesh = peerMeshRef.current;
-            if (!mesh) {
-              mesh = new CanvasPeerMesh({
-                sendSignal: sendRtcRaw,
-                onData: receivePeerData,
-                onLaser: receiveLaser,
-                onCursor: (peer, cursor) => remoteCursorUpdaterRef.current?.(peer, cursor),
-                onPeersChanged: (peers) => {
-                  setPeerList(peers);
-                  const activeIds = new Set(peers.map((peer) => peer.peer_id));
-                  setRemoteEditors((current) => Object.fromEntries(Object.entries(current).filter(([peerId]) => activeIds.has(peerId))));
-                  setLaserStrokes((current) => current.filter((stroke) => !stroke.peerId || activeIds.has(stroke.peerId)));
-                  for (const peer of peers) {
-                    if (!peer.connected) syncedPeersRef.current.delete(peer.peer_id);
-                  }
-                  let drawingsChanged = false;
-                  for (const [key, stroke] of remoteDrawingStrokesRef.current) {
-                    if (activeIds.has(stroke.peerId)) continue;
-                    remoteDrawingStrokesRef.current.delete(key);
-                    drawingsChanged = true;
-                  }
-                  if (drawingsChanged) setRemoteDrawingStrokes([...remoteDrawingStrokesRef.current.values()]);
-                  for (const peer of peers) {
-                    if (!peer.connected) continue;
-                    if (editingIdRef.current) broadcastEditorPresence(editingIdRef.current, true);
-                    if (syncedPeersRef.current.has(peer.peer_id)) continue;
-                    syncedPeersRef.current.add(peer.peer_id);
-                    const activeStroke = drawingSessionRef.current;
-                    if (activeStroke) {
-                      const pendingPoints = activeStroke.pendingPoints.splice(0);
-                      if (pendingPoints.length) sendStrokePreviewPoints(mesh, activeStroke, pendingPoints);
-                      sendStrokePreviewSnapshot(mesh, peer, activeStroke, draftRef.current);
-                    }
-                    let snapshotSendFailed = false;
-                    for (const [id, item] of Object.entries(itemsRef.current)) {
-                      if (!isCanvasSyncItem(item) || !canPeerAccessItem(item, peer)) continue;
-                      if (isCollaborativeItem(item)) {
-                        try {
-                          const doc = getCollaborativeDoc(id, item);
-                          const field = collaborativeField(item);
-                          snapshotSendFailed = !mesh.sendToPeer(peer.peer_id, {
-                            type: 'doc_snapshot', item_id: id,
-                            item: { ...item, [field]: doc.content },
-                            snapshot: encodeBase64(Automerge.save(doc)),
-                            version: itemSyncVersionsRef.current.get(String(id)) || INITIAL_SYNC_VERSION,
-                            dirty: dirtyItemsRef.current.has(String(id)),
-                          }) || snapshotSendFailed;
-                        } catch { /* A later snapshot can recover an interrupted peer sync. */ }
-                        continue;
-                      }
-                      snapshotSendFailed = !mesh.sendToPeer(peer.peer_id, {
-                        type: 'item_sync_state', action: 'upsert', item_id: id, item,
-                        version: itemSyncVersionsRef.current.get(String(id)) || INITIAL_SYNC_VERSION,
-                      }) || snapshotSendFailed;
-                    }
-                    for (const [id, tombstone] of deletedItemSyncVersionsRef.current) {
-                      const accessItem = { permission: tombstone.permission };
-                      if (!canPeerAccessItem(accessItem, peer)) continue;
-                      snapshotSendFailed = !mesh.sendToPeer(peer.peer_id, {
-                        type: 'item_sync_state', action: 'delete', item_id: id,
-                        permission: tombstone.permission, version: tombstone.version,
-                      }) || snapshotSendFailed;
-                    }
-                    if (snapshotSendFailed) setToast('일부 객체가 너무 커서 WebRTC 초기 동기화 대기열에 추가되지 않았습니다. 다시 접속해 동기화를 재시도해주세요.');
-                  }
-                },
-              });
-              peerMeshRef.current = mesh;
-            }
-            mesh.setInitialPeers(data.self_peer_id, data.peers);
-            return;
-          }
-          if (data.type === 'rtc_peer_joined') {
-            peerMeshRef.current?.addPeer(data.peer);
-            return;
-          }
-          if (data.type === 'rtc_peer_left') {
-            peerMeshRef.current?.removePeer(data.peer_id);
-            syncedPeersRef.current.delete(data.peer_id);
-            setRemoteEditors((current) => { const next = { ...current }; delete next[data.peer_id]; return next; });
-            return;
-          }
-          if (data.type === 'rtc_signal') {
-            void peerMeshRef.current?.handleSignal(data);
-            return;
-          }
-          if (data.type === 'rtc_disconnected') {
-            resetPeerMesh();
-            return;
-          }
-          if (data.type === 'error' && data.code?.startsWith('RTC_')) {
-            setToast(`P2P 연결 오류: ${data.code}`);
-          }
-        };
-        rtcSocket.onmessage = handleRtcMessage;
-        rtcSocket.onerror = () => {
-          if (!cancelled && wsRef.current?.readyState === WebSocket.OPEN) setToast('P2P 신호 서버에 연결할 수 없습니다.');
-        };
-        rtcSocket.onclose = () => {
-          if (rtcWsRef.current === rtcSocket) rtcWsRef.current = null;
-          resetPeerMesh();
-          if (!cancelled && wsRef.current?.readyState === WebSocket.OPEN) setToast('P2P 신호 연결이 종료되었습니다.');
-        };
-        socket.onopen = () => {
-          if (cancelled) return;
-          const wasReconnecting = autoReconnectRef.current;
-          autoReconnectRef.current = false;
-          reconnectAttemptsRef.current = 0;
-          setConnection('connected');
-          setError('');
-          if (wasReconnecting) setToast('캔버스에 다시 연결되었습니다.');
-        };
-        socket.onmessage = (event) => {
-          let data;
-          try { data = JSON.parse(event.data); } catch { return; }
-          if (data.type === 'server_reconnect') {
-            requestServerReconnect(data);
-            return;
-          }
-          if (data.type === 'init_items') {
-            const initialItems = data.items && typeof data.items === 'object' ? data.items : {};
-            itemSyncVersionsRef.current = new Map(Object.keys(initialItems).map((id) => [String(id), INITIAL_SYNC_VERSION]));
-            deletedItemSyncVersionsRef.current.clear();
-            pendingPeerItemEventsRef.current.clear();
-            pendingPeerItemEventsSizeRef.current = 0;
-            syncClockRef.current = Math.max(syncClockRef.current, Date.now());
-            collaborativeDocsRef.current.clear();
-            collaborativeBaseDocsRef.current.clear();
-            const hydratedItems = { ...initialItems };
-            for (const [id, item] of Object.entries(initialItems)) {
-              if (!isCollaborativeItem(item)) continue;
-              try {
-                const doc = getCollaborativeDoc(id, item);
-                hydratedItems[id] = { ...item, [collaborativeField(item)]: doc.content };
-              } catch { /* Keep the stored plain-text fallback for damaged legacy snapshots. */ }
-            }
-            itemsRef.current = hydratedItems;
-            setItems(hydratedItems);
-            refreshSpatialIndex();
-            setItemsInitialized(true);
-            const currentGroups = Array.isArray(data.groups) ? data.groups : [];
-            groupsRef.current = currentGroups;
-            setGroups(currentGroups);
-            setCanvas((current) => ({ ...current, canvas_name: data.canvas_name || current?.canvas_name }));
-            canvasConnectionId = data.rtc_canvas_connection_id == null ? '' : String(data.rtc_canvas_connection_id);
-            canvasConnectionHash = typeof data.rtc_canvas_connection_hash === 'string' ? data.rtc_canvas_connection_hash : '';
-            if (!canvasConnectionId || !canvasConnectionHash) setToast('RTC 연결 증명값을 받지 못했습니다. 페이지를 새로고침해주세요.');
-            joinRtcSocket();
-            sendRaw({ type: 'canvas_settings_get' });
-            requestChatHistory();
-            return;
-          }
-          if (data.type === 'canvas_settings_snapshot' || data.type === 'canvas_settings_changed') {
-            setSettings(data.settings);
-            setCanvas((current) => ({ ...current, canvas_name: data.settings?.canvas_name || current?.canvas_name, description: data.settings?.description ?? current?.description }));
-            return;
-          }
-          if (data.type === 'canvas_settings_result') {
-            setSettingsPending(false);
-            if (data.settings) setSettings(data.settings);
-            setToast(data.ok ? '설정이 업데이트되었습니다.' : data.code === 'SETTINGS_CONFLICT' ? '다른 변경사항이 먼저 저장되어 최신 정보를 불러왔어요.' : `설정 변경 실패: ${data.code || '오류'}`);
-            window.setTimeout(() => setToast(''), 3400);
-            return;
-          }
-          if (data.type === 'item_crdt_change') return;
-          if (data.type === 'item_update' || data.type === 'item_add' || data.type === 'update_item' || data.type === 'item_save') {
-            const id = data.item_id ?? data['item-id'];
-            const item = data.item || data.data;
-            if (id != null && item && typeof item === 'object') {
-              const key = String(id);
-              const existing = itemsRef.current[key];
-              let nextItem = item;
-              if (isCollaborativeItem(item)) {
-                try {
-                  let doc;
-                  let savedDoc;
-                  if (data.type === 'item_save' && item.automerge_snapshot) {
-                    const incomingBaseDoc = Automerge.load(decodeBase64(item.automerge_snapshot), { actor: createActorId() });
-                    if (!collaborativeBaseDocsRef.current.has(key)) collaborativeBaseDocsRef.current.set(key, incomingBaseDoc);
-                    savedDoc = incomingBaseDoc;
-                    for (const entry of item.automerge_changes || []) {
-                      const change = typeof entry === 'string' ? entry : entry?.change;
-                      if (change) savedDoc = Automerge.loadIncremental(savedDoc, decodeBase64(change));
-                    }
-                    doc = existing && isCollaborativeItem(existing)
-                      ? Automerge.merge(getCollaborativeDoc(key, existing), savedDoc)
-                      : savedDoc;
-                  } else if (existing && existing.kind === item.kind) {
-                    doc = getCollaborativeDoc(key, existing);
-                    for (const entry of item.automerge_changes || []) {
-                      const change = typeof entry === 'string' ? entry : entry?.change;
-                      if (change) doc = Automerge.loadIncremental(doc, decodeBase64(change));
-                    }
-                  } else if (item.automerge_snapshot) {
-                    doc = Automerge.load(decodeBase64(item.automerge_snapshot), { actor: createActorId() });
-                  } else {
-                    doc = Automerge.from({ content: collaborativeContent(item) });
-                  }
-                  collaborativeDocsRef.current.set(key, doc);
-                  const field = collaborativeField(item);
-                  nextItem = {
-                    ...(existing || {}),
-                    ...item,
-                    [field]: doc.content,
-                    automerge_changes: mergeCollaborativeHistory(existing?.automerge_changes, item.automerge_changes),
-                  };
-                  if (data.type === 'item_save') {
-                    newCollaborativeItemsRef.current.delete(key);
-                    if (savedDoc && doc.content !== savedDoc.content) markItemDirty(key);
-                    else setDirtyItems((current) => { const next = new Set(current); next.delete(key); return next; });
-                  }
-                } catch { /* Keep the server-sent item if its legacy CRDT data cannot be read. */ }
-              }
-              const next = { ...itemsRef.current, [key]: nextItem };
-              itemsRef.current = next;
-              if (nextItem === item) collaborativeDocsRef.current.delete(key);
-              setItems(next);
-              if (!existing || existing.x !== nextItem.x || existing.y !== nextItem.y
-                || existing.width !== nextItem.width || existing.height !== nextItem.height) refreshSpatialIndex();
-            }
-            return;
-          }
-          if (data.type === 'item_delete' || data.type === 'delete_item') {
-            const id = data.item_id ?? data['item-id'];
-            if (id != null) {
-              const key = String(id);
-              const next = { ...itemsRef.current };
-              delete next[key];
-              itemsRef.current = next;
-              collaborativeDocsRef.current.delete(key);
-              collaborativeBaseDocsRef.current.delete(key);
-              newCollaborativeItemsRef.current.delete(key);
-              setItems(next);
-              refreshSpatialIndex();
-              setRemoteEditors((current) => Object.fromEntries(Object.entries(current).filter(([, editor]) => editor.itemId !== key)));
-            }
-            return;
-          }
-          if (data.type === 'chat_history') {
-            if (chatHistoryRequestRef.current && data.request_id !== chatHistoryRequestRef.current) return;
-            chatHistoryRequestRef.current = null;
-            setChatHistoryLoading(false);
-            const entries = Array.isArray(data.messages) ? data.messages.map((entry) => toChatEntry(entry, user)) : [];
-            setMessages((current) => mergeChatEntries(current, entries));
-            const nextToSequence = Number(data.next_to_sequence);
-            const hasMore = Boolean(data.has_more) && Number.isFinite(nextToSequence) && nextToSequence > 0;
-            chatHistoryPageRef.current = { hasMore, nextToSequence: hasMore ? nextToSequence : null };
-            setHasOlderMessages(hasMore);
-            return;
-          }
-          if (data.type === 'chat') {
-            setMessages((current) => mergeChatEntries(current, [toChatEntry(data, user)]));
-            return;
-          }
-          if (data.type === 'pong') {
-            if (rejectedEventPongsRef.current > 0) rejectedEventPongsRef.current -= 1;
-            else {
-              const accepted = pendingItemChangesRef.current.shift();
-              if (accepted?.syncAction) broadcastPeerItemState(accepted);
-            }
-            return;
-          }
-          if (data.type === 'error') {
-            if (chatHistoryRequestRef.current && data.request_id === chatHistoryRequestRef.current) {
-              chatHistoryRequestRef.current = null;
-              setChatHistoryLoading(false);
-              if (data.code === 'CHAT_ROOM_NOT_FOUND') {
-                chatHistoryPageRef.current = { hasMore: false, nextToSequence: null };
-                setHasOlderMessages(false);
-                return;
-              }
-              setToast(data.code === 'ITEM_ACCESS_DENIED' ? '이 채팅방의 내역을 볼 권한이 없습니다.' : `채팅 내역을 불러오지 못했습니다: ${data.code || '오류'}`);
-              return;
-            }
-            if (data.code?.startsWith('CHAT_')) {
-              setToast(`채팅을 처리하지 못했습니다: ${data.code}`);
-              return;
-            }
-            if (['ITEM_ACCESS_DENIED', 'ITEM_SAVE_INVALID', 'ITEM_SAVE_REQUIRED'].includes(data.code)) {
-              const rejected = pendingItemChangesRef.current.shift();
-              if (rejected) {
-                rejectedEventPongsRef.current += 1;
-                if (rejected.type === 'item_save') {
-                  markItemDirty(rejected.id);
-                  if (rejected.wasNewCollaborative) newCollaborativeItemsRef.current.add(rejected.id);
-                } else {
-                  const currentVersion = itemSyncVersionsRef.current.get(rejected.id);
-                  const isLatestRejectedChange = rejected.syncVersion
-                    && compareSyncVersions(currentVersion, rejected.syncVersion) === 0;
-                  if (!rejected.syncVersion || isLatestRejectedChange) {
-                    const next = { ...itemsRef.current };
-                    if (rejected.previous == null) delete next[rejected.id];
-                    else next[rejected.id] = rejected.previous;
-                    itemsRef.current = next;
-                    setItems(next);
-                    refreshSpatialIndex();
-                    if (isLatestRejectedChange) {
-                      const correctionVersion = nextPeerSyncVersion(syncClockRef, syncActorRef);
-                      itemSyncVersionsRef.current.set(rejected.id, correctionVersion);
-                      if (rejected.previous == null) {
-                        const permission = rejected.item?.permission;
-                        deletedItemSyncVersionsRef.current.set(rejected.id, { version: correctionVersion, permission });
-                        broadcastPeerItemState({ id: rejected.id, syncAction: 'delete', syncVersion: correctionVersion, permission });
-                      } else {
-                        deletedItemSyncVersionsRef.current.delete(rejected.id);
-                        broadcastPeerItemState({ id: rejected.id, syncAction: 'upsert', syncVersion: correctionVersion, item: rejected.previous, previous: rejected.item });
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            setToast(data.code === 'ITEM_ACCESS_DENIED' ? '이 아이템을 수정할 권한이 없습니다.' : data.code === 'ITEM_SAVE_REQUIRED' ? 'Ctrl + S로 저장한 뒤 서버에 반영할 수 있습니다.' : data.message || data.code || '서버 오류가 발생했습니다.');
-          }
-        };
-        socket.onerror = () => {
-          if (cancelled) return;
-          if (autoReconnectRef.current) {
-            setToast('캔버스 서버를 다시 찾고 있어요.');
-            if (reconnectTimer === null) scheduleReconnect(nextReconnectDelay());
-          } else {
-            setError('실시간 서버에 연결할 수 없습니다. 서버 주소와 WebSocket 설정을 확인해주세요.');
-          }
-        };
-        socket.onclose = (event) => {
-          if (wsRef.current === socket) wsRef.current = null;
-          chatHistoryRequestRef.current = null;
-          setChatHistoryLoading(false);
-          for (const pending of pendingItemChangesRef.current.splice(0)) {
-            if (pending.type === 'item_save') {
-              markItemDirty(pending.id);
-              if (pending.wasNewCollaborative) newCollaborativeItemsRef.current.add(pending.id);
-            }
-          }
-          rejectedEventPongsRef.current = 0;
-          if (rtcSocket && rtcSocket.readyState !== WebSocket.CLOSED) rtcSocket.close();
-          if (rtcWsRef.current === rtcSocket) rtcWsRef.current = null;
-          rtcReady = false;
-          canvasConnectionId = '';
-          canvasConnectionHash = '';
-          joinedCanvasConnectionId = '';
-          resetPeerMesh();
-          setItemsInitialized(false);
-          if (!cancelled && event.code === 1012) requestServerReconnect({ retry_after_ms: 0 });
-          if (!cancelled && autoReconnectRef.current) {
-            setConnection('connecting');
-            if (reconnectTimer === null) scheduleReconnect(nextReconnectDelay());
-          } else if (!cancelled) {
-            setConnection('disconnected');
-            if (event.code === 1008) setError('캔버스 권한이나 설정이 변경되었습니다. 다시 접속해주세요.');
-          }
-        };
-      } catch (err) {
-        if (!cancelled && autoReconnectRef.current) {
-          setConnection('connecting');
-          setToast('캔버스 서버를 다시 찾고 있어요.');
-          if (reconnectTimer === null) scheduleReconnect(nextReconnectDelay());
-        } else if (!cancelled) {
-          setConnection('disconnected');
-          setError(err.message || '캔버스에 접속할 수 없습니다.');
-        }
-      }
-    }
-    connect();
-    return () => {
-      cancelled = true;
-      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
-      rtcReady = false;
-      canvasConnectionId = '';
-      canvasConnectionHash = '';
-      joinedCanvasConnectionId = '';
-      resetPeerMesh();
-      if (rtcSocket && rtcSocket.readyState !== WebSocket.CLOSED) rtcSocket.close();
-      if (rtcWsRef.current === rtcSocket) rtcWsRef.current = null;
-      if (socket) socket.close();
-      if (wsRef.current === socket) wsRef.current = null;
-    };
-  }, [broadcastEditorPresence, broadcastPeerItemState, canvasId, getCollaborativeDoc, markItemDirty, navigate, receiveLaser, receivePeerData, reconnectEpoch, refreshSpatialIndex, requestChatHistory, sendRaw, sendRtcRaw, token, user]);
+  useCanvasConnection({
+    identity: {
+      canvasId,
+      navigate,
+      permission,
+      reconnectEpoch,
+      token,
+      user
+    },
+    refs: {
+      autoReconnectRef,
+      canvasSnapshotLoadedRef,
+      chatHistoryPageRef,
+      chatHistoryRequestRef,
+      collaborativeBaseDocsRef,
+      collaborativeDocsRef,
+      deletedItemSyncVersionsRef,
+      dirtyItemsRef,
+      draftRef,
+      dragRef,
+      drawingSessionRef,
+      editingIdRef,
+      groupsRef,
+      itemSyncVersionsRef,
+      itemsRef,
+      newCollaborativeItemsRef,
+      peerMeshRef,
+      pendingItemChangesRef,
+      pendingPeerItemEventsRef,
+      pendingPeerItemEventsSizeRef,
+      reconnectAttemptsRef,
+      reconnectRequestRef,
+      rejectedEventPongsRef,
+      remoteCursorUpdaterRef,
+      remoteDrawingStrokesRef,
+      rtcWsRef,
+      serverReconnectRequestedRef,
+      stageOfflineGeometryRef,
+      syncActorRef,
+      syncClockRef,
+      syncedPeersRef,
+      wsRef
+    },
+    setters: {
+      setCanvas,
+      setChatHistoryLoading,
+      setConnection,
+      setDirtyItems,
+      setError,
+      setGroups,
+      setHasOlderMessages,
+      setItems,
+      setLaserStrokes,
+      setMessages,
+      setPeerList,
+      setReconnectEpoch,
+      setRemoteDrawingStrokes,
+      setRemoteEditors,
+      setSettings,
+      setSettingsPending,
+      setToast
+    },
+    actions: {
+      acknowledgeServerChange,
+      broadcastEditorPresence,
+      broadcastPeerItemState,
+      getCollaborativeDoc,
+      getPendingServerChanges,
+      markItemDirty,
+      receiveLaser,
+      receivePeerData,
+      refreshSpatialIndex,
+      rejectServerChange,
+      replacePersistedItems,
+      requestChatHistory,
+      sendItemChange,
+      sendRaw,
+      sendRtcRaw
+    },
+  });
 
   const spatialIndex = useMemo(() => new CanvasSpatialBTree(items, boardSize), [spatialRevision, boardSize]);
-  const visibleWorldBounds = useMemo(() => {
-    const width = Math.max(1, boardSize.width);
-    const height = Math.max(1, boardSize.height);
-    const scale = Math.max(0.001, camera.scale);
-    return {
-      minX: -camera.x / scale,
-      minY: -camera.y / scale,
-      maxX: (width - camera.x) / scale,
-      maxY: (height - camera.y) / scale,
-    };
-  }, [boardSize, camera]);
-  const visibleBounds = useMemo(() => ({
-    minX: visibleWorldBounds.minX / Math.max(1, boardSize.width),
-    minY: visibleWorldBounds.minY / Math.max(1, boardSize.height),
-    maxX: visibleWorldBounds.maxX / Math.max(1, boardSize.width),
-    maxY: visibleWorldBounds.maxY / Math.max(1, boardSize.height),
-  }), [boardSize, visibleWorldBounds]);
+  const {
+    visibleBounds,
+    minimap,
+    minimapItemColors,
+    minimapPosition,
+    minimapWidgetRef,
+    startMinimapWidgetMove,
+    moveMinimapWidget,
+    stopMinimapWidgetMove,
+    startMinimapPan,
+    moveMinimapPan,
+    stopMinimapPan,
+  } = useCanvasMinimap({ boardRef, boardSize, camera, setCamera, items });
   const activePeerIds = useMemo(() => peerList.filter((peer) => peer.connected).map((peer) => peer.peer_id).sort().join('\n'), [peerList]);
-  const minimap = useMemo(() => {
-    const viewportWidth = Math.max(1, boardSize.width);
-    const viewportHeight = Math.max(1, boardSize.height);
-    const minimapItems = Object.entries(items)
-      .filter(([, item]) => MINIMAP_ITEM_KINDS.has(item?.kind))
-      .map(([id, item]) => {
-        const normalizedBounds = objectBounds(item, items, viewportWidth, viewportHeight);
-        return {
-          id,
-          item,
-          bounds: {
-            minX: normalizedBounds.minX * viewportWidth,
-            minY: normalizedBounds.minY * viewportHeight,
-            maxX: normalizedBounds.maxX * viewportWidth,
-            maxY: normalizedBounds.maxY * viewportHeight,
-          },
-        };
-      });
-    const viewport = visibleWorldBounds;
-    const bounds = {
-      minX: -viewportWidth,
-      minY: -viewportHeight,
-      maxX: viewportWidth * 2,
-      maxY: viewportHeight * 2,
-    };
-    const include = (next) => {
-      bounds.minX = Math.min(bounds.minX, next.minX);
-      bounds.minY = Math.min(bounds.minY, next.minY);
-      bounds.maxX = Math.max(bounds.maxX, next.maxX);
-      bounds.maxY = Math.max(bounds.maxY, next.maxY);
-    };
-    minimapItems.forEach(({ bounds: itemBounds }) => include(itemBounds));
-    include(viewport);
-
-    const padding = Math.max((bounds.maxX - bounds.minX), (bounds.maxY - bounds.minY)) * 0.1;
-    bounds.minX -= padding;
-    bounds.minY -= padding;
-    bounds.maxX += padding;
-    bounds.maxY += padding;
-    let width = bounds.maxX - bounds.minX;
-    let height = bounds.maxY - bounds.minY;
-    if (width / height < MINIMAP_ASPECT) {
-      const expandedWidth = height * MINIMAP_ASPECT;
-      bounds.minX -= (expandedWidth - width) / 2;
-      width = expandedWidth;
-    } else {
-      const expandedHeight = width / MINIMAP_ASPECT;
-      bounds.minY -= (expandedHeight - height) / 2;
-      height = expandedHeight;
-    }
-    const overviewWidth = width * MINIMAP_OVERVIEW_SCALE;
-    const overviewHeight = height * MINIMAP_OVERVIEW_SCALE;
-    bounds.minX -= (overviewWidth - width) / 2;
-    bounds.minY -= (overviewHeight - height) / 2;
-    width = overviewWidth;
-    height = overviewHeight;
-    bounds.maxX = bounds.minX + width;
-    bounds.maxY = bounds.minY + height;
-    return { bounds: { ...bounds, width, height }, viewport, items: minimapItems };
-  }, [boardSize, items, visibleWorldBounds]);
   const axisOriginX = boardSize.width * camera.scale / 2 + camera.x;
   const axisOriginY = boardSize.height * camera.scale / 2 + camera.y;
   const coordinatePlaneStyle = {
@@ -2086,10 +780,6 @@ function CanvasWorkspace() {
   const changeSelectionGroup = (shouldGroup) => {
     const ids = selectedObjectIds.filter((id) => itemsRef.current[id] && !['stroke', 'connector'].includes(itemsRef.current[id].kind));
     if (shouldGroup && ids.length < 2) return;
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      setToast('실시간 서버에 연결된 뒤 오브젝트를 그룹화할 수 있어요.');
-      return;
-    }
     const groupId = shouldGroup ? createId() : null;
     const nextItems = { ...itemsRef.current };
     for (const id of ids) {
@@ -2103,6 +793,7 @@ function CanvasWorkspace() {
         const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
         itemSyncVersionsRef.current.set(String(id), version);
         peerMeshRef.current?.sendData({ type: 'item_metadata', item_id: id, field: 'groupId', value: groupId || '', version }, (peer) => canPeerAccessItem(nextItem, peer));
+        if (nextItem.kind === 'note') saveCollaborativeItemRef.current?.(id, { silent: true });
       } else if (sendItemChange({ type: 'item_update', item_id: id, item: nextItem }, previous)) {
         nextItems[id] = nextItem;
       }
@@ -2157,520 +848,22 @@ function CanvasWorkspace() {
       y: board.height / 2 - centerY * board.height * current.scale,
     }));
   };
-  const moveCameraFromMinimap = (event) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    const xRatio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-    const yRatio = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
-    const worldX = minimap.bounds.minX + xRatio * minimap.bounds.width;
-    const worldY = minimap.bounds.minY + yRatio * minimap.bounds.height;
-    setCamera((current) => ({
-      ...current,
-      x: boardSize.width / 2 - worldX * current.scale,
-      y: boardSize.height / 2 - worldY * current.scale,
-    }));
-  };
-  const startMinimapWidgetMove = (event) => {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const widget = minimapWidgetRef.current?.getBoundingClientRect();
-    const stage = boardRef.current?.getBoundingClientRect();
-    if (!widget || !stage) return;
-    minimapMoveRef.current = {
-      pointerId: event.pointerId,
-      offsetX: event.clientX - widget.left,
-      offsetY: event.clientY - widget.top,
-    };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  };
-  const moveMinimapWidget = (event) => {
-    event.stopPropagation();
-    const drag = minimapMoveRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const widget = minimapWidgetRef.current?.getBoundingClientRect();
-    const stage = boardRef.current?.getBoundingClientRect();
-    if (!widget || !stage) return;
-    const maxLeft = Math.max(4, stage.width - widget.width - 4);
-    const maxTop = Math.max(4, stage.height - widget.height - 4);
-    const next = {
-      left: Math.max(4, Math.min(maxLeft, event.clientX - stage.left - drag.offsetX)),
-      top: Math.max(4, Math.min(maxTop, event.clientY - stage.top - drag.offsetY)),
-    };
-    minimapPositionRef.current = next;
-    setMinimapPosition(next);
-  };
-  const stopMinimapWidgetMove = (event) => {
-    event.stopPropagation();
-    if (minimapMoveRef.current?.pointerId !== event.pointerId) return;
-    minimapMoveRef.current = null;
-    if (event.type === 'pointerup' && minimapPositionRef.current) {
-      try { localStorage.setItem(MINIMAP_POSITION_KEY, JSON.stringify(minimapPositionRef.current)); } catch { /* Ignore unavailable local storage. */ }
-    }
-    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-  };
-  const startMinimapPan = (event) => {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    minimapPointerRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  };
-  const moveMinimapPan = (event) => {
-    event.stopPropagation();
-    const press = minimapPointerRef.current;
-    if (press?.pointerId !== event.pointerId) return;
-    if (Math.hypot(event.clientX - press.startX, event.clientY - press.startY) > 4) press.moved = true;
-  };
-  const stopMinimapPan = (event) => {
-    event.stopPropagation();
-    const press = minimapPointerRef.current;
-    if (press?.pointerId !== event.pointerId) return;
-    minimapPointerRef.current = null;
-    if (event.type === 'pointerup' && !press.moved) moveCameraFromMinimap(event);
-    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-  };
   const sendSettings = (field, value, participant) => {
     if (!settings || settingsPending) return;
     const payload = { type: 'canvas_settings_update', request_id: createId(), expected_revision: settings.settings_revision ?? 0, field };
     if (participant) Object.assign(payload, participant); else payload.value = value;
     if (sendRaw(payload)) setSettingsPending(true);
   };
-  const pointerPosition = (event) => {
-    const bounds = boardRef.current.getBoundingClientRect();
-    return {
-      x: (event.clientX - bounds.left - camera.x) / (bounds.width * camera.scale),
-      y: (event.clientY - bounds.top - camera.y) / (bounds.height * camera.scale),
-    };
-  };
-  const updateEraserCursor = (event) => {
-    if (activeTool !== 'eraser') return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const cursor = eraserCursorRef.current;
-    if (!cursor) return;
-    cursor.style.left = `${event.clientX - bounds.left}px`;
-    cursor.style.top = `${event.clientY - bounds.top}px`;
-    cursor.classList.add('is-visible');
-  };
-  const hideEraserCursor = () => eraserCursorRef.current?.classList.remove('is-visible');
-  const eraseStrokesBetween = (from, to) => {
-    const entries = Object.entries(itemsRef.current).filter(([, item]) => item?.kind === 'stroke');
-    for (const [id, item] of entries) {
-      if (itemsRef.current[id]?.kind !== 'stroke') continue;
-      const remainingPaths = eraseStrokeWithEraser(item, from, to, boardSize, camera.scale, ERASER_RADIUS);
-      if (remainingPaths === null) continue;
-      if (remainingPaths.length === 0) {
-        if (!deleteItem(id)) {
-          setToast('연결이 복구되면 지우개를 다시 사용해주세요.');
-          return;
-        }
-        continue;
-      }
-
-      const updatedItem = { ...item, points: remainingPaths[0] };
-      if (!sendItemChange({ type: 'item_update', item_id: id, item: updatedItem }, item)) {
-        setToast('연결이 복구되면 지우개를 다시 사용해주세요.');
-        return;
-      }
-
-      const nextItems = { ...itemsRef.current, [id]: updatedItem };
-      let allFragmentsSent = true;
-      for (const points of remainingPaths.slice(1)) {
-        const fragmentId = createId();
-        const fragment = { ...item, points };
-        if (!sendItemChange({ type: 'item_update', item_id: fragmentId, item: fragment }, null)) {
-          allFragmentsSent = false;
-          break;
-        }
-        nextItems[fragmentId] = fragment;
-      }
-      itemsRef.current = nextItems;
-      setItems(nextItems);
-      refreshSpatialIndex();
-      if (!allFragmentsSent) {
-        setToast('일부 선을 지우지 못했습니다. 연결이 복구되면 다시 시도해주세요.');
-        return;
-      }
-    }
-  };
-  const centeredItemPosition = (width, height) => {
-    const bounds = boardRef.current?.getBoundingClientRect();
-    const viewWidth = Math.max(1, bounds?.width || boardSize.width);
-    const viewHeight = Math.max(1, bounds?.height || boardSize.height);
-    return {
-      x: (viewWidth / 2 - camera.x) / (viewWidth * camera.scale) - width / 2,
-      y: (viewHeight / 2 - camera.y) / (viewHeight * camera.scale) - height / 2,
-    };
-  };
-  const sendCursorPosition = (event) => {
-    const now = performance.now();
-    if (now - lastCursorSentAtRef.current < 40) return;
-    lastCursorSentAtRef.current = now;
-    const point = pointerPosition(event);
-    peerMeshRef.current?.sendCursor({ type: 'cursor', x: point.x, y: point.y });
-  };
-  const hideCursor = () => {
-    peerMeshRef.current?.sendCursor({ type: 'cursor', visible: false });
-    hideEraserCursor();
-  };
-  const startPan = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    panRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, cameraX: camera.x, cameraY: camera.y };
-    boardRef.current?.classList.add('panning');
-    boardRef.current?.setPointerCapture?.(event.pointerId);
-  };
-  const zoomBy = (factor, clientX, clientY) => {
-    const bounds = boardRef.current?.getBoundingClientRect();
-    if (!bounds) return;
-    const targetX = clientX ?? bounds.left + bounds.width / 2;
-    const targetY = clientY ?? bounds.top + bounds.height / 2;
-    setCamera((current) => {
-      const scale = Math.max(0.5, Math.min(4, current.scale * factor));
-      const worldX = (targetX - bounds.left - current.x) / (bounds.width * current.scale);
-      const worldY = (targetY - bounds.top - current.y) / (bounds.height * current.scale);
-      return { scale, x: targetX - bounds.left - worldX * bounds.width * scale, y: targetY - bounds.top - worldY * bounds.height * scale };
-    });
-  };
-  const stopZoomHold = () => {
-    const hold = zoomHoldRef.current;
-    if (hold?.delay) window.clearTimeout(hold.delay);
-    if (hold?.repeat) window.clearInterval(hold.repeat);
-    zoomHoldRef.current = null;
-    window.setTimeout(() => { zoomPointerPressRef.current = false; }, 0);
-  };
-  const cancelZoomHold = () => {
-    stopZoomHold();
-    zoomPointerPressRef.current = false;
-  };
-  const startZoomHold = (event, factor) => {
-    if (event.button !== 0) return;
-    zoomPointerPressRef.current = true;
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    zoomBy(factor);
-    const hold = { delay: null, repeat: null };
-    zoomHoldRef.current = hold;
-    hold.delay = window.setTimeout(() => {
-      if (zoomHoldRef.current !== hold) return;
-      zoomBy(factor);
-      hold.delay = null;
-      hold.repeat = window.setInterval(() => zoomBy(factor), 100);
-    }, 300);
-  };
-  const clickZoom = (factor) => {
-    if (zoomPointerPressRef.current) {
-      zoomPointerPressRef.current = false;
-      return;
-    }
-    zoomBy(factor);
-  };
-  useEffect(() => () => {
-    const hold = zoomHoldRef.current;
-    if (hold?.delay) window.clearTimeout(hold.delay);
-    if (hold?.repeat) window.clearInterval(hold.repeat);
-  }, []);
-  const handleStageWheel = (event) => {
-    if (event.target.closest?.('.canvas-minimap')) {
-      event.preventDefault();
-      return;
-    }
-    if (event.target.closest?.('.canvas-object')) return;
-    event.preventDefault();
-    if (event.ctrlKey || event.metaKey) {
-      zoomBy(Math.exp(-event.deltaY * 0.0015 * zoomSensitivity), event.clientX, event.clientY);
-    } else {
-      setCamera((current) => ({ ...current, x: current.x - event.deltaX, y: current.y - event.deltaY }));
-    }
-  };
-  stageWheelHandlerRef.current = handleStageWheel;
-  useEffect(() => {
-    const stage = boardRef.current;
-    if (!stage) return undefined;
-    const onWheel = (event) => stageWheelHandlerRef.current?.(event);
-    stage.addEventListener('wheel', onWheel, { passive: false });
-    return () => stage.removeEventListener('wheel', onWheel);
-  }, []);
-  const recordLaserPoint = (point, finish = false) => {
-    const active = laserDrawingRef.current;
-    if (!active) return;
-    const previous = active.lastPoint;
-    const moved = point && previous && Math.hypot(point.x - previous.x, point.y - previous.y) >= 0.0008;
-    if (moved) {
-      active.lastPoint = point;
-      active.points.push(point);
-      const now = Date.now();
-      setLaserStrokes((current) => current.map((stroke) => stroke.id === active.key
-        ? { ...stroke, points: [...stroke.points, point], updatedAt: now }
-        : stroke));
-      if (performance.now() - active.lastSentAt >= 32) {
-        active.sequence += 1;
-        active.lastSentAt = performance.now();
-        active.lastSentPoint = point;
-        peerMeshRef.current?.sendLaser({
-          type: 'laser', phase: 'point', stroke_id: active.strokeId, sequence: active.sequence,
-          x: point.x, y: point.y,
-        });
-      }
-    }
-    if (!finish) return;
-
-    const lastPoint = active.lastPoint;
-    if (!active.lastSentPoint || active.lastSentPoint.x !== lastPoint.x || active.lastSentPoint.y !== lastPoint.y) {
-      active.sequence += 1;
-      active.lastSentPoint = lastPoint;
-    }
-    const endedAt = Date.now();
-    setLaserStrokes((current) => current.map((stroke) => stroke.id === active.key
-      ? { ...stroke, active: false, endedAt, updatedAt: endedAt }
-      : stroke));
-    peerMeshRef.current?.sendLaser({
-      type: 'laser', phase: 'end', stroke_id: active.strokeId, sequence: active.sequence,
-      x: lastPoint.x, y: lastPoint.y,
-    });
-    laserDrawingRef.current = null;
-  };
-
-  const startMarqueeSelection = (event) => {
-    const stage = boardRef.current;
-    const bounds = stage?.getBoundingClientRect();
-    if (!bounds) return;
-    stage.focus({ preventScroll: true });
-    const start = pointerPosition(event);
-    const startClient = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
-    const baseIds = event.shiftKey ? selectedItemIds : [];
-    selectionRef.current = { pointerId: event.pointerId, start, startClient, baseIds };
-    setSelectionBox({ left: startClient.x, top: startClient.y, width: 0, height: 0 });
-    if (!event.shiftKey) selectItems([]);
-    event.preventDefault();
-    event.stopPropagation();
-    stage.setPointerCapture?.(event.pointerId);
-  };
-  const moveMarqueeSelection = (event) => {
-    const selection = selectionRef.current;
-    if (!selection || selection.pointerId !== event.pointerId) return;
-    const bounds = boardRef.current?.getBoundingClientRect();
-    if (!bounds) return;
-    const x = event.clientX - bounds.left;
-    const y = event.clientY - bounds.top;
-    setSelectionBox({
-      left: Math.min(selection.startClient.x, x),
-      top: Math.min(selection.startClient.y, y),
-      width: Math.abs(x - selection.startClient.x),
-      height: Math.abs(y - selection.startClient.y),
-    });
-  };
-  const finishMarqueeSelection = (event) => {
-    const selection = selectionRef.current;
-    if (!selection || selection.pointerId !== event.pointerId) return;
-    selectionRef.current = null;
-    setSelectionBox(null);
-    if (event.type !== 'pointercancel') {
-      const end = pointerPosition(event);
-      const marquee = {
-        minX: Math.min(selection.start.x, end.x),
-        minY: Math.min(selection.start.y, end.y),
-        maxX: Math.max(selection.start.x, end.x),
-        maxY: Math.max(selection.start.y, end.y),
-      };
-      const hits = Object.entries(itemsRef.current).filter(([, item]) => item && !['stroke', 'connector'].includes(item.kind))
-        .filter(([, item]) => {
-          const bounds = objectBounds(item, itemsRef.current, boardSize.width, boardSize.height);
-          return bounds && bounds.minX >= marquee.minX && bounds.maxX <= marquee.maxX
-            && bounds.minY >= marquee.minY && bounds.maxY <= marquee.maxY;
-        }).map(([id]) => id);
-      const expanded = new Set([...selection.baseIds, ...hits]);
-      const selectedGroups = new Set([...expanded].map((id) => itemsRef.current[id]?.groupId).filter(Boolean));
-      if (selectedGroups.size) {
-        Object.entries(itemsRef.current).forEach(([id, item]) => {
-          if (!item?.groupId || !selectedGroups.has(item.groupId) || ['stroke', 'connector'].includes(item.kind)) return;
-          const bounds = objectBounds(item, itemsRef.current, boardSize.width, boardSize.height);
-          if (bounds && bounds.minX >= marquee.minX && bounds.maxX <= marquee.maxX
-            && bounds.minY >= marquee.minY && bounds.maxY <= marquee.maxY) expanded.add(id);
-        });
-      }
-      selectItems([...expanded]);
-    }
-    if (boardRef.current?.hasPointerCapture?.(event.pointerId)) boardRef.current.releasePointerCapture(event.pointerId);
-  };
-  const startDrawing = (event) => {
-    updateEraserCursor(event);
-    const clickedEmptySpace = event.button === 0 && !event.target.closest?.('.canvas-object, .canvas-minimap, .stage-label, .draw-cursor-label, .eraser-cursor');
-    if (clickedEmptySpace) {
-      finishEditing();
-      setConnectionStartId(null);
-    }
-    if (event.button === 1 || spacePressedRef.current) { startPan(event); return; }
-    if (activeTool === 'select' && clickedEmptySpace) { startMarqueeSelection(event); return; }
-    if (connection !== 'connected' || (!['pen', 'laser'].includes(activeTool) && event.target.closest?.('.canvas-object'))) return;
-    if (activeTool === 'eraser') {
-      event.preventDefault();
-      event.currentTarget.setPointerCapture(event.pointerId);
-      const point = pointerPosition(event);
-      eraserRef.current = point;
-      eraseStrokesBetween(point, point);
-      return;
-    }
-    if (activeTool === 'link') {
-      event.preventDefault();
-      setSharePosition(pointerPosition(event));
-      return;
-    }
-    if (activeTool === 'table') {
-      event.preventDefault();
-      const point = pointerPosition(event);
-      const width = tableConfig.width / 100;
-      const height = tableConfig.height / 100;
-      const id = createId();
-      const item = { kind: 'table', ...createTableData(tableConfig.rows, tableConfig.columns), x: point.x - width / 2, y: point.y - height / 2, width, height, permission };
-      if (!addItem(id, item)) setToast('실시간 서버에 연결된 뒤 테이블을 놓을 수 있어요.');
-      else setActiveTool('select');
-      return;
-    }
-    if (activeTool === 'shape' || activeTool === 'text' || activeTool === 'math' || activeTool === 'code' || activeTool === 'note') {
-      event.preventDefault();
-      const point = pointerPosition(event);
-      const itemWidth = activeTool === 'shape' ? 0.14 : activeTool === 'math' ? 0.2 : activeTool === 'code' ? 0.32 : activeTool === 'note' ? 0.24 : 0.22;
-      const x = point.x - itemWidth / 2;
-      const y = point.y - (activeTool === 'code' ? 0.1 : activeTool === 'note' ? 0.08 : 0.06);
-      let item;
-      if (activeTool === 'shape') item = { kind: 'shape', shapeType, ...(shapeType === 'arrow' ? { bend: DEFAULT_SHAPE_ARROW_BEND, startHead: shapeArrowStartHead, endHead: shapeArrowEndHead } : {}), x, y, width: itemWidth, height: 0.12, color, permission };
-      else if (activeTool === 'text') item = { kind: 'text', text: '', x, y, width: itemWidth, permission };
-      else if (activeTool === 'note') item = { kind: 'note', text: '', x, y, width: itemWidth, color: noteColor, rotation: Math.random() * 3 - 1.5, permission };
-      else if (activeTool === 'code') item = { kind: 'code', code: '', filename: 'idea.js', language: 'javascript', x, y, width: itemWidth, permission };
-      else {
-        const content = window.prompt('수식을 입력하세요. 예: f(x) = x² + 2x + 1');
-        if (!content?.trim()) return;
-        item = { kind: 'math', formula: content.trim(), x, y, width: itemWidth, permission };
-      }
-      const id = createId();
-      if (!addItem(id, item)) setToast('실시간 서버에 연결된 뒤 캔버스를 수정할 수 있어요.');
-      else {
-        setActiveTool('select');
-        if (activeTool === 'text' || activeTool === 'code' || activeTool === 'note') startEditing(id);
-      }
-      return;
-    }
-    if (activeTool === 'connect') { setToast('연결할 오브젝트 두 개를 차례로 선택하세요.'); return; }
-    if (activeTool === 'laser') {
-      event.preventDefault();
-      event.currentTarget.setPointerCapture(event.pointerId);
-      const point = pointerPosition(event);
-      const strokeId = createId();
-      const key = `local-${strokeId}`;
-      const now = Date.now();
-      laserDrawingRef.current = {
-        strokeId, key, sequence: 0, lastPoint: point, lastSentPoint: point,
-        lastSentAt: performance.now(), points: [point],
-      };
-      setLaserStrokes((current) => [...current, {
-        id: key, color: LASER_COLOR, points: [point], active: true, updatedAt: now, endedAt: null,
-      }]);
-      peerMeshRef.current?.sendLaser({ type: 'laser', phase: 'start', stroke_id: strokeId, sequence: 0, x: point.x, y: point.y });
-      return;
-    }
-    if (activeTool !== 'pen') return;
-    event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId);
-    const point = pointerPosition(event);
-    const strokeId = createId();
-    const session = {
-      id: strokeId,
-      sequence: 0,
-      color,
-      strokeWidth,
-      permission,
-      aclItem: { kind: 'stroke', permission },
-      lastSentAt: performance.now(),
-      pendingPoints: [],
-    };
-    drawingRef.current = true;
-    drawingSessionRef.current = session;
-    draftRef.current = [point];
-    vectorDraftRef.current?.({ points: draftRef.current, color: session.color, strokeWidth: session.strokeWidth });
-    sendStrokePreviewStart(peerMeshRef.current, session, point);
-  };
-  const moveDrawing = (event) => {
-    updateEraserCursor(event);
-    sendCursorPosition(event);
-    if (selectionRef.current) { moveMarqueeSelection(event); return; }
-    if (panRef.current) {
-      const pan = panRef.current;
-      setCamera((current) => ({ ...current, x: pan.cameraX + event.clientX - pan.x, y: pan.cameraY + event.clientY - pan.y }));
-      return;
-    }
-    if (eraserRef.current) {
-      const point = pointerPosition(event);
-      eraseStrokesBetween(eraserRef.current, point);
-      eraserRef.current = point;
-      return;
-    }
-    if (laserDrawingRef.current) {
-      recordLaserPoint(pointerPosition(event));
-      return;
-    }
-    if (!drawingRef.current) return;
-    const point = pointerPosition(event);
-    const previous = draftRef.current[draftRef.current.length - 1];
-    if (previous && Math.hypot(point.x - previous.x, point.y - previous.y) < 0.0018) return;
-    if (draftRef.current.length >= MAX_REALTIME_STROKE_POINTS) return;
-    draftRef.current.push(point);
-    const session = drawingSessionRef.current;
-    if (!session) return;
-    session.pendingPoints.push(point);
-    vectorDraftRef.current?.({ points: draftRef.current, color: session.color, strokeWidth: session.strokeWidth });
-    const now = performance.now();
-    if (now - session.lastSentAt >= REALTIME_STROKE_INTERVAL_MS || session.pendingPoints.length >= REALTIME_STROKE_BATCH_SIZE) {
-      sendStrokePreviewPoints(peerMeshRef.current, session, session.pendingPoints.splice(0));
-      session.lastSentAt = now;
-    }
-  };
-  const stopDrawing = (event) => {
-    if (selectionRef.current) { finishMarqueeSelection(event); return; }
-    if (panRef.current) {
-      panRef.current = null;
-      boardRef.current?.classList.remove('panning');
-      event.currentTarget.releasePointerCapture?.(event.pointerId);
-      return;
-    }
-    if (eraserRef.current) {
-      eraserRef.current = null;
-      if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-      return;
-    }
-    if (laserDrawingRef.current) {
-      recordLaserPoint(pointerPosition(event), true);
-      if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-      return;
-    }
-    if (!drawingRef.current) return;
-    drawingRef.current = false; event.currentTarget.releasePointerCapture?.(event.pointerId);
-    const points = draftRef.current;
-    const session = drawingSessionRef.current;
-    drawingSessionRef.current = null;
-    draftRef.current = [];
-    vectorDraftRef.current?.(null);
-    if (!points.length) return;
-    const id = session?.id || createId();
-    const item = {
-      kind: 'stroke',
-      points,
-      color: session?.color || color,
-      strokeWidth: session?.strokeWidth || strokeWidth,
-      permission: session?.permission || permission,
-    };
-    if (session) sendStrokePreviewPoints(peerMeshRef.current, session, session.pendingPoints.splice(0));
-    const added = addItem(id, item);
-    if (!added) setToast('실시간 서버에 연결된 뒤 그릴 수 있어요.');
-    if (session) {
-      session.sequence += 1;
-      peerMeshRef.current?.sendData({
-        type: 'stroke_preview',
-        phase: added ? 'end' : 'cancel',
-        stroke_id: session.id,
-        sequence: session.sequence,
-        points: [],
-      }, (peer) => canPeerAccessItem(session.aclItem, peer));
-    }
-  };
+  const { pointerPosition, startPan, centeredItemPosition, hideCursor, startZoomHold, stopZoomHold, cancelZoomHold, clickZoom, startDrawing, moveDrawing, stopDrawing } = useCanvasStageInteractions({
+    boardRef, camera, setCamera, activeTool, eraserCursorRef, itemsRef, boardSize,
+    addItem, deleteItem, setToast, sendItemChange, setItems, refreshSpatialIndex,
+    lastCursorSentAtRef, peerMeshRef, panRef, zoomHoldRef, zoomPointerPressRef, zoomSensitivity,
+    stageWheelHandlerRef, laserDrawingRef, setLaserStrokes, selectionRef, selectedItemIds,
+    setSelectionBox, selectItems, canvasSnapshotLoadedRef, finishEditing, setConnectionStartId,
+    spacePressedRef, tableConfig, permission, setSharePosition, shapeType, shapeArrowStartHead,
+    shapeArrowEndHead, color, noteColor, setActiveTool, startEditing, strokeWidth,
+    drawingRef, drawingSessionRef, draftRef, vectorDraftRef,
+  });
   const placeSharedLink = (shared) => {
     if (!sharePosition) return;
     const isVideo = shared.mediaType === 'youtube' || shared.mediaType === 'video';
@@ -2713,208 +906,44 @@ function CanvasWorkspace() {
     if (!text || !sendRaw({ type: 'chat', room_id: CHAT_ROOM_ID, text, request_id: createId() })) return;
     setMessage('');
   };
-  const startObjectDrag = (event, id, item) => {
-    if (event.button === 1 || spacePressedRef.current) { startPan(event); return; }
-    if (activeTool === 'pen' || activeTool === 'laser') {
-      if (event.target.closest('button, input, textarea, select')) event.stopPropagation();
-      return;
-    }
-    if (activeTool === 'connect') {
-      event.preventDefault(); event.stopPropagation();
-      if (!connectionStartId) { setConnectionStartId(id); setToast('도착 오브젝트를 선택해 연결을 완성하세요.'); return; }
-      if (connectionStartId === id) { setConnectionStartId(null); return; }
-      const from = itemsRef.current[connectionStartId];
-      const to = itemsRef.current[id];
-      if (from && to) addItem(createId(), { kind: 'connector', from: connectionStartId, to: id, color: connectorColor, strokeWidth: connectorWidth, startHead: connectorStartHead, endHead: connectorEndHead, permission });
-      setConnectionStartId(null); setActiveTool('select'); return;
-    }
-    const key = String(id);
-    if (activeTool !== 'select') { event.stopPropagation(); return; }
-    const focusCanvas = () => boardRef.current?.focus({ preventScroll: true });
-    const groupedIds = item?.groupId
-      ? Object.entries(itemsRef.current).filter(([, candidate]) => candidate?.groupId === item.groupId && !['stroke', 'connector'].includes(candidate.kind)).map(([groupedId]) => groupedId)
-      : [];
-    if (event.shiftKey) {
-      const toggleIds = groupedIds.length ? groupedIds : [key];
-      const alreadySelected = selectedObjectIdSet.has(key);
-      const nextSelection = alreadySelected
-        ? selectedObjectIds.filter((selectedId) => !toggleIds.includes(selectedId))
-        : [...selectedObjectIds, ...toggleIds];
-      selectItems(nextSelection, alreadySelected ? nextSelection[nextSelection.length - 1] : key);
-      if (!event.target.closest('button, input, textarea, select')) focusCanvas();
-      event.preventDefault();
-      event.stopPropagation();
-      return;
-    }
-    const targetIds = selectedObjectIdSet.has(key)
-      ? selectedObjectIds
-      : groupedIds.length ? groupedIds : [key];
-    selectItems(targetIds, key);
-    if (event.target.closest('button')) { event.stopPropagation(); return; }
-    focusCanvas();
-    if (item?.kind === 'connector') { event.preventDefault(); event.stopPropagation(); return; }
-    event.preventDefault(); event.stopPropagation();
-    const start = pointerPosition(event);
-    const movableIds = targetIds.filter((targetId) => itemsRef.current[targetId] && !['stroke', 'connector'].includes(itemsRef.current[targetId].kind));
-    if (movableIds.length > 1) {
-      const initialItems = Object.fromEntries(movableIds.map((targetId) => [targetId, itemsRef.current[targetId]]));
-      const elements = movableIds.map((targetId) => [...(sceneRef.current?.querySelectorAll('[data-item-id]') || [])].find((node) => node.dataset.itemId === targetId)).filter(Boolean);
-      elements.forEach((element) => element.classList.add('object-dragging', 'multi-object-dragging'));
-      dragRef.current = { mode: 'multi-move', ids: movableIds, initialItems, startPoint: start, elements };
-    } else {
-      event.currentTarget.classList.add('object-dragging');
-      dragRef.current = { mode: 'move', id, initial: item, offsetX: start.x - (item.x || 0), offsetY: start.y - (item.y || 0), startX: start.x, startY: start.y, element: event.currentTarget };
-    }
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  };
-  const startObjectResize = (event, id, item, handle) => {
-    if (activeTool !== 'select' || item?.kind === 'connector') return;
-    const board = boardRef.current?.getBoundingClientRect();
-    if (!board) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const key = String(id);
-    const initial = itemsRef.current[key] || item;
-    const start = pointerPosition(event);
-    const element = event.currentTarget.closest('.canvas-object');
-    selectItems([key], key);
-    element?.classList.add('object-resizing');
-    dragRef.current = {
-      mode: 'resize',
-      id: key,
-      initial,
-      resize: captureResize(initial, handle, start, element, board),
-      viewport: { width: board.width, height: board.height },
-      element,
-    };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  };
-  const startArrowBend = (event, id, item) => {
-    const isShapeArrow = item?.kind === 'shape' && item.shapeType === 'arrow';
-    const isConnectorArrow = item?.kind === 'connector';
-    if (event.button !== 0 || activeTool !== 'select' || (!isShapeArrow && !isConnectorArrow)) return;
-    const board = boardRef.current?.getBoundingClientRect();
-    if (!board) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const key = String(id);
-    const initial = itemsRef.current[key] || item;
-    const element = event.currentTarget.closest('.canvas-object');
-    selectItems([key], key);
-    element?.classList.add('object-bending');
-    dragRef.current = { mode: 'bend', id: key, initial, viewport: { width: board.width, height: board.height }, element };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  };
-  const startObjectRotation = (event, id, item) => {
-    if (activeTool !== 'select' || item?.kind === 'connector') return;
-    const key = String(id);
-    const initial = itemsRef.current[key] || item;
-    const frame = event.currentTarget.closest('.object-rotation-frame');
-    const frameBounds = frame?.getBoundingClientRect();
-    const element = sceneRef.current && [...sceneRef.current.querySelectorAll('[data-item-id]')]
-      .find((node) => node.dataset.itemId === key);
-    if (!initial || !frameBounds || !element) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const centerX = frameBounds.left + frameBounds.width / 2;
-    const centerY = frameBounds.top + frameBounds.height / 2;
-    selectItems([key], key);
-    element.classList.add('object-rotating');
-    boardRef.current?.classList.add('rotating');
-    dragRef.current = {
-      mode: 'rotate',
-      id: key,
-      initial,
-      centerX,
-      centerY,
-      startAngle: Math.atan2(event.clientY - centerY, event.clientX - centerX),
-      initialRotation: Number(initial.rotation) || 0,
-      element,
-    };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  };
-  const moveObject = (event) => {
-    if (!dragRef.current) return;
-    const { mode, id, initial, offsetX, offsetY, startX, startY, resize, viewport } = dragRef.current;
-    if (mode === 'multi-move') {
-      const { ids, initialItems, startPoint } = dragRef.current;
-      const point = pointerPosition(event);
-      const dx = point.x - startPoint.x;
-      const dy = point.y - startPoint.y;
-      const nextItems = { ...itemsRef.current };
-      ids.forEach((itemId) => {
-        const original = initialItems[itemId];
-        nextItems[itemId] = { ...original, x: (Number(original.x) || 0) + dx, y: (Number(original.y) || 0) + dy };
-      });
-      itemsRef.current = nextItems;
-      setItems(nextItems);
-      return;
-    }
-    if (mode === 'bend') {
-      const point = pointerPosition(event);
-      const next = initial.kind === 'connector'
-        ? { ...initial, ...connectorBendFromPointer(connectorGeometry(initial, itemsRef.current, viewport.width, viewport.height), point, viewport) }
-        : { ...initial, bend: shapeArrowBendFromPointer(initial, point, viewport) };
-      itemsRef.current = { ...itemsRef.current, [id]: next };
-      setItems((current) => ({ ...current, [id]: next }));
-      return;
-    }
-    if (mode === 'rotate') {
-      const { centerX, centerY, startAngle, initialRotation } = dragRef.current;
-      const next = { ...initial, rotation: rotationAtPointer(initialRotation, startAngle, event.clientX, event.clientY, centerX, centerY) };
-      itemsRef.current = { ...itemsRef.current, [id]: next };
-      setItems((current) => ({ ...current, [id]: next }));
-      return;
-    }
-    const point = pointerPosition(event);
-    const next = mode === 'resize'
-      ? resizeItemAtPointer(initial, resize, point, viewport)
-      : initial.kind === 'stroke'
-        ? { ...initial, points: initial.points.map((part) => ({ ...part, x: part.x + point.x - startX, y: part.y + point.y - startY })) }
-        : { ...initial, x: point.x - offsetX, y: point.y - offsetY };
-    itemsRef.current = { ...itemsRef.current, [id]: next };
-    setItems((current) => ({ ...current, [id]: next }));
-  };
-  const stopObjectDrag = () => {
-    if (!dragRef.current) return;
-    const drag = dragRef.current;
-    dragRef.current = null;
-    if (drag.mode === 'multi-move') {
-      drag.elements.forEach((element) => element.classList.remove('object-dragging', 'multi-object-dragging'));
-      refreshSpatialIndex();
-      for (const id of drag.ids) {
-        const initial = drag.initialItems[id];
-        const item = itemsRef.current[id];
-        if (isCollaborativeItem(item)) {
-          const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
-          itemSyncVersionsRef.current.set(String(id), version);
-          peerMeshRef.current?.sendData({ type: 'item_geometry', item_id: String(id), x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, version }, (peer) => canPeerAccessItem(item, peer));
-          markItemDirty(id);
-        } else if (item && !sendItemChange({ type: 'item_update', item_id: id, item }, initial)) {
-          const rolledBack = { ...itemsRef.current, [id]: initial };
-          itemsRef.current = rolledBack;
-          setItems(rolledBack);
-          setToast('연결이 복구되면 선택한 오브젝트를 다시 이동해주세요.');
-        }
-      }
-      return;
-    }
-    const { id, initial, element } = drag;
-    element?.classList.remove('object-dragging', 'object-resizing', 'object-rotating', 'object-bending');
-    boardRef.current?.classList.remove('rotating');
-    const item = itemsRef.current[id];
-    refreshSpatialIndex();
-    if (isCollaborativeItem(item)) {
-      const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
-      itemSyncVersionsRef.current.set(String(id), version);
-      peerMeshRef.current?.sendData({ type: 'item_geometry', item_id: String(id), x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, version }, (peer) => canPeerAccessItem(item, peer));
-      markItemDirty(id);
-    } else if (item && !sendItemChange({ type: 'item_update', item_id: id, item }, initial)) {
-      itemsRef.current = { ...itemsRef.current, [id]: initial };
-      setItems((current) => ({ ...current, [id]: initial }));
-      refreshSpatialIndex();
-    }
-  };
+  const {
+    startObjectDrag,
+    startObjectResize,
+    startArrowBend,
+    startObjectRotation,
+    moveObject,
+    stopObjectDrag,
+  } = useCanvasObjectInteractions({
+    activeTool,
+    addItem,
+    boardRef,
+    clearPeerItemGeometryBroadcast,
+    connectionStartId,
+    connectorColor,
+    connectorEndHead,
+    connectorStartHead,
+    connectorWidth,
+    dragRef,
+    itemsRef,
+    markItemDirty,
+    permission,
+    pointerPosition,
+    refreshSpatialIndex,
+    saveCollaborativeItemRef,
+    sceneRef,
+    selectItems,
+    selectedObjectIdSet,
+    selectedObjectIds,
+    sendItemChange,
+    sendPeerItemGeometry,
+    sendRealtimePeerItemGeometry,
+    setActiveTool,
+    setConnectionStartId,
+    setItems,
+    setToast,
+    spacePressedRef,
+    startPan,
+  });
   const changeTheme = (nextTheme) => { localStorage.setItem('agora_canvas_theme', nextTheme); setTheme(nextTheme); };
   const toggleGrid = () => { const next = !showGrid; localStorage.setItem('agora_canvas_grid', String(next)); setShowGrid(next); };
   const changeZoomSensitivity = (event) => {
@@ -3040,7 +1069,7 @@ function CanvasWorkspace() {
   return <div className="canvas-app-page" data-theme={theme}>
     <header className="canvas-topbar">
       <div className="canvas-title-group"><Link to="/search" className="canvas-back" aria-label="캔버스 목록"><Icon name="back" size={19} /></Link><div className="canvas-cover-image"><AuthenticatedImage src={canvas?.image} token={token} alt="캔버스 대표 이미지" fallback={<div className="canvas-cover-art"><i /><i /><i /><span>AG</span></div>} loadingFallback={<div className="canvas-cover-art"><i /><i /><i /><span>AG</span></div>} /></div><div className="canvas-title-copy"><span>AGORA CANVAS · #{canvasId}</span><h1>{canvas?.canvas_name || `캔버스 ${canvasId}`}</h1></div></div>
-      <div className="canvas-header-right"><div className="canvas-description-card"><span>캔버스 설명</span><p>{canvas?.description || '함께 아이디어를 모으고 실시간으로 만들어가는 공간입니다.'}</p></div><div className="canvas-top-right"><span className={`connection-pill ${connection}`}><i />{connection === 'connected' ? '실시간 연결됨' : connection === 'connecting' ? '연결 중' : '연결 끊김'}</span><div className="collaborator-avatars"><span>{(user?.nickname || 'A').slice(0, 1)}</span>{otherParticipants.slice(0, 2).map((person) => <span key={`${person.nickname}-${person.tag_number}`}>{person.nickname.slice(0, 1)}</span>)}</div><button className="button button-outline canvas-settings-button" onClick={() => setShowSettings(true)}><Icon name="settings" size={17} /><span>설정</span></button></div></div>
+      <div className="canvas-header-right"><div className="canvas-description-card"><span>캔버스 설명</span><p>{canvas?.description || '함께 아이디어를 모으고 실시간으로 만들어가는 공간입니다.'}</p></div><div className="canvas-top-right"><span className={`connection-pill ${connection}`} role="status" aria-live="polite" title={connection === 'connecting' ? '다시 연결하는 중입니다. 캔버스 편집은 계속할 수 있고 변경 사항은 연결 후 저장됩니다.' : connection === 'connected' ? '서버에 연결되어 변경 사항을 동기화하고 있습니다.' : '서버 연결이 해제되었습니다.'}><i />{connection === 'connected' ? '연결됨' : connection === 'connecting' ? '연결 중' : '연결 해제'}</span><div className="collaborator-avatars"><span>{(user?.nickname || 'A').slice(0, 1)}</span>{otherParticipants.slice(0, 2).map((person) => <span key={`${person.nickname}-${person.tag_number}`}>{person.nickname.slice(0, 1)}</span>)}</div><button className="button button-outline canvas-settings-button" onClick={() => setShowSettings(true)}><Icon name="settings" size={17} /><span>설정</span></button></div></div>
     </header>
     {error ? <div className="canvas-error-state"><div className="error-art"><Icon name="grid" size={30} /></div><span className="section-kicker">CANVAS CONNECTION</span><h1>캔버스를 열 수 없어요.</h1><p>{error}</p><div><button className="button button-dark" onClick={() => window.location.reload()}>다시 연결하기</button><Link className="button button-outline" to="/search">캔버스 목록</Link></div></div> : <div className="canvas-workspace">
       <aside className="canvas-tools" aria-label="캔버스 도구">
@@ -3049,7 +1078,7 @@ function CanvasWorkspace() {
         <div className="tool-separator" /><div className="tool-group"><label className="tool-button file-tool" title="사진 올리기" aria-label="사진 올리기"><Icon name="image" size={19} /><input type="file" accept="image/*" onChange={uploadImage} /></label><button className={`tool-button${activeTool === 'code' ? ' active' : ''}`} title="코드 블록" aria-label="코드 블록" onClick={() => setActiveTool('code')}><Icon name="code" size={19} /></button><button className={`tool-button${activeTool === 'link' ? ' active' : ''}`} title="동영상·링크 공유" aria-label="동영상·링크 공유" onClick={() => setActiveTool('link')}><Icon name="link" size={19} /></button></div>
         <div className="tool-separator" /><div className="color-picker" aria-label="펜 및 도형 색상">{inkColors.map((ink) => <button key={ink} style={{ '--ink': ink }} className={color === ink ? 'selected' : ''} onClick={() => setColor(ink)} aria-label={`색상 ${ink}`} />)}</div><div className="tool-bottom"><span className="tool-help">CANVAS</span><span>도구</span></div>
       </aside>
-      <main className="board-region"><div className="board-topline"><span className="board-section-label"><i /> 2차 좌표 캔버스</span><div className="board-toolbar-actions"><span className="board-updated"><Icon name="clock" size={14} /> P2P {peerList.filter((peer) => peer.connected).length}명 · 저장 Ctrl+S</span><button className="zoom-button" aria-label="확대" title="클릭: 한 단계 확대 · 길게 누르기: 계속 확대" onPointerDown={(event) => startZoomHold(event, 1 + 0.15 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.15 * zoomSensitivity)}>+</button><span className="zoom-value">{Math.round(camera.scale * 100)}%</span><button className="zoom-button" aria-label="축소" title="클릭: 한 단계 축소 · 길게 누르기: 계속 축소" onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.15 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.15 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => setCamera({ x: 0, y: 0, scale: 1 })}>맞춤</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />격자 {showGrid ? '켜짐' : '꺼짐'}</button></div></div>
+      <main className="board-region"><div className="board-topline"><span className="board-section-label"><i /> 2차 좌표 캔버스</span><div className="board-toolbar-actions"><span className="board-updated" title="텍스트·코드는 Ctrl+S 저장, 포스트잇은 변경 후 자동 저장"><Icon name="clock" size={14} /> P2P {peerList.filter((peer) => peer.connected).length}명 · 저장 Ctrl+S</span><button className="zoom-button" aria-label="확대" title="클릭: 한 단계 확대 · 길게 누르기: 계속 확대" onPointerDown={(event) => startZoomHold(event, 1 + 0.15 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.15 * zoomSensitivity)}>+</button><span className="zoom-value">{Math.round(camera.scale * 100)}%</span><button className="zoom-button" aria-label="축소" title="클릭: 한 단계 축소 · 길게 누르기: 계속 축소" onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.15 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.15 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => setCamera({ x: 0, y: 0, scale: 1 })}>맞춤</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />격자 {showGrid ? '켜짐' : '꺼짐'}</button></div></div>
         <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ '--grid-size': `${20 * camera.scale}px`, '--grid-dot-radius': `${camera.scale}px`, '--grid-position-x': `${camera.x}px`, '--grid-position-y': `${camera.y}px` }} ref={boardRef} tabIndex={-1} onPointerDown={startDrawing} onPointerMove={moveDrawing} onPointerUp={stopDrawing} onPointerCancel={stopDrawing} onPointerLeave={hideCursor}>
           <div className="stage-label"><span>AGORA / {String(canvasId).padStart(2, '0')}</span><b>{canvas?.canvas_name || '공유 캔버스'}</b></div>
           <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true"><span className="coordinate-x" /><span className="coordinate-y" /><i className="coordinate-origin">0</i><b className="coordinate-x-label">X</b><b className="coordinate-y-label">Y</b></div>
@@ -3070,7 +1099,7 @@ function CanvasWorkspace() {
                 {minimap.items.map(({ id, item, bounds }) => {
                   const itemWidth = Math.max(bounds.maxX - bounds.minX, minimap.bounds.width * 0.008);
                   const itemHeight = Math.max(bounds.maxY - bounds.minY, minimap.bounds.height * 0.008);
-                  return <rect key={id} className={`canvas-minimap-item${selectedObjectIdSet.has(String(id)) ? ' selected' : ''}`} x={(bounds.minX + bounds.maxX - itemWidth) / 2} y={(bounds.minY + bounds.maxY - itemHeight) / 2} width={itemWidth} height={itemHeight} rx={Math.min(itemWidth, itemHeight) * 0.22} style={{ fill: item.color || MINIMAP_ITEM_COLORS[item.kind] }} />;
+                  return <rect key={id} className={`canvas-minimap-item${selectedObjectIdSet.has(String(id)) ? ' selected' : ''}`} x={(bounds.minX + bounds.maxX - itemWidth) / 2} y={(bounds.minY + bounds.maxY - itemHeight) / 2} width={itemWidth} height={itemHeight} rx={Math.min(itemWidth, itemHeight) * 0.22} style={{ fill: item.color || minimapItemColors[item.kind] }} />;
                 })}
                 <rect className="canvas-minimap-viewport" x={minimap.viewport.minX} y={minimap.viewport.minY} width={minimap.viewport.maxX - minimap.viewport.minX} height={minimap.viewport.maxY - minimap.viewport.minY} rx="2" />
               </svg>
@@ -3079,33 +1108,59 @@ function CanvasWorkspace() {
           {activeTool === 'eraser' && <div className="eraser-cursor" ref={eraserCursorRef} style={{ width: `${ERASER_RADIUS * 2}px`, height: `${ERASER_RADIUS * 2}px` }} aria-hidden="true" />}
           {sharePosition && <ShareComposer onCancel={() => { setSharePosition(null); setActiveTool('select'); }} onSubmit={placeSharedLink} />}
           {activeTool === 'laser' && <div className="draw-cursor-label laser-cursor-label"><Icon name="laser" size={13} /> 가리키는 중 · 1.6초 후 사라짐</div>}{activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} /> 그리는 중</div>}{activeTool === 'eraser' && <div className="draw-cursor-label"><Icon name="eraser" size={13} /> 드로잉을 드래그해 지우기</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? '도착 오브젝트 선택' : '시작 오브젝트 선택'}</div>}{activeTool === 'link' && !sharePosition && <div className="draw-cursor-label"><Icon name="link" size={13} /> 공유 자료를 놓을 위치 선택</div>}
-        </div><div className="board-footer"><span>무한 좌표 평면 · X/Y축</span><span className="board-footer-center">빈 공간 드래그 선택 · 오브젝트 드래그 이동 · Space+드래그 화면 이동</span><span>{visibleItemIds.size}/{Object.keys(items).length}개 표시</span></div>
+        </div><div className="board-footer"><span>무한 좌표 평면 · X/Y축</span><span className="board-footer-center">빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · Space+드래그 화면 이동</span><span>{visibleItemIds.size}/{Object.keys(items).length}개 표시</span></div>
       </main>
-      <aside className={`canvas-sidepanel canvas-inspector${activeTool === 'select' ? ' server-settings-mode' : ' tool-settings-mode'}`}><div className="inspector-heading"><div><span className="section-kicker">{activeTool === 'select' ? 'WORKSPACE' : 'TOOL SETTINGS'}</span><h2>{activeTool === 'select' ? '환경 설정' : `${({ pen: '드로잉', laser: '레이저 포인터', eraser: '지우개', connect: '연결', shape: '도형', text: '텍스트', note: '포스트잇', math: '수식', table: '테이블', code: '코드', link: '동영상·링크' })[activeTool] || '도구'} 설정`}</h2></div>{activeTool === 'select' && <button className="icon-button" onClick={() => setShowSettings(true)} aria-label="캔버스 세부 설정"><Icon name="settings" size={18} /></button>}</div>
-        {activeTool === 'select' && <>
-        <section className="inspector-section"><div className="inspector-label">화면 모드</div><div className="theme-switch" role="group" aria-label="테마 선택"><button className={theme === 'light' ? 'active' : ''} aria-pressed={theme === 'light'} onClick={() => changeTheme('light')}><Icon name="sun" size={16} />라이트</button><button className={theme === 'dark' ? 'active' : ''} aria-pressed={theme === 'dark'} onClick={() => changeTheme('dark')}><Icon name="moon" size={16} />다크</button></div></section>
-        <section className="inspector-section"><div className="inspector-switch-row"><span><strong>좌표 격자</strong><small>2차 평면 가이드라인</small></span><button className={`toggle-switch${showGrid ? ' on' : ''}`} role="switch" aria-checked={showGrid} onClick={toggleGrid}><i /></button></div><div className="axis-preview"><span>X축</span><i /><span>Y축</span><i className="axis-preview-origin" /></div></section>
-        <section className="inspector-section zoom-sensitivity-section"><div className="zoom-sensitivity-heading"><strong>줌 감도</strong><span>{Math.round(zoomSensitivity * 100)}%</span></div><input type="range" min={MIN_ZOOM_SENSITIVITY} max={MAX_ZOOM_SENSITIVITY} step="0.1" value={zoomSensitivity} onChange={changeZoomSensitivity} aria-label="줌 감도" /><small>휠과 확대·축소 버튼 반응 속도</small></section>
-        {(selectedObjectIds.length > 1 || selectedObjectIds.some((id) => items[id]?.groupId)) && <section className="inspector-section selection-actions-section"><div className="selection-actions-heading"><strong>{selectedObjectIds.length}개 오브젝트 선택됨</strong><button type="button" onClick={() => selectItems([])}>선택 해제</button></div><small className="inspector-hint">빈 공간을 드래그해 여러 개를 선택하고, Shift를 누른 채 개별 선택을 더할 수 있어요.</small>{selectedObjectIds.some((id) => isCollaborativeItem(items[id])) && <small className="inspector-hint">텍스트·포스트잇·코드가 포함된 선택은 Ctrl + S로 함께 저장할 수 있어요.</small>}<div className="selection-actions-buttons"><button type="button" className="button button-dark" disabled={!selectionIsSingleGroup && selectedObjectIds.filter((id) => !['stroke', 'connector'].includes(items[id]?.kind)).length < 2} onClick={() => changeSelectionGroup(!selectionIsSingleGroup)}>{selectionIsSingleGroup ? '그룹 해제' : '그룹화'}</button></div></section>}
-        </>}
-        {activeTool !== 'select' && <section className="inspector-section tool-settings-summary"><strong className="inspector-label">선택한 도구</strong><small className="inspector-hint">캔버스에서 사용할 도구의 설정을 조정하세요. 커서 도구를 선택하면 워크스페이스 설정으로 돌아갑니다.</small></section>}
-        {activeTool === 'pen' && <><section className="inspector-section"><span className="inspector-label">선 색상</span><div className="color-picker inspector-color-picker" aria-label="드로잉 색상">{inkColors.map((ink) => <button key={ink} style={{ '--ink': ink }} className={color === ink ? 'selected' : ''} onClick={() => setColor(ink)} aria-label={`색상 ${ink}`} />)}</div></section><section className="inspector-section stroke-width-section"><div className="zoom-sensitivity-heading"><strong>선 굵기</strong><span>{strokeWidth}px</span></div><input type="range" min={MIN_STROKE_WIDTH} max={MAX_STROKE_WIDTH} step="1" value={strokeWidth} onChange={changeStrokeWidth} aria-label="드로잉 선 굵기" /><small>새로 그리는 선에 적용됩니다.</small></section></>}
-        {activeTool === 'laser' && <section className="inspector-section"><strong className="inspector-label">레이저 포인터</strong><small className="inspector-hint">드래그해 가리키면 흔적이 1.6초 동안 서서히 사라집니다. 다른 참여자에게도 실시간으로 보여요.</small></section>}{activeTool === 'eraser' && <section className="inspector-section"><strong className="inspector-label">드로잉 지우개</strong><small className="inspector-hint">지우려는 선 위를 드래그하면 닿은 부분만 지워집니다. 드로잉은 개체로 선택되지 않습니다.</small></section>}
-        {activeTool === 'shape' && <><section className="inspector-section"><span className="inspector-label">도형 색상</span><div className="color-picker inspector-color-picker" aria-label="도형 색상">{inkColors.map((ink) => <button key={ink} style={{ '--ink': ink }} className={color === ink ? 'selected' : ''} onClick={() => setColor(ink)} aria-label={`색상 ${ink}`} />)}</div></section><section className="inspector-section"><label className="inspector-label" htmlFor="shape-kind">도형 종류</label><select id="shape-kind" className="shape-select" value={shapeType} onChange={(event) => setShapeType(event.target.value)}><option value="rectangle">사각형</option><option value="ellipse">타원</option><option value="arrow">화살표</option></select>{shapeType === 'arrow' && <><ArrowHeadControls item={{ startHead: shapeArrowStartHead, endHead: shapeArrowEndHead }} onChange={updateNewShapeArrowHead} /><small className="inspector-hint">이 모양은 새 화살표에 적용됩니다.</small></>}<small className="inspector-hint">캔버스를 클릭해 도형을 놓으세요.</small></section></>}
-        {activeTool === 'note' && <section className="inspector-section"><span className="inspector-label">포스트잇 색상</span><div className="sticky-note-colors">{stickyNoteColors.map((swatch) => <button key={swatch} type="button" style={{ '--sticky-swatch': swatch }} className={noteColor === swatch ? 'selected' : ''} onClick={() => setNoteColor(swatch)} aria-label={`포스트잇 색상 ${swatch}`} aria-pressed={noteColor === swatch} />)}</div><small className="inspector-hint">캔버스를 클릭해 Markdown 포스트잇을 놓으세요.</small></section>}
-        {activeTool === 'link' && <section className="inspector-section"><strong className="inspector-label">동영상·링크 공유</strong><small className="inspector-hint">캔버스를 클릭하고 YouTube, 동영상 주소 또는 웹 링크를 입력하세요.</small></section>}
-        {(activeTool === 'connect' || (activeTool === 'select' && selectedConnector)) && <section className="inspector-section connector-style-section"><strong className="inspector-label">{connectorToEdit ? '선택한 화살표 스타일' : '새 연결 스타일'}</strong><label className="connector-color-control">색상<input type="color" value={connectorToEdit?.color || connectorColor} onChange={(event) => connectorToEdit ? updateConnectorAppearance(primarySelectedItemId, 'color', event.target.value) : setConnectorColor(event.target.value)} /></label><label className="connector-width-control"><span>굵기 <b>{Number(connectorToEdit?.strokeWidth) || connectorWidth}px</b></span><input type="range" min="0.8" max="4" step="0.2" value={Number(connectorToEdit?.strokeWidth) || connectorWidth} onChange={(event) => connectorToEdit ? updateConnectorAppearance(primarySelectedItemId, 'strokeWidth', event.target.value) : setConnectorWidth(Number(event.target.value))} aria-label="연결 화살표 굵기" /></label><ArrowHeadControls item={connectorToEdit || { startHead: connectorStartHead, endHead: connectorEndHead }} onChange={(field, value) => connectorToEdit ? updateArrowHead(primarySelectedItemId, field, value) : updateNewConnectorHead(field, value)} /><small className="inspector-hint">화살표는 회색으로 시작하며, 연결 도구에서 새 연결의 색과 굵기를 설정할 수 있어요.</small>{selectedConnector && <small className="inspector-hint">가운데 조절점을 드래그해 몸통을 원하는 방향으로 휘어보세요.</small>}</section>}
-        {activeTool === 'select' && selectedArrow && <section className="inspector-section"><strong className="inspector-label">화살표 곡률 및 머리 모양</strong><small className="inspector-hint">몸통 가운데 조절점을 드래그해 원하는 방향으로 휘어보세요.</small><button type="button" onClick={() => updateShapeArrowBend(primarySelectedItemId, 0)}>직선으로 만들기</button><ArrowHeadControls item={selectedArrow} onChange={(field, value) => updateArrowHead(primarySelectedItemId, field, value)} /></section>}
-        {activeTool === 'select' && selectedItem && <section className="inspector-section rotation-section"><div className="zoom-sensitivity-heading"><strong>{selectedConnector ? '곡선 방향' : '객체 회전'}</strong><span>{Math.round(Number(selectedItem.rotation) || 0)}°</span></div>{selectedConnector && <input type="range" min="-180" max="180" step="1" value={Math.round(Number(selectedItem.rotation) || 0)} onChange={(event) => updateItemRotation(primarySelectedItemId, event.target.value)} aria-label="선택한 화살표 곡선 방향" />}{!selectedConnector && <small className="inspector-hint">선택 객체 위쪽 핸들을 드래그해 마우스 방향을 따라 회전하세요.</small>}<button type="button" onClick={() => updateItemRotation(primarySelectedItemId, 0)}>{selectedConnector ? '방향 초기화' : '회전 초기화'}</button></section>}
-        {(activeTool === 'table' || (activeTool === 'select' && selectedTable)) && <section className="inspector-section"><strong className="inspector-label">{activeTool === 'table' ? '새 테이블 설정' : '테이블 설정'}</strong><div className="table-config-grid"><label>행 수<input type="number" min="1" max={MAX_TABLE_ROWS} value={activeTool === 'table' ? tableConfig.rows : selectedTable.rows?.length || 1} onChange={(event) => changeTableCount('rows', event)} /></label><label>열 수<input type="number" min="1" max={MAX_TABLE_COLUMNS} value={activeTool === 'table' ? tableConfig.columns : selectedTable.columns?.length || 1} onChange={(event) => changeTableCount('columns', event)} /></label><label>너비 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.width : Math.round((selectedTable.width || 0.42) * 100)} onChange={(event) => changeTableSize('width', event)} /></label><label>높이 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.height : Math.round((selectedTable.height || 0.32) * 100)} onChange={(event) => changeTableSize('height', event)} /></label></div><small className="inspector-hint">{activeTool === 'table' ? '설정 후 캔버스를 클릭해 놓으세요.' : '셀이나 컬럼 이름을 두 번 클릭해 Markdown으로 편집하세요.'}</small></section>}
-        {(activeTool === 'text' || activeTool === 'code') && <section className="inspector-section"><strong className="inspector-label">{activeTool === 'text' ? '텍스트 작성' : '코드 작성'}</strong><small className="inspector-hint">캔버스를 클릭하면 편집 가능한 아이템이 놓입니다.</small></section>}
-        {activeTool === 'select' && <>
-        <section className="inspector-section inspector-stats"><div><span>캔버스 ID</span><strong>#{canvasId}</strong></div><div><span>오브젝트</span><strong>{Object.keys(items).length}</strong></div><div><span>설정 revision</span><strong>{settings?.settings_revision ?? '—'}</strong></div></section>
-        <section className="inspector-members"><div className="member-panel-title"><strong>참여자</strong><span>{canvasParticipants.length}명</span></div>{canvasParticipants.slice(0, 5).map((person, index) => <div className="member-row" key={`${person.nickname}-${person.tag_number}`}><span className={`avatar member-avatar avatar-tone-${index % 4}`}>{person.nickname.slice(0, 1)}</span><span><strong>{person.nickname} <small>#{person.tag_number}</small></strong><small>{index === 0 ? '캔버스 멤버' : '참여자'}</small></span></div>)}<button className="manage-members-button" onClick={() => setShowSettings(true)}>참여자 관리 <Icon name="arrow" size={14} /></button></section>
-        </>}
-        <div className="sidepanel-bottom"><span className="online-indicator"><i /> {connection === 'connected' ? '동기화됨' : '연결 확인 중'}</span></div>
-      </aside>
-      <section className="canvas-chat-panel" aria-label="캔버스 채팅"><div className="chat-dock-heading"><span className="conversation-icon"><Icon name="chat" size={16} /></span><div><strong>캔버스 채팅</strong><small>아이디어를 바로 나눠보세요</small></div><span className="chat-message-count">{messages.length}개 표시</span>{hasOlderMessages && <button type="button" className="chat-load-more" style={{ padding: '5px 7px', border: '1px solid var(--line)', borderRadius: 6, background: 'var(--panel-soft)', color: 'var(--ink-muted)', fontSize: 7, whiteSpace: 'nowrap' }} onClick={loadOlderMessages} disabled={chatHistoryLoading}>{chatHistoryLoading ? '불러오는 중' : '이전 메시지'}</button>}</div><div className="message-list">{messages.length ? messages.map((entry) => <div className={`chat-entry${entry.own ? ' own' : ''}`} key={entry.id}><div className="chat-entry-avatar">{entry.sender.slice(0, 1)}</div><div className="chat-entry-content"><div><strong>{entry.sender}</strong><time>{entry.time.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</time></div><div className="chat-message-bubble"><MarkdownText source={entry.text} /></div></div></div>) : <div className="chat-empty"><span>✳</span><strong>첫 대화를 시작해보세요.</strong><small>캔버스에 대한 생각을 멤버들과 나눠요.</small></div>}</div><form className="chat-compose" onSubmit={submitMessage}><textarea rows="2" placeholder="Markdown 메시지를 남겨보세요..." value={message} onChange={(event) => setMessage(event.target.value)} disabled={connection !== 'connected'} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit(); } }} /><div><span>Markdown 지원 · Enter 전송 · Shift + Enter 줄바꿈</span><button type="submit" className="chat-send-button" disabled={!message.trim() || connection !== 'connected'} aria-label="메시지 전송"><Icon name="send" size={16} strokeWidth={2} className="chat-send-glyph" /></button></div></form></section>
+<CanvasInspectorPanel {...{
+        activeTool,
+        canvasId,
+        canvasParticipants,
+        changeSelectionGroup,
+        changeStrokeWidth,
+        changeTableCount,
+        changeTableSize,
+        changeTheme,
+        changeZoomSensitivity,
+        color,
+        connection,
+        connectorColor,
+        connectorEndHead,
+        connectorStartHead,
+        connectorToEdit,
+        connectorWidth,
+        items,
+        noteColor,
+        primarySelectedItemId,
+        selectItems,
+        selectedArrow,
+        selectedConnector,
+        selectedItem,
+        selectedObjectIds,
+        selectedTable,
+        selectionIsSingleGroup,
+        setColor,
+        setConnectorColor,
+        setConnectorWidth,
+        setNoteColor,
+        setShapeType,
+        setShowSettings,
+        settings,
+        shapeArrowEndHead,
+        shapeArrowStartHead,
+        shapeType,
+        showGrid,
+        strokeWidth,
+        tableConfig,
+        theme,
+        toggleGrid,
+        updateArrowHead,
+        updateConnectorAppearance,
+        updateItemRotation,
+        updateNewConnectorHead,
+        updateNewShapeArrowHead,
+        updateShapeArrowBend,
+        zoomSensitivity
+      }} />
+<CanvasChatPanel {...{ chatHistoryLoading, connection, hasOlderMessages, loadOlderMessages, message, messages, setMessage, submitMessage }} />
     </div>}
     {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{toast}</div>}
     {showSettings && <SettingsDialog settings={settings} pending={settingsPending} onClose={() => setShowSettings(false)} onUpdate={sendSettings} onAddParticipant={(nickname, tag) => sendSettings('participant_add', null, { nickname, tag_number: tag })} onRemoveParticipant={(person) => sendSettings('participant_remove', null, { nickname: person.nickname, tag_number: person.tag_number })} />}
@@ -3113,6 +1168,7 @@ function CanvasWorkspace() {
 }
 
 export default function CanvasPage() {
+  const { canvasId } = useParams();
   const [ready, setReady] = useState(false);
   useEffect(() => {
     let active = true;
@@ -3120,5 +1176,5 @@ export default function CanvasPage() {
     return () => { active = false; };
   }, []);
   if (!ready) return <div className="canvas-app-page canvas-loading-state"><span className="loader" /> 공동 편집 엔진을 불러오는 중이에요.</div>;
-  return <CanvasWorkspace />;
+  return <CanvasWorkspace key={canvasId} />;
 }

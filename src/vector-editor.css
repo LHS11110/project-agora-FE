@@ -182,9 +182,17 @@
 .canvas-stage{position:relative}.canvas-stage:focus{outline:none}.canvas-stage.select-mode{cursor:default}.canvas-stage.select-mode.panning{cursor:grabbing}
 .canvas-selection-marquee{position:absolute;z-index:18;box-sizing:border-box;border:1px solid #66876e;background:#8eae9228;pointer-events:none}
 .canvas-app-page[data-theme="dark"] .canvas-selection-marquee{border-color:#a7c5a2;background:#a7c5a21f}
+.canvas-stage .object-move-handle{position:absolute;z-index:21;top:5px;left:5px;box-sizing:border-box;display:grid;width:34px;height:34px;place-items:center;padding:0;border:1px solid #bdcbbd;border-radius:9px;background:#ffffffed;color:#55715b;box-shadow:0 2px 8px #263b3526;opacity:0;pointer-events:none;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.canvas-stage .canvas-object.selected .object-move-handle,.canvas-stage .object-move-handle:focus-visible{opacity:1;pointer-events:auto}
+.canvas-stage .canvas-object:not(.selected) .object-move-handle{opacity:0;pointer-events:none}
+.canvas-stage .object-move-handle:active{background:#e7efe5;cursor:grabbing}
+.canvas-app-page[data-theme="dark"] .canvas-stage .object-move-handle{border-color:#536556;background:#26352b;color:#d3e3d1}
+@media(pointer:coarse){.canvas-stage .canvas-object.selected .object-move-handle{top:4px;left:4px;width:44px;height:44px;border-radius:12px}.canvas-stage .sticky-note-object .sticky-note-head{min-height:44px}.canvas-stage .sticky-note-object.selected .sticky-note-head{padding-left:48px}.canvas-stage .sticky-note-object.selected .object-move-handle{top:12px;left:8px}.canvas-stage .code-object.selected .code-object-head{padding-left:48px}}
 .selection-actions-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px;color:var(--ink-strong)}
 .selection-actions-heading strong{font-size:9px}.selection-actions-heading button{padding:3px 6px;border:0;border-radius:5px;background:transparent;color:var(--ink-muted);font-size:7px;cursor:pointer}.selection-actions-heading button:hover{background:var(--panel-soft);color:var(--ink-strong)}
 .selection-actions-buttons{display:flex;gap:6px;margin-top:9px}.selection-actions-buttons .button{min-height:29px;padding:0 10px;font-size:8px}.selection-actions-buttons .button:disabled{opacity:.45;cursor:not-allowed}
 .canvas-inspector .inspector-color-picker{display:flex;flex-direction:row;gap:8px;padding:1px 0}.canvas-inspector .inspector-color-picker button{width:18px;height:18px;flex:0 0 18px}
 .tool-settings-mode .tool-settings-summary{padding-top:3px}.tool-settings-mode .inspector-heading .section-kicker{color:#829184}
 @media(max-width:650px){.selection-actions-buttons .button{flex:1}}
+.online-indicator.connecting{color:#9c7740}.online-indicator.connecting i{background:#d4a75d;animation:pulse 1.2s infinite}.online-indicator.disconnected{color:#b16e59}.online-indicator.disconnected i{background:#d9866b}
+@media(max-width:650px){.canvas-top-right .connection-pill{width:auto;min-width:0;height:23px;padding:0 7px;font-size:7px;flex:0 0 auto}}

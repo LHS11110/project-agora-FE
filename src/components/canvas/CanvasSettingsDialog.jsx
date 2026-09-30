@@ -1,0 +1,19 @@
+import { useEffect, useState } from 'react';
+import Icon from '../Icon.jsx';
+import { uniqueCanvasParticipants } from '../../canvas/canvasParticipants.js';
+
+export default function SettingsDialog({ settings, pending, onClose, onUpdate, onAddParticipant, onRemoveParticipant }) {
+  const [name, setName] = useState(settings?.canvas_name || '');
+  const [description, setDescription] = useState(settings?.description || '');
+  const [password, setPassword] = useState('');
+  const [participant, setParticipant] = useState({ nickname: '', tag: '' });
+  const [message, setMessage] = useState('');
+  const participants = uniqueCanvasParticipants(settings?.participants);
+  useEffect(() => { setName(settings?.canvas_name || ''); setDescription(settings?.description || ''); }, [settings]);
+  return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className="modal-card settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title"><button className="icon-button modal-close" onClick={onClose} aria-label="닫기"><Icon name="close" /></button><span className="section-kicker">CANVAS SETTINGS</span><h2 id="settings-title">캔버스 설정</h2><p>변경 사항은 접속 중인 멤버에게 바로 전달돼요.</p>
+    <div className="settings-dialog-content"><label className="form-field"><span>캔버스 이름</span><div className="setting-row"><input className="plain-input" value={name} maxLength={255} onChange={(e) => setName(e.target.value)} /><button className="button button-outline" disabled={pending || name === settings?.canvas_name} onClick={() => onUpdate('name', name)}>저장</button></div></label><label className="form-field"><span>설명</span><div className="setting-row"><textarea className="plain-input" rows="2" value={description} onChange={(e) => setDescription(e.target.value)} /><button className="button button-outline" disabled={pending || description === (settings?.description || '')} onClick={() => onUpdate('description', description)}>저장</button></div></label><label className="form-field"><span>비밀번호 <small>{settings?.password_protected ? '현재 보호 중' : '현재 비밀번호 없음'}</small></span><div className="setting-row"><input className="plain-input" type="password" placeholder="새 비밀번호 입력" value={password} onChange={(e) => setPassword(e.target.value)} /><button className="button button-outline" disabled={pending || !password} onClick={() => { onUpdate('password', password); setPassword(''); }}>적용</button></div></label>
+      <div className="form-field"><span>참여자 <small>닉네임과 태그로 관리</small></span><div className="participant-chips">{participants.map((person) => <span className="participant-chip" key={`${person.nickname}-${person.tag_number}`}><i>{person.nickname.slice(0, 1)}</i>{person.nickname}#{person.tag_number}<button onClick={() => onRemoveParticipant(person)} aria-label={`${person.nickname} 참여자 제외`} title="참여자 제외">×</button></span>)}</div><div className="setting-row participant-add-row"><input className="plain-input" placeholder="닉네임" value={participant.nickname} onChange={(e) => setParticipant({ ...participant, nickname: e.target.value })} /><input className="plain-input tag-input" inputMode="numeric" placeholder="태그" value={participant.tag} onChange={(e) => setParticipant({ ...participant, tag: e.target.value })} /><button className="button button-outline" disabled={pending || !participant.nickname || !participant.tag} onClick={() => { onAddParticipant(participant.nickname, Number(participant.tag)); setParticipant({ nickname: '', tag: '' }); }}>추가</button></div></div>
+    </div>{message && <p className="field-hint">{message}</p>}{pending && <div className="settings-pending"><span className="loader" /> 변경 내용을 확인하고 있어요.</div>}<div className="settings-dialog-footer"><span>revision {settings?.settings_revision ?? '—'}</span><button className="button button-dark" onClick={onClose}>완료</button></div>
+  </section></div>;
+}
+

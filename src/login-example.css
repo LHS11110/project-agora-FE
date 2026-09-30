@@ -1,0 +1,24 @@
+.login-agora-example{position:relative;width:100%;height:100%;min-height:180px;color:#536653;pointer-events:none}
+.login-example-paper{position:absolute;left:3%;bottom:-27px;box-sizing:border-box;width:min(360px,94%);height:193px;padding:12px 17px 11px;border:1px solid #e8dfcc;border-radius:3px;background:#fbf7eb;box-shadow:0 18px 34px #34493620;transform:rotate(-3deg)}
+.login-example-paper:after{position:absolute;content:'';top:0;right:0;width:25px;height:25px;background:linear-gradient(225deg,#e8dec7 0 49%,#f4eedf 51%);clip-path:polygon(0 0,100% 100%,100% 0)}
+.login-example-header{display:flex;align-items:center;justify-content:space-between;color:#89947f;font:7px var(--mono);letter-spacing:.7px}
+.login-example-header b{color:#bd8262;font:italic 12px var(--display);letter-spacing:0}
+.login-example-sketch{display:block;width:100%;height:94px;margin-top:1px;overflow:visible}
+.login-example-connection{stroke:#a8b99d;stroke-width:1.3;stroke-dasharray:2 5;stroke-linecap:round}
+.login-example-node{fill:#e0bd75;stroke:#fbf7eb;stroke-width:2}
+.login-example-person-one{fill:#d5a47c}.login-example-person-two{fill:#6d8778}.login-example-person-three{fill:#c47b62}
+.login-example-person circle{stroke:#fbf7eb;stroke-width:2}
+.login-example-column,.login-example-olive{stroke:#82927a;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.login-example-formula{display:flex;align-items:baseline;justify-content:center;gap:7px;color:#647365;font:500 10px var(--display)}
+.login-example-formula b{color:#bb7c5c;font:500 10px var(--mono)}
+.login-example-formula strong{color:#496951;font-weight:650}
+.login-example-caption{margin:5px 0 0;text-align:center;color:#90988a;font:8px/1.4 var(--display)}
+
+@media(max-width:650px){
+  .login-agora-example--compact{height:160px;min-height:160px}
+  .login-agora-example--compact .login-example-paper{inset:0;width:100%;height:100%;padding:10px 12px 8px;border-radius:8px;transform:rotate(-1.2deg)}
+  .login-agora-example--compact .login-example-header{font-size:6px}
+  .login-agora-example--compact .login-example-sketch{height:84px;margin-top:3px}
+  .login-agora-example--compact .login-example-formula{gap:5px;font-size:8px}
+  .login-agora-example--compact .login-example-caption{margin-top:4px;font-size:7px}
+}

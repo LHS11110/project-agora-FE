@@ -161,6 +161,21 @@ export default class CanvasPeerMesh {
     return queued;
   }
 
+  sendRealtimeData(payload, canSend = () => true) {
+    const encoded = JSON.stringify(payload);
+    let sent = true;
+    for (const peer of this.peers.values()) {
+      if (!canSend(peer.metadata)) continue;
+      const channel = peer.cursor;
+      if (channel?.readyState === 'open') {
+        try { channel.send(encoded); } catch { sent = false; }
+      } else {
+        sent = this.#enqueue(peer, 'agora-sync', encoded) && sent;
+      }
+    }
+    return sent;
+  }
+
   sendToPeer(peerId, payload, channelName = 'agora-sync') {
     const peer = this.peers.get(peerId);
     if (channelName === 'agora-cursor') {
