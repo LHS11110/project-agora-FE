@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from '../routing.jsx';
 import Icon from '../components/Icon.jsx';
+import FreLogBrand from '../components/frelog/FreLogBrand.jsx';
 import MarkdownText from '../components/MarkdownText.jsx';
 import EditableTable from '../components/EditableTable.jsx';
 import ShareComposer from '../components/ShareComposer.jsx';
@@ -598,13 +599,13 @@ export default function TutorialPage() {
 
   return <div className="tutorial-page">
     <header className="tutorial-header">
-      <Link className="brand-lockup" to="/"><span className="brand-mark"><i /><i /><i /><i /></span><span>agora<span className="brand-period">.</span></span></Link>
+      <FreLogBrand />
       <div><span className="tutorial-breadcrumb">튜토리얼 <Icon name="chevron" size={14} /> 캔버스 체험</span><span className="tutorial-local-badge"><i /> 브라우저에서만 작동</span></div>
       <Link className="button button-outline" to="/login">계정 만들기 <Icon name="arrow" size={15} /></Link>
     </header>
     <main className="tutorial-main">
       <section className="tutorial-intro">
-        <div><span className="section-kicker">A SMALL SPACE TO TRY</span><h1>아고라 캔버스, 직접 만져보세요.</h1><p>실제 캔버스처럼 아이템을 놓고, 편집하고, 이동해보세요. 체험 데이터는 서버에 저장되지 않습니다.</p></div>
+        <div><span className="section-kicker">A SMALL SPACE TO TRY</span><h1>FreLog 캔버스, 직접 만져보세요.</h1><p>실제 캔버스처럼 아이템을 놓고, 편집하고, 이동해보세요. 체험 데이터는 서버에 저장되지 않습니다.</p></div>
         <div className="tutorial-steps"><span><b>01</b> 도구 선택</span><Icon name="chevron" size={14} /><span><b>02</b> 캔버스 클릭</span><Icon name="chevron" size={14} /><span><b>03</b> 자유롭게 조합</span></div>
       </section>
       <section className="tutorial-workspace" aria-label="인터랙티브 캔버스 체험">

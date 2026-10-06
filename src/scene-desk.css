@@ -1,0 +1,27 @@
+/* Notes sit on a shared desk instead of drifting through the viewport. */
+.frelog-scene { background: #eeece5; box-shadow: 0 3px 0 #3029580c; border-color: #30295816; }
+.frelog-scene::before, .frelog-scene::after,
+.frelog-scene .scene-grain { display: none; }
+.frelog-scene .scene-object {
+  animation: none;
+  translate: none;
+  transform: translate(var(--drag-x,0px),var(--drag-y,0px));
+  box-shadow: 0 2px 0 #30295812;
+  transition: border-color .2s, box-shadow .2s;
+}
+.frelog-scene .scene-object:hover { scale: 1; box-shadow: 0 2px 0 #30295812; }
+.frelog-scene .scene-object.is-focused { scale: 1; box-shadow: 0 0 0 2px #8a75e926; }
+.frelog-scene .scene-object:focus-visible { outline: 3px solid #765de9; outline-offset: 3px; }
+.frelog-scene .scene-note--question { left: 7%; top: 22%; width: 40%; height: 25%; }
+.frelog-scene .scene-formula { right: 7%; top: 22%; width: 40%; height: 25%; }
+.frelog-scene .scene-culture { left: 7%; bottom: 21%; width: 40%; height: 25%; }
+.frelog-scene .scene-code { right: 7%; bottom: 21%; width: 40%; height: 25%; }
+.frelog-scene .scene-connections { opacity: .25; }
+.frelog-scene .scene-connections--quiet { opacity: 0; }
+.frelog-scene .scene-connections :is(path,circle) { animation: none; }
+.frelog-scene .scene-connections path { stroke-dasharray: none; }
+.frelog-scene--login { background: #36324b; border-color: #ffffff25; }
+.frelog-scene--compact .scene-note--question,
+.frelog-scene--compact .scene-formula { top: 29%; height: 27%; }
+.frelog-scene--compact .scene-culture,
+.frelog-scene--compact .scene-code { bottom: 7%; height: 27%; }

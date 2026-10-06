@@ -74,13 +74,17 @@ export function connectorGeometry(item, items, width = 1, height = 1) {
   const curveNormalY = normalX * Math.sin(curveRotation) + normalY * Math.cos(curveRotation);
   const sourceReach = distanceToEdge(from, directionX, directionY);
   const targetReach = distanceToEdge(to, -directionX, -directionY);
+  const strokeWidth = Number(item.strokeWidth) || 1.5;
+  const headSize = Math.max(8, Math.min(15, 6 + strokeWidth * 2.5));
+  const edgePadding = Math.min(headSize + strokeWidth / 2 + 4,
+    Math.max(0, (length - sourceReach - targetReach) / 3));
   const start = {
-    x: from.centerX + directionX * sourceReach,
-    y: from.centerY + directionY * sourceReach,
+    x: from.centerX + directionX * (sourceReach + edgePadding),
+    y: from.centerY + directionY * (sourceReach + edgePadding),
   };
   const end = {
-    x: to.centerX - directionX * targetReach,
-    y: to.centerY - directionY * targetReach,
+    x: to.centerX - directionX * (targetReach + edgePadding),
+    y: to.centerY - directionY * (targetReach + edgePadding),
   };
   const gap = Math.max(1, (end.x - start.x) * directionX + (end.y - start.y) * directionY);
   const hasCustomBend = Number.isFinite(Number(item.bend));
@@ -96,7 +100,6 @@ export function connectorGeometry(item, items, width = 1, height = 1) {
     end,
   ];
   const curvePoints = Array.from({ length: 33 }, (_, index) => bezierPoint(curve, index / 32));
-  const headSize = Math.max(8, Math.min(15, 6 + (Number(item.strokeWidth) || 1.5) * 2.5));
   const arrowPath = arrowPathGeometry(curvePoints, {
     startHead: item.startHead,
     endHead: item.endHead,

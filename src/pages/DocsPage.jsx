@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from '../routing.jsx';
 import Icon from '../components/Icon.jsx';
+import FreLogBrand from '../components/frelog/FreLogBrand.jsx';
 import '../docs-directory.css';
 
 const publicEndpoints = [
@@ -195,10 +196,10 @@ export default function DocsPage() {
   }, []);
 
   return <main className="docs-page">
-    <header className="docs-header page-container"><Link className="brand-lockup" to="/"><span className="brand-mark"><i /><i /><i /><i /></span><span>agora<span className="brand-period">.</span></span></Link><nav><a href="#structure">프로젝트 구조</a><a href="#public-api">외부 API</a><a href="#internal-api">내부 API</a><a href="#database">DB 명세</a></nav><Link className="button button-outline docs-workspace-link" to="/search">워크스페이스 <Icon name="arrow" size={15} /></Link></header>
+    <header className="docs-header page-container"><FreLogBrand /><nav><a href="#structure">프로젝트 구조</a><a href="#public-api">외부 API</a><a href="#internal-api">내부 API</a><a href="#database">DB 명세</a></nav><Link className="button button-outline docs-workspace-link" to="/search">워크스페이스 <Icon name="arrow" size={15} /></Link></header>
     <div className="docs-layout page-container">
       <aside className="docs-toc" aria-label="문서 목차">
-        <div className="docs-toc-heading"><span>AGORA DOCS</span><small>REFERENCE / DIRECTORY</small></div>
+        <div className="docs-toc-heading"><span>FRELOG DOCS</span><small>REFERENCE / DIRECTORY</small></div>
         <DocsNavLink id="overview" activeSection={activeSection} onSelect={setActiveSection}>개요</DocsNavLink>
         <DocsNavFolder title="프로젝트">
           <DocsNavLink id="structure" activeSection={activeSection} onSelect={setActiveSection}>구조와 역할</DocsNavLink>
@@ -242,7 +243,7 @@ export default function DocsPage() {
         <DocsNavLink id="rules" activeSection={activeSection} onSelect={setActiveSection}>보안·공통 규칙</DocsNavLink>
       </aside>
       <article className="docs-content">
-        <section className="docs-hero" id="overview"><span className="docs-hero-icon"><Icon name="book" size={22} /></span><span className="section-kicker">PROJECT AGORA / TECHNICAL DOCS</span><h1>구조와 API를<br /><em>한눈에 살펴보세요.</em></h1><p>Agora는 캔버스 위에서 그림, 이미지, 코드와 대화를 실시간으로 나누는 협업 서비스입니다. 이 문서는 현재 저장소 구현을 기준으로 정리했습니다.</p><div className="docs-hero-meta"><span><i /> React · Vite</span><span><i /> Spring Boot</span><span><i /> C++ · uWebSockets</span></div></section>
+        <section className="docs-hero" id="overview"><span className="docs-hero-icon"><Icon name="book" size={22} /></span><span className="section-kicker">FRELOG / TECHNICAL DOCS</span><h1>구조와 API를<br /><em>한눈에 살펴보세요.</em></h1><p>FreLog는 캔버스 위에서 그림, 이미지, 코드와 대화를 실시간으로 나누는 협업 서비스입니다. 이 문서는 현재 저장소 구현을 기준으로 정리했습니다.</p><div className="docs-hero-meta"><span><i /> React · Vite</span><span><i /> Spring Boot</span><span><i /> C++ · uWebSockets</span></div></section>
         <section className="docs-section"><SectionTitle id="structure" eyebrow="01 / PROJECT MAP" title="프로젝트 구조와 역할" />
           <div className="docs-architecture"><div><span>Browser</span><strong>React · Vite</strong><small>화면 · 인증 UI · 캔버스 이벤트</small></div><b>HTTPS / WSS</b><div><span>Nginx</span><strong>Reverse proxy</strong><small>정적 파일 · API · WebSocket 라우팅</small></div><b>internal</b><div><span>Backend</span><strong>Spring + C++</strong><small>권한·데이터 관리 · 실시간 세션</small></div></div>
           <pre className="docs-tree"><code>{projectTree.join('\n')}</code></pre>
@@ -288,7 +289,7 @@ export default function DocsPage() {
           </section>
         </section>
         <section className="docs-section docs-rules" id="rules"><SectionTitle eyebrow="06 / IMPLEMENTATION NOTES" title="보안·공통 규칙" /><ul><li>일반 API는 로그인 JWT, 실시간 접속은 캔버스 전용 토큰을 사용합니다.</li><li>캔버스 비밀번호는 서버에서 해시 저장되며 평문이나 해시를 응답에 포함하지 않습니다.</li><li>브라우저 공개 응답과 WebSocket 이벤트에 내부 사용자 ID를 넣지 않습니다. 참여자 관리 키는 nickname + tag_number입니다.</li><li>포스트잇은 변경 후 item_save로 자동 저장하며, 텍스트·코드는 Ctrl + S로 저장합니다. 입력 중 Automerge 변경과 객체 좌표는 WebRTC 데이터 채널로 피어에게 전달합니다.</li><li>기본 주소: Spring <code>127.0.0.1:8080</code>, 내부 C++ REST <code>127.0.0.1:8000</code>, 첫 WebSocket 포트 <code>8002</code>.</li><li>별도 프런트엔드 도메인에서 API를 호출할 때만 Spring <code>CORS_ALLOWED_ORIGINS</code>를 지정합니다. 같은 도메인 배포는 Nginx 경유를 권장합니다.</li></ul></section>
-        <footer className="docs-footer"><Link to="/">← Agora 홈으로</Link><span>API는 project-agora-BE/API_SPEC.md, DB는 project-agora-DB의 현재 초기화 스키마를 기준으로 갱신했습니다.</span></footer>
+        <footer className="docs-footer"><Link to="/">← FreLog 홈으로</Link><span>API는 project-agora-BE/API_SPEC.md, DB는 project-agora-DB의 현재 초기화 스키마를 기준으로 갱신했습니다.</span></footer>
       </article>
     </div>
   </main>;

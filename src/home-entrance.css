@@ -1,0 +1,70 @@
+.home-slides-page .marketing-header {
+  animation: home-header-arrive .68s cubic-bezier(.2, .75, .2, 1) both;
+}
+
+.home-slides-page .frelog-brand-mark {
+  animation: home-mark-arrive .78s cubic-bezier(.18, .82, .24, 1.2) .12s both;
+}
+
+.home-slides-page .slide-hero .home-slide-copy > * {
+  animation: home-copy-arrive .64s cubic-bezier(.2, .75, .2, 1) both;
+}
+
+.home-slides-page .slide-hero .home-slide-copy > :nth-child(1) { animation-delay: .16s; }
+.home-slides-page .slide-hero .home-slide-copy > :nth-child(2) { animation-delay: .26s; }
+.home-slides-page .slide-hero .home-slide-copy > :nth-child(3) { animation-delay: .38s; }
+.home-slides-page .slide-hero .home-slide-copy > :nth-child(4) { animation-delay: .5s; }
+.home-slides-page .slide-hero .home-slide-copy > :nth-child(5) { animation-delay: .62s; }
+.home-slides-page .slide-hero .home-slide-copy > :nth-child(6) { animation-delay: .72s; }
+
+.home-slides-page .slide-hero .frelog-scene {
+  animation: home-scene-arrive .92s cubic-bezier(.2, .75, .2, 1) .18s both;
+}
+
+.home-slides-page .slide-hero .hero-side-note {
+  animation: home-copy-arrive .66s cubic-bezier(.2, .75, .2, 1) .68s both;
+}
+
+.home-slides-page .home-slide-controls {
+  animation: home-controls-arrive .64s cubic-bezier(.2, .75, .2, 1) .38s both;
+}
+
+@keyframes home-header-arrive {
+  from { opacity: 0; transform: translateY(-14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes home-mark-arrive {
+  0% { opacity: 0; transform: translateY(-7px) rotate(-25deg) scale(.68); }
+  68% { opacity: 1; transform: translateY(1px) rotate(4deg) scale(1.12); }
+  100% { opacity: 1; transform: rotate(-5deg) scale(1); }
+}
+
+@keyframes home-copy-arrive {
+  from { opacity: 0; transform: translateY(15px); filter: blur(3px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+
+@keyframes home-scene-arrive {
+  from { opacity: 0; transform: translate3d(18px, 12px, 0) scale(.94); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes home-controls-arrive {
+  from { opacity: 0; transform: translateY(11px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-slides-page .marketing-header,
+  .home-slides-page .frelog-brand-mark,
+  .home-slides-page .slide-hero .home-slide-copy > *,
+  .home-slides-page .slide-hero .frelog-scene,
+  .home-slides-page .slide-hero .hero-side-note,
+  .home-slides-page .home-slide-controls {
+    animation: none !important;
+    filter: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

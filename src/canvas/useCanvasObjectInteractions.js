@@ -1,3 +1,4 @@
+import { activateObjectPointer, captureObjectPointer, releaseObjectPointer } from './pointerCapture.js';
 import { captureResize, resizeItemAtPointer } from '../components/objectResize.js';
 import { rotationAtPointer } from '../components/CanvasRotationHandles.jsx';
 import { connectorBendFromPointer, connectorGeometry } from '../components/connectorGeometry.js';
@@ -41,6 +42,7 @@ export function useCanvasObjectInteractions(options) {
 
   const startObjectDrag = (event, id, item) => {
     if (event.button === 1 || spacePressedRef.current) { startPan(event); return; }
+    if (event.button !== 0) return;
     const objectElement = event.currentTarget.closest?.('.canvas-object') || event.currentTarget;
     if (activeTool === 'pen' || activeTool === 'laser') {
       if (event.target.closest('button, input, textarea, select')) event.stopPropagation();
@@ -73,10 +75,16 @@ export function useCanvasObjectInteractions(options) {
       event.stopPropagation();
       return;
     }
-    const targetIds = selectedObjectIdSet.has(key)
+    const alreadySelected = selectedObjectIdSet.has(key);
+    const targetIds = alreadySelected
       ? selectedObjectIds
       : groupedIds.length ? groupedIds : [key];
     selectItems(targetIds, key);
+    if (!alreadySelected) {
+      focusCanvas();
+      event.preventDefault(); event.stopPropagation();
+      return;
+    }
     const isMoveHandle = event.target.closest?.('.object-move-handle');
     if (event.target.closest?.('button') && !isMoveHandle) { event.stopPropagation(); return; }
     focusCanvas();
@@ -94,7 +102,7 @@ export function useCanvasObjectInteractions(options) {
       objectElement.classList.add('object-dragging');
       dragRef.current = { mode: 'move', id, initial: item, offsetX: start.x - (item.x || 0), offsetY: start.y - (item.y || 0), startX: start.x, startY: start.y, touchStart, element: objectElement };
     }
-    objectElement.setPointerCapture?.(event.pointerId);
+    captureObjectPointer(boardRef.current, dragRef.current, event);
   };
   const startObjectResize = (event, id, item, handle) => {
     if (activeTool !== 'select' || item?.kind === 'connector') return;
@@ -116,7 +124,7 @@ export function useCanvasObjectInteractions(options) {
       viewport: { width: board.width, height: board.height },
       element,
     };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
+    captureObjectPointer(boardRef.current, dragRef.current, event);
   };
   const startArrowBend = (event, id, item) => {
     const isShapeArrow = item?.kind === 'shape' && item.shapeType === 'arrow';
@@ -132,7 +140,7 @@ export function useCanvasObjectInteractions(options) {
     selectItems([key], key);
     element?.classList.add('object-bending');
     dragRef.current = { mode: 'bend', id: key, initial, viewport: { width: board.width, height: board.height }, element };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
+    captureObjectPointer(boardRef.current, dragRef.current, event);
   };
   const startObjectRotation = (event, id, item) => {
     if (activeTool !== 'select' || item?.kind === 'connector') return;
@@ -160,10 +168,11 @@ export function useCanvasObjectInteractions(options) {
       initialRotation: Number(initial.rotation) || 0,
       element,
     };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
+    captureObjectPointer(boardRef.current, dragRef.current, event);
   };
   const moveObject = (event) => {
-    if (!dragRef.current) return;
+    if (!dragRef.current || dragRef.current.pointerId !== event.pointerId) return;
+    if (!activateObjectPointer(dragRef.current, event)) return;
     const pendingTouchStart = dragRef.current.touchStart;
     if (pendingTouchStart) {
       if (Math.hypot(event.clientX - pendingTouchStart.x, event.clientY - pendingTouchStart.y) < 7) return;
@@ -212,10 +221,13 @@ export function useCanvasObjectInteractions(options) {
     setItems((current) => ({ ...current, [id]: next }));
     sendRealtimePeerItemGeometry(id, next);
   };
-  const stopObjectDrag = () => {
+  const stopObjectDrag = (event) => {
     if (!dragRef.current) return;
+    if (event && dragRef.current.pointerId !== event.pointerId) return;
+    if (event?.type === 'lostpointercapture' && event.target !== dragRef.current.captureElement) return;
     const drag = dragRef.current;
     dragRef.current = null;
+    releaseObjectPointer(drag);
     if (drag.mode === 'multi-move') {
       drag.elements.forEach((element) => element.classList.remove('object-dragging', 'multi-object-dragging'));
       refreshSpatialIndex();

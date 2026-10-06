@@ -1,16 +1,16 @@
 export const HOME_SLIDES = [
-  { label: '아고라 소개', row: 0, column: 0 },
-  { label: '서비스 구조', row: 1, column: 0 },
-  { label: '벡터 캔버스', row: 1, column: 1 },
-  { label: '실시간 협업', row: 1, column: 2 },
-  { label: '직접 체험', row: 2, column: 2 },
+  { label: 'FreLog 소개' },
+  { label: '작동 방식' },
+  { label: '프로젝트 맵' },
+  { label: '실시간 협업' },
+  { label: '직접 체험' },
 ];
 
 export function getAdjacentSlide(index, rowOffset, columnOffset) {
-  const current = HOME_SLIDES[index];
-  return HOME_SLIDES.findIndex((slide) => (
-    slide.row === current.row + rowOffset && slide.column === current.column + columnOffset
-  ));
+  const direction = Math.sign(rowOffset || columnOffset);
+  if (direction === 0) return -1;
+  const nextIndex = index + direction;
+  return nextIndex >= 0 && nextIndex < HOME_SLIDES.length ? nextIndex : -1;
 }
 
 export function canScroll(element, direction) {

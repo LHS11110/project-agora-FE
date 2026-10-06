@@ -1,6 +1,0 @@
-.auth-visual-panel{background:#e7ede5}
-.auth-inline-agora{display:none}
-
-@media(max-width:650px){
-  .auth-inline-agora{display:block;width:min(100%,340px);height:160px;margin:18px auto 21px}
-}

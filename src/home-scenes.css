@@ -1,0 +1,26 @@
+/* Each slide owns a persistent setting; only the track moves between them. */
+.home-slides-page .home-slide::before,
+.home-slides-page .home-slide::after { display: none; }
+.home-slides-page .slide-hero { background: #f6f4ef; }
+.home-slides-page .slide-architecture { background: #edf1f5; }
+.home-slides-page .slide-vector { background: #f0f3ec; }
+.home-slides-page .slide-collab { background: #f5efeb; }
+.home-slides-page .slide-hero .home-slide-copy h1 {
+  font-size: clamp(35px,4.25vw,61px);
+  word-break: keep-all;
+}
+.home-slides-page :is(.architecture-showcase,.vector-showcase,.live-edit-showcase,.text-edit-showcase) {
+  border: 1px solid #30295816;
+  box-shadow: 0 3px 0 #30295808;
+  transform: none;
+  animation: none;
+}
+.home-slides-page :is(.collab-card-row article,.start-star),
+.home-slides-page .vector-showcase svg :is(path,rect) { animation: none; }
+.home-slides-page .vector-showcase svg path[fill="none"] { stroke-dasharray: none; }
+.home-slides-page .start-star { display: none; }
+.home-slides-page .collab-card-row article { box-shadow: none; }
+.home-slides-page .home-slide-copy h1 { word-break: keep-all; }
+@media (min-width:701px) {
+  .home-slides-page .slide-architecture .home-slide-copy h1 { font-size: clamp(32px,3.2vw,46px); }
+}

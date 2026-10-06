@@ -4,9 +4,9 @@
 .home-slides-page .marketing-nav button{border:0;background:transparent;padding:9px 0;color:#7a887e;font:500 11px 'DM Sans',sans-serif;cursor:pointer;transition:color .18s}
 .home-slides-page .marketing-nav button.current,.home-slides-page .marketing-nav button:hover{color:#355f49}
 .home-slides-page .marketing-nav a{font-size:11px}
-.home-slide-window{width:100%;flex:1;min-height:0;overflow:hidden;position:relative}
-.home-slide-track{height:100%;width:400%;display:flex;transition:transform .68s cubic-bezier(.2,.75,.2,1);will-change:transform}
-.home-slide{width:25%;height:100%;flex:0 0 25%;min-width:0;position:relative;overflow:hidden}
+.home-slide-window{width:100%;flex:1;min-height:0;overflow:hidden;position:relative;overscroll-behavior:contain;touch-action:pan-y}
+.home-slide-track{height:100%;width:500%;display:flex;transition:transform .68s cubic-bezier(.2,.75,.2,1);will-change:transform}
+.home-slide{width:20%;height:100%;flex:0 0 20%;min-width:0;position:relative;overflow:hidden}
 .home-slide-inner{position:relative;width:min(1320px,calc(100% - 64px));height:100%;margin:0 auto;display:grid;grid-template-columns:minmax(0,.96fr) minmax(0,1.04fr);align-items:center;gap:44px}
 .home-slide-copy{position:relative;z-index:2;max-width:550px;padding:20px 0}
 .home-slide-kicker{display:flex;align-items:center;gap:9px;color:#809084;font:600 9px var(--mono);letter-spacing:1px}

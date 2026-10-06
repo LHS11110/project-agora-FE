@@ -2,7 +2,7 @@ import Icon from '../Icon.jsx';
 
 export default function ArchitectureDiagram() {
   return <div className="architecture-showcase" aria-label="프론트엔드에서 백엔드와 데이터베이스로 이어지는 구성">
-    <div className="architecture-showcase-label">AGORA / SYSTEM MAP</div>
+    <div className="architecture-showcase-label">FRELOG / SYSTEM MAP</div>
     <div className="architecture-main-flow">
       <article className="architecture-node architecture-client">
         <span className="architecture-node-kicker">01 / CLIENT</span>

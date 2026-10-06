@@ -1,0 +1,21 @@
+.canvas-stage .canvas-object-connector {
+  z-index: 6;
+  pointer-events: none;
+}
+.connector-arrowheads { color: var(--object-color); pointer-events: none; }
+.canvas-stage.select-mode .canvas-object:not(.selected),
+.canvas-stage.select-mode .canvas-object:not(.selected) * { cursor: default !important; }
+.canvas-stage.select-mode .canvas-object:not(.selected) > button { opacity: 0 !important; }
+.canvas-stage.select-mode .canvas-object.selected.movable:not(.canvas-object-connector) { cursor: grab; }
+
+/* During creation or an active drag, other objects cannot intercept the pointer. */
+.canvas-stage.creation-mode .canvas-object,
+.canvas-stage.creation-mode .canvas-object *,
+.canvas-stage.object-gesture-active .canvas-object,
+.canvas-stage.object-gesture-active .canvas-object * { pointer-events: none !important; }
+
+/* Panning also shields embedded players, handles and the minimap from taking input. */
+.canvas-stage.panning { cursor: grabbing !important; }
+.canvas-stage.panning * { pointer-events: none !important; }
+.shared-media-preview { position: relative; }
+.shared-media-activate { position: absolute; inset: 0; display: grid; place-items: center; background: #29254122; color: #fff; text-shadow: 0 1px 4px #000; font-size: 11px; cursor: default; }

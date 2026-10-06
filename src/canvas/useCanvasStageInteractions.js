@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { editorCanScroll } from './editorWheel.js';
 import { createId } from './canvasIds.js';
 import { ERASER_RADIUS, LASER_COLOR, MAX_REALTIME_STROKE_POINTS, REALTIME_STROKE_BATCH_SIZE, REALTIME_STROKE_INTERVAL_MS } from './canvasConstants.js';
 import {
@@ -13,7 +14,7 @@ import { DEFAULT_SHAPE_ARROW_BEND } from '../components/shapeArrowGeometry.js';
 
 export function useCanvasStageInteractions(options) {
   const {
-    boardRef, camera, setCamera, activeTool, eraserCursorRef, itemsRef, boardSize,
+    boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize,
     addItem, deleteItem, setToast, sendItemChange, setItems, refreshSpatialIndex,
     lastCursorSentAtRef, peerMeshRef, panRef, zoomHoldRef, zoomPointerPressRef,
     zoomSensitivity, stageWheelHandlerRef, laserDrawingRef, setLaserStrokes,
@@ -102,6 +103,7 @@ export function useCanvasStageInteractions(options) {
     hideEraserCursor();
   };
   const startPan = (event) => {
+    if (panRef.current) return;
     event.preventDefault();
     event.stopPropagation();
     panRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, cameraX: camera.x, cameraY: camera.y };
@@ -162,7 +164,7 @@ export function useCanvasStageInteractions(options) {
       event.preventDefault();
       return;
     }
-    if (event.target.closest?.('.canvas-object')) return;
+    if (!panRef.current && editorCanScroll(event)) return;
     event.preventDefault();
     if (event.ctrlKey || event.metaKey) {
       zoomBy(Math.exp(-event.deltaY * 0.0015 * zoomSensitivity), event.clientX, event.clientY);
@@ -175,8 +177,8 @@ export function useCanvasStageInteractions(options) {
     const stage = boardRef.current;
     if (!stage) return undefined;
     const onWheel = (event) => stageWheelHandlerRef.current?.(event);
-    stage.addEventListener('wheel', onWheel, { passive: false });
-    return () => stage.removeEventListener('wheel', onWheel);
+    stage.addEventListener('wheel', onWheel, { passive: false, capture: true });
+    return () => stage.removeEventListener('wheel', onWheel, true);
   }, []);
   const recordLaserPoint = (point, finish = false) => {
     const active = laserDrawingRef.current;
@@ -314,7 +316,7 @@ export function useCanvasStageInteractions(options) {
       else setActiveTool('select');
       return;
     }
-    if (activeTool === 'shape' || activeTool === 'text' || activeTool === 'math' || activeTool === 'code' || activeTool === 'note') {
+    if (activeTool === 'shape' || activeTool === 'text' || activeTool === 'markdown' || activeTool === 'math' || activeTool === 'code' || activeTool === 'note') {
       event.preventDefault();
       const point = pointerPosition(event);
       const itemWidth = activeTool === 'shape' ? 0.14 : activeTool === 'math' ? 0.2 : activeTool === 'code' ? 0.32 : activeTool === 'note' ? 0.24 : 0.22;
@@ -322,7 +324,7 @@ export function useCanvasStageInteractions(options) {
       const y = point.y - (activeTool === 'code' ? 0.1 : activeTool === 'note' ? 0.08 : 0.06);
       let item;
       if (activeTool === 'shape') item = { kind: 'shape', shapeType, ...(shapeType === 'arrow' ? { bend: DEFAULT_SHAPE_ARROW_BEND, startHead: shapeArrowStartHead, endHead: shapeArrowEndHead } : {}), x, y, width: itemWidth, height: 0.12, color, permission };
-      else if (activeTool === 'text') item = { kind: 'text', text: '', x, y, width: itemWidth, permission };
+      else if (activeTool === 'text' || activeTool === 'markdown') item = { kind: 'text', text: '', ...(activeTool === 'markdown' ? { format: 'markdown' } : {}), x, y, width: itemWidth, permission };
       else if (activeTool === 'note') item = { kind: 'note', text: '', x, y, width: itemWidth, color: noteColor, rotation: Math.random() * 3 - 1.5, permission };
       else if (activeTool === 'code') item = { kind: 'code', code: '', filename: 'idea.js', language: 'javascript', x, y, width: itemWidth, permission };
       else {
@@ -334,7 +336,7 @@ export function useCanvasStageInteractions(options) {
       if (!addItem(id, item)) setToast('실시간 서버에 연결된 뒤 캔버스를 수정할 수 있어요.');
       else {
         setActiveTool('select');
-        if (activeTool === 'text' || activeTool === 'code' || activeTool === 'note') startEditing(id);
+        if (activeTool === 'text' || activeTool === 'markdown' || activeTool === 'code' || activeTool === 'note') startEditing(id);
       }
       return;
     }
@@ -382,6 +384,7 @@ export function useCanvasStageInteractions(options) {
     if (selectionRef.current) { moveMarqueeSelection(event); return; }
     if (panRef.current) {
       const pan = panRef.current;
+      if (pan.pointerId !== event.pointerId) return;
       setCamera((current) => ({ ...current, x: pan.cameraX + event.clientX - pan.x, y: pan.cameraY + event.clientY - pan.y }));
       return;
     }
@@ -414,9 +417,11 @@ export function useCanvasStageInteractions(options) {
   const stopDrawing = (event) => {
     if (selectionRef.current) { finishMarqueeSelection(event); return; }
     if (panRef.current) {
+      if (panRef.current.pointerId !== event.pointerId) return;
       panRef.current = null;
-      boardRef.current?.classList.remove('panning');
-      event.currentTarget.releasePointerCapture?.(event.pointerId);
+      const stage = boardRef.current;
+      stage?.classList.remove('panning');
+      if (stage?.hasPointerCapture?.(event.pointerId)) stage.releasePointerCapture(event.pointerId);
       return;
     }
     if (eraserRef.current) {
