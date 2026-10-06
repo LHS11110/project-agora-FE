@@ -1,3 +1,5 @@
+import { useEraserSize } from '../canvas/useEraserSize.js';
+import { useCanvasPalette } from '../canvas/useCanvasPalette.js';
 import { stagePointerHandlers } from '../canvas/stagePointerHandlers.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Automerge from '@automerge/automerge/slim';
@@ -12,6 +14,7 @@ import LaserLayer from '../components/LaserLayer.jsx';
 import RotationHandles from '../components/CanvasRotationHandles.jsx';
 import CanvasSpatialBTree, { objectBounds } from '../components/CanvasSpatialBTree.js';
 import CanvasObject from '../canvas/CanvasObject.jsx';
+import CanvasToolPanel from '../canvas/CanvasToolPanel.jsx';
 import RemoteCursorLayer from '../components/canvas/RemoteCursorLayer.jsx';
 import SettingsDialog from '../components/canvas/CanvasSettingsDialog.jsx';
 import CanvasInspectorPanel from '../components/canvas/CanvasInspectorPanel.jsx';
@@ -30,14 +33,17 @@ import {
   makeCollaborativeItem,
   nextPeerSyncVersion,
 } from '../canvas/collaborativeSync.js';
-import { ERASER_RADIUS, LASER_FADE_MS, MAX_STROKE_WIDTH, MIN_STROKE_WIDTH, stickyNoteColors, inkColors, MIN_ZOOM_SENSITIVITY, MAX_ZOOM_SENSITIVITY } from '../canvas/canvasConstants.js';
+import { LASER_FADE_MS, MAX_STROKE_WIDTH, MIN_STROKE_WIDTH, stickyNoteColors, MIN_ZOOM_SENSITIVITY, MAX_ZOOM_SENSITIVITY } from '../canvas/canvasConstants.js';
 import { textSpliceBetween } from '../canvas/collaborativeText.js';
 import { isCanvasSyncItem, useCanvasPeerGeometry } from '../canvas/useCanvasPeerGeometry.js';
-import { useCanvasNoteAutoSave } from '../canvas/useCanvasNoteAutoSave.js';
+import { sendStrokeBatches } from '../canvas/strokeBatchTransport.js';
+import { useCanvasAutoSave } from '../canvas/useCanvasAutoSave.js';
 import { useCanvasStageInteractions } from '../canvas/useCanvasStageInteractions.js';
 import { useCanvasPeerEvents } from '../canvas/useCanvasPeerEvents.js';
 import { useCanvasObjectInteractions } from '../canvas/useCanvasObjectInteractions.js';
 import { useCanvasConnection } from '../canvas/useCanvasConnection.js';
+import { CANVAS_SPACE, fitCanvasCamera } from '../canvas/canvasSpace.js';
+import { useCanvasViewport } from '../canvas/useCanvasViewport.js';
 import { useCanvasMinimap } from '../canvas/useCanvasMinimap.js';
 import { useCanvasServerChangeQueue } from '../canvas/useCanvasServerChangeQueue.js';
 import { connectorGeometry } from '../components/connectorGeometry.js';
@@ -59,6 +65,8 @@ function CanvasWorkspace() {
   const selectionRef = useRef(null);
   const stageWheelHandlerRef = useRef(null);
   const wsRef = useRef(null);
+  const strokeFrameTransportRef = useRef(null);
+  const strokeSaveFlushRef = useRef(null);
   const rtcWsRef = useRef(null);
   const autoReconnectRef = useRef(false);
   const serverReconnectRequestedRef = useRef(false);
@@ -134,7 +142,7 @@ function CanvasWorkspace() {
   const [laserStrokes, setLaserStrokes] = useState([]);
   const [dirtyItems, setDirtyItems] = useState(() => new Set());
   const [camera, setCamera] = useState({ x: 0, y: 0, scale: 1 });
-  const [boardSize, setBoardSize] = useState({ width: 1, height: 1 });
+  const boardSize = CANVAS_SPACE;
   const [zoomSensitivity, setZoomSensitivity] = useState(() => {
     const stored = Number(localStorage.getItem(ZOOM_SENSITIVITY_KEY));
     return Number.isFinite(stored) && stored >= MIN_ZOOM_SENSITIVITY && stored <= MAX_ZOOM_SENSITIVITY ? stored : 1;
@@ -143,9 +151,10 @@ function CanvasWorkspace() {
   const [connection, setConnection] = useState('connecting');
   const [reconnectEpoch, setReconnectEpoch] = useState(0);
   const [error, setError] = useState('');
+  const { eraserWidth, changeEraserWidth } = useEraserSize();
   const [activeTool, setActiveTool] = useState('select');
   const [sharePosition, setSharePosition] = useState(null);
-  const [color, setColor] = useState(inkColors[0]);
+  const { color, setColor, favoriteColors, saveFavoriteColor } = useCanvasPalette();
   const [connectorColor, setConnectorColor] = useState('#8b8f8c');
   const [connectorWidth, setConnectorWidth] = useState(1.5);
   const [connectorStartHead, setConnectorStartHead] = useState(DEFAULT_ARROW_START_HEAD);
@@ -374,6 +383,7 @@ function CanvasWorkspace() {
       previous,
       item: syncItem,
       type: requestPayload.type,
+      editRevision: itemEditRevisionRef.current.get(id) || 0,
       wasNewCollaborative: newCollaborativeItemsRef.current.has(id),
       syncAction: syncDeleteItem ? 'delete' : syncItem ? 'upsert' : null,
       syncVersion,
@@ -388,6 +398,10 @@ function CanvasWorkspace() {
     }
 
     pendingItemChangesRef.current.push(entry);
+    if (strokeFrameTransportRef.current) {
+      strokeFrameTransportRef.current.push(entry);
+      return true;
+    }
     try {
       socket.send(JSON.stringify(requestPayload));
       markServerChangeSent(entry);
@@ -399,6 +413,27 @@ function CanvasWorkspace() {
     }
     return true;
   }, [broadcastPeerItemState, enqueueServerChange, markServerChangeSent]);
+  const sendStrokeFrameChanges = useCallback((changes) => {
+    const entries = [];
+    strokeFrameTransportRef.current = entries;
+    try {
+      for (const change of changes) sendItemChange(change.payload, change.previous);
+    } finally {
+      strokeFrameTransportRef.current = null;
+    }
+    if (!entries.length) return;
+    const sent = new Set();
+    try {
+      sendStrokeBatches(wsRef.current, entries, (entry) => {
+        markServerChangeSent(entry);
+        sent.add(entry);
+      });
+    } catch {
+      // Unsent entries remain in the reconnect queue; do not wait for their replies.
+      pendingItemChangesRef.current = pendingItemChangesRef.current.filter(entry => !entries.includes(entry) || sent.has(entry));
+      if (!autoReconnectRef.current) reconnectRequestRef.current?.();
+    }
+  }, [markServerChangeSent, sendItemChange]);
   const updateTableItem = useCallback((id, update) => {
     const key = String(id);
     const previous = itemsRef.current[key];
@@ -573,17 +608,12 @@ function CanvasWorkspace() {
       automerge_snapshot: encodeBase64(Automerge.save(baseDoc)),
       automerge_changes: changes,
     };
-    const revision = itemEditRevisionRef.current.get(key) || 0;
     if (!sendItemChange({ type: 'item_save', item_id: key, item: savedItem }, item)) {
       if (!silent) setToast(item.kind === 'note' ? '서버 연결이 복구되면 포스트잇을 다시 저장해주세요.' : '서버 연결이 복구되면 Ctrl + S로 다시 저장해주세요.');
       return false;
     }
     itemsRef.current = { ...itemsRef.current, [key]: savedItem };
     setItems((current) => ({ ...current, [key]: savedItem }));
-    if ((itemEditRevisionRef.current.get(key) || 0) === revision
-      && !serverReconnectRequestedRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
-      setDirtyItems((current) => { const next = new Set(current); next.delete(key); return next; });
-    }
     if (!silent) {
       setToast('저장 요청을 처리했습니다.');
       window.setTimeout(() => setToast(''), 2400);
@@ -591,7 +621,7 @@ function CanvasWorkspace() {
     return true;
   }, [getCollaborativeBaseDoc, getCollaborativeDoc, sendItemChange]);
   saveCollaborativeItemRef.current = saveCollaborativeItem;
-  useCanvasNoteAutoSave({ canSave: canvasSnapshotLoadedRef.current && connection !== 'disconnected', dirtyItems, itemsRef, itemEditRevisionRef, saveCollaborativeItem });
+  useCanvasAutoSave({ canSave: canvasSnapshotLoadedRef.current && connection !== 'disconnected', dirtyItemsRef, itemsRef, itemEditRevisionRef, pendingItemChangesRef, saveCollaborativeItem });
   const { receivePeerData, receiveLaser } = useCanvasPeerEvents({
     collaborativeBaseDocsRef,
     collaborativeDocsRef,
@@ -662,6 +692,7 @@ function CanvasWorkspace() {
       drawingSessionRef,
       editingIdRef,
       groupsRef,
+      itemEditRevisionRef,
       itemSyncVersionsRef,
       itemsRef,
       newCollaborativeItemsRef,
@@ -680,6 +711,7 @@ function CanvasWorkspace() {
       syncActorRef,
       syncClockRef,
       syncedPeersRef,
+      strokeSaveFlushRef,
       wsRef
     },
     setters: {
@@ -715,11 +747,13 @@ function CanvasWorkspace() {
       replacePersistedItems,
       requestChatHistory,
       sendItemChange,
+      sendStrokeFrameChanges,
       sendRaw,
       sendRtcRaw
     },
   });
 
+  const viewportSize = useCanvasViewport({ boardRef, setCamera, refreshKey: error });
   const spatialIndex = useMemo(() => new CanvasSpatialBTree(items, boardSize), [spatialRevision, boardSize]);
   const {
     visibleBounds,
@@ -733,14 +767,14 @@ function CanvasWorkspace() {
     startMinimapPan,
     moveMinimapPan,
     stopMinimapPan,
-  } = useCanvasMinimap({ boardRef, boardSize, camera, setCamera, items });
+  } = useCanvasMinimap({ boardRef, boardSize, viewportSize, camera, setCamera, items });
   const activePeerIds = useMemo(() => peerList.filter((peer) => peer.connected).map((peer) => peer.peer_id).sort().join('\n'), [peerList]);
   const axisOriginX = boardSize.width * camera.scale / 2 + camera.x;
   const axisOriginY = boardSize.height * camera.scale / 2 + camera.y;
   const coordinatePlaneStyle = {
     '--axis-origin-x': `${axisOriginX}px`,
     '--axis-origin-y': `${axisOriginY}px`,
-    '--axis-x-arrow-opacity': axisOriginX <= boardSize.width ? 1 : 0,
+    '--axis-x-arrow-opacity': axisOriginX <= viewportSize.width ? 1 : 0,
     '--axis-y-arrow-opacity': axisOriginY >= 0 ? 1 : 0,
   };
   const visibleEntries = useMemo(() => {
@@ -840,14 +874,14 @@ function CanvasWorkspace() {
     const target = itemsRef.current[String(connector.to)];
     const board = boardRef.current?.getBoundingClientRect();
     if (!target || !board) return;
-    const bounds = objectBounds(target, itemsRef.current, board.width, board.height);
+    const bounds = objectBounds(target, itemsRef.current, boardSize.width, boardSize.height);
     const centerX = (bounds.minX + bounds.maxX) / 2;
     const centerY = (bounds.minY + bounds.maxY) / 2;
     selectItems([String(connector.to)], String(connector.to));
     setCamera((current) => ({
       ...current,
-      x: board.width / 2 - centerX * board.width * current.scale,
-      y: board.height / 2 - centerY * board.height * current.scale,
+      x: board.width / 2 - centerX * boardSize.width * current.scale,
+      y: board.height / 2 - centerY * boardSize.height * current.scale,
     }));
   };
   const sendSettings = (field, value, participant) => {
@@ -857,8 +891,9 @@ function CanvasWorkspace() {
     if (sendRaw(payload)) setSettingsPending(true);
   };
   const { pointerPosition, startPan, centeredItemPosition, hideCursor, startZoomHold, stopZoomHold, cancelZoomHold, clickZoom, startDrawing, moveDrawing, stopDrawing } = useCanvasStageInteractions({
-    boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize,
-    addItem, deleteItem, setToast, sendItemChange, setItems, refreshSpatialIndex,
+    boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth,
+    addItem, setToast, setItems, refreshSpatialIndex,
+    sendStrokeFrameChanges, pendingItemChangesRef, strokeSaveFlushRef,
     lastCursorSentAtRef, peerMeshRef, panRef, zoomHoldRef, zoomPointerPressRef, zoomSensitivity,
     stageWheelHandlerRef, laserDrawingRef, setLaserStrokes, selectionRef, selectedItemIds,
     setSelectionBox, selectItems, canvasSnapshotLoadedRef, finishEditing, setConnectionStartId,
@@ -918,6 +953,7 @@ function CanvasWorkspace() {
   } = useCanvasObjectInteractions({
     activeTool,
     addItem,
+    boardSize,
     boardRef,
     clearPeerItemGeometryBroadcast,
     connectionStartId,
@@ -983,25 +1019,13 @@ function CanvasWorkspace() {
     if (selectedTable) updateTableItem(primarySelectedItemId, { [field]: nextSize / 100 });
   };
   useEffect(() => {
-    const host = boardRef.current;
-    if (!host) return undefined;
-    const updateSize = () => {
-      const bounds = host.getBoundingClientRect();
-      setBoardSize({ width: Math.max(1, bounds.width), height: Math.max(1, bounds.height) });
-    };
-    const observer = new ResizeObserver(updateSize);
-    observer.observe(host);
-    updateSize();
-    return () => observer.disconnect();
-  }, [error]);
-  useEffect(() => {
     const isEditableTarget = (target) => target instanceof HTMLElement
       && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
     const onDeleteKeyDown = (event) => {
       if (event.repeat) return;
       if (event.key !== 'Delete' && event.key !== 'Backspace') return;
       const target = event.target instanceof HTMLElement ? event.target : null;
-      if (target?.closest('.code-shared-input, .code-filename-input, .code-language-select')) return;
+      if (target?.closest('.canvas-code-editor, .code-shared-input, .code-filename-input, .code-language-select')) return;
       if (editingId != null || isEditableTarget(target) || !selectedObjectIds.length) return;
       event.preventDefault();
       const remainingIds = [];
@@ -1074,24 +1098,22 @@ function CanvasWorkspace() {
       <div className="canvas-header-right"><div className="canvas-description-card"><span>캔버스 설명</span><p>{canvas?.description || '함께 아이디어를 모으고 실시간으로 만들어가는 공간입니다.'}</p></div><div className="canvas-top-right"><span className={`connection-pill ${connection}`} role="status" aria-live="polite" title={connection === 'connecting' ? '다시 연결하는 중입니다. 캔버스 편집은 계속할 수 있고 변경 사항은 연결 후 저장됩니다.' : connection === 'connected' ? '서버에 연결되어 변경 사항을 동기화하고 있습니다.' : '서버 연결이 해제되었습니다.'}><i />{connection === 'connected' ? '연결됨' : connection === 'connecting' ? '연결 중' : '연결 해제'}</span><div className="collaborator-avatars"><span>{(user?.nickname || 'A').slice(0, 1)}</span>{otherParticipants.slice(0, 2).map((person) => <span key={`${person.nickname}-${person.tag_number}`}>{person.nickname.slice(0, 1)}</span>)}</div><button className="button button-outline canvas-settings-button" onClick={() => setShowSettings(true)}><Icon name="settings" size={17} /><span>설정</span></button></div></div>
     </header>
     {error ? <div className="canvas-error-state"><div className="error-art"><Icon name="grid" size={30} /></div><span className="section-kicker">CANVAS CONNECTION</span><h1>캔버스를 열 수 없어요.</h1><p>{error}</p><div><button className="button button-dark" onClick={() => window.location.reload()}>다시 연결하기</button><Link className="button button-outline" to="/search">캔버스 목록</Link></div></div> : <div className="canvas-workspace">
-      <aside className="canvas-tools" aria-label="캔버스 도구">
-        <div className="tool-group"><button className={`tool-button${activeTool === 'select' ? ' active' : ''}`} title="선택 및 이동" aria-label="선택 및 이동" onClick={() => setActiveTool('select')}><Icon name="select" size={19} /></button><button className={`tool-button${activeTool === 'pen' ? ' active' : ''}`} title="드로잉" aria-label="드로잉" onClick={() => setActiveTool('pen')}><Icon name="pen" size={19} /></button><button className={`tool-button${activeTool === 'laser' ? ' active' : ''}`} title="레이저 포인터" aria-label="레이저 포인터" onClick={() => setActiveTool('laser')}><Icon name="laser" size={19} /></button><button className={`tool-button${activeTool === 'eraser' ? ' active' : ''}`} title="드로잉 지우개" aria-label="드로잉 지우개" onClick={() => setActiveTool('eraser')}><Icon name="eraser" size={19} /></button><button className={`tool-button${activeTool === 'connect' ? ' active' : ''}`} title="오브젝트 연결" aria-label="오브젝트 연결" onClick={() => { setConnectionStartId(null); setActiveTool('connect'); }}><Icon name="connect" size={19} /></button></div>
-        <div className="tool-separator" /><div className="tool-group"><button className={`tool-button${activeTool === 'shape' ? ' active' : ''}`} title="도형" aria-label="도형" onClick={() => setActiveTool('shape')}><Icon name="shape" size={19} /></button><button className={`tool-button${activeTool === 'text' ? ' active' : ''}`} title="텍스트" aria-label="텍스트" onClick={() => setActiveTool('text')}><Icon name="text" size={19} /></button><button className={`tool-button${activeTool === 'markdown' ? ' active' : ''}`} title="배경 없는 마크다운 텍스트" aria-label="마크다운 텍스트" onClick={() => setActiveTool('markdown')}><span className="markdown-tool-mark" aria-hidden="true">M↓</span></button><button className={`tool-button${activeTool === 'note' ? ' active' : ''}`} title="포스트잇" aria-label="포스트잇" onClick={() => setActiveTool('note')}><Icon name="sticky" size={19} /></button><button className={`tool-button${activeTool === 'math' ? ' active' : ''}`} title="수식 작성" aria-label="수식 작성" onClick={() => setActiveTool('math')}><Icon name="math" size={19} /></button><button className={`tool-button${activeTool === 'table' ? ' active' : ''}`} title="테이블" aria-label="테이블" onClick={() => setActiveTool('table')}><Icon name="table" size={19} /></button></div>
-        <div className="tool-separator" /><div className="tool-group"><label className="tool-button file-tool" title="사진 올리기" aria-label="사진 올리기"><Icon name="image" size={19} /><input type="file" accept="image/*" onChange={uploadImage} /></label><button className={`tool-button${activeTool === 'code' ? ' active' : ''}`} title="코드 블록" aria-label="코드 블록" onClick={() => setActiveTool('code')}><Icon name="code" size={19} /></button><button className={`tool-button${activeTool === 'link' ? ' active' : ''}`} title="동영상·링크 공유" aria-label="동영상·링크 공유" onClick={() => setActiveTool('link')}><Icon name="link" size={19} /></button></div>
-        <div className="tool-separator" /><div className="color-picker" aria-label="펜 및 도형 색상">{inkColors.map((ink) => <button key={ink} style={{ '--ink': ink }} className={color === ink ? 'selected' : ''} onClick={() => setColor(ink)} aria-label={`색상 ${ink}`} />)}</div><div className="tool-bottom"><span className="tool-help">CANVAS</span><span>도구</span></div>
-      </aside>
-      <main className="board-region"><div className="board-topline"><span className="board-section-label"><i /> 2차 좌표 캔버스</span><div className="board-toolbar-actions"><span className="board-updated" title="텍스트·코드는 Ctrl+S 저장, 포스트잇은 변경 후 자동 저장"><Icon name="clock" size={14} /> P2P {peerList.filter((peer) => peer.connected).length}명 · 저장 Ctrl+S</span><button className="zoom-button" aria-label="확대" title="클릭: 한 단계 확대 · 길게 누르기: 계속 확대" onPointerDown={(event) => startZoomHold(event, 1 + 0.15 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.15 * zoomSensitivity)}>+</button><span className="zoom-value">{Math.round(camera.scale * 100)}%</span><button className="zoom-button" aria-label="축소" title="클릭: 한 단계 축소 · 길게 누르기: 계속 축소" onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.15 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.15 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => setCamera({ x: 0, y: 0, scale: 1 })}>맞춤</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />격자 {showGrid ? '켜짐' : '꺼짐'}</button></div></div>
+      <CanvasToolPanel activeTool={activeTool} onSelectTool={(tool) => {
+        if (tool === 'connect') setConnectionStartId(null);
+        setActiveTool(tool);
+      }} color={color} onColorChange={setColor} onUploadImage={uploadImage} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} />
+      <main className="board-region"><div className="board-topline"><span className="board-section-label"><i /> 2차 좌표 캔버스</span><div className="board-toolbar-actions"><span className="board-updated" title="변경 사항은 초당 30회 주기로 자동 저장됩니다. Ctrl+S로도 저장할 수 있어요."><Icon name="clock" size={14} /> P2P {peerList.filter((peer) => peer.connected).length}명 · 자동 저장</span><button className="zoom-button" aria-label="확대" title="클릭: 한 단계 확대 · 길게 누르기: 계속 확대" onPointerDown={(event) => startZoomHold(event, 1 + 0.15 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.15 * zoomSensitivity)}>+</button><span className="zoom-value">{Math.round(camera.scale * 100)}%</span><button className="zoom-button" aria-label="축소" title="클릭: 한 단계 축소 · 길게 누르기: 계속 축소" onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.15 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.15 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => setCamera(fitCanvasCamera(viewportSize))}>맞춤</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />격자 {showGrid ? '켜짐' : '꺼짐'}</button></div></div>
         <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ '--grid-size': `${20 * camera.scale}px`, '--grid-dot-radius': `${camera.scale}px`, '--grid-position-x': `${camera.x}px`, '--grid-position-y': `${camera.y}px` }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ dragRef, panRef, spacePressedRef, startPan, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor })}>
           <InteractiveAtmosphere variant="canvas" />
           <div className="stage-label"><span>FRELOG / {String(canvasId).padStart(2, '0')}</span><b>{canvas?.canvas_name || '공유 캔버스'}</b></div>
           <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true"><span className="coordinate-x" /><span className="coordinate-y" /><i className="coordinate-origin">0</i><b className="coordinate-x-label">X</b><b className="coordinate-y-label">Y</b></div>
-          <VectorLayer items={visibleVectorItems} referenceItems={items} previewStrokes={remoteDrawingStrokes} camera={camera} onReady={(setDraft) => { vectorDraftRef.current = setDraft; }} />
-          <div className="canvas-scene" ref={sceneRef} style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}>
+          <VectorLayer worldSize={boardSize} items={visibleVectorItems} referenceItems={items} previewStrokes={remoteDrawingStrokes} camera={camera} onReady={(setDraft) => { vectorDraftRef.current = setDraft; }} />
+          <div className="canvas-scene" ref={sceneRef} style={{ width: boardSize.width, height: boardSize.height, right: 'auto', bottom: 'auto', transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}>
             {sortedItems.map(([id, item, bounds, connectorCurve]) => <CanvasObject key={id} id={id} item={item} bounds={bounds} connectorCurve={connectorCurve} viewSize={boardSize} token={token} selected={selectedObjectIdSet.has(String(id))} allowSingleSelectionControls={hasSingleSelection} activeTool={activeTool} connectionStartId={connectionStartId} editing={editingId === id} dirty={dirtyItems.has(String(id))} remoteEditors={Object.values(remoteEditors).filter((editor) => editor.itemId === String(id))} onStartEditing={startEditing} onTextChange={updateCollaborativeText} onMetadataChange={updateCollaborativeMetadata} onFormulaChange={updateFormulaItem} onTableChange={updateTableItem} onStopEditing={stopEditing} onSave={saveCollaborativeItem} onPointerDown={startObjectDrag} onResizeStart={startObjectResize} onArrowBendStart={startArrowBend} onPointerMove={moveObject} onPointerUp={stopObjectDrag} onCopy={(value) => navigator.clipboard?.writeText(value)} onConnectorDoubleClick={focusConnectorTarget} />)}
             {selectedItem && selectedItem.kind !== 'connector' && activeTool === 'select' && !editingId && <RotationHandles sceneRef={sceneRef} id={String(primarySelectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startObjectRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
             <RemoteCursorLayer updaterRef={remoteCursorUpdaterRef} activePeerIds={activePeerIds} visibleBounds={visibleBounds} />
           </div>
-          <LaserLayer strokes={laserStrokes} width={boardSize.width} height={boardSize.height} camera={camera} />
+          <LaserLayer strokes={laserStrokes} width={viewportSize.width} height={viewportSize.height} worldSize={boardSize} camera={camera} />
           {selectionBox && <div className="canvas-selection-marquee" style={{ left: selectionBox.left, top: selectionBox.top, width: selectionBox.width, height: selectionBox.height }} aria-hidden="true" />}
           <div className="canvas-minimap" ref={minimapWidgetRef} style={minimapPosition ? { left: `${minimapPosition.left}px`, top: `${minimapPosition.top}px`, right: 'auto', bottom: 'auto' } : undefined} role="group" aria-label="캔버스 미니맵">
             <div className="canvas-minimap-heading" onPointerDown={startMinimapWidgetMove} onPointerMove={moveMinimapWidget} onPointerUp={stopMinimapWidgetMove} onPointerCancel={stopMinimapWidgetMove} onLostPointerCapture={stopMinimapWidgetMove}><strong>미니맵</strong><span>잡고 이동</span></div>
@@ -1108,7 +1130,7 @@ function CanvasWorkspace() {
               </svg>
             </div>
           </div>
-          {activeTool === 'eraser' && <div className="eraser-cursor" ref={eraserCursorRef} style={{ width: `${ERASER_RADIUS * 2}px`, height: `${ERASER_RADIUS * 2}px` }} aria-hidden="true" />}
+          {activeTool === 'eraser' && <div className="eraser-cursor" ref={eraserCursorRef} style={{ width: `${eraserWidth}px`, height: `${eraserWidth}px` }} aria-hidden="true" />}
           {sharePosition && <ShareComposer onCancel={() => { setSharePosition(null); setActiveTool('select'); }} onSubmit={placeSharedLink} />}
           {activeTool === 'laser' && <div className="draw-cursor-label laser-cursor-label"><Icon name="laser" size={13} /> 가리키는 중 · 1.6초 후 사라짐</div>}{activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} /> 그리는 중</div>}{activeTool === 'eraser' && <div className="draw-cursor-label"><Icon name="eraser" size={13} /> 드로잉을 드래그해 지우기</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? '도착 오브젝트 선택' : '시작 오브젝트 선택'}</div>}{activeTool === 'link' && !sharePosition && <div className="draw-cursor-label"><Icon name="link" size={13} /> 공유 자료를 놓을 위치 선택</div>}
         </div><div className="board-footer"><span>무한 좌표 평면 · X/Y축</span><span className="board-footer-center">빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · Space+드래그 화면 이동</span><span>{visibleItemIds.size}/{Object.keys(items).length}개 표시</span></div>
@@ -1119,6 +1141,8 @@ function CanvasWorkspace() {
         canvasParticipants,
         changeSelectionGroup,
         changeStrokeWidth,
+        eraserWidth,
+        changeEraserWidth,
         changeTableCount,
         changeTableSize,
         changeTheme,
@@ -1141,6 +1165,8 @@ function CanvasWorkspace() {
         selectedTable,
         selectionIsSingleGroup,
         setColor,
+        favoriteColors,
+        saveFavoriteColor,
         setConnectorColor,
         setConnectorWidth,
         setNoteColor,
@@ -1166,7 +1192,7 @@ function CanvasWorkspace() {
 <CanvasChatPanel {...{ chatHistoryLoading, connection, hasOlderMessages, loadOlderMessages, message, messages, setMessage, submitMessage }} />
     </div>}
     {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{toast}</div>}
-    {showSettings && <SettingsDialog settings={settings} pending={settingsPending} onClose={() => setShowSettings(false)} onUpdate={sendSettings} onAddParticipant={(nickname, tag) => sendSettings('participant_add', null, { nickname, tag_number: tag })} onRemoveParticipant={(person) => sendSettings('participant_remove', null, { nickname: person.nickname, tag_number: person.tag_number })} />}
+    {showSettings && <SettingsDialog canvasId={canvasId} image={canvas?.image} token={token} onImageSaved={(image) => setCanvas(current => ({ ...current, image }))} settings={settings} pending={settingsPending} onClose={() => setShowSettings(false)} onUpdate={sendSettings} onAddParticipant={(nickname, tag) => sendSettings('participant_add', null, { nickname, tag_number: tag })} onRemoveParticipant={(person) => sendSettings('participant_remove', null, { nickname: person.nickname, tag_number: person.tag_number })} />}
   </div>;
 }
 

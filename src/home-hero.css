@@ -39,3 +39,14 @@
 }
 
 @media(prefers-reduced-motion:reduce){.slide-hero *{animation:none!important}}
+
+/* The caption participates in layout instead of overlapping the board. */
+.home-slides-page .slide-hero .hero-scene-setting { display: flex; flex-direction: column; gap: 14px; width: 100%; min-width: 0; }
+.home-slides-page .slide-hero .hero-scene-setting .frelog-scene { height: clamp(330px,60vh,520px); }
+.home-slides-page .slide-hero .hero-scene-setting .hero-side-note { position: static; display: flex; align-items: center; justify-content: flex-end; gap: 10px; transform: none; writing-mode: horizontal-tb; white-space: normal; padding: 0 8px; font: 8px var(--mono); letter-spacing: 1px; }
+.home-slides-page .slide-hero .hero-scene-setting .vertical-rule { width: 24px; height: 1px; background: #9691aa55; }
+@media(max-width:700px) {
+  .home-slides-page .slide-hero .hero-scene-setting { height: 100%; display: grid; grid-template-rows: minmax(0,1fr) auto; gap: 10px; }
+  .home-slides-page .slide-hero .hero-scene-setting .frelog-scene { height: 100%; min-height: 0; }
+  .home-slides-page .slide-hero .hero-scene-setting .hero-side-note { font-size: 7px; }
+}

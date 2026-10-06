@@ -1,0 +1,10 @@
+.canvas-cover-editor-row{display:flex;align-items:center;gap:12px}
+.canvas-cover-editor-preview,.canvas-cover-editor-placeholder{width:76px;height:76px;flex:0 0 76px;object-fit:cover;border:1px solid var(--line,#e7ebe4);border-radius:10px}
+.canvas-cover-editor-placeholder{display:grid;place-items:center;font-size:10px;background:var(--surface-soft,#f4f6f1)}
+.canvas-cover-editor-row>div{min-width:0;flex:1}
+.canvas-cover-editor-row p{font-size:10px;line-height:1.6;margin:6px 0;color:var(--ink-muted,#879288)}
+.canvas-cover-file{position:relative;overflow:hidden}
+.canvas-cover-file input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.canvas-cover-file:focus-within{outline:2px solid var(--ink-strong,#3c5144);outline-offset:2px}
+.canvas-cover-filename{display:block;overflow-wrap:anywhere;font-size:10px}
+@media(max-width:500px){.canvas-cover-editor-row{flex-wrap:wrap}.canvas-cover-editor-row>button{margin-left:auto}}

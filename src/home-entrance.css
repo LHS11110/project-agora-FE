@@ -6,25 +6,6 @@
   animation: home-mark-arrive .78s cubic-bezier(.18, .82, .24, 1.2) .12s both;
 }
 
-.home-slides-page .slide-hero .home-slide-copy > * {
-  animation: home-copy-arrive .64s cubic-bezier(.2, .75, .2, 1) both;
-}
-
-.home-slides-page .slide-hero .home-slide-copy > :nth-child(1) { animation-delay: .16s; }
-.home-slides-page .slide-hero .home-slide-copy > :nth-child(2) { animation-delay: .26s; }
-.home-slides-page .slide-hero .home-slide-copy > :nth-child(3) { animation-delay: .38s; }
-.home-slides-page .slide-hero .home-slide-copy > :nth-child(4) { animation-delay: .5s; }
-.home-slides-page .slide-hero .home-slide-copy > :nth-child(5) { animation-delay: .62s; }
-.home-slides-page .slide-hero .home-slide-copy > :nth-child(6) { animation-delay: .72s; }
-
-.home-slides-page .slide-hero .frelog-scene {
-  animation: home-scene-arrive .92s cubic-bezier(.2, .75, .2, 1) .18s both;
-}
-
-.home-slides-page .slide-hero .hero-side-note {
-  animation: home-copy-arrive .66s cubic-bezier(.2, .75, .2, 1) .68s both;
-}
-
 .home-slides-page .home-slide-controls {
   animation: home-controls-arrive .64s cubic-bezier(.2, .75, .2, 1) .38s both;
 }

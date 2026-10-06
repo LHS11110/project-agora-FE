@@ -9,7 +9,7 @@ export function useMotionField(canvasRef, quiet) {
     if (!scope || !ctx) return undefined;
     const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
     const state = {
-      width: 0, height: 0, particles: createMotionParticles(quiet ? 18 : 38), waves: [],
+      width: 0, height: 0, particles: createMotionParticles(quiet ? 0 : 38), waves: [],
       pointer: { active: false, x: 0, y: 0, targetX: 0, targetY: 0 },
     };
     let frame = 0;
@@ -24,7 +24,7 @@ export function useMotionField(canvasRef, quiet) {
       }
       paintMotionField(ctx, state, now, previous ? now - previous : 16.67, quiet);
       previous = now;
-      frame = requestAnimationFrame(render);
+      if (!quiet || state.waves.length) frame = requestAnimationFrame(render);
     };
     const resume = () => {
       if (preference.matches || document.hidden || !visible) {
@@ -58,7 +58,7 @@ export function useMotionField(canvasRef, quiet) {
       const { x, y } = locate(event);
       state.waves.push({ x, y, started: performance.now() });
       state.waves = state.waves.slice(-5);
-      if (quiet) { leave(); return; }
+      if (quiet) { leave(); resume(); return; }
       state.particles.forEach((particle) => {
         const dx = particle.x - x, dy = particle.y - y;
         const distance = Math.hypot(dx, dy) || 1;
@@ -70,8 +70,10 @@ export function useMotionField(canvasRef, quiet) {
     resizeObserver.observe(canvas.parentElement);
     const intersectionObserver = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; resume(); });
     intersectionObserver.observe(canvas);
-    scope.addEventListener('pointermove', move, { passive: true });
-    scope.addEventListener('pointerleave', leave);
+    if (!quiet) {
+      scope.addEventListener('pointermove', move, { passive: true });
+      scope.addEventListener('pointerleave', leave);
+    }
     scope.addEventListener('pointerdown', press, { passive: true, capture: true });
     document.addEventListener('visibilitychange', resume);
     preference.addEventListener('change', resume);

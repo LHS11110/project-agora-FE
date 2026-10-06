@@ -1,3 +1,4 @@
+import PointerWater from '../components/frelog/PointerWater.jsx';
 import '../motion/motion.css';
 import { useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from '../routing.jsx';
@@ -29,13 +30,13 @@ export default function LoginPage() {
   };
 
   return <div className="auth-page">
-    <div className="auth-visual-panel">
+    <div className="auth-visual-panel"><PointerWater />
       <FreLogBrand className="auth-brand" />
       <div className="auth-quote"><span className="section-kicker">IDEAS IN MOTION</span><h1>생각을 자유롭게,<br /><em>함께 연결해요.</em></h1><p>질문과 메모, 수식과 문화가<br />한 장의 캔버스에서 만납니다.</p></div>
       <div className="auth-art"><FreLogMotionScene variant="login" /></div>
       <div className="auth-panel-foot"><span>MAKE ROOM FOR IDEAS</span><span>© FreLog</span></div>
     </div>
-    <main className="auth-form-panel">
+    <main className="auth-form-panel"><PointerWater />
       <div className="auth-mobile-brand"><FreLogBrand /></div>
       <div className="auth-form-wrap"><div className="auth-inline-scene"><FreLogMotionScene compact variant="login" /></div><div className="auth-heading"><span className="section-kicker">WELCOME TO FRELOG</span><h2>{mode === 'login' ? '다시 만났네요.' : '함께 시작해요.'}</h2><p>{mode === 'login' ? '로그인하고 이어서 아이디어를 나눠보세요.' : '계정을 만들고 팀의 첫 캔버스를 열어보세요.'}</p></div>
         <form className="auth-form" onSubmit={submit}>

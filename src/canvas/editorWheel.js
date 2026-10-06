@@ -1,5 +1,6 @@
 // Let an editor scroll its own content while ordinary objects remain transparent to navigation.
 export function editorCanScroll(event) {
+  if (event.target.closest?.('.canvas-code-editor')) return true;
   const editor = event.target.closest?.('textarea, [contenteditable="true"]');
   if (!editor || event.ctrlKey || event.metaKey) return false;
   const vertical = Math.abs(event.deltaY) >= Math.abs(event.deltaX);

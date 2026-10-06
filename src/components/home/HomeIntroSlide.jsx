@@ -1,10 +1,11 @@
+import PointerWater from '../frelog/PointerWater.jsx';
 import SlideDeskObjects from './SlideDeskObjects.jsx';
 import Icon from '../Icon.jsx';
 import FreLogMotionScene from '../frelog/FreLogMotionScene.jsx';
 
 export default function HomeIntroSlide({navigate, target, selectSlide}) {
   return (
-        <section className="home-slide slide-hero" aria-roledescription="슬라이드" aria-label="1 / 5">
+        <section className="home-slide slide-hero" aria-roledescription="슬라이드" aria-label="1 / 5"><PointerWater />
           <div className="home-slide-inner page-container">
             <div className="home-slide-copy">
               <span className="home-slide-kicker"><i /> FRELOG · COLLABORATIVE CANVAS</span>
@@ -14,8 +15,10 @@ export default function HomeIntroSlide({navigate, target, selectSlide}) {
               <div className="home-slide-note"><span className="avatar-stack"><i>H</i><i>M</i><i>J</i></span>서로 다른 생각을 한 장에 모아보세요.</div>
               <span className="home-scroll-hint" aria-hidden="true">↓ 아래로 FreLog 둘러보기</span>
             </div>
-            <FreLogMotionScene variant="home" />
-            <div className="hero-side-note"><span>01</span><span className="vertical-rule" /><span>IDEAS IN GOOD COMPANY</span></div>
+            <div className="hero-scene-setting">
+              <FreLogMotionScene variant="home" />
+              <div className="hero-side-note"><span>01</span><span className="vertical-rule" aria-hidden="true" /><span>IDEAS IN GOOD COMPANY</span></div>
+            </div>
           </div>
         </section>
   );

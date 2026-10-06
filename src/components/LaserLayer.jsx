@@ -14,10 +14,12 @@ function pathForPoints(points, width, height) {
   return `${path} L ${last.x} ${last.y}`;
 }
 
-export default function LaserLayer({ strokes = [], width = 1, height = 1, camera }) {
+export default function LaserLayer({ strokes = [], width = 1, height = 1, camera, worldSize }) {
   if (!strokes.length) return null;
   const viewWidth = Math.max(1, width);
   const viewHeight = Math.max(1, height);
+  const worldWidth = worldSize?.width || viewWidth;
+  const worldHeight = worldSize?.height || viewHeight;
   const view = camera || { x: 0, y: 0, scale: 1 };
 
   return <svg className="laser-layer" viewBox={`0 0 ${viewWidth} ${viewHeight}`} preserveAspectRatio="none" aria-hidden="true">
@@ -27,9 +29,9 @@ export default function LaserLayer({ strokes = [], width = 1, height = 1, camera
         className={`laser-trail${stroke.endedAt ? ' is-fading' : ''}`}
         style={{ '--laser-color': stroke.color || '#ff3d67' }}
       >
-        <path className="laser-trail-glow" d={pathForPoints(stroke.points, viewWidth, viewHeight)} />
-        <path className="laser-trail-line" d={pathForPoints(stroke.points, viewWidth, viewHeight)} />
-        <path className="laser-trail-core" d={pathForPoints(stroke.points, viewWidth, viewHeight)} />
+        <path className="laser-trail-glow" d={pathForPoints(stroke.points, worldWidth, worldHeight)} />
+        <path className="laser-trail-line" d={pathForPoints(stroke.points, worldWidth, worldHeight)} />
+        <path className="laser-trail-core" d={pathForPoints(stroke.points, worldWidth, worldHeight)} />
       </g>)}
     </g>
   </svg>;

@@ -1,3 +1,4 @@
+import { inkStrokeSize, INK_BRUSH } from '../canvas/inkStroke.js';
 import { connectorGeometry, OBJECT_SIZES } from './connectorGeometry.js';
 import { shapeArrowGeometry } from './shapeArrowGeometry.js';
 
@@ -55,7 +56,7 @@ function objectBounds(item, items, viewportWidth = 1, viewportHeight = 1) {
       maxX = Math.max(maxX, x);
       maxY = Math.max(maxY, y);
     }
-    const pad = Math.max(2, (Number(item.strokeWidth) || 3.5) / 2);
+    const pad = Math.max(2, (item.brush === INK_BRUSH ? inkStrokeSize(item.strokeWidth) : Number(item.strokeWidth) || 3.5) / 2);
     const rotation = (Number(item.rotation) || 0) * Math.PI / 180;
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;

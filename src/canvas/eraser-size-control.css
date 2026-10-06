@@ -1,0 +1,9 @@
+.eraser-size-control{display:flex;flex-direction:column;gap:9px;margin-top:12px;color:var(--ink-strong,#3c5144);font-size:11px}
+.eraser-size-control>span{display:flex;justify-content:space-between;gap:12px}
+.eraser-size-control strong{font-weight:600;white-space:nowrap}
+.eraser-size-control input{width:100%;accent-color:#68866f;cursor:pointer}
+.eraser-size-control small{color:var(--ink-muted,#879288);font-size:10px;line-height:1.6}
+.eraser-size-control.compact{flex-direction:row;align-items:center;gap:7px;margin-top:0;font-size:9px;white-space:nowrap}
+.eraser-size-control.compact>span{gap:5px}
+.eraser-size-control.compact input{width:70px;margin:0;touch-action:auto}
+.eraser-size-control.compact small{display:none}

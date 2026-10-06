@@ -1,14 +1,16 @@
 import { useRef, useState } from 'react';
+import { useObjectFeedback } from '../../motion/useObjectFeedback.js';
 import { DESK_OBJECTS } from '../../home/deskObjects.js';
 import '../../home/desk-objects.css';
 
 function DeskObject({ object }) {
+  const { trackPointer, playFeedback } = useObjectFeedback();
   const gesture = useRef(null);
   const suppressClick = useRef(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [active, setActive] = useState(false);
-  return <button type="button" className="slide-desk-object" aria-label={object.label}
-    aria-pressed={active} style={{ '--desk-x': `${position.x}px`, '--desk-y': `${position.y}px` }}
+  return <button type="button" className="slide-desk-object object-feedback" aria-label={object.label}
+    aria-pressed={active} data-feedback-motion={object.motion} style={{ '--desk-x': `${position.x}px`, '--desk-y': `${position.y}px` }}
     onPointerDown={(event) => {
       if (event.button !== 0) return;
       suppressClick.current = false;
@@ -16,6 +18,7 @@ function DeskObject({ object }) {
       event.currentTarget.setPointerCapture(event.pointerId);
     }}
     onPointerMove={(event) => {
+      trackPointer(event);
       const drag = gesture.current;
       if (!drag || drag.pointerId !== event.pointerId) return;
       const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
@@ -27,10 +30,12 @@ function DeskObject({ object }) {
     onLostPointerCapture={() => { gesture.current = null; }}
     onClick={(event) => {
       if (event.detail !== 0 && suppressClick.current) { suppressClick.current = false; return; }
+      playFeedback(event);
       setActive((value) => !value);
     }}>
+    <span data-feedback-pulse aria-hidden="true" />
     <span className="desk-object-icon" aria-hidden="true">{object.icon}</span>
-    <span><b>{object.label}</b><small>{object.states[active ? 1 : 0]}</small></span>
+    <span><b>{object.label}</b><small key={String(active)}>{object.states[active ? 1 : 0]}</small></span>
   </button>;
 }
 

@@ -11,7 +11,7 @@ export function isCanvasSyncItem(item) {
 
 export function hasItemGeometryChanged(previous, next) {
   if (!previous || !next) return true;
-  const fields = ['x', 'y', 'width', 'height', 'rotation', 'bend'];
+  const fields = ['x', 'y', 'width', 'height', 'rotation', 'bend', 'contentScale', 'contentScaleX', 'contentScaleY'];
   return fields.some((field) => (Number(previous[field]) || 0) !== (Number(next[field]) || 0))
     || (previous.kind === 'stroke' && previous.points !== next.points);
 }
@@ -35,6 +35,7 @@ export function useCanvasPeerGeometry({
     const payload = {
       type: 'item_geometry', item_id: key,
       x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation,
+      contentScale: item.contentScale, contentScaleX: item.contentScaleX, contentScaleY: item.contentScaleY,
       version,
     };
     const mesh = peerMeshRef.current;

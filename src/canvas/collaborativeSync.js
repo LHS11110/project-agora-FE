@@ -138,6 +138,8 @@ export function sendStrokePreviewStart(mesh, session, firstPoint) {
     points: [firstPoint],
     color: session.color,
     stroke_width: session.strokeWidth,
+    brush: session.brush,
+    simulate_pressure: session.simulatePressure,
     permission: session.permission,
   }, (peer) => canPeerAccessItem(session.aclItem, peer));
 }
@@ -152,6 +154,8 @@ export function sendStrokePreviewSnapshot(mesh, peer, session, points) {
     points: [points[0]],
     color: session.color,
     stroke_width: session.strokeWidth,
+    brush: session.brush,
+    simulate_pressure: session.simulatePressure,
     permission: session.permission,
   });
   let sequence = 0;

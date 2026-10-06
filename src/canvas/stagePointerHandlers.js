@@ -5,7 +5,7 @@ export function stagePointerHandlers({ dragRef, panRef, spacePressedRef, startPa
   };
   return {
     onPointerDownCapture: (event) => {
-      if (event.target.closest?.('.canvas-minimap')) return;
+      if (event.target.closest?.('.canvas-minimap, .canvas-code-editor')) return;
       if (panRef.current) { event.preventDefault(); event.stopPropagation(); return; }
       if (event.button === 1 || (event.button === 0 && spacePressedRef.current)) startPan(event);
     },
@@ -35,7 +35,7 @@ export function stagePointerHandlers({ dragRef, panRef, spacePressedRef, startPa
       // A child's capture loss bubbles here too; it does not end the stage gesture.
       if (event.target !== event.currentTarget) return;
       if (dragRef.current) stopObjectDrag(event);
-      else if (panRef.current) stopDrawing(event);
+      else stopDrawing(event);
     },
     onPointerLeave: hideCursor,
   };

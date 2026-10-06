@@ -1,0 +1,14 @@
+.preview-art.actual-canvas-preview { background: #f9faf6; overflow: hidden; }
+.canvas-content-preview { display: block; width: 100%; height: 100%; pointer-events: none; }
+.canvas-preview-message { height: 100%; display: grid; place-items: center; padding: 20px; color: #77817a; font-size: 12px; text-align: center; }
+.preview-object { box-sizing: border-box; width: 100%; height: 100%; padding: 12px; overflow: hidden; color: #263b35; font: 16px/1.4 sans-serif; }
+.preview-object p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.preview-object-note { border-radius: 4px; }
+.preview-object-code { background: #253730; color: #eef4ee; border-radius: 6px; }
+.preview-object pre { margin: 8px 0; font: 12px/1.5 monospace; white-space: pre-wrap; }
+.preview-object-image { padding: 0; }
+.preview-object-image img { width: 100%; height: 100%; object-fit: contain; }
+.preview-object-link, .preview-object-table { background: white; border: 1px solid #cad3cc; border-radius: 4px; }
+.preview-object table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.preview-object th, .preview-object td { padding: 5px; border: 1px solid #cad3cc; }
+.preview-object h2, .preview-object h3, .preview-object h4 { margin: 0 0 8px; }

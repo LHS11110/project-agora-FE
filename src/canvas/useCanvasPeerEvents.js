@@ -1,3 +1,5 @@
+import { MIN_CONTENT_SCALE, MAX_CONTENT_SCALE } from './objectContentScale.js';
+import { isCodeLanguage } from './codeLanguages.js';
 import { useCallback } from 'react';
 import * as Automerge from '@automerge/automerge/slim';
 import {
@@ -111,7 +113,8 @@ export function useCanvasPeerEvents(options) {
         || !Number.isSafeInteger(sequence) || sequence < 0 || sequence > 1000000
         || !Array.isArray(points) || points.length > REALTIME_STROKE_BATCH_SIZE
         || points.some((point) => !point || typeof point.x !== 'number' || typeof point.y !== 'number'
-          || !Number.isFinite(point.x) || !Number.isFinite(point.y) || Math.abs(point.x) > 1e6 || Math.abs(point.y) > 1e6)) return;
+          || !Number.isFinite(point.x) || !Number.isFinite(point.y) || Math.abs(point.x) > 1e6 || Math.abs(point.y) > 1e6
+          || (point.pressure !== undefined && (!Number.isFinite(point.pressure) || point.pressure < 0 || point.pressure > 1)))) return;
 
       const key = `${peer.peer_id}:${strokeId}`;
       const remoteStrokes = remoteDrawingStrokesRef.current;
@@ -130,6 +133,9 @@ export function useCanvasPeerEvents(options) {
           points,
           color: data.color,
           strokeWidth: Math.max(1, Math.min(MAX_STROKE_WIDTH, data.stroke_width)),
+          brush: data.brush === 'ink' ? 'ink' : undefined,
+          simulatePressure: data.simulate_pressure !== false,
+          complete: false,
           permission: data.permission,
         });
         setRemoteDrawingStrokes([...remoteStrokes.values()]);
@@ -158,6 +164,9 @@ export function useCanvasPeerEvents(options) {
         points: nextPoints,
         color: previous.color,
         strokeWidth: previous.strokeWidth,
+        brush: previous.brush,
+        simulatePressure: previous.simulatePressure,
+        complete: true,
         permission: previous.permission,
       };
       if (!itemsRef.current[strokeId]) {
@@ -329,7 +338,7 @@ export function useCanvasPeerEvents(options) {
         : data.field === 'color' ? item.kind === 'note' && /^#[0-9a-f]{6}$/i.test(value)
           : item.kind === 'code' && (data.field === 'filename'
             ? value.length <= 80
-            : ['javascript', 'typescript', 'python', 'html', 'css', 'json', 'text'].includes(value));
+            : isCodeLanguage(value));
       if (!validMetadata) return;
       if (version) {
         syncClockRef.current = Math.max(syncClockRef.current, version.clock);
@@ -371,6 +380,15 @@ export function useCanvasPeerEvents(options) {
       const safeRotation = Number.isFinite(rotation) ? Math.max(-180, Math.min(180, rotation)) : item.rotation;
       const width = data.width == null ? item.width : Number(data.width);
       const height = data.height == null ? item.height : Number(data.height);
+      const contentScale = data.contentScale == null ? item.contentScale : Number(data.contentScale);
+      if (data.contentScale != null && (!Number.isFinite(contentScale) || contentScale < MIN_CONTENT_SCALE || contentScale > MAX_CONTENT_SCALE)) return;
+      const axisScales = {};
+      for (const field of ['contentScaleX', 'contentScaleY']) {
+        if (data[field] == null) continue;
+        const value = Number(data[field]);
+        if (!Number.isFinite(value) || value < MIN_CONTENT_SCALE || value > MAX_CONTENT_SCALE) return;
+        axisScales[field] = value;
+      }
       if ((data.width != null && (!Number.isFinite(width) || width <= 0))
         || (data.height != null && (!Number.isFinite(height) || height <= 0))) return;
       const nextItem = {
@@ -380,6 +398,8 @@ export function useCanvasPeerEvents(options) {
         rotation: safeRotation,
         ...(Number.isFinite(width) && width > 0 ? { width } : {}),
         ...(Number.isFinite(height) && height > 0 ? { height } : {}),
+        ...(Number.isFinite(contentScale) && contentScale > 0 ? { contentScale } : {}),
+        ...axisScales,
       };
       if (version) {
         syncClockRef.current = Math.max(syncClockRef.current, version.clock);
@@ -387,7 +407,7 @@ export function useCanvasPeerEvents(options) {
       }
       itemsRef.current = { ...itemsRef.current, [key]: nextItem };
       setItems((current) => ({ ...current, [key]: nextItem }));
-      if (item.x !== nextItem.x || item.y !== nextItem.y || item.width !== nextItem.width || item.height !== nextItem.height || item.rotation !== nextItem.rotation) refreshSpatialIndex();
+      if (item.x !== nextItem.x || item.y !== nextItem.y || item.width !== nextItem.width || item.height !== nextItem.height || item.rotation !== nextItem.rotation || item.contentScale !== nextItem.contentScale || item.contentScaleX !== nextItem.contentScaleX || item.contentScaleY !== nextItem.contentScaleY) refreshSpatialIndex();
       if (isCollaborativeItem(item)) markItemDirty(key);
       return;
     }

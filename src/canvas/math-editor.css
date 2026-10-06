@@ -1,0 +1,2 @@
+.canvas-stage .math-object .math-formula-input { width: 100%; max-width: 100%; min-width: 180px; }
+.math-formula-placeholder { color: var(--ink-muted); font: 12px/1.5 var(--display); }

@@ -10,7 +10,7 @@ const MINIMAP_ITEM_COLORS = {
   shape: '#6d9a91', text: '#809084', math: '#9a7ea1', stroke: '#526d5f', connector: '#a0a59b',
 };
 
-export function useCanvasMinimap({ boardRef, boardSize, camera, setCamera, items }) {
+export function useCanvasMinimap({ boardRef, boardSize, viewportSize = boardSize, camera, setCamera, items }) {
   const minimapWidgetRef = useRef(null);
   const minimapPointerRef = useRef(null);
   const minimapMoveRef = useRef(null);
@@ -26,8 +26,8 @@ export function useCanvasMinimap({ boardRef, boardSize, camera, setCamera, items
   minimapPositionRef.current = minimapPosition;
 
   const visibleWorldBounds = useMemo(() => {
-    const width = Math.max(1, boardSize.width);
-    const height = Math.max(1, boardSize.height);
+    const width = Math.max(1, viewportSize.width);
+    const height = Math.max(1, viewportSize.height);
     const scale = Math.max(0.001, camera.scale);
     return {
       minX: -camera.x / scale,
@@ -35,7 +35,7 @@ export function useCanvasMinimap({ boardRef, boardSize, camera, setCamera, items
       maxX: (width - camera.x) / scale,
       maxY: (height - camera.y) / scale,
     };
-  }, [boardSize, camera]);
+  }, [viewportSize, camera]);
   const visibleBounds = useMemo(() => ({
     minX: visibleWorldBounds.minX / Math.max(1, boardSize.width),
     minY: visibleWorldBounds.minY / Math.max(1, boardSize.height),
@@ -104,19 +104,19 @@ export function useCanvasMinimap({ boardRef, boardSize, camera, setCamera, items
   }, [boardSize, items, visibleWorldBounds]);
 
   useEffect(() => {
-    if (!minimapPosition || boardSize.width <= 1 || boardSize.height <= 1) return;
+    if (!minimapPosition || viewportSize.width <= 1 || viewportSize.height <= 1) return;
     const widget = minimapWidgetRef.current?.getBoundingClientRect();
     if (!widget) return;
     const next = {
-      left: Math.max(4, Math.min(Math.max(4, boardSize.width - widget.width - 4), minimapPosition.left)),
-      top: Math.max(4, Math.min(Math.max(4, boardSize.height - widget.height - 4), minimapPosition.top)),
+      left: Math.max(4, Math.min(Math.max(4, viewportSize.width - widget.width - 4), minimapPosition.left)),
+      top: Math.max(4, Math.min(Math.max(4, viewportSize.height - widget.height - 4), minimapPosition.top)),
     };
     if (next.left !== minimapPosition.left || next.top !== minimapPosition.top) {
       minimapPositionRef.current = next;
       setMinimapPosition(next);
       try { localStorage.setItem(MINIMAP_POSITION_KEY, JSON.stringify(next)); } catch { /* Ignore unavailable local storage. */ }
     }
-  }, [boardSize, minimapPosition]);
+  }, [viewportSize, minimapPosition]);
 
   const moveCameraFromMinimap = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -127,8 +127,8 @@ export function useCanvasMinimap({ boardRef, boardSize, camera, setCamera, items
     const worldY = minimap.bounds.minY + yRatio * minimap.bounds.height;
     setCamera((current) => ({
       ...current,
-      x: boardSize.width / 2 - worldX * current.scale,
-      y: boardSize.height / 2 - worldY * current.scale,
+      x: viewportSize.width / 2 - worldX * current.scale,
+      y: viewportSize.height / 2 - worldY * current.scale,
     }));
   };
   const startMinimapWidgetMove = (event) => {

@@ -1,3 +1,4 @@
+import { isContentScalable, objectContentScale, MIN_CONTENT_SCALE, MAX_CONTENT_SCALE } from '../canvas/objectContentScale.js';
 const MIN_WIDTHS = { image: 100, code: 190, note: 170, text: 110 };
 const MIN_HEIGHTS = { shape: 38, code: 64, note: 148, math: 33, text: 38, table: 60, link: 60 };
 
@@ -90,14 +91,30 @@ export function resizeItemAtPointer(item, resize, point, viewport) {
   let right = width * boardWidth / 2;
   let top = -height * boardHeight / 2;
   let bottom = height * boardHeight / 2;
-  const minWidth = Math.max(40, MIN_WIDTHS[item.kind] || 0) / boardWidth;
+  const scalable = isContentScalable(item);
+  const minWidth = scalable ? 1 : Math.max(40, MIN_WIDTHS[item.kind] || 0);
   const minHeightPixels = item.kind === 'link' && item.mediaType !== 'link' ? 125 : MIN_HEIGHTS[item.kind] || 0;
-  const minHeight = Math.max(32, minHeightPixels) / boardHeight;
+  const minHeight = scalable ? 1 : Math.max(32, minHeightPixels);
 
   if (handle.includes('w')) left = Math.min(left + deltaX, right - minWidth);
   if (handle.includes('e')) right = Math.max(right + deltaX, left + minWidth);
   if (handle.includes('n')) top = Math.min(top + deltaY, bottom - minHeight);
   if (handle.includes('s')) bottom = Math.max(bottom + deltaY, top + minHeight);
+
+  let contentScaleX, contentScaleY;
+  if (scalable) {
+    const baseWidth = width * boardWidth, baseHeight = height * boardHeight;
+    const originalX = objectContentScale(item, 'X');
+    const originalY = objectContentScale(item, 'Y');
+    contentScaleX = /[ew]/.test(handle)
+      ? Math.max(MIN_CONTENT_SCALE, Math.min(MAX_CONTENT_SCALE, originalX * (right - left) / baseWidth)) : originalX;
+    contentScaleY = /[ns]/.test(handle)
+      ? Math.max(MIN_CONTENT_SCALE, Math.min(MAX_CONTENT_SCALE, originalY * (bottom - top) / baseHeight)) : originalY;
+    if (handle.includes('w')) left = right - baseWidth * contentScaleX / originalX;
+    else if (handle.includes('e')) right = left + baseWidth * contentScaleX / originalX;
+    if (handle.includes('n')) top = bottom - baseHeight * contentScaleY / originalY;
+    else if (handle.includes('s')) bottom = top + baseHeight * contentScaleY / originalY;
+  }
 
   const nextWidth = (right - left) / boardWidth;
   const nextHeight = (bottom - top) / boardHeight;
@@ -109,5 +126,6 @@ export function resizeItemAtPointer(item, resize, point, viewport) {
     y: nextCenter.y / boardHeight - nextHeight / 2,
     width: nextWidth,
     height: nextHeight,
+    ...(scalable ? { contentScaleX, contentScaleY } : {}),
   };
 }

@@ -1,0 +1,28 @@
+/* Image objects follow their saved dimensions without cropping the source. */
+.canvas-stage .canvas-object.image-object,
+.tutorial-scene .tutorial-item.tutorial-image-item {
+  max-width: none;
+}
+
+.canvas-stage .image-object > img,
+.tutorial-scene .tutorial-image-item > img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  box-sizing: border-box;
+  object-fit: contain;
+}
+
+.canvas-stage .image-object.has-custom-height > img,
+.tutorial-scene .tutorial-image-item.has-custom-height > img {
+  height: 100%;
+  min-height: 0;
+}
+
+.canvas-stage .image-object.has-custom-height > .image-object-fallback {
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}

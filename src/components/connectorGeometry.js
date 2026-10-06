@@ -1,4 +1,5 @@
 import { arrowPathGeometry } from './arrowheadGeometry.js';
+import { shapeOutlinePaths } from '../canvas/shapeGeometry.js';
 
 export const OBJECT_SIZES = {
   image: [0.3, 0.2],
@@ -24,6 +25,8 @@ function objectRect(item, width, height) {
     halfHeight: objectHeight / 2,
     rotation: (Number(item?.rotation) || 0) * Math.PI / 180,
     isEllipse: item?.kind === 'shape' && item.shapeType === 'ellipse',
+    shapePaths: item?.kind === 'shape' && item.shapeType !== 'arrow'
+      ? shapeOutlinePaths(item.shapeType, objectWidth, objectHeight) : null,
   };
 }
 
@@ -32,6 +35,21 @@ function distanceToEdge(rect, directionX, directionY) {
   const sine = Math.sin(rect.rotation);
   const localX = directionX * cosine + directionY * sine;
   const localY = -directionX * sine + directionY * cosine;
+  if (rect.shapePaths && !rect.isEllipse) {
+    let distance = 0;
+    for (const path of rect.shapePaths) {
+      for (let index = 1; index < path.length; index += 1) {
+        const a = { x: path[index - 1].x - rect.halfWidth, y: path[index - 1].y - rect.halfHeight };
+        const edge = { x: path[index].x - path[index - 1].x, y: path[index].y - path[index - 1].y };
+        const cross = localX * edge.y - localY * edge.x;
+        if (Math.abs(cross) < 1e-8) continue;
+        const rayDistance = (a.x * edge.y - a.y * edge.x) / cross;
+        const segmentPosition = (a.x * localY - a.y * localX) / cross;
+        if (rayDistance >= 0 && segmentPosition >= -1e-8 && segmentPosition <= 1 + 1e-8) distance = Math.max(distance, rayDistance);
+      }
+    }
+    if (distance > 0) return distance;
+  }
   if (rect.isEllipse) {
     const factor = (localX / rect.halfWidth) ** 2 + (localY / rect.halfHeight) ** 2;
     return factor > 0 ? 1 / Math.sqrt(factor) : 0;

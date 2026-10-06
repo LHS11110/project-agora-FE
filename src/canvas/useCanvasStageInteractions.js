@@ -1,4 +1,8 @@
+import { shapeCreationSize } from './shapeCatalog.js';
 import { useEffect } from 'react';
+import { INK_BRUSH, inkPointAtPointer } from './inkStroke.js';
+import { canvasPointAtPointer, MIN_CANVAS_ZOOM, MAX_CANVAS_ZOOM } from './canvasSpace.js';
+import { useCanvasStrokeSaveBatch } from './useCanvasStrokeSaveBatch.js';
 import { editorCanScroll } from './editorWheel.js';
 import { createId } from './canvasIds.js';
 import { ERASER_RADIUS, LASER_COLOR, MAX_REALTIME_STROKE_POINTS, REALTIME_STROKE_BATCH_SIZE, REALTIME_STROKE_INTERVAL_MS } from './canvasConstants.js';
@@ -14,8 +18,9 @@ import { DEFAULT_SHAPE_ARROW_BEND } from '../components/shapeArrowGeometry.js';
 
 export function useCanvasStageInteractions(options) {
   const {
-    boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize,
-    addItem, deleteItem, setToast, sendItemChange, setItems, refreshSpatialIndex,
+    boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth = ERASER_RADIUS * 2,
+    addItem, setToast, setItems, refreshSpatialIndex,
+    sendStrokeFrameChanges, pendingItemChangesRef, strokeSaveFlushRef,
     lastCursorSentAtRef, peerMeshRef, panRef, zoomHoldRef, zoomPointerPressRef,
     zoomSensitivity, stageWheelHandlerRef, laserDrawingRef, setLaserStrokes,
     selectionRef, selectedItemIds, setSelectionBox, selectItems,
@@ -25,12 +30,21 @@ export function useCanvasStageInteractions(options) {
     drawingRef, drawingSessionRef, draftRef, vectorDraftRef,
   } = options;
 
+  const { enqueue: enqueueStrokeChange, flush: flushStrokeChanges } = useCanvasStrokeSaveBatch({
+    sendBatch: sendStrokeFrameChanges, pendingItemChangesRef, flushRef: strokeSaveFlushRef,
+  });
+  const queueDrawingStroke = () => {
+    const session = drawingSessionRef.current;
+    if (!session || !draftRef.current.length) return;
+    enqueueStrokeChange(session.id, {
+      kind: 'stroke', points: draftRef.current, color: session.color,
+      strokeWidth: session.strokeWidth, permission: session.permission,
+      brush: session.brush, simulatePressure: session.simulatePressure, complete: false,
+    }, itemsRef.current[session.id] || null);
+  };
   const pointerPosition = (event) => {
     const bounds = boardRef.current.getBoundingClientRect();
-    return {
-      x: (event.clientX - bounds.left - camera.x) / (bounds.width * camera.scale),
-      y: (event.clientY - bounds.top - camera.y) / (bounds.height * camera.scale),
-    };
+    return canvasPointAtPointer(event, bounds, camera, boardSize);
   };
   const updateEraserCursor = (event) => {
     if (activeTool !== 'eraser') return;
@@ -46,40 +60,26 @@ export function useCanvasStageInteractions(options) {
     const entries = Object.entries(itemsRef.current).filter(([, item]) => item?.kind === 'stroke');
     for (const [id, item] of entries) {
       if (itemsRef.current[id]?.kind !== 'stroke') continue;
-      const remainingPaths = eraseStrokeWithEraser(item, from, to, boardSize, camera.scale, ERASER_RADIUS);
+      const remainingPaths = eraseStrokeWithEraser(item, from, to, boardSize, camera.scale, eraserWidth / 2);
       if (remainingPaths === null) continue;
+      const nextItems = { ...itemsRef.current };
       if (remainingPaths.length === 0) {
-        if (!deleteItem(id)) {
-          setToast('연결이 복구되면 지우개를 다시 사용해주세요.');
-          return;
+        enqueueStrokeChange(id, null, item);
+        delete nextItems[id];
+      } else {
+        const updatedItem = { ...item, points: remainingPaths[0] };
+        enqueueStrokeChange(id, updatedItem, item);
+        nextItems[id] = updatedItem;
+        for (const points of remainingPaths.slice(1)) {
+          const fragmentId = createId();
+          const fragment = { ...item, points };
+          enqueueStrokeChange(fragmentId, fragment, null);
+          nextItems[fragmentId] = fragment;
         }
-        continue;
-      }
-
-      const updatedItem = { ...item, points: remainingPaths[0] };
-      if (!sendItemChange({ type: 'item_update', item_id: id, item: updatedItem }, item)) {
-        setToast('연결이 복구되면 지우개를 다시 사용해주세요.');
-        return;
-      }
-
-      const nextItems = { ...itemsRef.current, [id]: updatedItem };
-      let allFragmentsSent = true;
-      for (const points of remainingPaths.slice(1)) {
-        const fragmentId = createId();
-        const fragment = { ...item, points };
-        if (!sendItemChange({ type: 'item_update', item_id: fragmentId, item: fragment }, null)) {
-          allFragmentsSent = false;
-          break;
-        }
-        nextItems[fragmentId] = fragment;
       }
       itemsRef.current = nextItems;
       setItems(nextItems);
       refreshSpatialIndex();
-      if (!allFragmentsSent) {
-        setToast('일부 선을 지우지 못했습니다. 연결이 복구되면 다시 시도해주세요.');
-        return;
-      }
     }
   };
   const centeredItemPosition = (width, height) => {
@@ -87,8 +87,8 @@ export function useCanvasStageInteractions(options) {
     const viewWidth = Math.max(1, bounds?.width || boardSize.width);
     const viewHeight = Math.max(1, bounds?.height || boardSize.height);
     return {
-      x: (viewWidth / 2 - camera.x) / (viewWidth * camera.scale) - width / 2,
-      y: (viewHeight / 2 - camera.y) / (viewHeight * camera.scale) - height / 2,
+      x: (viewWidth / 2 - camera.x) / (boardSize.width * camera.scale) - width / 2,
+      y: (viewHeight / 2 - camera.y) / (boardSize.height * camera.scale) - height / 2,
     };
   };
   const sendCursorPosition = (event) => {
@@ -116,10 +116,10 @@ export function useCanvasStageInteractions(options) {
     const targetX = clientX ?? bounds.left + bounds.width / 2;
     const targetY = clientY ?? bounds.top + bounds.height / 2;
     setCamera((current) => {
-      const scale = Math.max(0.5, Math.min(4, current.scale * factor));
-      const worldX = (targetX - bounds.left - current.x) / (bounds.width * current.scale);
-      const worldY = (targetY - bounds.top - current.y) / (bounds.height * current.scale);
-      return { scale, x: targetX - bounds.left - worldX * bounds.width * scale, y: targetY - bounds.top - worldY * bounds.height * scale };
+      const scale = Math.max(MIN_CANVAS_ZOOM, Math.min(MAX_CANVAS_ZOOM, current.scale * factor));
+      const worldX = (targetX - bounds.left - current.x) / (boardSize.width * current.scale);
+      const worldY = (targetY - bounds.top - current.y) / (boardSize.height * current.scale);
+      return { scale, x: targetX - bounds.left - worldX * boardSize.width * scale, y: targetY - bounds.top - worldY * boardSize.height * scale };
     });
   };
   const stopZoomHold = () => {
@@ -283,6 +283,7 @@ export function useCanvasStageInteractions(options) {
     if (boardRef.current?.hasPointerCapture?.(event.pointerId)) boardRef.current.releasePointerCapture(event.pointerId);
   };
   const startDrawing = (event) => {
+    if (drawingRef.current || event.button !== 0 && event.button !== 1) return;
     updateEraserCursor(event);
     const clickedEmptySpace = event.button === 0 && !event.target.closest?.('.canvas-object, .canvas-minimap, .stage-label, .draw-cursor-label, .eraser-cursor');
     if (clickedEmptySpace) {
@@ -319,24 +320,21 @@ export function useCanvasStageInteractions(options) {
     if (activeTool === 'shape' || activeTool === 'text' || activeTool === 'markdown' || activeTool === 'math' || activeTool === 'code' || activeTool === 'note') {
       event.preventDefault();
       const point = pointerPosition(event);
-      const itemWidth = activeTool === 'shape' ? 0.14 : activeTool === 'math' ? 0.2 : activeTool === 'code' ? 0.32 : activeTool === 'note' ? 0.24 : 0.22;
+      const shapeSize = shapeCreationSize(shapeType, boardSize);
+      const itemWidth = activeTool === 'shape' ? shapeSize.width : activeTool === 'math' ? 0.2 : activeTool === 'code' ? 0.32 : activeTool === 'note' ? 0.24 : 0.22;
       const x = point.x - itemWidth / 2;
-      const y = point.y - (activeTool === 'code' ? 0.1 : activeTool === 'note' ? 0.08 : 0.06);
+      const y = point.y - (activeTool === 'shape' ? shapeSize.height / 2 : activeTool === 'code' ? 0.1 : activeTool === 'note' ? 0.08 : 0.06);
       let item;
-      if (activeTool === 'shape') item = { kind: 'shape', shapeType, ...(shapeType === 'arrow' ? { bend: DEFAULT_SHAPE_ARROW_BEND, startHead: shapeArrowStartHead, endHead: shapeArrowEndHead } : {}), x, y, width: itemWidth, height: 0.12, color, permission };
+      if (activeTool === 'shape') item = { kind: 'shape', shapeType, ...(shapeType === 'arrow' ? { bend: DEFAULT_SHAPE_ARROW_BEND, startHead: shapeArrowStartHead, endHead: shapeArrowEndHead } : {}), x, y, width: itemWidth, height: shapeSize.height, color, permission };
       else if (activeTool === 'text' || activeTool === 'markdown') item = { kind: 'text', text: '', ...(activeTool === 'markdown' ? { format: 'markdown' } : {}), x, y, width: itemWidth, permission };
       else if (activeTool === 'note') item = { kind: 'note', text: '', x, y, width: itemWidth, color: noteColor, rotation: Math.random() * 3 - 1.5, permission };
       else if (activeTool === 'code') item = { kind: 'code', code: '', filename: 'idea.js', language: 'javascript', x, y, width: itemWidth, permission };
-      else {
-        const content = window.prompt('수식을 입력하세요. 예: f(x) = x² + 2x + 1');
-        if (!content?.trim()) return;
-        item = { kind: 'math', formula: content.trim(), x, y, width: itemWidth, permission };
-      }
+      else item = { kind: 'math', formula: '', x, y, width: itemWidth, permission };
       const id = createId();
       if (!addItem(id, item)) setToast('실시간 서버에 연결된 뒤 캔버스를 수정할 수 있어요.');
       else {
         setActiveTool('select');
-        if (activeTool === 'text' || activeTool === 'markdown' || activeTool === 'code' || activeTool === 'note') startEditing(id);
+        if (activeTool === 'text' || activeTool === 'markdown' || activeTool === 'code' || activeTool === 'note' || activeTool === 'math') startEditing(id);
       }
       return;
     }
@@ -360,10 +358,13 @@ export function useCanvasStageInteractions(options) {
     }
     if (activeTool !== 'pen') return;
     event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId);
-    const point = pointerPosition(event);
+    const point = inkPointAtPointer(event, pointerPosition(event));
     const strokeId = createId();
     const session = {
       id: strokeId,
+      pointerId: event.pointerId,
+      brush: INK_BRUSH,
+      simulatePressure: event.pointerType !== 'pen',
       sequence: 0,
       color,
       strokeWidth,
@@ -375,8 +376,9 @@ export function useCanvasStageInteractions(options) {
     drawingRef.current = true;
     drawingSessionRef.current = session;
     draftRef.current = [point];
-    vectorDraftRef.current?.({ points: draftRef.current, color: session.color, strokeWidth: session.strokeWidth });
+    vectorDraftRef.current?.({ id: session.id, brush: session.brush, simulatePressure: session.simulatePressure, complete: false, points: draftRef.current, color: session.color, strokeWidth: session.strokeWidth });
     sendStrokePreviewStart(peerMeshRef.current, session, point);
+    queueDrawingStroke();
   };
   const moveDrawing = (event) => {
     updateEraserCursor(event);
@@ -399,15 +401,24 @@ export function useCanvasStageInteractions(options) {
       return;
     }
     if (!drawingRef.current) return;
-    const point = pointerPosition(event);
-    const previous = draftRef.current[draftRef.current.length - 1];
-    if (previous && Math.hypot(point.x - previous.x, point.y - previous.y) < 0.0018) return;
-    if (draftRef.current.length >= MAX_REALTIME_STROKE_POINTS) return;
-    draftRef.current.push(point);
     const session = drawingSessionRef.current;
-    if (!session) return;
-    session.pendingPoints.push(point);
-    vectorDraftRef.current?.({ points: draftRef.current, color: session.color, strokeWidth: session.strokeWidth });
+    if (!session || session.pointerId !== event.pointerId) return;
+    const coalesced = event.nativeEvent?.getCoalescedEvents?.() || event.getCoalescedEvents?.() || [];
+    const samples = coalesced.length ? coalesced : [event];
+    let changed = false;
+    for (const sample of samples) {
+      if (draftRef.current.length >= MAX_REALTIME_STROKE_POINTS) break;
+      const point = inkPointAtPointer(sample, pointerPosition(sample));
+      const previous = draftRef.current[draftRef.current.length - 1];
+      const distance = previous ? Math.hypot((point.x - previous.x) * boardSize.width, (point.y - previous.y) * boardSize.height) : Infinity;
+      if (distance < 0.5 && Math.abs((point.pressure ?? 0.5) - (previous?.pressure ?? 0.5)) < 0.02) continue;
+      draftRef.current.push(point);
+      session.pendingPoints.push(point);
+      changed = true;
+    }
+    if (!changed) return;
+    queueDrawingStroke();
+    vectorDraftRef.current?.({ id: session.id, brush: session.brush, simulatePressure: session.simulatePressure, complete: false, points: draftRef.current, color: session.color, strokeWidth: session.strokeWidth });
     const now = performance.now();
     if (now - session.lastSentAt >= REALTIME_STROKE_INTERVAL_MS || session.pendingPoints.length >= REALTIME_STROKE_BATCH_SIZE) {
       sendStrokePreviewPoints(peerMeshRef.current, session, session.pendingPoints.splice(0));
@@ -425,6 +436,7 @@ export function useCanvasStageInteractions(options) {
       return;
     }
     if (eraserRef.current) {
+      flushStrokeChanges({ force: true });
       eraserRef.current = null;
       if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
       return;
@@ -435,7 +447,20 @@ export function useCanvasStageInteractions(options) {
       return;
     }
     if (!drawingRef.current) return;
-    drawingRef.current = false; event.currentTarget.releasePointerCapture?.(event.pointerId);
+    if (drawingSessionRef.current?.pointerId !== event.pointerId) return;
+    // Capture the final location before pointerup; some devices do not send a
+    // pointermove for the last segment. Do not record release pressure (zero).
+    if (event.type === 'pointerup') {
+      const point = pointerPosition(event);
+      const previous = draftRef.current[draftRef.current.length - 1];
+      if (previous && Math.hypot((point.x - previous.x) * boardSize.width, (point.y - previous.y) * boardSize.height) >= 0.5) {
+        const finalPoint = { ...point, ...(Number.isFinite(previous.pressure) ? { pressure: previous.pressure } : {}) };
+        draftRef.current.push(finalPoint);
+        drawingSessionRef.current.pendingPoints.push(finalPoint);
+      }
+    }
+    drawingRef.current = false;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     const points = draftRef.current;
     const session = drawingSessionRef.current;
     drawingSessionRef.current = null;
@@ -445,14 +470,21 @@ export function useCanvasStageInteractions(options) {
     const id = session?.id || createId();
     const item = {
       kind: 'stroke',
+      brush: session?.brush || INK_BRUSH,
+      simulatePressure: session?.simulatePressure !== false,
+      complete: true,
       points,
       color: session?.color || color,
       strokeWidth: session?.strokeWidth || strokeWidth,
       permission: session?.permission || permission,
     };
     if (session) sendStrokePreviewPoints(peerMeshRef.current, session, session.pendingPoints.splice(0));
-    const added = addItem(id, item);
-    if (!added) setToast('실시간 서버에 연결된 뒤 그릴 수 있어요.');
+    enqueueStrokeChange(id, item, itemsRef.current[id] || null);
+    itemsRef.current = { ...itemsRef.current, [id]: item };
+    setItems(itemsRef.current);
+    refreshSpatialIndex();
+    flushStrokeChanges({ force: true });
+    const added = true;
     if (session) {
       session.sequence += 1;
       peerMeshRef.current?.sendData({

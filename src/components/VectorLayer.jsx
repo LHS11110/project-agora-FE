@@ -1,5 +1,7 @@
+import { shapeOutlinePaths } from '../canvas/shapeGeometry.js';
 import { useEffect, useRef } from 'react';
 import { Application, Graphics } from 'pixi.js';
+import { createInkStrokeRenderer } from '../canvas/inkStrokeRenderer.js';
 import { connectorGeometry } from './connectorGeometry.js';
 import { shapeArrowGeometry } from './shapeArrowGeometry.js';
 import './vector-layer.css';
@@ -49,16 +51,6 @@ function drawPolyline(graphics, points, color, width) {
   graphics.stroke({ color, width, cap: 'round', join: 'round' });
 }
 
-function drawStroke(graphics, points, color, width) {
-  if (!points.length) return;
-  const strokeWidth = Math.max(0.5, Number(width) || 3.5);
-  if (points.length === 1) {
-    graphics.circle(points[0].x, points[0].y, strokeWidth / 2).fill(color);
-    return;
-  }
-  drawPolyline(graphics, points, color, strokeWidth);
-}
-
 function drawCurvedArrow(graphics, geometry, color, width) {
   if (!geometry?.points?.length) return;
   drawPolyline(graphics, geometry.points, color, width);
@@ -70,20 +62,6 @@ export function drawVectorItems(graphics, items, width, height, visibleItemIds =
   const entries = Object.entries(items || {}).filter(([id]) => !visibleItemIds || visibleItemIds.has(id));
 
   for (const [, item] of entries) {
-    if (item?.kind !== 'stroke' || !Array.isArray(item.points) || item.points.length < 1) continue;
-    const points = item.points;
-    const ink = colorNumber(item.color);
-    const pixelPoints = points.map((point) => ({ x: point.x * width, y: point.y * height }));
-    const bounds = pixelPoints.reduce((current, point) => ({ minX: Math.min(current.minX, point.x), minY: Math.min(current.minY, point.y), maxX: Math.max(current.maxX, point.x), maxY: Math.max(current.maxY, point.y) }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
-    const centerX = (bounds.minX + bounds.maxX) / 2;
-    const centerY = (bounds.minY + bounds.maxY) / 2;
-    const angle = (Number(item.rotation) || 0) * Math.PI / 180;
-    const rotated = pixelPoints.map((point) => rotatePoint(point.x, point.y, centerX, centerY, angle));
-    if (rotated.length === 1) rotated.push({ x: rotated[0].x + 0.1, y: rotated[0].y + 0.1 });
-    drawStroke(graphics, rotated, ink, Number(item.strokeWidth) || 3.5);
-  }
-
-  for (const [, item] of entries) {
     if (item?.kind !== 'shape') continue;
     const x = (Number(item.x) || 0) * width;
     const y = (Number(item.y) || 0) * height;
@@ -93,30 +71,12 @@ export function drawVectorItems(graphics, items, width, height, visibleItemIds =
     const centerX = x + w / 2;
     const centerY = y + h / 2;
     const angle = (Number(item.rotation) || 0) * Math.PI / 180;
-    if (item.shapeType === 'ellipse') {
-      if (!angle) {
-        graphics.ellipse(centerX, centerY, w / 2, h / 2).stroke({ color: ink, width: 2.5 });
-        continue;
-      }
-      const points = Array.from({ length: 48 }, (_, index) => {
-        const phase = index / 48 * Math.PI * 2;
-        return rotatePoint(centerX + Math.cos(phase) * w / 2, centerY + Math.sin(phase) * h / 2, centerX, centerY, angle);
-      });
-      graphics.poly(points.flatMap((point) => [point.x, point.y]), true).stroke({ color: ink, width: 2.5 });
-    } else if (item.shapeType === 'arrow') {
+    if (item.shapeType === 'arrow') {
       drawShapeArrow(graphics, x, y, w, h, angle, ink, item.bend, item.startHead, item.endHead);
     } else {
-      if (!angle) {
-        graphics.roundRect(x, y, w, h, 5).stroke({ color: ink, width: 2.5 });
-        continue;
+      for (const path of shapeOutlinePaths(item.shapeType, w, h)) {
+        drawPolyline(graphics, path.map(point => rotatePoint(x + point.x, y + point.y, centerX, centerY, angle)), ink, 2.5);
       }
-      const corners = [
-        rotatePoint(x, y, centerX, centerY, angle),
-        rotatePoint(x + w, y, centerX, centerY, angle),
-        rotatePoint(x + w, y + h, centerX, centerY, angle),
-        rotatePoint(x, y + h, centerX, centerY, angle),
-      ];
-      drawPolyline(graphics, [...corners, corners[0]], ink, 2.5);
     }
   }
 
@@ -124,21 +84,6 @@ export function drawVectorItems(graphics, items, width, height, visibleItemIds =
     if (item?.kind !== 'connector') continue;
     const geometry = connectorGeometry(item, referenceItems, width, height);
     drawCurvedArrow(graphics, geometry, colorNumber(item.color || '#8b8f8c'), Number(item.strokeWidth) || 1.5);
-  }
-}
-
-function drawDraft(graphics, draft, width, height) {
-  graphics.clear();
-  if (!draft?.points?.length) return;
-  drawStroke(graphics, draft.points.map((point) => ({ x: point.x * width, y: point.y * height })), colorNumber(draft.color), Number(draft.strokeWidth) || 3.5);
-}
-
-function drawLiveStrokes(graphics, strokes, width, height) {
-  graphics.clear();
-  for (const stroke of strokes || []) {
-    if (!Array.isArray(stroke?.points) || !stroke.points.length) continue;
-    const points = stroke.points.map((point) => ({ x: point.x * width, y: point.y * height }));
-    drawStroke(graphics, points, colorNumber(stroke.color), Number(stroke.strokeWidth) || 3.5);
   }
 }
 
@@ -158,12 +103,11 @@ function vectorSceneChanged(previous, current) {
   return false;
 }
 
-export default function VectorLayer({ items, referenceItems = items, visibleItemIds, previewStrokes = [], camera, onReady }) {
+export default function VectorLayer({ items, referenceItems = items, visibleItemIds, previewStrokes = [], camera, onReady, worldSize }) {
   const hostRef = useRef(null);
   const appRef = useRef(null);
   const sceneRef = useRef(null);
-  const liveDrawingRef = useRef(null);
-  const draftRef = useRef(null);
+  const inkRendererRef = useRef(null);
   const itemsRef = useRef(items);
   const referenceItemsRef = useRef(referenceItems);
   const previewStrokesRef = useRef(previewStrokes);
@@ -171,23 +115,28 @@ export default function VectorLayer({ items, referenceItems = items, visibleItem
   const cameraRef = useRef(camera || { x: 0, y: 0, scale: 1 });
   const lastSceneItemsRef = useRef(null);
   const lastVisibleItemsRef = useRef(null);
-  const dimensionsRef = useRef({ width: 1, height: 1 });
+  const worldSizeRef = useRef(worldSize);
+  worldSizeRef.current = worldSize;
 
   const renderScene = () => {
     const app = appRef.current;
     const scene = sceneRef.current;
-    const draft = draftRef.current;
     if (!app || !scene || !hostRef.current) return;
-    const width = Math.max(1, hostRef.current.clientWidth);
-    const height = Math.max(1, hostRef.current.clientHeight);
-    dimensionsRef.current = { width, height };
-    app.renderer.resize(width, height);
+    const viewportWidth = Math.max(1, hostRef.current.clientWidth);
+    const viewportHeight = Math.max(1, hostRef.current.clientHeight);
+    const width = Math.max(1, worldSizeRef.current?.width || viewportWidth);
+    const height = Math.max(1, worldSizeRef.current?.height || viewportHeight);
+    app.renderer.resize(viewportWidth, viewportHeight);
     const currentCamera = cameraRef.current;
     app.stage.position.set(currentCamera.x, currentCamera.y);
     app.stage.scale.set(currentCamera.scale);
+    const activeDraft = hostRef.current.__agoraDraft;
     drawVectorItems(scene, itemsRef.current, width, height, visibleItemIdsRef.current, referenceItemsRef.current);
-    drawLiveStrokes(liveDrawingRef.current, previewStrokesRef.current, width, height);
-    if (draft) drawDraft(draftRef.current, hostRef.current.__agoraDraft, width, height);
+    inkRendererRef.current?.render({
+      items: itemsRef.current, visibleItemIds: visibleItemIdsRef.current,
+      previews: previewStrokesRef.current, draft: activeDraft,
+      width, height, viewportWidth, viewportHeight, camera: currentCamera,
+    });
     app.renderer.render(app.stage);
   };
 
@@ -219,6 +168,7 @@ export default function VectorLayer({ items, referenceItems = items, visibleItem
     let disposed = false;
     let appInitialized = false;
     let observer;
+    let inkDraftFrame = null;
     const host = hostRef.current;
     if (!host) return undefined;
     const app = new Application();
@@ -237,37 +187,19 @@ export default function VectorLayer({ items, referenceItems = items, visibleItem
         return;
       }
       const scene = new Graphics();
-      const liveDrawing = new Graphics();
-      const draft = new Graphics();
-      app.stage.addChild(scene, liveDrawing, draft);
+      app.stage.addChild(scene);
       host.appendChild(app.canvas);
+      inkRendererRef.current = createInkStrokeRenderer(host, app.canvas);
       appRef.current = app;
       sceneRef.current = scene;
-      liveDrawingRef.current = liveDrawing;
-      draftRef.current = draft;
-      let draftPointCount = 0;
-      let draftColor = null;
       host.__agoraSetDraft = (value) => {
         host.__agoraDraft = value;
-        const { width, height } = dimensionsRef.current;
-        if (!value) {
-          draft.clear();
-          draftPointCount = 0;
-          draftColor = null;
-        } else {
-          const points = value.points || [];
-          if (draftPointCount > 0 && points.length === draftPointCount + 1 && draftColor === value.color) {
-            const from = points[points.length - 2];
-            const to = points[points.length - 1];
-            draft.moveTo(from.x * width, from.y * height).lineTo(to.x * width, to.y * height)
-              .stroke({ color: colorNumber(value.color), width: Number(value.strokeWidth) || 3.5, cap: 'round', join: 'round' });
-          } else {
-            drawDraft(draft, value, width, height);
-          }
-          draftPointCount = points.length;
-          draftColor = value.color;
-        }
-        app.renderer.render(app.stage);
+        if (inkDraftFrame !== null) return;
+        inkDraftFrame = requestAnimationFrame(() => {
+          inkDraftFrame = null;
+          if (disposed) return;
+          inkRendererRef.current?.renderDraft(host.__agoraDraft);
+        });
       };
       observer = new ResizeObserver(renderScene);
       observer.observe(host);
@@ -279,6 +211,7 @@ export default function VectorLayer({ items, referenceItems = items, visibleItem
 
     return () => {
       disposed = true;
+      if (inkDraftFrame !== null) cancelAnimationFrame(inkDraftFrame);
       observer?.disconnect();
       onReady?.(null);
       delete host.__agoraSetDraft;
@@ -286,8 +219,8 @@ export default function VectorLayer({ items, referenceItems = items, visibleItem
       if (appRef.current === app) {
         appRef.current = null;
         sceneRef.current = null;
-        liveDrawingRef.current = null;
-        draftRef.current = null;
+        inkRendererRef.current?.destroy();
+        inkRendererRef.current = null;
       }
       if (appInitialized) {
         const canvas = app.canvas;

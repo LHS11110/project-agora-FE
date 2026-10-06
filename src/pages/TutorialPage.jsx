@@ -1,3 +1,12 @@
+import '../canvas/image-object.css';
+import { scaleObjectElement } from '../canvas/ScalableObjectContent.jsx';
+import ShapePicker from '../canvas/ShapePicker.jsx';
+import { shapeCreationSize } from '../canvas/shapeCatalog.js';
+import { useEraserSize } from '../canvas/useEraserSize.js';
+import EraserSizeControl from '../canvas/EraserSizeControl.jsx';
+import CanvasCodeEditor from '../canvas/CanvasCodeEditor.jsx';
+import CodeLanguageOptions from '../canvas/CodeLanguageOptions.jsx';
+import { codeLanguageLabel } from '../canvas/codeLanguages.js';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from '../routing.jsx';
 import Icon from '../components/Icon.jsx';
@@ -40,9 +49,7 @@ const tools = [
   { id: 'laser', label: '레이저 포인터', icon: 'laser' },
   { id: 'eraser', label: '드로잉 지우개', icon: 'eraser' },
   { id: 'connect', label: '오브젝트 연결', icon: 'connect' },
-  { id: 'rectangle', label: '사각형', icon: 'rectangle' },
-  { id: 'ellipse', label: '타원', icon: 'ellipse' },
-  { id: 'arrow', label: '화살표', icon: 'connect' },
+  { id: 'shape', label: '도형', icon: 'shape' },
   { id: 'text', label: '텍스트', icon: 'text' },
   { id: 'note', label: '포스트잇', icon: 'sticky' },
   { id: 'table', label: '테이블', icon: 'table' },
@@ -52,7 +59,6 @@ const tools = [
 ];
 
 const makeId = () => globalThis.crypto?.randomUUID?.() || `tutorial-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-const ERASER_RADIUS = 12;
 const LASER_COLOR = '#ff3d67';
 const LASER_FADE_MS = 1600;
 const isEditableTarget = (target) => target instanceof HTMLElement
@@ -87,6 +93,8 @@ export default function TutorialPage() {
   const [shapeArrowEndHead, setShapeArrowEndHead] = useState(DEFAULT_ARROW_END_HEAD);
   const [noteColor, setNoteColor] = useState(stickyNoteColors[0]);
   const [tableConfig, setTableConfig] = useState({ rows: 3, columns: 3, width: 42, height: 32 });
+  const { eraserWidth, changeEraserWidth } = useEraserSize();
+  const [shapeType, setShapeType] = useState('rectangle');
   const [strokeWidth, setStrokeWidth] = useState(4);
   const [laserStrokes, setLaserStrokes] = useState([]);
   const [showGrid, setShowGrid] = useState(true);
@@ -226,7 +234,7 @@ export default function TutorialPage() {
     const edits = entries.map(([id, item]) => ({
       id,
       item,
-      remainingPaths: eraseStrokeWithEraser(item, from, to, boardSize, camera.scale, ERASER_RADIUS),
+      remainingPaths: eraseStrokeWithEraser(item, from, to, boardSize, camera.scale, eraserWidth / 2),
     })).filter(({ remainingPaths }) => remainingPaths !== null)
       .map((edit) => ({
         ...edit,
@@ -311,16 +319,14 @@ export default function TutorialPage() {
       setActiveTool('select');
       return;
     }
-    if (['rectangle', 'ellipse', 'arrow'].includes(activeTool)) {
+    if (['shape', 'rectangle', 'ellipse', 'arrow'].includes(activeTool)) {
+      const type = activeTool === 'shape' ? shapeType : activeTool;
+      const size = shapeCreationSize(type, boardSize);
       addItem({
-        kind: 'shape',
-        shapeType: activeTool === 'arrow' ? 'arrow' : activeTool,
-        ...(activeTool === 'arrow' ? { bend: DEFAULT_SHAPE_ARROW_BEND, startHead: shapeArrowStartHead, endHead: shapeArrowEndHead } : {}),
-        x: point.x - 0.07,
-        y: point.y - 0.06,
-        width: 0.14,
-        height: 0.12,
-        color,
+        kind: 'shape', shapeType: type,
+        ...(type === 'arrow' ? { bend: DEFAULT_SHAPE_ARROW_BEND, startHead: shapeArrowStartHead, endHead: shapeArrowEndHead } : {}),
+        x: point.x - size.width / 2, y: point.y - size.height / 2,
+        ...size, color,
       });
       setActiveTool('select');
       return;
@@ -621,8 +627,10 @@ export default function TutorialPage() {
             <div className="tutorial-board-actions">
               {selectedItem && <label className="tutorial-range-control">{selectedConnector ? '곡선 방향' : '회전'} <input type="range" min="-180" max="180" step="1" value={Math.round(Number(selectedItem.rotation) || 0)} onChange={(event) => changeRotation(event.target.value)} aria-label={selectedConnector ? '선택한 화살표 곡선 방향' : '선택한 객체 회전'} /><b>{Math.round(Number(selectedItem.rotation) || 0)}°</b></label>}
               {(activeTool === 'connect' || selectedConnector) && <><label className="tutorial-connector-color-control">색상<input type="color" value={connectorToEdit?.color || connectorColor} onChange={(event) => updateConnectorAppearance('color', event.target.value)} aria-label="연결 화살표 색상" /></label><label className="tutorial-range-control">굵기 <input type="range" min="0.8" max="4" step="0.2" value={Number(connectorToEdit?.strokeWidth) || connectorWidth} onChange={(event) => updateConnectorAppearance('strokeWidth', event.target.value)} aria-label="연결 화살표 굵기" /><b>{Number(connectorToEdit?.strokeWidth) || connectorWidth}px</b></label><ArrowHeadControls className="tutorial-arrow-head-controls" item={connectorToEdit || { startHead: connectorStartHead, endHead: connectorEndHead }} onChange={(field, value) => connectorToEdit ? updateArrowHead(field, value) : updateNewConnectorHead(field, value)} /></>}
-              {activeTool === 'arrow' && <ArrowHeadControls className="tutorial-arrow-head-controls" item={{ startHead: shapeArrowStartHead, endHead: shapeArrowEndHead }} onChange={updateNewShapeArrowHead} />}
+              {activeTool === 'shape' && <ShapePicker value={shapeType} onChange={setShapeType} compact />}
+              {(activeTool === 'arrow' || activeTool === 'shape' && shapeType === 'arrow') && <ArrowHeadControls className="tutorial-arrow-head-controls" item={{ startHead: shapeArrowStartHead, endHead: shapeArrowEndHead }} onChange={updateNewShapeArrowHead} />}
               {activeTool === 'select' && selectedArrow && <ArrowHeadControls className="tutorial-arrow-head-controls" item={selectedArrow} onChange={updateArrowHead} />}
+              {activeTool === 'eraser' && <EraserSizeControl value={eraserWidth} onChange={changeEraserWidth} compact />}
               {activeTool === 'pen' && <label className="tutorial-range-control">굵기 <input type="range" min="1" max="20" step="1" value={strokeWidth} onChange={(event) => setStrokeWidth(Number(event.target.value))} aria-label="드로잉 선 굵기" /><b>{strokeWidth}px</b></label>}
               <label className="tutorial-range-control">줌 감도 <input type="range" min="0.5" max="2" step="0.1" value={zoomSensitivity} onChange={(event) => setZoomSensitivity(Number(event.target.value))} aria-label="줌 감도" /><b>{Math.round(zoomSensitivity * 100)}%</b></label>
               <button className="tutorial-zoom-button" type="button" aria-label="축소" title="클릭: 한 단계 축소 · 길게 누르기: 계속 축소" onPointerDown={(event) => startZoomHold(event, 1 / zoomStep)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / zoomStep)}>−</button>
@@ -741,17 +749,17 @@ export default function TutorialPage() {
                 }
                 if (item.kind === 'code') {
                   return <div key={id} className={`tutorial-item tutorial-code-item${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.32) * 100}%` }} {...commonHandlers} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setEditingId((current) => current === id ? null : current); }}>
-                    <div className="tutorial-code-head"><Icon name="code" size={14} />{editingId === id ? <><input value={item.filename || ''} aria-label="파일 이름" maxLength={80} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'filename', event.target.value)} /><select value={item.language || 'javascript'} aria-label="코드 언어" onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'language', event.target.value)}><option>javascript</option><option>typescript</option><option>python</option><option>html</option><option>css</option><option>json</option><option>text</option></select></> : <><span>{item.filename || 'idea.js'}</span><small>{item.language || 'javascript'}</small></>}</div>
-                    {editingId === id ? <textarea autoFocus value={item.code || ''} placeholder="여기에 코드를 작성하세요." aria-label="코드 편집" onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeCode(id, event.target.value)} /> : <pre title="두 번 클릭해 편집">{item.code || '두 번 클릭해 편집'}</pre>}
+                    <div className="tutorial-code-head"><Icon name="code" size={14} />{editingId === id ? <><input value={item.filename || ''} aria-label="파일 이름" maxLength={80} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'filename', event.target.value)} /><select value={item.language || 'javascript'} aria-label="코드 언어" onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'language', event.target.value)}><CodeLanguageOptions value={item.language || 'javascript'} /></select></> : <><span>{item.filename || 'idea.js'}</span><small>{codeLanguageLabel(item.language || 'javascript')}</small></>}</div>
+                    {editingId === id ? <CanvasCodeEditor value={item.code || ''} language={item.language || 'javascript'} onChange={value => changeCode(id, value)} onSave={() => setEditingId(null)} /> : <pre title="두 번 클릭해 편집">{item.code || '두 번 클릭해 편집'}</pre>}
                     {resizeHandles}
                   </div>;
                 }
                 return null;
-              })}
+              }).map(element => scaleObjectElement(element, items[element?.key]))}
               {selectedItem && selectedItem.kind !== 'connector' && activeTool === 'select' && editingId !== selectedItemId && <RotationHandles sceneRef={sceneRef} id={String(selectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startItemRotation} />}
             </div>
             <LaserLayer strokes={laserStrokes} width={boardSize.width} height={boardSize.height} camera={camera} />
-            {activeTool === 'eraser' && <div className="eraser-cursor" ref={eraserCursorRef} style={{ width: `${ERASER_RADIUS * 2}px`, height: `${ERASER_RADIUS * 2}px` }} aria-hidden="true" />}
+            {activeTool === 'eraser' && <div className="eraser-cursor" ref={eraserCursorRef} style={{ width: `${eraserWidth}px`, height: `${eraserWidth}px` }} aria-hidden="true" />}
             {sharePosition && <ShareComposer onCancel={() => { setSharePosition(null); setActiveTool('select'); }} onSubmit={placeSharedLink} />}
             {composer && <form className="tutorial-editor" onPointerDown={(event) => event.stopPropagation()} onSubmit={(event) => { event.preventDefault(); placeComposer(); }}><div className="tutorial-editor-heading"><span>수식 작성</span><button type="button" onClick={() => setComposer(null)} aria-label="닫기"><Icon name="close" size={15} /></button></div><textarea autoFocus value={composer.value} onChange={(event) => setComposer((current) => ({ ...current, value: event.target.value }))} aria-label="수식 입력" /><button className="tutorial-place-button" type="submit">캔버스에 놓기 <Icon name="arrow" size={14} /></button></form>}
             <span className="tutorial-stage-hint">{activeTool === 'select' && (selectedArrow || selectedConnector) ? '가운데 조절점을 드래그해 화살표 몸통을 휘어보세요.' : activeTool === 'select' ? '오브젝트 드래그 이동 · 빈 곳 드래그 또는 Space + 드래그 이동' : activeTool === 'eraser' ? '지우개 도구 · 드래그한 곳의 선 부분만 지우기' : activeTool === 'laser' ? '드래그해 가리키면 흔적이 1.6초 동안 서서히 사라져요.' : `${tools.find((tool) => tool.id === activeTool)?.label} 도구 · 캔버스를 클릭`}</span>

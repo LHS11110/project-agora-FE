@@ -47,6 +47,7 @@ export function useCanvasConnection(options) {
       drawingSessionRef,
       editingIdRef,
       groupsRef,
+      itemEditRevisionRef,
       itemSyncVersionsRef,
       itemsRef,
       newCollaborativeItemsRef,
@@ -65,6 +66,7 @@ export function useCanvasConnection(options) {
       syncActorRef,
       syncClockRef,
       syncedPeersRef,
+      strokeSaveFlushRef,
       wsRef
     },
     setters: {
@@ -100,6 +102,7 @@ export function useCanvasConnection(options) {
       replacePersistedItems,
       requestChatHistory,
       sendItemChange,
+      sendStrokeFrameChanges,
       sendRaw,
       sendRtcRaw
     },
@@ -371,6 +374,7 @@ export function useCanvasConnection(options) {
             return;
           }
           if (data.type === 'init_items') {
+            strokeSaveFlushRef.current?.({ force: true });
             const initialItems = data.items && typeof data.items === 'object' ? data.items : {};
             const queuedChanges = getPendingServerChanges();
             const changesToReplay = queuedChanges.filter((change) => {
@@ -472,7 +476,12 @@ export function useCanvasConnection(options) {
             joinRtcSocket();
             sendRaw({ type: 'canvas_settings_get' });
             requestChatHistory();
-            for (const change of changesToReplay) sendItemChange(change.payload, change.previous);
+            const strokeChanges = [];
+            for (const change of changesToReplay) {
+              if (change.type === 'item_delete' || change.payload?.item?.kind === 'stroke') strokeChanges.push(change);
+              else sendItemChange(change.payload, change.previous);
+            }
+            if (strokeChanges.length) sendStrokeFrameChanges(strokeChanges);
             return;
           }
           if (data.type === 'canvas_settings_snapshot' || data.type === 'canvas_settings_changed') {
@@ -582,10 +591,20 @@ export function useCanvasConnection(options) {
             else {
               const accepted = pendingItemChangesRef.current.shift();
               acknowledgeServerChange(accepted);
+              if (accepted?.type === 'item_save'
+                && (itemEditRevisionRef.current.get(accepted.id) || 0) === accepted.editRevision) {
+                dirtyItemsRef.current = new Set(dirtyItemsRef.current);
+                dirtyItemsRef.current.delete(accepted.id);
+                setDirtyItems((current) => { const next = new Set(current); next.delete(accepted.id); return next; });
+              }
             }
             return;
           }
           if (data.type === 'error') {
+            if (['ITEM_BATCH_INVALID', 'RATE_LIMITED'].includes(data.code) && pendingItemChangesRef.current.length) {
+              requestServerReconnect({ retry_after_ms: 250 });
+              return;
+            }
             if (chatHistoryRequestRef.current && data.request_id === chatHistoryRequestRef.current) {
               chatHistoryRequestRef.current = null;
               setChatHistoryLoading(false);
@@ -700,6 +719,7 @@ export function useCanvasConnection(options) {
     }
     connect();
     return () => {
+      strokeSaveFlushRef.current?.({ force: true });
       cancelled = true;
       const preservePeerMesh = autoReconnectRef.current && canvasSnapshotLoadedRef.current && reconnectTimer === null;
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
@@ -727,5 +747,5 @@ export function useCanvasConnection(options) {
       }
       if (wsRef.current === socket) wsRef.current = null;
     };
-  }, [acknowledgeServerChange, broadcastEditorPresence, broadcastPeerItemState, canvasId, getCollaborativeDoc, getPendingServerChanges, markItemDirty, navigate, receiveLaser, receivePeerData, reconnectEpoch, refreshSpatialIndex, rejectServerChange, replacePersistedItems, requestChatHistory, sendItemChange, sendRaw, sendRtcRaw, token, user]);
+  }, [acknowledgeServerChange, broadcastEditorPresence, broadcastPeerItemState, canvasId, getCollaborativeDoc, getPendingServerChanges, markItemDirty, navigate, receiveLaser, receivePeerData, reconnectEpoch, refreshSpatialIndex, rejectServerChange, replacePersistedItems, requestChatHistory, sendItemChange, sendStrokeFrameChanges, sendRaw, sendRtcRaw, token, user]);
 }

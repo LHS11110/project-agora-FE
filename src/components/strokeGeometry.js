@@ -1,3 +1,5 @@
+import { inkStrokeSize, INK_BRUSH } from '../canvas/inkStroke.js';
+
 function pointToSegmentDistance(point, start, end) {
   const dx = end.x - start.x;
   const dy = end.y - start.y;
@@ -11,6 +13,9 @@ function interpolate(start, end, progress) {
   return {
     x: start.x + (end.x - start.x) * progress,
     y: start.y + (end.y - start.y) * progress,
+    ...(Number.isFinite(start.pressure) || Number.isFinite(end.pressure) ? {
+      pressure: (start.pressure ?? end.pressure) + ((end.pressure ?? start.pressure) - (start.pressure ?? end.pressure)) * progress,
+    } : {}),
   };
 }
 
@@ -91,7 +96,7 @@ export function eraseStrokeWithEraser(stroke, eraserStart, eraserEnd, viewSize, 
   const toPixels = (point) => ({ x: (Number(point.x) || 0) * width * zoom, y: (Number(point.y) || 0) * height * zoom });
   const eraserA = toPixels(eraserStart);
   const eraserB = toPixels(eraserEnd);
-  const strokeRadius = Math.max(0, Number(stroke.strokeWidth) || 3.5) * zoom / 2;
+  const strokeRadius = (stroke.brush === INK_BRUSH ? inkStrokeSize(stroke.strokeWidth) : Math.max(0, Number(stroke.strokeWidth) || 3.5)) * zoom / 2;
   const hitDistance = Math.max(1, Number(radius) || 12) + strokeRadius;
   const pixels = source.map(toPixels);
   const bounds = pixels.reduce((current, point) => ({
@@ -104,7 +109,7 @@ export function eraseStrokeWithEraser(stroke, eraserStart, eraserEnd, viewSize, 
   const angle = (Number(stroke.rotation) || 0) * Math.PI / 180;
   const hitPixels = pixels.map((point) => rotate(point, center, angle));
 
-  if (source.length === 1) return pointToSegmentDistance(hitPixels[0], eraserA, eraserB) <= hitDistance ? [] : [source];
+  if (source.length === 1) return pointToSegmentDistance(hitPixels[0], eraserA, eraserB) <= hitDistance ? [] : null;
 
   const paths = [];
   let current = [];

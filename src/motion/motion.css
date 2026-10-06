@@ -35,15 +35,11 @@
 .auth-form-panel > .motion-field { z-index: -1; }
 .auth-visual-panel > .motion-field { z-index: 0; }
 
-.canvas-app-page .canvas-topbar { animation: motion-header-enter .8s cubic-bezier(.16,1,.3,1) both; }
-.canvas-app-page .canvas-tools .tool-group { animation: motion-tools-enter .75s cubic-bezier(.16,1,.3,1) both; }
-.canvas-app-page .canvas-tools .tool-group:nth-of-type(2) { animation-delay: .1s; }
-.canvas-app-page .canvas-tools .tool-group:nth-of-type(3) { animation-delay: .2s; }
-.canvas-app-page .canvas-tools .tool-group:nth-of-type(4) { animation-delay: .3s; }
-.canvas-app-page .board-topline { animation: motion-header-enter .7s cubic-bezier(.16,1,.3,1) .12s both; }
-.canvas-app-page .tool-button { transition: background .2s, color .2s, box-shadow .2s, scale .2s; }
-.canvas-app-page .tool-button:hover { scale: 1.08; box-shadow: 0 5px 15px #765de919; }
-.canvas-app-page .tool-button:active { scale: .94; }
+/* The canvas keeps only click ripples and its arrival wave. */
+.canvas-app-page .tool-button { transition: none; }
+.canvas-app-page .tool-button:hover,
+.canvas-app-page .tool-button:active { scale: none; }
+.canvas-app-page .connection-pill.connecting i { animation: none; }
 
 @keyframes motion-copy-enter {
   from { opacity: 0; transform: translate3d(0,32px,0); filter: blur(5px); }

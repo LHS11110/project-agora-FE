@@ -1,0 +1,46 @@
+.canvas-stage .canvas-object.scalable-object-frame,.tutorial-scene .tutorial-item.scalable-object-frame{display:block!important;min-width:0!important;min-height:0!important;max-width:none!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;overflow:visible!important}
+.object-content-viewport{position:relative;width:100%;min-width:0;overflow:visible}
+.object-content-viewport>.scalable-object-content{position:absolute!important;left:0!important;top:0!important;width:calc(100% / var(--content-scale-x))!important;max-width:none!important;margin:0!important;transform:scale(var(--content-fit-scale))!important;transform-origin:top left!important;box-sizing:border-box}
+
+.canvas-stage .canvas-object.scalable-object-frame,.tutorial-scene .tutorial-item.scalable-object-frame{clip-path:none!important}
+.scalable-object-frame::before,.scalable-object-frame::after{display:none!important}
+
+/* Let code panels fill either axis while scaling their UI uniformly. */
+.object-content-viewport.code-content-viewport > .scalable-object-content {
+  width: calc(100% / var(--content-fit-scale)) !important;
+}
+.canvas-stage .code-content-viewport > .code-object.has-custom-height,
+.tutorial-scene .code-content-viewport > .tutorial-code-item.has-custom-height {
+  display: flex;
+  flex-direction: column;
+}
+.canvas-stage .code-content-viewport > .code-object.has-custom-height > pre,
+.tutorial-scene .code-content-viewport > .tutorial-code-item.has-custom-height > pre {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+}
+.canvas-stage .code-content-viewport > .code-object.has-custom-height > .canvas-code-editor,
+.tutorial-scene .code-content-viewport > .tutorial-code-item.has-custom-height > .canvas-code-editor {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  display: block;
+  padding: 0;
+  border: 0;
+}
+.code-content-viewport .code-object-head,
+.code-content-viewport .code-object-foot,
+.code-content-viewport .tutorial-code-head,
+.code-content-viewport .code-file-icon,
+.code-content-viewport .tutorial-code-head > svg {
+  flex-shrink: 0;
+}
+.tutorial-scene .tutorial-code-item > .code-content-viewport {
+  display: block;
+  padding: 0;
+  border: 0;
+  color: inherit;
+}

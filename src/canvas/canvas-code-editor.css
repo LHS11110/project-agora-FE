@@ -1,0 +1,10 @@
+.canvas-code-editor{position:relative;min-width:0;height:260px;min-height:160px;background:#1e1e1e;cursor:text;touch-action:auto}
+.canvas-code-editor-host{width:100%;height:100%}
+.canvas-code-editor-loading{position:absolute;inset:0;display:grid;place-items:center;color:#c3d3c6;font-size:12px}
+.canvas-code-editor .monaco-editor{cursor:text}
+.canvas-code-editor>p{margin:0;padding:8px;color:#d9e8dc;font-size:11px}
+.canvas-code-editor-fallback{width:100%;height:200px;resize:none;border:0;padding:10px;background:#1e1e1e;color:#eee;font:13px/20px monospace}
+.canvas-stage .code-object.has-custom-height,.tutorial-code-item.has-custom-height{display:flex;flex-direction:column}
+.canvas-stage .code-object.has-custom-height>.canvas-code-editor,.tutorial-code-item.has-custom-height>.canvas-code-editor{flex:1;min-height:100px;height:auto}
+.canvas-stage .code-object.has-custom-height>.code-object-head,.canvas-stage .code-object.has-custom-height>.code-object-foot{flex-shrink:0}
+.canvas-code-editor .monaco-editor textarea{min-height:0!important;margin:0!important;padding:0!important;resize:none!important;border:0!important;background:transparent!important;box-shadow:none!important}

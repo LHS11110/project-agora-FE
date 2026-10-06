@@ -1,16 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from '../routing.jsx';
 import Icon from '../components/Icon.jsx';
-import AuthenticatedImage from '../components/AuthenticatedImage.jsx';
+import CanvasPreview from '../components/search/CanvasPreview.jsx';
 import { api } from '../api/client.js';
 import { useAuth } from '../state/AuthContext.jsx';
-
-const palette = ['lavender', 'mint', 'peach', 'blue'];
-
-function CanvasPreview({ index, canvas, token }) {
-  const artwork = <><span className="preview-note note-one">{index % 2 ? 'start here' : '아이디어를 모아봐요'}</span><span className="preview-note note-two">{index % 2 ? '→ make it real' : 'what if?'}</span><div className="preview-loop" /><div className="preview-sun" /></>;
-  return <div className={`canvas-preview preview-${palette[index % palette.length]}`}><div className="preview-toolbar"><span className="preview-dot" /><span className="preview-dot" /><span className="preview-dot" /><i>{canvas.canvas_name || '새로운 생각'}</i></div><div className={`preview-art${canvas.image ? ' has-cover' : ''}`}>{canvas.image ? <AuthenticatedImage src={canvas.image} token={token} alt={`${canvas.canvas_name || '캔버스'} 대표 이미지`} fallback={artwork} loadingFallback={artwork} /> : artwork}</div><div className="preview-bottom"><span>FRELOG CANVAS</span><span>↗</span></div></div>;
-}
 
 function CreateCanvasDialog({ onClose, onCreated }) {
   const { token } = useAuth();

@@ -1,3 +1,4 @@
+import { useObjectFeedback } from '../../motion/useObjectFeedback.js';
 import { useRef, useState } from 'react';
 import '../../frelog-scene.css';
 import '../../scene-desk.css';
@@ -10,6 +11,7 @@ const SCENE_OBJECTS = [
 ];
 
 export default function FreLogMotionScene({ compact = false, variant = 'home' }) {
+  const { trackPointer, playFeedback } = useObjectFeedback();
   const rootRef = useRef(null);
   const dragRef = useRef(null);
   const [positions, setPositions] = useState({});
@@ -72,17 +74,19 @@ export default function FreLogMotionScene({ compact = false, variant = 'home' })
       return <button
         key={object.id}
         type="button"
-        className={`scene-object ${object.className}${focusedObject === object.id ? ' is-focused' : ''}`}
+        className={`scene-object object-feedback ${object.className}${focusedObject === object.id ? ' is-focused' : ''}`}
         style={style}
         aria-label={`${object.label}. 방향키로 움직이고 선택해 강조하세요.`}
         aria-pressed={focusedObject === object.id}
+        data-feedback-motion={{ note: 'lift', formula: 'stamp', culture: 'sway', code: 'glide' }[object.type]}
         onPointerDown={(event) => beginDrag(object.id, event)}
-        onPointerMove={(event) => moveObject(object.id, event)}
+        onPointerMove={(event) => { trackPointer(event); moveObject(object.id, event); }}
         onPointerUp={() => { dragRef.current = null; }}
         onPointerCancel={() => { dragRef.current = null; }}
         onKeyDown={(event) => nudgeObject(object.id, event)}
-        onClick={() => setFocusedObject(object.id)}
+        onClick={(event) => { setFocusedObject(object.id); playFeedback(event); }}
       >
+        <span data-feedback-pulse aria-hidden="true" />
         {object.type === 'note' && <><span className="scene-object-index">A QUESTION</span><strong>{object.detail}</strong><small>민지 · 방금 전</small></>}
         {object.type === 'formula' && <><span className="scene-object-index">A SMALL EQUATION</span><strong><b>관점</b><i>+</i>연결 <em>=</em> 발견</strong><small>생각이 이어지는 방식</small></>}
         {object.type === 'culture' && <><span className="scene-object-index">CULTURE / 02</span><strong>{object.detail}</strong><small>서로 다른 언어, 하나의 자리</small></>}

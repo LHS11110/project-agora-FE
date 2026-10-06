@@ -37,6 +37,7 @@ export function useTutorialObjectInteractions(options) {
   } = options;
 
   const startItemInteraction = (event, id) => {
+    if (event.target.closest?.('.canvas-code-editor')) { event.stopPropagation(); return; }
     if (event.button === 1 || spacePressedRef.current) return;
     if (activeTool === 'pen' || activeTool === 'laser') {
       if (event.target.closest?.('button, input, textarea, select')) event.stopPropagation();

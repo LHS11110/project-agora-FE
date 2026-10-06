@@ -1,6 +1,9 @@
+export const CANVAS_SAVE_FPS = 30;
 export const inkColors = ['#263b35', '#d9785e', '#617db2', '#d8a443', '#7e6b9d'];
 export const stickyNoteColors = ['#f6edcf', '#f3d8cc', '#dce9e0', '#dce6f4', '#eadff1'];
 export const ERASER_RADIUS = 12;
+export const MIN_ERASER_WIDTH = 4;
+export const MAX_ERASER_WIDTH = 120;
 export const LASER_COLOR = '#ff3d67';
 export const LASER_FADE_MS = 1600;
 export const REALTIME_STROKE_INTERVAL_MS = 32;

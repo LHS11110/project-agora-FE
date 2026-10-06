@@ -2,6 +2,16 @@
   z-index: 6;
   pointer-events: none;
 }
+/* Connector hit paths opt in separately; its bend handle must opt in as well. */
+.canvas-stage.select-mode .canvas-object-connector.selected > .shape-arrow-bend-handle {
+  pointer-events: auto;
+  width: 20px;
+  height: 20px;
+  cursor: grab;
+}
+.canvas-stage .canvas-object-connector.object-bending > .shape-arrow-bend-handle {
+  cursor: grabbing;
+}
 .connector-arrowheads { color: var(--object-color); pointer-events: none; }
 .canvas-stage.select-mode .canvas-object:not(.selected),
 .canvas-stage.select-mode .canvas-object:not(.selected) * { cursor: default !important; }

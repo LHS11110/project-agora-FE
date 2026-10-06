@@ -12,6 +12,7 @@ export function useCanvasObjectInteractions(options) {
     activeTool,
     addItem,
     boardRef,
+    boardSize,
     clearPeerItemGeometryBroadcast,
     connectionStartId,
     connectorColor,
@@ -41,6 +42,7 @@ export function useCanvasObjectInteractions(options) {
   } = options;
 
   const startObjectDrag = (event, id, item) => {
+    if (event.target.closest?.('.canvas-code-editor')) { event.stopPropagation(); return; }
     if (event.button === 1 || spacePressedRef.current) { startPan(event); return; }
     if (event.button !== 0) return;
     const objectElement = event.currentTarget.closest?.('.canvas-object') || event.currentTarget;
@@ -120,8 +122,8 @@ export function useCanvasObjectInteractions(options) {
       mode: 'resize',
       id: key,
       initial,
-      resize: captureResize(initial, handle, start, element, board),
-      viewport: { width: board.width, height: board.height },
+      resize: captureResize(initial, handle, start, element, boardSize),
+      viewport: boardSize,
       element,
     };
     captureObjectPointer(boardRef.current, dragRef.current, event);
@@ -139,7 +141,7 @@ export function useCanvasObjectInteractions(options) {
     const element = event.currentTarget.closest('.canvas-object');
     selectItems([key], key);
     element?.classList.add('object-bending');
-    dragRef.current = { mode: 'bend', id: key, initial, viewport: { width: board.width, height: board.height }, element };
+    dragRef.current = { mode: 'bend', id: key, initial, viewport: boardSize, element };
     captureObjectPointer(boardRef.current, dragRef.current, event);
   };
   const startObjectRotation = (event, id, item) => {

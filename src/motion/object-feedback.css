@@ -1,0 +1,22 @@
+.object-feedback { position: relative; isolation: isolate; }
+.frelog-scene .scene-object.object-feedback { position: absolute; }
+.object-feedback::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: repeating-linear-gradient(-12deg, transparent 0 15px, #6aa7b32b 16px 17px, transparent 18px 32px); opacity: 0; transition: opacity .22s; pointer-events: none; }
+.object-feedback:hover::after, .object-feedback:focus-visible::after { opacity: 1; animation: feedback-water 1.6s linear infinite; }
+@keyframes feedback-water { to { background-position: 32px 0; } }
+.object-feedback > [data-feedback-pulse] { position: absolute; inset: -3px; border: 2px solid #a293d7; border-radius: inherit; opacity: 0; pointer-events: none; }
+.desk-object-icon { display: inline-block; }
+.slide-desk-object small { animation: feedback-label-in .25s ease-out; }
+@keyframes feedback-label-in { from { opacity: .3; translate: 0 3px; } to { opacity: 1; translate: 0 0; } }
+.frelog-scene:has(.is-focused) .scene-connections:not(.scene-connections--quiet) { opacity: .65; }
+.frelog-scene:has(.is-focused) .scene-connections:not(.scene-connections--quiet) path { stroke-dasharray: 5 8; animation: feedback-connect 1.1s linear 2; }
+@keyframes feedback-connect { to { stroke-dashoffset: -52; } }
+.auth-page .input-wrap { transition: border-color .2s, box-shadow .2s; }
+.auth-page .input-wrap:focus-within { border-color: #9a87d9; box-shadow: 0 0 0 3px #927de516; }
+@media(prefers-reduced-motion:reduce) {
+  .object-feedback::after, .auth-page .input-wrap { transition: none; }
+  .object-feedback:hover::after, .object-feedback:focus-visible::after { animation: none; }
+  .slide-desk-object small, .frelog-scene:has(.is-focused) .scene-connections:not(.scene-connections--quiet) path { animation: none; }
+}
+
+.frelog-scene .scene-object.object-feedback:hover { box-shadow: 0 8px 24px #765de930, 0 0 0 2px #9f8bda50; }
+.slide-desk-object.object-feedback:hover { box-shadow: 0 5px 16px #765de925; }
