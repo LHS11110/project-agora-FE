@@ -1,3 +1,5 @@
+import { isPenStyle } from './penStyles.js';
+import { isObjectFontSize, hasIndependentContentSize } from './objectSize.js';
 import { MIN_CONTENT_SCALE, MAX_CONTENT_SCALE } from './objectContentScale.js';
 import { isCodeLanguage } from './codeLanguages.js';
 import { useCallback } from 'react';
@@ -133,7 +135,8 @@ export function useCanvasPeerEvents(options) {
           points,
           color: data.color,
           strokeWidth: Math.max(1, Math.min(MAX_STROKE_WIDTH, data.stroke_width)),
-          brush: data.brush === 'ink' ? 'ink' : undefined,
+          brush: isPenStyle(data.brush) ? data.brush : undefined,
+          opacity: Number.isFinite(data.opacity) ? Math.max(0, Math.min(1, data.opacity)) : 1,
           simulatePressure: data.simulate_pressure !== false,
           complete: false,
           permission: data.permission,
@@ -165,6 +168,7 @@ export function useCanvasPeerEvents(options) {
         color: previous.color,
         strokeWidth: previous.strokeWidth,
         brush: previous.brush,
+        opacity: previous.opacity,
         simulatePressure: previous.simulatePressure,
         complete: true,
         permission: previous.permission,
@@ -313,7 +317,7 @@ export function useCanvasPeerEvents(options) {
       } catch { /* A later snapshot can recover an interrupted peer sync. */ }
       return;
     }
-    if (data.type === 'item_metadata' && data.item_id && ['filename', 'language', 'color', 'groupId'].includes(data.field)) {
+    if (data.type === 'item_metadata' && data.item_id && ['filename', 'language', 'color', 'groupId', 'fontSize'].includes(data.field)) {
       const key = String(data.item_id);
       const item = itemsRef.current[key];
       if (!item) {
@@ -333,7 +337,7 @@ export function useCanvasPeerEvents(options) {
       if (version && compareSyncVersions(version, itemSyncVersionsRef.current.get(key) || INITIAL_SYNC_VERSION) <= 0) return;
       if (typeof data.value !== 'string') return;
       const value = data.value;
-      const validMetadata = data.field === 'groupId'
+      const validMetadata = data.field === 'fontSize' ? item.kind === 'text' && isObjectFontSize(value) : data.field === 'groupId'
         ? value.length <= 128
         : data.field === 'color' ? item.kind === 'note' && /^#[0-9a-f]{6}$/i.test(value)
           : item.kind === 'code' && (data.field === 'filename'
@@ -344,11 +348,12 @@ export function useCanvasPeerEvents(options) {
         syncClockRef.current = Math.max(syncClockRef.current, version.clock);
         itemSyncVersionsRef.current.set(key, version);
       }
-      const nextValue = data.field === 'groupId' ? value || null : value;
+      const nextValue = data.field === 'fontSize' ? Number(value) : data.field === 'groupId' ? value || null : value;
       if (item[data.field] === nextValue) return;
       const nextItem = { ...item, [data.field]: nextValue };
       itemsRef.current = { ...itemsRef.current, [key]: nextItem };
       setItems((current) => ({ ...current, [key]: nextItem }));
+      refreshSpatialIndex();
       markItemDirty(key);
       return;
     }
@@ -380,6 +385,7 @@ export function useCanvasPeerEvents(options) {
       const safeRotation = Number.isFinite(rotation) ? Math.max(-180, Math.min(180, rotation)) : item.rotation;
       const width = data.width == null ? item.width : Number(data.width);
       const height = data.height == null ? item.height : Number(data.height);
+      if (data.fontSize != null && (!hasIndependentContentSize(item) || !isObjectFontSize(data.fontSize))) return;
       const contentScale = data.contentScale == null ? item.contentScale : Number(data.contentScale);
       if (data.contentScale != null && (!Number.isFinite(contentScale) || contentScale < MIN_CONTENT_SCALE || contentScale > MAX_CONTENT_SCALE)) return;
       const axisScales = {};
@@ -400,6 +406,7 @@ export function useCanvasPeerEvents(options) {
         ...(Number.isFinite(height) && height > 0 ? { height } : {}),
         ...(Number.isFinite(contentScale) && contentScale > 0 ? { contentScale } : {}),
         ...axisScales,
+        ...(data.fontSize != null ? { fontSize: Number(data.fontSize) } : {}),
       };
       if (version) {
         syncClockRef.current = Math.max(syncClockRef.current, version.clock);
@@ -407,7 +414,7 @@ export function useCanvasPeerEvents(options) {
       }
       itemsRef.current = { ...itemsRef.current, [key]: nextItem };
       setItems((current) => ({ ...current, [key]: nextItem }));
-      if (item.x !== nextItem.x || item.y !== nextItem.y || item.width !== nextItem.width || item.height !== nextItem.height || item.rotation !== nextItem.rotation || item.contentScale !== nextItem.contentScale || item.contentScaleX !== nextItem.contentScaleX || item.contentScaleY !== nextItem.contentScaleY) refreshSpatialIndex();
+      if (item.x !== nextItem.x || item.y !== nextItem.y || item.width !== nextItem.width || item.height !== nextItem.height || item.rotation !== nextItem.rotation || item.contentScale !== nextItem.contentScale || item.contentScaleX !== nextItem.contentScaleX || item.contentScaleY !== nextItem.contentScaleY || item.fontSize !== nextItem.fontSize) refreshSpatialIndex();
       if (isCollaborativeItem(item)) markItemDirty(key);
       return;
     }

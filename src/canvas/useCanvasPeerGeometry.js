@@ -1,3 +1,4 @@
+import { hasIndependentContentSize, objectFontSize } from './objectSize.js';
 import { useCallback, useRef } from 'react';
 
 const REALTIME_ITEM_GEOMETRY_INTERVAL_MS = 32;
@@ -11,7 +12,7 @@ export function isCanvasSyncItem(item) {
 
 export function hasItemGeometryChanged(previous, next) {
   if (!previous || !next) return true;
-  const fields = ['x', 'y', 'width', 'height', 'rotation', 'bend', 'contentScale', 'contentScaleX', 'contentScaleY'];
+  const fields = ['x', 'y', 'width', 'height', 'rotation', 'bend', 'contentScale', 'contentScaleX', 'contentScaleY', 'fontSize'];
   return fields.some((field) => (Number(previous[field]) || 0) !== (Number(next[field]) || 0))
     || (previous.kind === 'stroke' && previous.points !== next.points);
 }
@@ -35,7 +36,7 @@ export function useCanvasPeerGeometry({
     const payload = {
       type: 'item_geometry', item_id: key,
       x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation,
-      contentScale: item.contentScale, contentScaleX: item.contentScaleX, contentScaleY: item.contentScaleY,
+      fontSize: hasIndependentContentSize(item) ? objectFontSize(item) : undefined, contentScale: item.contentScale, contentScaleX: item.contentScaleX, contentScaleY: item.contentScaleY,
       version,
     };
     const mesh = peerMeshRef.current;

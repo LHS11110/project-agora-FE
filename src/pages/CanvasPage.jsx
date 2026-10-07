@@ -1,3 +1,7 @@
+import { isInternalEditorPointer } from '../canvas/editorInteraction.js';
+import { usePenStyle } from '../canvas/usePenStyle.js';
+import { isObjectFontSize, hasIndependentContentSize } from '../canvas/objectSize.js';
+import { canvasGridStyle } from '../canvas/canvasGrid.js';
 import { useEraserSize } from '../canvas/useEraserSize.js';
 import { useCanvasPalette } from '../canvas/useCanvasPalette.js';
 import { stagePointerHandlers } from '../canvas/stagePointerHandlers.js';
@@ -163,6 +167,7 @@ function CanvasWorkspace() {
   const [shapeArrowEndHead, setShapeArrowEndHead] = useState(DEFAULT_ARROW_END_HEAD);
   const [noteColor, setNoteColor] = useState(stickyNoteColors[0]);
   const [tableConfig, setTableConfig] = useState({ rows: 3, columns: 3, width: 42, height: 32 });
+  const { penBrush, penOpacity, changePenBrush, changePenOpacity } = usePenStyle();
   const [strokeWidth, setStrokeWidth] = useState(() => {
     const stored = Number(localStorage.getItem(STROKE_WIDTH_KEY));
     return Number.isFinite(stored) && stored >= MIN_STROKE_WIDTH && stored <= MAX_STROKE_WIDTH ? stored : 4;
@@ -313,21 +318,22 @@ function CanvasWorkspace() {
     const key = String(id);
     const item = itemsRef.current[key];
     const nextValue = field === 'groupId' ? String(value || '') : String(value ?? '');
-    const validField = field === 'groupId'
+    const validField = field === 'fontSize' ? item?.kind === 'text' && isObjectFontSize(value) : field === 'groupId'
       ? isCollaborativeItem(item) && nextValue.length <= 128
       : field === 'color'
       ? item?.kind === 'note' && /^#[0-9a-f]{6}$/i.test(nextValue)
       : item?.kind === 'code' && ['filename', 'language'].includes(field);
     if (!isCollaborativeItem(item) || !validField) return;
-    const nextItem = { ...item, [field]: field === 'groupId' ? nextValue || null : nextValue };
+    const nextItem = { ...item, [field]: field === 'fontSize' ? Number(nextValue) : field === 'groupId' ? nextValue || null : nextValue };
     itemsRef.current = { ...itemsRef.current, [key]: nextItem };
     setItems((current) => ({ ...current, [key]: nextItem }));
+    if (field === 'fontSize') refreshSpatialIndex();
     markItemDirty(key);
     const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
     itemSyncVersionsRef.current.set(key, version);
     peerMeshRef.current?.sendData({ type: 'item_metadata', item_id: key, field, value: nextValue, version }, (peer) => canPeerAccessItem(nextItem, peer));
     if (item.kind === 'note' && field === 'groupId') saveCollaborativeItemRef.current?.(key, { silent: true });
-  }, [markItemDirty]);
+  }, [markItemDirty, refreshSpatialIndex]);
   const broadcastEditorPresence = useCallback((id, editing) => {
     const key = String(id);
     const item = itemsRef.current[key];
@@ -467,6 +473,26 @@ function CanvasWorkspace() {
     }
     return true;
   }, [sendItemChange]);
+  const updateObjectSize = (id, field, value) => {
+    const key = String(id);
+    const previous = itemsRef.current[key];
+    if (!hasIndependentContentSize(previous) || !['fontSize', 'width', 'height'].includes(field)
+      || !Number.isFinite(value) || value <= 0 || (field === 'fontSize' && !isObjectFontSize(value))) return;
+    const nextItem = { ...previous, [field]: field === 'fontSize' ? value : value / boardSize[field] };
+    itemsRef.current = { ...itemsRef.current, [key]: nextItem };
+    setItems(current => ({ ...current, [key]: nextItem }));
+    refreshSpatialIndex();
+    sendPeerItemGeometry(key, nextItem);
+    if (isCollaborativeItem(nextItem)) markItemDirty(key);
+    else if (!sendItemChange({ type: 'item_update', item_id: key, item: nextItem }, previous)) {
+      itemsRef.current = { ...itemsRef.current, [key]: previous };
+      setItems(current => ({ ...current, [key]: previous }));
+      sendPeerItemGeometry(key, previous);
+      refreshSpatialIndex();
+    }
+  };
+  const updateObjectDimensions = (id, field, value) => updateObjectSize(id, field, value);
+  const updateObjectFontSize = (id, value) => updateObjectSize(id, 'fontSize', value);
   const updateItemRotation = (id, value) => {
     const key = String(id);
     const previous = itemsRef.current[key];
@@ -861,6 +887,8 @@ function CanvasWorkspace() {
     const key = String(id);
     const editor = [...(sceneRef.current?.querySelectorAll('[data-item-id]') || [])]
       .find((element) => element.dataset.itemId === key);
+    const formulaInput = editor?.querySelector('.math-formula-input');
+    if (formulaInput) updateFormulaItem(key, formulaInput.value);
     const focusedElement = document.activeElement;
     if (editor?.contains(focusedElement) && typeof focusedElement.blur === 'function') focusedElement.blur();
     if (editingIdRef.current === key) {
@@ -868,7 +896,7 @@ function CanvasWorkspace() {
       broadcastEditorPresence(key, false);
     }
     setEditingId((current) => String(current) === key ? null : current);
-  }, [broadcastEditorPresence, editingId]);
+  }, [broadcastEditorPresence, editingId, updateFormulaItem]);
   const focusConnectorTarget = (connectorId, connector) => {
     if (activeTool !== 'select') return;
     const target = itemsRef.current[String(connector.to)];
@@ -898,7 +926,7 @@ function CanvasWorkspace() {
     stageWheelHandlerRef, laserDrawingRef, setLaserStrokes, selectionRef, selectedItemIds,
     setSelectionBox, selectItems, canvasSnapshotLoadedRef, finishEditing, setConnectionStartId,
     spacePressedRef, tableConfig, permission, setSharePosition, shapeType, shapeArrowStartHead,
-    shapeArrowEndHead, color, noteColor, setActiveTool, startEditing, strokeWidth,
+    shapeArrowEndHead, color, noteColor, setActiveTool, startEditing, strokeWidth, penBrush, penOpacity,
     drawingRef, drawingSessionRef, draftRef, vectorDraftRef,
   });
   const placeSharedLink = (shared) => {
@@ -1081,9 +1109,7 @@ function CanvasWorkspace() {
     const onDocumentPointerDown = (event) => {
       const editor = [...(sceneRef.current?.querySelectorAll('[data-item-id]') || [])]
         .find((element) => element.dataset.itemId === String(editingId));
-      const target = event.target instanceof HTMLElement ? event.target : null;
-      const clickedEditorField = target?.closest('textarea, input, select, [contenteditable="true"]');
-      if (editor?.contains(target) && clickedEditorField) return;
+      if (isInternalEditorPointer(editor, event)) return;
       finishEditing(editingId);
     };
     document.addEventListener('pointerdown', onDocumentPointerDown, true);
@@ -1103,7 +1129,7 @@ function CanvasWorkspace() {
         setActiveTool(tool);
       }} color={color} onColorChange={setColor} onUploadImage={uploadImage} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} />
       <main className="board-region"><div className="board-topline"><span className="board-section-label"><i /> 2차 좌표 캔버스</span><div className="board-toolbar-actions"><span className="board-updated" title="변경 사항은 초당 30회 주기로 자동 저장됩니다. Ctrl+S로도 저장할 수 있어요."><Icon name="clock" size={14} /> P2P {peerList.filter((peer) => peer.connected).length}명 · 자동 저장</span><button className="zoom-button" aria-label="확대" title="클릭: 한 단계 확대 · 길게 누르기: 계속 확대" onPointerDown={(event) => startZoomHold(event, 1 + 0.15 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.15 * zoomSensitivity)}>+</button><span className="zoom-value">{Math.round(camera.scale * 100)}%</span><button className="zoom-button" aria-label="축소" title="클릭: 한 단계 축소 · 길게 누르기: 계속 축소" onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.15 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.15 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => setCamera(fitCanvasCamera(viewportSize))}>맞춤</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />격자 {showGrid ? '켜짐' : '꺼짐'}</button></div></div>
-        <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ '--grid-size': `${20 * camera.scale}px`, '--grid-dot-radius': `${camera.scale}px`, '--grid-position-x': `${camera.x}px`, '--grid-position-y': `${camera.y}px` }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ dragRef, panRef, spacePressedRef, startPan, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor })}>
+        <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={canvasGridStyle(camera)} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ dragRef, panRef, spacePressedRef, startPan, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor })}>
           <InteractiveAtmosphere variant="canvas" />
           <div className="stage-label"><span>FRELOG / {String(canvasId).padStart(2, '0')}</span><b>{canvas?.canvas_name || '공유 캔버스'}</b></div>
           <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true"><span className="coordinate-x" /><span className="coordinate-y" /><i className="coordinate-origin">0</i><b className="coordinate-x-label">X</b><b className="coordinate-y-label">Y</b></div>
@@ -1178,12 +1204,15 @@ function CanvasWorkspace() {
         shapeType,
         showGrid,
         strokeWidth,
+        penBrush, penOpacity, changePenBrush, changePenOpacity,
         tableConfig,
         theme,
         toggleGrid,
         updateArrowHead,
         updateConnectorAppearance,
         updateItemRotation,
+        updateObjectDimensions,
+        updateObjectFontSize,
         updateNewConnectorHead,
         updateNewShapeArrowHead,
         updateShapeArrowBend,

@@ -1,3 +1,7 @@
+import { usePenStyle } from '../canvas/usePenStyle.js';
+import PenStyleControls from '../canvas/PenStyleControls.jsx';
+import { inkPointAtPointer } from '../canvas/inkStroke.js';
+import { canvasGridStyle } from '../canvas/canvasGrid.js';
 import '../canvas/image-object.css';
 import { scaleObjectElement } from '../canvas/ScalableObjectContent.jsx';
 import ShapePicker from '../canvas/ShapePicker.jsx';
@@ -95,6 +99,8 @@ export default function TutorialPage() {
   const [tableConfig, setTableConfig] = useState({ rows: 3, columns: 3, width: 42, height: 32 });
   const { eraserWidth, changeEraserWidth } = useEraserSize();
   const [shapeType, setShapeType] = useState('rectangle');
+  const { penBrush, penOpacity, changePenBrush, changePenOpacity } = usePenStyle();
+  const drawingStyleRef = useRef(null);
   const [strokeWidth, setStrokeWidth] = useState(4);
   const [laserStrokes, setLaserStrokes] = useState([]);
   const [showGrid, setShowGrid] = useState(true);
@@ -290,8 +296,9 @@ export default function TutorialPage() {
       event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);
       drawingRef.current = true;
-      pointsRef.current = [position(event)];
-      draftSetterRef.current?.({ points: pointsRef.current, color, strokeWidth });
+      drawingStyleRef.current = { brush: penBrush, opacity: penOpacity, color, strokeWidth, simulatePressure: event.pointerType !== 'pen' };
+      pointsRef.current = [inkPointAtPointer(event, position(event))];
+      draftSetterRef.current?.({ ...drawingStyleRef.current, points: pointsRef.current, complete: false });
       return;
     }
 
@@ -366,6 +373,7 @@ export default function TutorialPage() {
     draftSetterRef,
     dragRef,
     drawingRef,
+    drawingStyleRef,
     eraseStrokesBetween,
     eraserRef,
     items,
@@ -552,11 +560,7 @@ export default function TutorialPage() {
     '--axis-x-arrow-opacity': axisOriginX <= boardSize.width ? 1 : 0,
     '--axis-y-arrow-opacity': axisOriginY >= 0 ? 1 : 0,
   };
-  const stageStyle = {
-    '--grid-size': `${20 * camera.scale}px`,
-    '--grid-position-x': `${camera.x}px`,
-    '--grid-position-y': `${camera.y}px`,
-  };
+  const stageStyle = canvasGridStyle(camera);
   const zoomStep = 1 + 0.15 * zoomSensitivity;
   const selectedTable = selectedItemId ? items[String(selectedItemId)]?.kind === 'table' ? items[String(selectedItemId)] : null : null;
   const selectedItem = selectedItemId ? items[String(selectedItemId)] : null;
@@ -631,6 +635,7 @@ export default function TutorialPage() {
               {(activeTool === 'arrow' || activeTool === 'shape' && shapeType === 'arrow') && <ArrowHeadControls className="tutorial-arrow-head-controls" item={{ startHead: shapeArrowStartHead, endHead: shapeArrowEndHead }} onChange={updateNewShapeArrowHead} />}
               {activeTool === 'select' && selectedArrow && <ArrowHeadControls className="tutorial-arrow-head-controls" item={selectedArrow} onChange={updateArrowHead} />}
               {activeTool === 'eraser' && <EraserSizeControl value={eraserWidth} onChange={changeEraserWidth} compact />}
+              {activeTool === 'pen' && <PenStyleControls compact brush={penBrush} opacity={penOpacity} onBrushChange={changePenBrush} onOpacityChange={changePenOpacity} />}
               {activeTool === 'pen' && <label className="tutorial-range-control">굵기 <input type="range" min="1" max="20" step="1" value={strokeWidth} onChange={(event) => setStrokeWidth(Number(event.target.value))} aria-label="드로잉 선 굵기" /><b>{strokeWidth}px</b></label>}
               <label className="tutorial-range-control">줌 감도 <input type="range" min="0.5" max="2" step="0.1" value={zoomSensitivity} onChange={(event) => setZoomSensitivity(Number(event.target.value))} aria-label="줌 감도" /><b>{Math.round(zoomSensitivity * 100)}%</b></label>
               <button className="tutorial-zoom-button" type="button" aria-label="축소" title="클릭: 한 단계 축소 · 길게 누르기: 계속 축소" onPointerDown={(event) => startZoomHold(event, 1 / zoomStep)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / zoomStep)}>−</button>
@@ -726,7 +731,7 @@ export default function TutorialPage() {
                   return <div key={id} className={`tutorial-item tutorial-image-item${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.3) * 100}%` }} {...commonHandlers}><img src={item.src} alt={item.filename || '튜토리얼 이미지'} /><div>{item.filename || '이미지'}</div>{resizeHandles}</div>;
                 }
                 if (item.kind === 'note') {
-                  return <div key={id} className={`tutorial-item tutorial-sticky-note${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.24) * 100}%` }} {...commonHandlers} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setEditingId((current) => current === id ? null : current); }}>
+                  return <div key={id} className={`tutorial-item tutorial-sticky-note${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.24) * 100}%` }} {...commonHandlers}>
                     <div className="tutorial-sticky-head"><span title="끌어서 포스트잇 이동"><Icon name="sticky" size={13} /> 포스트잇</span><input type="color" aria-label="포스트잇 색상" title="포스트잇 색상 변경" value={item.color || stickyNoteColors[0]} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'color', event.target.value)} /></div>
                     {editingId === id ? <textarea autoFocus aria-label="포스트잇 Markdown 편집" value={item.text || ''} placeholder={'# 메모 제목\n- 할 일\n**중요한 내용**'} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeText(id, event.target.value)} /> : <div className="tutorial-sticky-content" onDoubleClick={() => { setSelectedItemId(id); setEditingId(id); }} title="두 번 클릭해 Markdown 편집">{item.text ? <MarkdownText source={item.text} /> : <p className="tutorial-sticky-empty">두 번 클릭해 메모를 작성하세요.</p>}</div>}
                     <small>간단한 Markdown · 로컬 체험</small>
@@ -748,9 +753,9 @@ export default function TutorialPage() {
                   </div>;
                 }
                 if (item.kind === 'code') {
-                  return <div key={id} className={`tutorial-item tutorial-code-item${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.32) * 100}%` }} {...commonHandlers} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setEditingId((current) => current === id ? null : current); }}>
+                  return <div key={id} className={`tutorial-item tutorial-code-item${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.32) * 100}%` }} {...commonHandlers}>
                     <div className="tutorial-code-head"><Icon name="code" size={14} />{editingId === id ? <><input value={item.filename || ''} aria-label="파일 이름" maxLength={80} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'filename', event.target.value)} /><select value={item.language || 'javascript'} aria-label="코드 언어" onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'language', event.target.value)}><CodeLanguageOptions value={item.language || 'javascript'} /></select></> : <><span>{item.filename || 'idea.js'}</span><small>{codeLanguageLabel(item.language || 'javascript')}</small></>}</div>
-                    {editingId === id ? <CanvasCodeEditor value={item.code || ''} language={item.language || 'javascript'} onChange={value => changeCode(id, value)} onSave={() => setEditingId(null)} /> : <pre title="두 번 클릭해 편집">{item.code || '두 번 클릭해 편집'}</pre>}
+                    {editingId === id ? <CanvasCodeEditor value={item.code || ''} language={item.language || 'javascript'} onChange={value => changeCode(id, value)} onSave={() => setEditingId(null)} onStopEditing={() => setEditingId(current => current === id ? null : current)} /> : <pre title="두 번 클릭해 편집">{item.code || '두 번 클릭해 편집'}</pre>}
                     {resizeHandles}
                   </div>;
                 }

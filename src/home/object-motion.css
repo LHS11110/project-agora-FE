@@ -1,0 +1,8 @@
+.home-slides-page .home-movable-object { cursor: grab; touch-action: none; user-select: none; }
+.home-slides-page .home-movable-object.is-home-dragging { cursor: grabbing; z-index: 30; }
+.home-slide .scene-object.is-home-dragging,
+.home-slide .start-star.is-home-dragging { position: absolute; }
+.home-slide .project-map-object { transform-box: fill-box; transform-origin: center; }
+.home-slide .start-star { pointer-events: auto; }
+.home-slides-page .frelog-scene,
+.home-slides-page .vector-showcase { overflow: visible; }

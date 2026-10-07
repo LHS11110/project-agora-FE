@@ -1,3 +1,4 @@
+export { codeModelUri, registerModelCompletions } from './completions/registerModelCompletions.js';
 import * as monaco from 'monaco-editor';
 import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker';
 import JsonWorker from 'monaco-editor/language/json/json.worker.js?worker';
@@ -18,6 +19,11 @@ self.MonacoEnvironment = {
 const aliases = { text: 'plaintext', bash: 'shell', objectivec: 'objective-c', vue: 'html', svelte: 'html' };
 export function editorLanguage(language) {
   const id = aliases[language] || language || 'plaintext';
+  if (!monaco.languages.getLanguages().some(entry => entry.id === id) && id !== 'plaintext') {
+    // Languages without a built-in tokenizer still get their own completion mode.
+    monaco.languages.register({ id });
+    monaco.languages.setLanguageConfiguration(id, { brackets: [['{', '}'], ['[', ']'], ['(', ')']] });
+  }
   return monaco.languages.getLanguages().some(entry => entry.id === id) ? id : 'plaintext';
 }
 export { monaco };

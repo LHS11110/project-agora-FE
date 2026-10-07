@@ -1,3 +1,4 @@
+import { inkPointAtPointer } from '../canvas/inkStroke.js';
 import { captureResize, resizeItemAtPointer } from '../components/objectResize.js';
 import { rotationAtPointer } from '../components/RotationHandles.jsx';
 import { connectorBendFromPointer, connectorGeometry } from '../components/connectorGeometry.js';
@@ -17,6 +18,7 @@ export function useTutorialObjectInteractions(options) {
     draftSetterRef,
     dragRef,
     drawingRef,
+    drawingStyleRef,
     eraseStrokesBetween,
     eraserRef,
     items,
@@ -194,8 +196,8 @@ export function useTutorialObjectInteractions(options) {
     const point = position(event);
     const previous = pointsRef.current[pointsRef.current.length - 1];
     if (previous && Math.hypot(point.x - previous.x, point.y - previous.y) < 0.0018) return;
-    pointsRef.current.push(point);
-    draftSetterRef.current?.({ points: pointsRef.current, color, strokeWidth });
+    pointsRef.current.push(inkPointAtPointer(event, point));
+    draftSetterRef.current?.({ ...drawingStyleRef.current, points: pointsRef.current, complete: false });
   };
 
   const finishInteraction = (event) => {
@@ -222,7 +224,8 @@ export function useTutorialObjectInteractions(options) {
     const points = pointsRef.current;
     pointsRef.current = [];
     draftSetterRef.current?.(null);
-    if (points.length) addItem({ kind: 'stroke', points, color, strokeWidth });
+    if (points.length) addItem({ kind: 'stroke', ...drawingStyleRef.current, points, complete: true });
+    drawingStyleRef.current = null;
   };
 
   return { startItemInteraction, startItemResize, startArrowBend, startItemRotation, moveOnBoard, finishInteraction };

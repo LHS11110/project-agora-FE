@@ -26,7 +26,7 @@ export function useCanvasStageInteractions(options) {
     selectionRef, selectedItemIds, setSelectionBox, selectItems,
     canvasSnapshotLoadedRef, finishEditing, setConnectionStartId, spacePressedRef,
     tableConfig, permission, setSharePosition, shapeType, shapeArrowStartHead,
-    shapeArrowEndHead, color, noteColor, setActiveTool, startEditing, strokeWidth,
+    shapeArrowEndHead, color, noteColor, setActiveTool, startEditing, strokeWidth, penBrush, penOpacity,
     drawingRef, drawingSessionRef, draftRef, vectorDraftRef,
   } = options;
 
@@ -39,7 +39,7 @@ export function useCanvasStageInteractions(options) {
     enqueueStrokeChange(session.id, {
       kind: 'stroke', points: draftRef.current, color: session.color,
       strokeWidth: session.strokeWidth, permission: session.permission,
-      brush: session.brush, simulatePressure: session.simulatePressure, complete: false,
+      brush: session.brush, opacity: session.opacity, simulatePressure: session.simulatePressure, complete: false,
     }, itemsRef.current[session.id] || null);
   };
   const pointerPosition = (event) => {
@@ -363,7 +363,8 @@ export function useCanvasStageInteractions(options) {
     const session = {
       id: strokeId,
       pointerId: event.pointerId,
-      brush: INK_BRUSH,
+      brush: penBrush || INK_BRUSH,
+      opacity: penOpacity ?? 1,
       simulatePressure: event.pointerType !== 'pen',
       sequence: 0,
       color,
@@ -376,7 +377,7 @@ export function useCanvasStageInteractions(options) {
     drawingRef.current = true;
     drawingSessionRef.current = session;
     draftRef.current = [point];
-    vectorDraftRef.current?.({ id: session.id, brush: session.brush, simulatePressure: session.simulatePressure, complete: false, points: draftRef.current, color: session.color, strokeWidth: session.strokeWidth });
+    vectorDraftRef.current?.({ id: session.id, brush: session.brush, opacity: session.opacity, simulatePressure: session.simulatePressure, complete: false, points: draftRef.current, color: session.color, strokeWidth: session.strokeWidth });
     sendStrokePreviewStart(peerMeshRef.current, session, point);
     queueDrawingStroke();
   };
@@ -418,7 +419,7 @@ export function useCanvasStageInteractions(options) {
     }
     if (!changed) return;
     queueDrawingStroke();
-    vectorDraftRef.current?.({ id: session.id, brush: session.brush, simulatePressure: session.simulatePressure, complete: false, points: draftRef.current, color: session.color, strokeWidth: session.strokeWidth });
+    vectorDraftRef.current?.({ id: session.id, brush: session.brush, opacity: session.opacity, simulatePressure: session.simulatePressure, complete: false, points: draftRef.current, color: session.color, strokeWidth: session.strokeWidth });
     const now = performance.now();
     if (now - session.lastSentAt >= REALTIME_STROKE_INTERVAL_MS || session.pendingPoints.length >= REALTIME_STROKE_BATCH_SIZE) {
       sendStrokePreviewPoints(peerMeshRef.current, session, session.pendingPoints.splice(0));
@@ -471,6 +472,7 @@ export function useCanvasStageInteractions(options) {
     const item = {
       kind: 'stroke',
       brush: session?.brush || INK_BRUSH,
+      opacity: session?.opacity ?? 1,
       simulatePressure: session?.simulatePressure !== false,
       complete: true,
       points,

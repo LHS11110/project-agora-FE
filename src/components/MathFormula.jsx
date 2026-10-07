@@ -43,20 +43,21 @@ function loadMathJax() {
   return mathJaxLoadPromise;
 }
 
-export default function MathFormula({ formula }) {
+export default function MathFormula({ formula, display = false }) {
   const elementRef = useRef(null);
 
   useLayoutEffect(() => {
     const element = elementRef.current;
     if (!element) return undefined;
-    const source = `\\(${String(formula ?? '').slice(0, 1200)}\\)`;
+    const text = String(formula ?? '').slice(0, 1200);
+    const source = display ? `\\[${text}\\]` : `\\(${text}\\)`;
     element.textContent = source;
     let cancelled = false;
     loadMathJax().then((mathJax) => {
       if (cancelled) return;
       mathJaxRenderQueue = mathJaxRenderQueue.catch(() => {}).then(async () => {
         if (cancelled) return;
-        const output = await mathJax.tex2svgPromise(String(formula ?? '').slice(0, 1200), { display: false });
+        const output = await mathJax.tex2svgPromise(text, { display });
         if (cancelled) return;
         element.replaceChildren(output);
       });
@@ -66,7 +67,7 @@ export default function MathFormula({ formula }) {
       cancelled = true;
       element.replaceChildren();
     };
-  }, [formula]);
+  }, [formula, display]);
 
   return <span className="mathjax-output" ref={elementRef} aria-label={`수식: ${formula}`} />;
 }

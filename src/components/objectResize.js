@@ -1,3 +1,4 @@
+import { hasIndependentContentSize } from '../canvas/objectSize.js';
 import { isContentScalable, objectContentScale, MIN_CONTENT_SCALE, MAX_CONTENT_SCALE } from '../canvas/objectContentScale.js';
 const MIN_WIDTHS = { image: 100, code: 190, note: 170, text: 110 };
 const MIN_HEIGHTS = { shape: 38, code: 64, note: 148, math: 33, text: 38, table: 60, link: 60 };
@@ -91,7 +92,7 @@ export function resizeItemAtPointer(item, resize, point, viewport) {
   let right = width * boardWidth / 2;
   let top = -height * boardHeight / 2;
   let bottom = height * boardHeight / 2;
-  const scalable = isContentScalable(item);
+  const scalable = isContentScalable(item) && !hasIndependentContentSize(item);
   const minWidth = scalable ? 1 : Math.max(40, MIN_WIDTHS[item.kind] || 0);
   const minHeightPixels = item.kind === 'link' && item.mediaType !== 'link' ? 125 : MIN_HEIGHTS[item.kind] || 0;
   const minHeight = scalable ? 1 : Math.max(32, minHeightPixels);

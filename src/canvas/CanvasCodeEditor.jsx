@@ -1,14 +1,16 @@
+import { useEditingBoundary } from './useEditingBoundary.js';
 import { useEffect, useRef, useState } from 'react';
 import { moveTextPosition, textSpliceBetween } from './collaborativeText.js';
 import './canvas-code-editor.css';
 
 /** One model per open block; remote updates preserve selections and view state. */
-export default function CanvasCodeEditor({ value = '', language = 'javascript', onChange, onSave }) {
+export default function CanvasCodeEditor({ value = '', language = 'javascript', onChange, onSave, onStopEditing }) {
+  const boundary = useEditingBoundary(true, onStopEditing, { pointerOnly: true });
   const hostRef = useRef(null);
   const editorRef = useRef(null);
   const runtimeRef = useRef(null);
   const applyingRemoteRef = useRef(false);
-  const latest = useRef({ value, language, onChange, onSave });
+  const latest = useRef({ value, language, onChange, onSave, onStopEditing });
   latest.current = { value, language, onChange, onSave };
   const [status, setStatus] = useState('loading');
 
@@ -20,14 +22,18 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
       if (disposed) return;
       runtimeRef.current = runtime;
       const { monaco, editorLanguage } = runtime;
-      model = monaco.editor.createModel(String(latest.current.value), editorLanguage(latest.current.language));
+      model = monaco.editor.createModel(String(latest.current.value), editorLanguage(latest.current.language), runtime.codeModelUri(monaco));
       model.setEOL(monaco.editor.EndOfLineSequence.LF);
+      subscriptions.push(runtime.registerModelCompletions(monaco, model, () => latest.current.language));
       editor = monaco.editor.create(hostRef.current, {
         model, theme: 'vs-dark', automaticLayout: true,
         fontSize: 13, lineHeight: 20, tabSize: 2, insertSpaces: true,
         minimap: { enabled: false }, scrollBeyondLastLine: false,
         lineNumbersMinChars: 3, padding: { top: 10, bottom: 10 },
         wordWrap: 'off', folding: true, glyphMargin: false,
+        quickSuggestions: { other: true, comments: false, strings: false },
+        suggestOnTriggerCharacters: true, snippetSuggestions: 'top',
+        wordBasedSuggestions: 'currentDocument', tabCompletion: 'on',
         renderLineHighlight: 'line', bracketPairColorization: { enabled: true },
         autoClosingBrackets: 'always', autoClosingQuotes: 'always',
         formatOnPaste: true, formatOnType: true,
@@ -88,11 +94,9 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
     if (model && runtimeRef.current) runtimeRef.current.monaco.editor.setModelLanguage(model, runtimeRef.current.editorLanguage(language));
   }, [language, status]);
 
-  return <div className="canvas-code-editor" onBlur={event => {
-    // Monaco's context menus can take focus outside the block's DOM subtree.
-    // Keep editing open while interacting with those transient controls.
-    if (!event.relatedTarget || event.relatedTarget.closest?.('.monaco-menu-container, .context-view')) event.stopPropagation();
-  }} onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()} onPointerMove={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()} onKeyDown={event => {
+  // Monaco moves focus between its input, widgets and native editing context.
+  // Only an explicit pointer outside the object closes the editing session.
+  return <div ref={boundary.ref} className="canvas-code-editor" onBlur={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()} onPointerMove={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()} onKeyDown={event => {
     event.stopPropagation();
     if (status !== 'ready' && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); onSave?.(); }
   }}>

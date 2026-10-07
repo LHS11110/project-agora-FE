@@ -1,4 +1,8 @@
-import { INK_BRUSH, inkStrokeOutline } from './inkStroke.js';
+import { addHighlighterToPath } from './highlighterStroke.js';
+import { brushBristlePaths, paintBrush } from './brushStroke.js';
+import { addSprayToPath } from './sprayStroke.js';
+import { strokeOpacity } from './penStyles.js';
+import { INK_BRUSH, inkStrokeOutline, strokePaintSize } from './inkStroke.js';
 
 const completedPaths = new WeakMap();
 
@@ -9,21 +13,27 @@ function strokePath(stroke, width, height) {
   const points = (stroke.points || []).filter(p => Number.isFinite(p.x) && Number.isFinite(p.y))
     .map(p => ({ ...p, x: p.x * width, y: p.y * height }));
   const path = new Path2D();
+  let bristles;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const p of points) {
     minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
     maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
   }
-  if (stroke.brush === INK_BRUSH) {
+  if (stroke.brush === 'spray') {
+    addSprayToPath(path, points, Math.max(.5, Number(stroke.strokeWidth) || 3.5));
+  } else if (stroke.brush === 'highlighter') {
+    addHighlighterToPath(path, points, strokePaintSize(stroke));
+  } else if (stroke.brush === INK_BRUSH || stroke.brush === 'pen') {
     const outline = inkStrokeOutline(points, stroke);
     outline.forEach(([x, y], i) => i ? path.lineTo(x, y) : path.moveTo(x, y));
     path.closePath();
+    if (stroke.brush === INK_BRUSH) bristles = brushBristlePaths(points, stroke);
   } else if (points.length === 1) {
-    path.arc(points[0].x, points[0].y, Math.max(0.5, Number(stroke.strokeWidth) || 3.5) / 2, 0, Math.PI * 2);
+    path.arc(points[0].x, points[0].y, strokePaintSize(stroke) / 2, 0, Math.PI * 2);
   } else {
     points.forEach((p, i) => i ? path.lineTo(p.x, p.y) : path.moveTo(p.x, p.y));
   }
-  const result = { key, path, centerX: points.length ? (minX + maxX) / 2 : 0,
+  const result = { key, path, bristles, centerX: points.length ? (minX + maxX) / 2 : 0,
     centerY: points.length ? (minY + maxY) / 2 : 0, dot: points.length === 1 };
   if (stroke.complete !== false) completedPaths.set(stroke, result);
   return result;
@@ -31,21 +41,24 @@ function strokePath(stroke, width, height) {
 
 function drawStroke(context, stroke, width, height) {
   if (!stroke?.points?.length) return;
-  const { path, centerX, centerY, dot } = strokePath(stroke, width, height);
+  const { path, bristles, centerX, centerY, dot } = strokePath(stroke, width, height);
   context.save();
   if (stroke.rotation) {
     context.translate(centerX, centerY);
     context.rotate(Number(stroke.rotation) * Math.PI / 180);
     context.translate(-centerX, -centerY);
   }
+  context.globalAlpha = strokeOpacity(stroke) * (stroke.brush === 'highlighter' ? .35 : 1);
   context.fillStyle = stroke.color || '#263b35';
   context.strokeStyle = stroke.color || '#263b35';
-  if (stroke.brush === INK_BRUSH || dot) {
+  if (stroke.brush === INK_BRUSH) {
+    paintBrush(context, path, bristles, stroke, strokeOpacity(stroke));
+  } else if (stroke.brush === 'pen' || stroke.brush === 'highlighter' || stroke.brush === 'spray' || dot) {
     // Native nonzero fill resolves crossings directly. A hole reveals the ink
     // underneath, so paths belonging to different strokes are never combined.
     context.fill(path, 'nonzero');
   } else {
-    context.lineWidth = Math.max(0.5, Number(stroke.strokeWidth) || 3.5);
+    context.lineWidth = strokePaintSize(stroke);
     context.lineCap = 'round'; context.lineJoin = 'round';
     context.stroke(path);
   }

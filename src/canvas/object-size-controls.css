@@ -1,0 +1,13 @@
+.object-size-controls>label{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;font-size:11px;color:var(--ink-strong)}
+.object-size-controls>label>span{display:flex;align-items:center;gap:5px;color:var(--ink-muted)}
+.object-size-controls input{width:82px;padding:6px;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--ink-strong)}
+.object-content-viewport.text-content-viewport>.scalable-object-content{width:calc(100% / var(--content-fit-scale))!important;font-size:13px;overflow:auto!important}
+.canvas-stage .text-content-viewport .text-object textarea,.tutorial-scene .text-content-viewport .tutorial-text-item textarea{font-size:13px;resize:none}
+.object-content-viewport.note-content-viewport>.scalable-object-content,
+.object-content-viewport.table-content-viewport>.scalable-object-content,
+.object-content-viewport.math-content-viewport>.scalable-object-content{width:calc(100% / var(--content-fit-scale))!important}
+.object-content-viewport.note-content-viewport>.scalable-object-content{overflow:auto!important}
+.object-content-viewport.math-content-viewport>.scalable-object-content{font-size:16px;overflow:auto!important}
+.canvas-stage .code-content-viewport .code-object>pre,
+.tutorial-scene .code-content-viewport .tutorial-code-item>pre{font:13px/20px var(--mono)}
+.object-content-viewport:is(.text-content-viewport,.note-content-viewport,.table-content-viewport,.math-content-viewport,.code-content-viewport)>.scalable-object-content{min-width:0!important;min-height:0!important}

@@ -42,7 +42,7 @@ export function useHomeSlideNavigation() {
   };
   const handleTouchStart = (event) => {
     const target = event.target instanceof Element ? event.target : null;
-    if (target?.closest('a, button, input, textarea, select')) {
+    if (target?.closest('a, button, input, textarea, select, .home-movable-object')) {
       gestureStartRef.current = null;
       return;
     }

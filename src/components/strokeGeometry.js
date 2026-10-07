@@ -1,4 +1,4 @@
-import { inkStrokeSize, INK_BRUSH } from '../canvas/inkStroke.js';
+import { strokePaintSize } from '../canvas/inkStroke.js';
 
 function pointToSegmentDistance(point, start, end) {
   const dx = end.x - start.x;
@@ -96,7 +96,7 @@ export function eraseStrokeWithEraser(stroke, eraserStart, eraserEnd, viewSize, 
   const toPixels = (point) => ({ x: (Number(point.x) || 0) * width * zoom, y: (Number(point.y) || 0) * height * zoom });
   const eraserA = toPixels(eraserStart);
   const eraserB = toPixels(eraserEnd);
-  const strokeRadius = (stroke.brush === INK_BRUSH ? inkStrokeSize(stroke.strokeWidth) : Math.max(0, Number(stroke.strokeWidth) || 3.5)) * zoom / 2;
+  const strokeRadius = strokePaintSize(stroke) * zoom / 2;
   const hitDistance = Math.max(1, Number(radius) || 12) + strokeRadius;
   const pixels = source.map(toPixels);
   const bounds = pixels.reduce((current, point) => ({

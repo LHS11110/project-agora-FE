@@ -1,3 +1,4 @@
+import { useEditingBoundary } from './useEditingBoundary.js';
 import './image-object.css';
 import { scaleObjectElement } from './ScalableObjectContent.jsx';
 import CanvasCodeEditor from './CanvasCodeEditor.jsx';
@@ -63,6 +64,10 @@ export default function CanvasObject({ id, item, bounds, selected, allowSingleSe
     }
     displayedCollaborativeValueRef.current = collaborativeValue;
   }, [collaborativeValue]);
+  const editingBoundary = useEditingBoundary(editing && ['text', 'note'].includes(item.kind), () => {
+    onStopEditing(id);
+    if (item.kind === 'note' && dirty) onSave(id, { silent: true });
+  });
   const width = Number(item.width) || ({ image: 0.3, code: 0.32, shape: 0.14, math: 0.2, text: 0.22, note: 0.22, table: 0.42, link: 0.3 }[item.kind] || 0.2);
   const height = Number(item.height) || ({ shape: 0.12, math: 0.09, text: 0.12, note: 0.15, table: 0.32, link: 0.15 }[item.kind] || 0.2);
   const style = { left: `${(Number(item.x) || 0) * 100}%`, top: `${(Number(item.y) || 0) * 100}%`, width: `${width * 100}%`, '--object-color': item.color || '#617d68', '--object-rotation': `${Number(item.rotation) || 0}deg` };
@@ -70,10 +75,11 @@ export default function CanvasObject({ id, item, bounds, selected, allowSingleSe
   const movable = activeTool === 'select' && selected;
   const classes = `canvas-object canvas-object-${item.kind}${movable ? ' movable' : ''}${selected ? ' selected' : ''}${connectionStartId === id ? ' connection-source' : ''}${item.height ? ' has-custom-height' : ''}`;
   const handlers = {
+    ref: editingBoundary.ref,
     'data-item-id': id,
     onDoubleClickCapture: (event) => handleObjectDoubleClick(event, { id, item, activeTool, editing, onStartEditing, onConnectorDoubleClick }),
     onPointerDownCapture: (event) => {
-      if (event.target.closest?.('.canvas-code-editor')) { selectingPointerRef.current = false; return; }
+      if (editing || event.target.closest?.('.canvas-code-editor')) { selectingPointerRef.current = false; return; }
       selectingPointerRef.current = activeTool === 'select' && !selected && event.button === 0
         && !event.shiftKey;
       if (!selectingPointerRef.current) return;
@@ -81,12 +87,12 @@ export default function CanvasObject({ id, item, bounds, selected, allowSingleSe
       onPointerDown(event, id, item);
     },
     onClickCapture: (event) => {
-      if (event.target.closest?.('.canvas-code-editor')) { selectingPointerRef.current = false; return; }
+      if (editing || event.target.closest?.('.canvas-code-editor')) { selectingPointerRef.current = false; return; }
       if (!selectingPointerRef.current && (editing || !event.target.closest?.('a'))) return;
       selectingPointerRef.current = false;
       event.preventDefault(); event.stopPropagation();
     },
-    onPointerDown: (event) => onPointerDown(event, id, item),
+    onPointerDown: (event) => { if (editing) { event.stopPropagation(); return; } onPointerDown(event, id, item); },
     onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onLostPointerCapture: onPointerUp,
   };
   const resizeHandles = selected && allowSingleSelectionControls && movable && !editing && item.kind !== 'connector'
@@ -119,8 +125,8 @@ export default function CanvasObject({ id, item, bounds, selected, allowSingleSe
     <div className="shared-media-header"><span className="shared-media-drag-handle" title="여기를 끌어 자료를 이동하세요"><Icon name={item.mediaType === 'link' ? 'link' : 'image'} size={13} />{item.mediaType === 'youtube' ? `YouTube · ${item.title || '동영상'}` : item.mediaType === 'video' ? `동영상 · ${item.title || '재생'}` : '링크'}</span></div>
     <SharedMediaContent item={item} interactive={editing} />
   </div>);
-  if (item.kind === 'code') return withResizeHandles(<div key={id} className={`${classes} code-object`} style={style} data-item-id={id} {...handlers} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) onStopEditing(id); }} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}><div className="code-object-head"><span className="code-file-icon"><Icon name="code" size={15} /></span>{editing ? <><input className="code-filename-input" aria-label="코드 파일 이름" value={item.filename || ''} placeholder="idea.js" maxLength={80} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'filename', event.target.value)} /><select className="code-language-select" aria-label="코드 언어" value={item.language || 'javascript'} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'language', event.target.value)}><CodeLanguageOptions value={item.language || 'javascript'} /></select></> : <><strong>{item.filename || 'snippet.js'}</strong><small>{codeLanguageLabel(item.language || 'text')}</small></>}</div>{editing ? <CanvasCodeEditor value={item.code || ''} language={item.language || 'javascript'} onChange={value => onTextChange(id, value)} onSave={() => onSave(id)} /> : <pre title="두 번 클릭해 함께 편집"><code>{item.code}</code></pre>}<div className="code-object-foot"><span><i /> {dirty ? '저장되지 않음 · Ctrl + S' : editing ? 'P2P 실시간 편집' : '두 번 클릭해 편집'}</span>{remoteEditorLabel && <small className="collab-presence-label" title={remoteEditorLabel}>{remoteEditorLabel}</small>}<button onClick={() => onCopy(item.code || '')}>복사</button></div></div>);
-  if (item.kind === 'note') return withResizeHandles(<div key={id} className={`${classes} sticky-note-object`} style={{ ...style, '--sticky-note-color': item.color || stickyNoteColors[0], '--sticky-note-rotation': `${Number(item.rotation) || -1}deg` }} data-item-id={id} {...handlers} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) { onStopEditing(id); if (dirty) onSave(id, { silent: true }); } }} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}>
+  if (item.kind === 'code') return withResizeHandles(<div key={id} className={`${classes} code-object`} style={style} data-item-id={id} {...handlers} onBlur={editingBoundary.onBlur} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}><div className="code-object-head"><span className="code-file-icon"><Icon name="code" size={15} /></span>{editing ? <><input className="code-filename-input" aria-label="코드 파일 이름" value={item.filename || ''} placeholder="idea.js" maxLength={80} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'filename', event.target.value)} /><select className="code-language-select" aria-label="코드 언어" value={item.language || 'javascript'} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'language', event.target.value)}><CodeLanguageOptions value={item.language || 'javascript'} /></select></> : <><strong>{item.filename || 'snippet.js'}</strong><small>{codeLanguageLabel(item.language || 'text')}</small></>}</div>{editing ? <CanvasCodeEditor value={item.code || ''} language={item.language || 'javascript'} onChange={value => onTextChange(id, value)} onSave={() => onSave(id)} onStopEditing={() => onStopEditing(id)} /> : <pre title="두 번 클릭해 함께 편집"><code>{item.code}</code></pre>}<div className="code-object-foot"><span><i /> {dirty ? '저장되지 않음 · Ctrl + S' : editing ? 'P2P 실시간 편집 · Ctrl+Space 자동완성' : '두 번 클릭해 편집'}</span>{remoteEditorLabel && <small className="collab-presence-label" title={remoteEditorLabel}>{remoteEditorLabel}</small>}<button onClick={() => onCopy(item.code || '')}>복사</button></div></div>);
+  if (item.kind === 'note') return withResizeHandles(<div key={id} className={`${classes} sticky-note-object`} style={{ ...style, '--sticky-note-color': item.color || stickyNoteColors[0], '--sticky-note-rotation': `${Number(item.rotation) || -1}deg` }} data-item-id={id} {...handlers} onBlur={editingBoundary.onBlur} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}>
     <div className="sticky-note-head"><span title="끌어서 포스트잇 이동"><Icon name="sticky" size={13} /> 포스트잇</span><input type="color" aria-label="포스트잇 색상" title="포스트잇 색상 변경" value={item.color || stickyNoteColors[0]} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'color', event.target.value)} /></div>
     {editing ? <textarea ref={collaborativeEditorRef} autoFocus aria-label="포스트잇 Markdown 편집" value={item.text || ''} placeholder={'# 메모 제목\n- 할 일\n**중요한 내용**'} onPointerDown={(event) => event.stopPropagation()} onSelect={rememberCollaborativeSelection} onKeyUp={rememberCollaborativeSelection} onClick={rememberCollaborativeSelection} onChange={handleCollaborativeInput} /> : <div className="sticky-note-content" title="두 번 클릭해 Markdown 편집">{item.text ? <MarkdownText source={item.text} /> : <p className="sticky-note-empty">두 번 클릭해 메모를 작성하세요.</p>}</div>}
     <small className={`collab-save-hint${remoteEditorLabel ? ' collab-presence-hint' : ''}`}>{remoteEditorLabel || (dirty ? '자동 저장 대기 중…' : editing ? 'Markdown · 자동 저장' : '두 번 클릭해 편집')}</small>
@@ -133,7 +139,7 @@ export default function CanvasObject({ id, item, bounds, selected, allowSingleSe
       : null;
     return withResizeHandles(<div key={id} className={`${classes} shape-object shape-vector-hit shape-${item.shapeType || 'rectangle'}`} style={style} {...handlers}>{bendHandle}</div>);
   }
-  if (item.kind === 'text') return withResizeHandles(<div key={id} className={`${classes} text-object${item.format === 'markdown' ? ' markdown-text-object' : ''}`} style={style} data-item-id={id} {...handlers}>{editing ? <><textarea ref={collaborativeEditorRef} autoFocus aria-label={item.format === 'markdown' ? '마크다운 텍스트 편집' : '공동 편집 텍스트'} value={item.text || ''} placeholder={item.format === 'markdown' ? '# 제목\n- 목록\n**강조할 내용**' : '여기에 텍스트를 입력하세요.'} onPointerDown={(event) => event.stopPropagation()} onSelect={rememberCollaborativeSelection} onKeyUp={rememberCollaborativeSelection} onClick={rememberCollaborativeSelection} onChange={handleCollaborativeInput} onBlur={() => onStopEditing(id)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }} /><small className={`collab-save-hint${remoteEditorLabel ? ' collab-presence-hint' : ''}`}>{remoteEditorLabel || (dirty ? '저장되지 않음 · Ctrl + S' : '저장됨')}</small></> : <div title="두 번 클릭해 함께 편집">{item.format === 'markdown' ? <MarkdownText source={item.text || '두 번 클릭해 마크다운 작성'} /> : <p>{item.text || '두 번 클릭해 편집'}</p>}</div>}</div>);
+  if (item.kind === 'text') return withResizeHandles(<div key={id} className={`${classes} text-object${item.format === 'markdown' ? ' markdown-text-object' : ''}`} style={style} data-item-id={id} {...handlers}>{editing ? <><textarea ref={collaborativeEditorRef} autoFocus aria-label={item.format === 'markdown' ? '마크다운 텍스트 편집' : '공동 편집 텍스트'} value={item.text || ''} placeholder={item.format === 'markdown' ? '# 제목\n- 목록\n**강조할 내용**' : '여기에 텍스트를 입력하세요.'} onPointerDown={(event) => event.stopPropagation()} onSelect={rememberCollaborativeSelection} onKeyUp={rememberCollaborativeSelection} onClick={rememberCollaborativeSelection} onChange={handleCollaborativeInput} onBlur={editingBoundary.onBlur} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }} /><small className={`collab-save-hint${remoteEditorLabel ? ' collab-presence-hint' : ''}`}>{remoteEditorLabel || (dirty ? '저장되지 않음 · Ctrl + S' : '저장됨')}</small></> : <div title="두 번 클릭해 함께 편집">{item.format === 'markdown' ? <MarkdownText source={item.text || '두 번 클릭해 마크다운 작성'} /> : <p>{item.text || '두 번 클릭해 편집'}</p>}</div>}</div>);
   if (item.kind === 'math') return withResizeHandles(<div key={id} className={`${classes} math-object`} style={style} {...handlers}>
     <CanvasMathContent {...{ id, item, editing, onFormulaChange, onStopEditing }} />
   </div>);

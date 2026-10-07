@@ -1,0 +1,7 @@
+.simple-markdown .markdown-code-block{margin:.7em 0;border:1px solid #52675d40;border-radius:6px;overflow:hidden;background:#1e2823;color:#e0e9e1;font-size:.95em;white-space:normal}
+.simple-markdown .markdown-code-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:.4em .8em;border-bottom:1px solid #ffffff20;font: .85em var(--mono,monospace);color:#bdd0c0}
+.simple-markdown .markdown-code-heading button{padding:.2em .5em;border:0;border-radius:3px;background:transparent;color:inherit;font:inherit;cursor:pointer}
+.simple-markdown .markdown-code-block>pre{margin:0;padding:.8em;max-height:none;overflow:auto;background:transparent;color:inherit;font:1em/1.6 var(--mono,monospace);white-space:pre;overflow-wrap:normal;tab-size:2}
+.simple-markdown .markdown-code-block>pre>code{display:block;padding:0!important;border:0;background:transparent!important;color:inherit;font:inherit!important;white-space:inherit}
+.simple-markdown .markdown-math-block{display:block;max-width:100%;margin:.7em 0;overflow-x:auto;text-align:center;white-space:normal}
+.simple-markdown .markdown-math-block .mathjax-output{max-width:100%;vertical-align:middle}

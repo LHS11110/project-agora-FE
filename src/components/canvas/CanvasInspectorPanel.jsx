@@ -1,3 +1,6 @@
+import PenStyleControls from '../../canvas/PenStyleControls.jsx';
+import { hasIndependentContentSize } from '../../canvas/objectSize.js';
+import ObjectSizeControls from '../../canvas/ObjectSizeControls.jsx';
 import ShapePicker from '../../canvas/ShapePicker.jsx';
 import EraserSizeControl from '../../canvas/EraserSizeControl.jsx';
 import CanvasColorPicker from '../../canvas/CanvasColorPicker.jsx';
@@ -49,12 +52,15 @@ export default function CanvasInspectorPanel({
   shapeType,
   showGrid,
   strokeWidth,
+  penBrush, penOpacity, changePenBrush, changePenOpacity,
   tableConfig,
   theme,
   toggleGrid,
   updateArrowHead,
   updateConnectorAppearance,
   updateItemRotation,
+  updateObjectDimensions,
+  updateObjectFontSize,
   updateNewConnectorHead,
   updateNewShapeArrowHead,
   updateShapeArrowBend,
@@ -68,8 +74,9 @@ export default function CanvasInspectorPanel({
         <section className="inspector-section zoom-sensitivity-section"><div className="zoom-sensitivity-heading"><strong>줌 감도</strong><span>{Math.round(zoomSensitivity * 100)}%</span></div><input type="range" min={MIN_ZOOM_SENSITIVITY} max={MAX_ZOOM_SENSITIVITY} step="0.1" value={zoomSensitivity} onChange={changeZoomSensitivity} aria-label="줌 감도" /><small>휠과 확대·축소 버튼 반응 속도</small></section>
         {(selectedObjectIds.length > 1 || selectedObjectIds.some((id) => items[id]?.groupId)) && <section className="inspector-section selection-actions-section"><div className="selection-actions-heading"><strong>{selectedObjectIds.length}개 오브젝트 선택됨</strong><button type="button" onClick={() => selectItems([])}>선택 해제</button></div><small className="inspector-hint">빈 공간을 드래그해 여러 개를 선택하고, Shift를 누른 채 개별 선택을 더할 수 있어요.</small>{selectedObjectIds.some((id) => ['text', 'code'].includes(items[id]?.kind)) && <small className="inspector-hint">텍스트와 코드는 Ctrl + S로 저장하며, 포스트잇은 변경 후 자동 저장합니다.</small>}<div className="selection-actions-buttons"><button type="button" className="button button-dark" disabled={!selectionIsSingleGroup && selectedObjectIds.filter((id) => !['stroke', 'connector'].includes(items[id]?.kind)).length < 2} onClick={() => changeSelectionGroup(!selectionIsSingleGroup)}>{selectionIsSingleGroup ? '그룹 해제' : '그룹화'}</button></div></section>}
         </>}
+        {selectedObjectIds.length === 1 && hasIndependentContentSize(selectedItem) && <ObjectSizeControls item={selectedItem} onFontSizeChange={value => updateObjectFontSize(primarySelectedItemId, value)} onDimensionChange={(field, value) => updateObjectDimensions(primarySelectedItemId, field, value)} />}
         {activeTool !== 'select' && <section className="inspector-section tool-settings-summary"><strong className="inspector-label">선택한 도구</strong><small className="inspector-hint">캔버스에서 사용할 도구의 설정을 조정하세요. 커서 도구를 선택하면 워크스페이스 설정으로 돌아갑니다.</small></section>}
-        {activeTool === 'pen' && <><section className="inspector-section"><span className="inspector-label">선 색상</span><CanvasColorPicker color={color} onChange={setColor} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} label="드로잉 색상" /></section><section className="inspector-section stroke-width-section"><div className="zoom-sensitivity-heading"><strong>선 굵기</strong><span>{strokeWidth}px</span></div><input type="range" min={MIN_STROKE_WIDTH} max={MAX_STROKE_WIDTH} step="1" value={strokeWidth} onChange={changeStrokeWidth} aria-label="드로잉 선 굵기" /><small>새로 그리는 선에 적용됩니다.</small></section></>}
+        {activeTool === 'pen' && <><section className="inspector-section"><strong className="inspector-label">펜 스타일</strong><PenStyleControls brush={penBrush} opacity={penOpacity} onBrushChange={changePenBrush} onOpacityChange={changePenOpacity} /></section><section className="inspector-section"><span className="inspector-label">선 색상</span><CanvasColorPicker color={color} onChange={setColor} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} label="드로잉 색상" /></section><section className="inspector-section stroke-width-section"><div className="zoom-sensitivity-heading"><strong>선 굵기</strong><span>{strokeWidth}px</span></div><input type="range" min={MIN_STROKE_WIDTH} max={MAX_STROKE_WIDTH} step="1" value={strokeWidth} onChange={changeStrokeWidth} aria-label="드로잉 선 굵기" /><small>새로 그리는 선에 적용됩니다.</small></section></>}
         {activeTool === 'laser' && <section className="inspector-section"><strong className="inspector-label">레이저 포인터</strong><small className="inspector-hint">드래그해 가리키면 흔적이 1.6초 동안 서서히 사라집니다. 다른 참여자에게도 실시간으로 보여요.</small></section>}{activeTool === 'eraser' && <section className="inspector-section"><strong className="inspector-label">드로잉 지우개</strong><EraserSizeControl value={eraserWidth} onChange={changeEraserWidth} /><small className="inspector-hint">지우려는 선 위를 드래그하면 닿은 부분만 지워집니다. 드로잉은 개체로 선택되지 않습니다.</small></section>}
         {activeTool === 'shape' && <><section className="inspector-section"><span className="inspector-label">도형 색상</span><CanvasColorPicker color={color} onChange={setColor} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} label="도형 색상" /></section><section className="inspector-section"><span className="inspector-label">도형 종류</span><ShapePicker value={shapeType} onChange={setShapeType} />{shapeType === 'arrow' && <><ArrowHeadControls item={{ startHead: shapeArrowStartHead, endHead: shapeArrowEndHead }} onChange={updateNewShapeArrowHead} /><small className="inspector-hint">이 모양은 새 화살표에 적용됩니다.</small></>}<small className="inspector-hint">캔버스를 클릭해 도형을 놓으세요.</small></section></>}
         {activeTool === 'note' && <section className="inspector-section"><span className="inspector-label">포스트잇 색상</span><div className="sticky-note-colors">{stickyNoteColors.map((swatch) => <button key={swatch} type="button" style={{ '--sticky-swatch': swatch }} className={noteColor === swatch ? 'selected' : ''} onClick={() => setNoteColor(swatch)} aria-label={`포스트잇 색상 ${swatch}`} aria-pressed={noteColor === swatch} />)}</div><CanvasColorPicker color={noteColor} onChange={setNoteColor} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} label="포스트잇 색상" /><small className="inspector-hint">캔버스를 클릭해 Markdown 포스트잇을 놓으세요.</small></section>}

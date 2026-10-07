@@ -41,7 +41,7 @@ function DeskObject({ object }) {
 
 export default function SlideDeskObjects({ variant }) {
   return <div className={`slide-desk slide-desk--${variant}`} role="group" aria-label="이 장면의 도구">
-    <span className="slide-desk-hint">눌러보거나 살짝 끌어보세요</span>
+    <span className="slide-desk-hint">끌어서 옮겨보세요 · 놓으면 제자리로 돌아와요</span>
     <div className="slide-desk-objects">{DESK_OBJECTS[variant].map((object) => <DeskObject key={object.label} object={object} />)}</div>
   </div>;
 }
