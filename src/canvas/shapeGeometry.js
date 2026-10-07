@@ -78,3 +78,11 @@ export function shapeOutlinePaths(type, width, height) {
     y: (point.y - minY) / (maxY - minY || 1) * height,
   })));
 }
+
+/** Fill the cylinder silhouette without closing its open body across the lid. */
+export function shapeFillPaths(type, width, height) {
+  if (type === 'arrow') return [];
+  const paths = shapeOutlinePaths(type, width, height);
+  if (type === 'cylinder') return [[...paths[0], ...paths[1].slice(32).reverse()]];
+  return paths;
+}

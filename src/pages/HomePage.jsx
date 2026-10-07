@@ -1,3 +1,5 @@
+import { useRef } from 'react';
+import { useHomeObjectDrag } from '../home/useHomeObjectDrag.js';
 import { Link, useNavigate } from '../routing.jsx';
 import FreLogBrand from '../components/frelog/FreLogBrand.jsx';
 import HomeIntroSlide from '../components/home/HomeIntroSlide.jsx';
@@ -15,6 +17,7 @@ import '../home-matrix.css';
 import '../frelog-pages.css';
 import '../home-entrance.css';
 import '../home-scenes.css';
+import '../home/home-responsive.css';
 
 export default function HomePage() {
   const { isAuthenticated } = useAuth();
@@ -22,7 +25,9 @@ export default function HomePage() {
   const target = isAuthenticated ? '/search' : '/login';
   const { activeSlide, slideLabels, selectSlide, handleWheel, handleTouchStart, handleTouchEnd } = useHomeSlideNavigation();
   const { windowRef, trackRef } = useSlideMotion(activeSlide);
-  return <div className="marketing-page home-slides-page">
+  const pageRef = useRef(null);
+  useHomeObjectDrag(pageRef, activeSlide);
+  return <div ref={pageRef} className="marketing-page home-slides-page">
     <header className="marketing-header page-container">
       <FreLogBrand />
       <nav className="marketing-nav" aria-label="소개 슬라이드"><button className={activeSlide === 0 ? 'current' : ''} onClick={() => selectSlide(0)}>FreLog 소개</button><button className={activeSlide === 1 ? 'current' : ''} onClick={() => selectSlide(1)}>작동 방식</button><button className={activeSlide === 2 ? 'current' : ''} onClick={() => selectSlide(2)}>프로젝트 맵</button><button className={activeSlide === 3 ? 'current' : ''} onClick={() => selectSlide(3)}>함께 편집</button><Link to="/docs">문서</Link></nav>

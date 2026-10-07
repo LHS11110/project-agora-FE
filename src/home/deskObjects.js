@@ -15,7 +15,7 @@ export const DESK_OBJECTS = {
     { motion: 'lift', icon: '⚑', label: '이정표', states: ['다음 단계', '여기까지 도착!'] },
   ],
   collaboration: [
-    { motion: 'glide', icon: '✎', label: '편집 펜', states: ['의견 남기기', '좋은 생각이에요'] },
+    { motion: 'glide', icon: '✍', label: '편집 펜', states: ['의견 남기기', '좋은 생각이에요'] },
     { motion: 'stamp', icon: '◉', label: '리뷰 도장', states: ['함께 살펴보기', '검토했어요'] },
     { motion: 'spin', icon: '+', label: '변경 기록', states: ['한 줄 더하기', '생각을 보탰어요'] },
   ],

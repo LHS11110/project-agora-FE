@@ -1,0 +1,15 @@
+.canvas-stage .unified-content-object{display:flex;flex-direction:column;min-width:0;min-height:36px}
+.canvas-stage .unified-content-object:not(.code-object){padding:10px 12px;background:transparent;border:1px solid transparent;border-radius:6px;box-shadow:none;color:var(--ink-strong)}
+.canvas-stage .unified-content-object:not(.code-object):hover,.canvas-stage .unified-content-object:not(.code-object).selected{border-color:var(--line)}
+.unified-content-body{min-width:0;min-height:0;flex:1;overflow:auto}
+.unified-content-body>.canvas-code-editor{height:260px;min-height:120px}
+.unified-content-object.has-custom-height .unified-content-body>.canvas-code-editor{height:100%;min-height:0}
+.unified-content-body>pre.syntax-code-preview{margin:0;max-height:none;padding:12px;font:13px/1.6 var(--mono)}
+.unified-plain-preview{white-space:pre-wrap;overflow-wrap:anywhere;margin:0;font:13px/1.6 var(--display)}
+.unified-content-empty{margin:0;color:var(--ink-muted);font-size:12px}
+.unified-latex-preview{padding:6px 0;overflow:auto;font-size:16px}
+.content-render-controls label,.connector-label-controls label{display:flex;flex-direction:column;gap:6px;margin:10px 0;color:var(--ink-muted);font-size:10px}
+.content-render-controls select,.content-render-controls input,.connector-label-controls select,.connector-label-controls textarea{width:100%;padding:7px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink-strong);font:11px/1.5 var(--display)}
+.connector-label-controls textarea{min-height:80px;resize:vertical}
+
+.tutorial-stage .unified-content-object{display:flex;flex-direction:column;min-height:40px;padding:10px 12px}

@@ -1,3 +1,4 @@
+import { isContentMode, isTextContent } from './content/contentPresentation.js';
 import { isPenStyle } from './penStyles.js';
 import { isObjectFontSize, hasIndependentContentSize } from './objectSize.js';
 import { MIN_CONTENT_SCALE, MAX_CONTENT_SCALE } from './objectContentScale.js';
@@ -317,7 +318,7 @@ export function useCanvasPeerEvents(options) {
       } catch { /* A later snapshot can recover an interrupted peer sync. */ }
       return;
     }
-    if (data.type === 'item_metadata' && data.item_id && ['filename', 'language', 'color', 'groupId', 'fontSize'].includes(data.field)) {
+    if (data.type === 'item_metadata' && data.item_id && ['filename', 'language', 'color', 'groupId', 'fontSize', 'renderMode'].includes(data.field)) {
       const key = String(data.item_id);
       const item = itemsRef.current[key];
       if (!item) {
@@ -340,7 +341,8 @@ export function useCanvasPeerEvents(options) {
       const validMetadata = data.field === 'fontSize' ? item.kind === 'text' && isObjectFontSize(value) : data.field === 'groupId'
         ? value.length <= 128
         : data.field === 'color' ? item.kind === 'note' && /^#[0-9a-f]{6}$/i.test(value)
-          : item.kind === 'code' && (data.field === 'filename'
+          : data.field === 'renderMode' ? isTextContent(item) && isContentMode(value)
+          : isTextContent(item) && (data.field === 'filename'
             ? value.length <= 80
             : isCodeLanguage(value));
       if (!validMetadata) return;

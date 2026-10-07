@@ -1,0 +1,4 @@
+import '../../canvas/content/unified-content.css';
+export default function ConnectorLabelControls({ item, onChange }) {
+  return <section className="inspector-section connector-label-controls"><strong className="inspector-label">연결 이름</strong><label>이름<textarea value={item.label || ''} maxLength={2000} aria-label="연결 화살표 이름" placeholder={'예: **데이터 전달** 또는 $x \\to y$'} onChange={event => onChange('label', event.target.value)} /></label><label>이름 표시 방식<select aria-label="연결 이름 렌더링 방식" value={item.labelMode || 'markdown'} onChange={event => onChange('labelMode', event.target.value)}><option value="plain">일반 텍스트</option><option value="markdown">Markdown + LaTeX</option><option value="latex">LaTeX</option></select></label><small className="inspector-hint">이름은 연결선 중앙에 표시됩니다. LaTeX 모드에서는 수식만 입력하세요.</small></section>;
+}

@@ -1,0 +1,10 @@
+.canvas-stage .unified-content-body>.inline-content-input,
+.tutorial-stage .unified-content-body>.inline-content-input{
+  display:block;box-sizing:border-box;width:100%;max-width:none;min-height:28px;
+  margin:0;padding:0;border:0;border-radius:0;outline:0;box-shadow:none;
+  background:transparent;color:inherit;resize:none;
+  font:13px/1.6 var(--display);white-space:pre-wrap;overflow-wrap:anywhere;
+}
+.unified-content-body>.inline-content-input[data-mode="latex"]{font-family:var(--mono)}
+.unified-content-body>.inline-content-input::placeholder{color:var(--ink-muted)}
+.unified-content-object.has-custom-height .unified-content-body>.inline-content-input{height:100%;min-height:0;overflow:auto}

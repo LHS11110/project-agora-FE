@@ -1,0 +1,3 @@
+.arrow-head-controls label>span{display:flex;align-items:center;justify-content:space-between;gap:5px}
+.arrow-head-preview{display:block;flex:0 0 42px;width:42px;height:18px;overflow:visible;color:var(--ink-strong,currentColor)}
+.arrow-head-preview .connector-arrowheads{color:inherit}

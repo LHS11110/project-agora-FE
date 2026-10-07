@@ -25,11 +25,11 @@
 .canvas-category-heading:hover{background:var(--surface-soft,#eef1ed);color:var(--ink-strong)}
 .canvas-category-heading:focus-visible{outline:2px solid var(--ink-strong);outline-offset:2px}
 .canvas-category-chevron{transition:transform .26s cubic-bezier(.2,.7,.2,1)}
-.canvas-tool-category[data-open="true"] > .canvas-category-heading .canvas-category-chevron{transform:rotate(90deg)}
+.canvas-tool-category[data-open="true"] > .canvas-category-header > .canvas-category-heading .canvas-category-chevron{transform:rotate(90deg)}
 .canvas-category-folder{color:#8b987d}
 .canvas-category-folder .folder-open-line{opacity:0;transform:translateY(2px);transition:opacity .2s,transform .26s}
-.canvas-tool-category[data-open="true"] > .canvas-category-heading .folder-open-line{opacity:1;transform:translateY(0)}
-.canvas-tool-category.has-selected-tool > .canvas-category-heading{color:var(--ink-strong)}
+.canvas-tool-category[data-open="true"] > .canvas-category-header > .canvas-category-heading .folder-open-line{opacity:1;transform:translateY(0)}
+.canvas-tool-category.has-selected-tool > .canvas-category-header > .canvas-category-heading{color:var(--ink-strong)}
 .canvas-category-selected{width:4px;height:4px;border-radius:50%;background:currentColor}
 .canvas-category-content{padding-top:5px}
 .canvas-category-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
@@ -62,3 +62,17 @@
   .canvas-tool-fold-actions{flex-direction:column}
 }
 @media(prefers-reduced-motion:reduce){.canvas-category-collapse,.canvas-category-chevron,.canvas-category-folder .folder-open-line{transition:none}}
+
+/* Folder accents are independent of the canvas drawing palette. */
+.canvas-tool-category{--category-color:#8b987d;--category-ink:color-mix(in srgb,var(--category-color) 65%,var(--ink-strong))}
+.canvas-category-header{display:grid;grid-template-columns:minmax(0,1fr) 18px;align-items:center;gap:4px}
+.canvas-category-color-input{width:18px;height:18px;padding:2px;border:1px solid var(--line);border-radius:5px;background:var(--surface);cursor:pointer}
+.canvas-category-color-input::-webkit-color-swatch-wrapper{padding:0}.canvas-category-color-input::-webkit-color-swatch{border:0;border-radius:2px}.canvas-category-color-input::-moz-color-swatch{border:0;border-radius:2px}
+.canvas-category-color-input:focus-visible{outline:2px solid var(--category-ink);outline-offset:2px}
+.canvas-tool-category .canvas-category-heading,.canvas-tool-category .canvas-category-folder{color:var(--category-ink)}
+.canvas-tool-category .canvas-category-heading:hover{background:color-mix(in srgb,var(--category-color) 12%,var(--surface))}
+.canvas-tool-category .canvas-category-content{border-left-color:color-mix(in srgb,var(--category-color) 60%,var(--line))}
+.canvas-app-page .categorized-tools .canvas-tool-category .tool-button.active{background:color-mix(in srgb,var(--category-color) 18%,var(--surface));border-color:color-mix(in srgb,var(--category-color) 55%,var(--line));color:var(--category-ink)}
+.canvas-app-page .categorized-tools .canvas-tool-category .tool-button:hover{border-color:color-mix(in srgb,var(--category-color) 45%,var(--line))}
+.canvas-folder-color-reset{flex-shrink:0;padding:5px 3px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink-muted);font-size:8px;cursor:pointer;white-space:nowrap}
+.canvas-folder-color-reset:hover{background:var(--surface-soft);color:var(--ink-strong)}.canvas-folder-color-reset:focus-visible{outline:2px solid var(--ink-strong);outline-offset:2px}

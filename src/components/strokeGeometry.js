@@ -92,7 +92,7 @@ export function eraseStrokeWithEraser(stroke, eraserStart, eraserEnd, viewSize, 
 
   const width = Math.max(1, Number(viewSize?.width) || 1);
   const height = Math.max(1, Number(viewSize?.height) || 1);
-  const zoom = Math.max(0.01, Number(scale) || 1);
+  const zoom = Number.isFinite(Number(scale)) && Number(scale) > 0 ? Number(scale) : 1;
   const toPixels = (point) => ({ x: (Number(point.x) || 0) * width * zoom, y: (Number(point.y) || 0) * height * zoom });
   const eraserA = toPixels(eraserStart);
   const eraserB = toPixels(eraserEnd);

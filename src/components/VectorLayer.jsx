@@ -1,5 +1,5 @@
 import { CONNECTOR_METRICS_EVENT } from '../canvas/connectors/objectMetrics.js';
-import { shapeOutlinePaths } from '../canvas/shapeGeometry.js';
+import { shapeOutlinePaths, shapeFillPaths } from '../canvas/shapeGeometry.js';
 import { useEffect, useRef } from 'react';
 import { Application, Graphics } from 'pixi.js';
 import { createInkStrokeRenderer } from '../canvas/inkStrokeRenderer.js';
@@ -13,17 +13,19 @@ const colorNumber = (value) => {
 };
 
 function drawArrowHead(graphics, head, color, width, transform = (point) => point) {
-  const points = (head.points || []).map(transform);
-  if (head.type === 'triangle' || head.type === 'diamond') {
-    graphics.poly(points.flatMap((point) => [point.x, point.y])).fill(color);
-    return;
+  for (const part of head.parts) {
+    const points = part.points.map(transform);
+    if (part.center) {
+      const center = transform(part.center);
+      graphics.circle(center.x, center.y, part.radius);
+    } else if (part.closed) graphics.poly(points.flatMap(point => [point.x, point.y]));
+    else {
+      graphics.moveTo(points[0].x, points[0].y);
+      points.slice(1).forEach(point => graphics.lineTo(point.x, point.y));
+    }
+    if (part.filled) graphics.fill(color);
+    graphics.stroke({ color, width: head.strokeWidth, cap: 'round', join: 'round' });
   }
-  if (head.type === 'circle') {
-    const center = transform(head.center);
-    graphics.circle(center.x, center.y, head.radius).stroke({ color, width: Math.max(1.5, width) });
-    return;
-  }
-  drawPolyline(graphics, points, color, Math.max(1.5, width));
 }
 
 function drawShapeArrow(graphics, x, y, width, height, angle, color, bend, startHead, endHead) {
@@ -75,6 +77,12 @@ export function drawVectorItems(graphics, items, width, height, visibleItemIds =
     if (item.shapeType === 'arrow') {
       drawShapeArrow(graphics, x, y, w, h, angle, ink, item.bend, item.startHead, item.endHead);
     } else {
+      if (/^#[0-9a-f]{6}$/i.test(item.fill || '')) {
+        for (const path of shapeFillPaths(item.shapeType, w, h)) {
+          const points = path.map(point => rotatePoint(x + point.x, y + point.y, centerX, centerY, angle));
+          graphics.poly(points.flatMap(point => [point.x, point.y])).fill(colorNumber(item.fill));
+        }
+      }
       for (const path of shapeOutlinePaths(item.shapeType, w, h)) {
         drawPolyline(graphics, path.map(point => rotatePoint(x + point.x, y + point.y, centerX, centerY, angle)), ink, 2.5);
       }

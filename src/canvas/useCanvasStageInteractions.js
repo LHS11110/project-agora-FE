@@ -1,7 +1,8 @@
+import { groupMember } from './userGroups/userGroupModel.js';
 import { shapeCreationSize } from './shapeCatalog.js';
 import { useEffect } from 'react';
 import { INK_BRUSH, inkPointAtPointer } from './inkStroke.js';
-import { canvasPointAtPointer, MIN_CANVAS_ZOOM, MAX_CANVAS_ZOOM } from './canvasSpace.js';
+import { canvasPointAtPointer, zoomCanvasCamera } from './canvasSpace.js';
 import { useCanvasStrokeSaveBatch } from './useCanvasStrokeSaveBatch.js';
 import { editorCanScroll } from './editorWheel.js';
 import { createId } from './canvasIds.js';
@@ -25,8 +26,8 @@ export function useCanvasStageInteractions(options) {
     zoomSensitivity, stageWheelHandlerRef, laserDrawingRef, setLaserStrokes,
     selectionRef, selectedItemIds, setSelectionBox, selectItems,
     canvasSnapshotLoadedRef, finishEditing, setConnectionStartId, spacePressedRef,
-    tableConfig, permission, setSharePosition, shapeType, shapeArrowStartHead,
-    shapeArrowEndHead, color, noteColor, setActiveTool, startEditing, strokeWidth, penBrush, penOpacity,
+    user, tableConfig, permission, setSharePosition, shapeType, shapeArrowStartHead,
+    shapeArrowEndHead, shapeFillColor, color, noteColor, setActiveTool, startEditing, strokeWidth, penBrush, penOpacity,
     drawingRef, drawingSessionRef, draftRef, vectorDraftRef,
   } = options;
 
@@ -115,12 +116,8 @@ export function useCanvasStageInteractions(options) {
     if (!bounds) return;
     const targetX = clientX ?? bounds.left + bounds.width / 2;
     const targetY = clientY ?? bounds.top + bounds.height / 2;
-    setCamera((current) => {
-      const scale = Math.max(MIN_CANVAS_ZOOM, Math.min(MAX_CANVAS_ZOOM, current.scale * factor));
-      const worldX = (targetX - bounds.left - current.x) / (boardSize.width * current.scale);
-      const worldY = (targetY - bounds.top - current.y) / (boardSize.height * current.scale);
-      return { scale, x: targetX - bounds.left - worldX * boardSize.width * scale, y: targetY - bounds.top - worldY * boardSize.height * scale };
-    });
+    setCamera(current => zoomCanvasCamera(current, factor,
+      { x: targetX - bounds.left, y: targetY - bounds.top }, bounds));
   };
   const stopZoomHold = () => {
     const hold = zoomHoldRef.current;
@@ -262,7 +259,7 @@ export function useCanvasStageInteractions(options) {
         maxX: Math.max(selection.start.x, end.x),
         maxY: Math.max(selection.start.y, end.y),
       };
-      const hits = Object.entries(itemsRef.current).filter(([, item]) => item && !['stroke', 'connector'].includes(item.kind))
+      const hits = Object.entries(itemsRef.current).filter(([, item]) => item && ['image', 'link', 'code', 'note', 'table', 'shape', 'text', 'math', 'pdf', 'user-group'].includes(item.kind))
         .filter(([, item]) => {
           const bounds = objectBounds(item, itemsRef.current, boardSize.width, boardSize.height);
           return bounds && bounds.minX >= marquee.minX && bounds.maxX <= marquee.maxX
@@ -272,7 +269,7 @@ export function useCanvasStageInteractions(options) {
       const selectedGroups = new Set([...expanded].map((id) => itemsRef.current[id]?.groupId).filter(Boolean));
       if (selectedGroups.size) {
         Object.entries(itemsRef.current).forEach(([id, item]) => {
-          if (!item?.groupId || !selectedGroups.has(item.groupId) || ['stroke', 'connector'].includes(item.kind)) return;
+          if (item?.type === 'chat_room' || !item?.groupId || !selectedGroups.has(item.groupId) || ['stroke', 'connector'].includes(item.kind)) return;
           const bounds = objectBounds(item, itemsRef.current, boardSize.width, boardSize.height);
           if (bounds && bounds.minX >= marquee.minX && bounds.maxX <= marquee.maxX
             && bounds.minY >= marquee.minY && bounds.maxY <= marquee.maxY) expanded.add(id);
@@ -307,6 +304,14 @@ export function useCanvasStageInteractions(options) {
       setSharePosition(pointerPosition(event));
       return;
     }
+    if (activeTool === 'user-group') {
+      event.preventDefault();
+      const point = pointerPosition(event), id = createId();
+      const item = { kind: 'user-group', groupTitle: '사용자 그룹', members: user?.user_id != null ? [groupMember(user)] : [], x: point.x - .15, y: point.y - .1, width: .3, height: .2, permission };
+      if (!addItem(id, item)) setToast('연결이 복구되면 사용자 그룹을 다시 추가해주세요.');
+      else { setActiveTool('select'); selectItems([id]); }
+      return;
+    }
     if (activeTool === 'table') {
       event.preventDefault();
       const point = pointerPosition(event);
@@ -326,11 +331,11 @@ export function useCanvasStageInteractions(options) {
       const x = point.x - itemWidth / 2;
       const y = point.y - (activeTool === 'shape' ? shapeSize.height / 2 : activeTool === 'code' ? 0.1 : activeTool === 'note' ? 0.08 : 0.06);
       let item;
-      if (activeTool === 'shape') item = { kind: 'shape', shapeType, ...(shapeType === 'arrow' ? { bend: DEFAULT_SHAPE_ARROW_BEND, startHead: shapeArrowStartHead, endHead: shapeArrowEndHead } : {}), x, y, width: itemWidth, height: shapeSize.height, color, permission };
-      else if (activeTool === 'text' || activeTool === 'markdown') item = { kind: 'text', text: '', ...(activeTool === 'markdown' ? { format: 'markdown' } : {}), x, y, width: itemWidth, permission };
+      if (activeTool === 'shape') item = { kind: 'shape', shapeType, fill: shapeType === 'arrow' ? '' : shapeFillColor, ...(shapeType === 'arrow' ? { bend: DEFAULT_SHAPE_ARROW_BEND, startHead: shapeArrowStartHead, endHead: shapeArrowEndHead } : {}), x, y, width: itemWidth, height: shapeSize.height, color, permission };
+      else if (activeTool === 'text' || activeTool === 'markdown') item = { kind: 'text', text: '', renderMode: 'markdown', ...(activeTool === 'markdown' ? { format: 'markdown' } : {}), x, y, width: itemWidth, permission };
       else if (activeTool === 'note') item = { kind: 'note', text: '', x, y, width: itemWidth, color: noteColor, rotation: Math.random() * 3 - 1.5, permission };
-      else if (activeTool === 'code') item = { kind: 'code', code: '', filename: 'idea.js', language: 'javascript', x, y, width: itemWidth, permission };
-      else item = { kind: 'math', formula: '', x, y, width: itemWidth, permission };
+      else if (activeTool === 'code') item = { kind: 'text', text: '', renderMode: 'code', filename: 'idea.js', language: 'javascript', x, y, width: itemWidth, permission };
+      else item = { kind: 'text', text: '', renderMode: 'latex', x, y, width: itemWidth, permission };
       const id = createId();
       if (!addItem(id, item)) setToast('실시간 서버에 연결된 뒤 캔버스를 수정할 수 있어요.');
       else {

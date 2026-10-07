@@ -1,3 +1,4 @@
+import AdditionalKnowledgeDiagram from './AdditionalKnowledgeDiagram.jsx';
 const line = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round', strokeLinejoin: 'round' };
 function Graph({ curve = false }) {
   const points = Array.from({ length: 65 }, (_, i) => {
@@ -13,7 +14,8 @@ function Network({ tree = false }) {
 }
 export default function KnowledgeDiagram({ kind, title }) {
   let content;
-  if (kind === 'wave' || kind === 'curve') content = <Graph curve={kind === 'curve'} />;
+  if (['distribution', 'helix', 'vector', 'sets', 'spiral'].includes(kind)) content = <AdditionalKnowledgeDiagram kind={kind} />;
+  else if (kind === 'wave' || kind === 'curve') content = <Graph curve={kind === 'curve'} />;
   else if (kind === 'network' || kind === 'tree') content = <Network tree={kind === 'tree'} />;
   else if (kind === 'blueprint') content = <>
     <path d="M15 10v80M40 10v80M65 10v80M90 10v80M115 10v80M140 10v80M165 10v80M10 20h160M10 45h160M10 70h160" opacity=".12" {...line} />

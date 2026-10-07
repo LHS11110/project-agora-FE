@@ -1,3 +1,4 @@
+import { isTextContent, contentMode, contentSource } from '../../canvas/content/contentPresentation.js';
 import Icon from '../Icon.jsx';
 import { CANVAS_SPACE } from '../../canvas/canvasSpace.js';
 import { connectorObjectSize } from '../../canvas/connectors/objectMetrics.js';
@@ -6,11 +7,13 @@ import { shapeCatalog } from '../../canvas/shapeCatalog.js';
 import { codeLanguageLabel } from '../../canvas/codeLanguages.js';
 import './connector-endpoint-info.css';
 
-const labels = { text: '텍스트', note: '포스트잇', code: '코드', math: '수식', shape: '도형', table: '테이블', image: '이미지', link: '링크', stroke: '드로잉' };
+const labels = { 'user-group': '사용자 그룹', text: '텍스트', note: '포스트잇', code: '코드', math: '수식', shape: '도형', table: '테이블', image: '이미지', link: '링크', stroke: '드로잉' };
 function summary(item) {
-  if (item.kind === 'code') return `${item.filename || 'snippet.js'} · ${codeLanguageLabel(item.language || 'text')}`;
+  if (item.kind === 'user-group') return `${item.groupTitle || '사용자 그룹'} · ${(item.members || []).map(member => member.nickname).join(', ')}`;
+  if (isTextContent(item) && contentMode(item) === 'code') return `${item.filename || 'snippet.js'} · ${codeLanguageLabel(item.language || 'text')}`;
   if (item.kind === 'shape') return shapeCatalog.find(shape => shape.id === item.shapeType)?.label || '도형';
   if (item.kind === 'table') return `${item.rows?.length || 0}행 × ${item.columns?.length || 0}열 · ${(item.columns || []).join(', ')}`;
+  if (isTextContent(item)) return contentSource(item);
   return String(item.text || item.formula || item.title || item.filename || item.url || '내용 없음');
 }
 function EndpointCard({ label, id, item, onNavigate }) {

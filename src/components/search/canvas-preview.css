@@ -12,3 +12,5 @@
 .preview-object table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .preview-object th, .preview-object td { padding: 5px; border: 1px solid #cad3cc; }
 .preview-object h2, .preview-object h3, .preview-object h4 { margin: 0 0 8px; }
+
+.preview-object-pdf{padding:0;background:#fff}.canvas-preview-pdf{width:100%;height:100%}.canvas-preview-pdf img{display:block;width:100%;height:100%;object-fit:contain}

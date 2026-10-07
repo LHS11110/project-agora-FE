@@ -40,7 +40,7 @@ function roundedPath(points) {
   result.push(points.at(-1)); return result;
 }
 /** Keep a clear straight/custom curve, otherwise find a rounded detour. */
-export function obstacleRoute({ preferred, rectangles, from, to, padding, anchor, preserveBend = false }) {
+export function obstacleRoute({ preferred, rectangles, from, to, padding, anchor, preserveBend = false, guides = null }) {
   // Endpoints define attachment positions only; they are never obstacles.
   const obstacles = rectangles.filter(rect => rect.id !== from.id && rect.id !== to.id);
   const required = obstacles.map(rect => rectangleBounds(rect, padding));
@@ -64,6 +64,13 @@ export function obstacleRoute({ preferred, rectangles, from, to, padding, anchor
   for (const box of boxes) for (const point of [{ x: box.minX - 1, y: box.minY - 1 }, { x: box.maxX + 1, y: box.minY - 1 }, { x: box.maxX + 1, y: box.maxY + 1 }, { x: box.minX - 1, y: box.maxY + 1 }]) {
     if (!boxes.some(candidate => inside(point, candidate))) nodes.push(point);
   }
+  // Each leg shares the same visibility graph; cache collision checks across all guides.
+  const visibility = new Map();
+  const edgeCost = (a, b) => {
+    const key = Math.min(a, b) * nodes.length + Math.max(a, b);
+    if (!visibility.has(key)) visibility.set(key, clear(nodes[a], nodes[b], boxes) ? distance(nodes[a], nodes[b]) : Infinity);
+    return visibility.get(key);
+  };
   const search = (startIndices, isTarget) => {
     const costs = nodes.map(() => Infinity), previous = nodes.map(() => -1), visited = new Set();
     startIndices.forEach(index => { costs[index] = index < starts.length ? distance(nodes[index].tip, nodes[index]) : 0; });
@@ -75,8 +82,10 @@ export function obstacleRoute({ preferred, rectangles, from, to, padding, anchor
       if (isTarget(current)) { target = current; break; }
       visited.add(current);
       for (let index = 0; index < nodes.length; index++) {
-        if (visited.has(index) || !clear(nodes[current], nodes[index], boxes)) continue;
-        const cost = costs[current] + distance(nodes[current], nodes[index]);
+        if (visited.has(index)) continue;
+        const weight = edgeCost(current, index);
+        if (!Number.isFinite(weight)) continue;
+        const cost = costs[current] + weight;
         if (cost < costs[index]) { costs[index] = cost; previous[index] = current; }
       }
     }
@@ -88,21 +97,28 @@ export function obstacleRoute({ preferred, rectangles, from, to, padding, anchor
   const isEnd = index => index >= starts.length && index < starts.length + ends.length;
   const startIndices = starts.map((_, index) => index);
   let route;
-  if (preserveBend) {
-    const desired = preferred[Math.floor(preferred.length / 2)];
-    let guide;
-    if (!boxes.some(box => inside(desired, box))) { guide = nodes.length; nodes.push(desired); }
-    else {
-      guide = nodes.reduce((best, node, index) => distance(node, desired) < distance(nodes[best], desired) ? index : best, 0);
+  let handles;
+  if (guides?.length || preserveBend) {
+    const desiredPoints = guides?.length ? guides : [preferred[Math.floor(preferred.length / 2)]];
+    const guideIndices = desiredPoints.map(desired => {
+      if (!boxes.some(box => inside(desired, box))) { nodes.push(desired); return nodes.length - 1; }
+      return nodes.reduce((best, node, index) => distance(node, desired) < distance(nodes[best], desired) ? index : best, 0);
+    });
+    let sources = startIndices, combined = [], success = true;
+    for (const guide of guideIndices) {
+      const leg = search(sources, index => index === guide);
+      if (!leg) { success = false; break; }
+      combined.push(...(combined.length ? leg.route.slice(1) : leg.route));
+      sources = [guide];
     }
-    const first = search(startIndices, index => index === guide);
-    const second = first && search([guide], isEnd);
-    if (first && second) route = [...first.route, ...second.route.slice(1)];
+    const last = success && search(sources, isEnd);
+    if (last) { route = [...combined, ...last.route.slice(1)]; handles = guideIndices.map(index => nodes[index]); }
   }
   if (!route) route = search(startIndices, isEnd)?.route;
   if (!route) return null;
   const middle = roundedPath(route);
   const points = [route[0].tip, ...middle, route.at(-1).tip];
   if (!pathIsClear(points, required) || !pathIsClear(middle, required)) return null;
-  return { points, routed: true };
+  const visibleHandles = handles?.map(handle => points.reduce((nearest, point) => distance(point, handle) < distance(nearest, handle) ? point : nearest, points[0]));
+  return { points, routed: true, handles: visibleHandles };
 }

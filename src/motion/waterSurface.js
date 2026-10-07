@@ -1,5 +1,6 @@
 import { createLiquidRipple } from 'liquid-ripple';
 import { createClickRipples } from './clickRipples.js';
+import { createClickFireworks } from './clickFireworks.js';
 import { waterAppearance } from './waterAppearance.js';
 
 export function createWaterSurface(layer) {
@@ -7,7 +8,9 @@ export function createWaterSurface(layer) {
   const appearance = waterAppearance(scene);
   layer.dataset.waterTone = appearance.dark ? 'dark' : 'light';
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-  const clicks = createClickRipples(layer, { prominent: appearance.home });
+  const clicks = appearance.home
+    ? createClickFireworks(layer, { dark: appearance.dark })
+    : createClickRipples(layer);
   let water = null, visible = false, previous = null, lastDrop = 0;
   const sync = () => {
     if (reduced.matches || document.hidden || !visible) {

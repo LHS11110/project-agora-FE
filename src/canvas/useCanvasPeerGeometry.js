@@ -3,7 +3,7 @@ import { useCallback, useRef } from 'react';
 
 const REALTIME_ITEM_GEOMETRY_INTERVAL_MS = 32;
 const CANVAS_SYNC_ITEM_KINDS = new Set([
-  'image', 'link', 'code', 'note', 'table', 'shape', 'text', 'math', 'stroke', 'connector',
+  'image', 'link', 'code', 'note', 'table', 'shape', 'text', 'math', 'stroke', 'connector', 'pdf', 'user-group',
 ]);
 
 export function isCanvasSyncItem(item) {
@@ -12,8 +12,9 @@ export function isCanvasSyncItem(item) {
 
 export function hasItemGeometryChanged(previous, next) {
   if (!previous || !next) return true;
-  const fields = ['x', 'y', 'width', 'height', 'rotation', 'bend', 'contentScale', 'contentScaleX', 'contentScaleY', 'fontSize'];
+  const fields = ['x', 'y', 'width', 'height', 'rotation', 'bend', 'contentScale', 'contentScaleX', 'contentScaleY', 'fontSize', 'bendPointCount'];
   return fields.some((field) => (Number(previous[field]) || 0) !== (Number(next[field]) || 0))
+    || (previous.kind === 'connector' && previous.bendPoints !== next.bendPoints)
     || (previous.kind === 'stroke' && previous.points !== next.points);
 }
 

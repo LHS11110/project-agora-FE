@@ -1,16 +1,18 @@
+import { viewportOverview } from './minimap/viewportOverview.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { objectBounds } from '../components/CanvasSpatialBTree.js';
 
 const MINIMAP_ASPECT = 1.6;
 const MINIMAP_OVERVIEW_SCALE = 1.5;
 const MINIMAP_POSITION_KEY = 'agora_canvas_minimap_position';
-const MINIMAP_ITEM_KINDS = new Set(['image', 'link', 'code', 'note', 'table', 'shape', 'text', 'math', 'stroke', 'connector']);
+const MINIMAP_ITEM_KINDS = new Set(['image', 'link', 'code', 'note', 'table', 'shape', 'text', 'math', 'stroke', 'connector', 'pdf', 'user-group']);
 const MINIMAP_ITEM_COLORS = {
-  image: '#c58b68', link: '#cf876b', code: '#708d78', note: '#d1ae62', table: '#7587a6',
+  'user-group': '#8a75aa',
+  pdf: '#b47768', image: '#c58b68', link: '#cf876b', code: '#708d78', note: '#d1ae62', table: '#7587a6',
   shape: '#6d9a91', text: '#809084', math: '#9a7ea1', stroke: '#526d5f', connector: '#a0a59b',
 };
 
-export function useCanvasMinimap({ boardRef, boardSize, viewportSize = boardSize, camera, setCamera, items }) {
+export function useCanvasMinimap({ boardRef, boardSize, viewportSize = boardSize, camera, setCamera, items, spatialIndex }) {
   const minimapWidgetRef = useRef(null);
   const minimapPointerRef = useRef(null);
   const minimapMoveRef = useRef(null);
@@ -28,7 +30,7 @@ export function useCanvasMinimap({ boardRef, boardSize, viewportSize = boardSize
   const visibleWorldBounds = useMemo(() => {
     const width = Math.max(1, viewportSize.width);
     const height = Math.max(1, viewportSize.height);
-    const scale = Math.max(0.001, camera.scale);
+    const scale = camera.scale;
     return {
       minX: -camera.x / scale,
       minY: -camera.y / scale,
@@ -43,65 +45,21 @@ export function useCanvasMinimap({ boardRef, boardSize, viewportSize = boardSize
     maxY: visibleWorldBounds.maxY / Math.max(1, boardSize.height),
   }), [boardSize, visibleWorldBounds]);
   const minimap = useMemo(() => {
-    const viewportWidth = Math.max(1, boardSize.width);
-    const viewportHeight = Math.max(1, boardSize.height);
-    const minimapItems = Object.entries(items)
-      .filter(([, item]) => MINIMAP_ITEM_KINDS.has(item?.kind))
-      .map(([id, item]) => {
-        const normalizedBounds = objectBounds(item, items, viewportWidth, viewportHeight);
-        return {
-          id,
-          item,
-          bounds: {
-            minX: normalizedBounds.minX * viewportWidth,
-            minY: normalizedBounds.minY * viewportHeight,
-            maxX: normalizedBounds.maxX * viewportWidth,
-            maxY: normalizedBounds.maxY * viewportHeight,
-          },
-        };
-      });
+    const worldWidth = Math.max(1, boardSize.width), worldHeight = Math.max(1, boardSize.height);
     const viewport = visibleWorldBounds;
-    const bounds = {
-      minX: -viewportWidth,
-      minY: -viewportHeight,
-      maxX: viewportWidth * 2,
-      maxY: viewportHeight * 2,
-    };
-    const include = (next) => {
-      bounds.minX = Math.min(bounds.minX, next.minX);
-      bounds.minY = Math.min(bounds.minY, next.minY);
-      bounds.maxX = Math.max(bounds.maxX, next.maxX);
-      bounds.maxY = Math.max(bounds.maxY, next.maxY);
-    };
-    minimapItems.forEach(({ bounds: itemBounds }) => include(itemBounds));
-    include(viewport);
-
-    const padding = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * 0.1;
-    bounds.minX -= padding;
-    bounds.minY -= padding;
-    bounds.maxX += padding;
-    bounds.maxY += padding;
-    let width = bounds.maxX - bounds.minX;
-    let height = bounds.maxY - bounds.minY;
-    if (width / height < MINIMAP_ASPECT) {
-      const expandedWidth = height * MINIMAP_ASPECT;
-      bounds.minX -= (expandedWidth - width) / 2;
-      width = expandedWidth;
-    } else {
-      const expandedHeight = width / MINIMAP_ASPECT;
-      bounds.minY -= (expandedHeight - height) / 2;
-      height = expandedHeight;
-    }
-    const overviewWidth = width * MINIMAP_OVERVIEW_SCALE;
-    const overviewHeight = height * MINIMAP_OVERVIEW_SCALE;
-    bounds.minX -= (overviewWidth - width) / 2;
-    bounds.minY -= (overviewHeight - height) / 2;
-    width = overviewWidth;
-    height = overviewHeight;
-    bounds.maxX = bounds.minX + width;
-    bounds.maxY = bounds.minY + height;
-    return { bounds: { ...bounds, width, height }, viewport, items: minimapItems };
-  }, [boardSize, items, visibleWorldBounds]);
+    const bounds = viewportOverview(viewport, MINIMAP_ASPECT, MINIMAP_OVERVIEW_SCALE);
+    const query = { minX: bounds.minX / worldWidth, minY: bounds.minY / worldHeight, maxX: bounds.maxX / worldWidth, maxY: bounds.maxY / worldHeight };
+    const entries = spatialIndex ? spatialIndex.query(query)
+      : Object.entries(items).map(([id, item]) => ({ id, item, bounds: objectBounds(item, items, worldWidth, worldHeight) }));
+    const minimapItems = entries.filter(entry => {
+      const item = items[entry.id] || entry.item, b = entry.bounds;
+      return MINIMAP_ITEM_KINDS.has(item?.kind) && b.maxX >= query.minX && b.minX <= query.maxX && b.maxY >= query.minY && b.minY <= query.maxY;
+    }).map(entry => ({ id: entry.id, item: items[entry.id] || entry.item, bounds: {
+      minX: entry.bounds.minX * worldWidth, minY: entry.bounds.minY * worldHeight,
+      maxX: entry.bounds.maxX * worldWidth, maxY: entry.bounds.maxY * worldHeight,
+    } }));
+    return { bounds, viewport, items: minimapItems };
+  }, [boardSize, items, visibleWorldBounds, spatialIndex]);
 
   useEffect(() => {
     if (!minimapPosition || viewportSize.width <= 1 || viewportSize.height <= 1) return;

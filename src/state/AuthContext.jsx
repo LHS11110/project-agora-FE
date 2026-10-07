@@ -25,16 +25,43 @@ export function AuthProvider({ children }) {
     return login(email, password);
   }, [login]);
   const updateUser = useCallback((nextUser) => {
-    localStorage.setItem(USER_KEY, JSON.stringify(nextUser)); setUser(nextUser);
+    setUser(current => {
+      const updated = typeof nextUser === 'function' ? nextUser(current) : nextUser;
+      localStorage.setItem(USER_KEY, JSON.stringify(updated));
+      return updated;
+    });
   }, []);
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); setToken(null); setUser(null);
   }, []);
   useEffect(() => {
     const handleUnauthorized = () => logout();
+    const syncStoredAccount = (event) => {
+      if (event.storageArea !== localStorage || (event.key !== null && ![TOKEN_KEY, USER_KEY].includes(event.key))) return;
+      setToken(localStorage.getItem(TOKEN_KEY));
+      setUser(readUser());
+    };
     window.addEventListener('agora:unauthorized', handleUnauthorized);
-    return () => window.removeEventListener('agora:unauthorized', handleUnauthorized);
+    window.addEventListener('storage', syncStoredAccount);
+    return () => {
+      window.removeEventListener('agora:unauthorized', handleUnauthorized);
+      window.removeEventListener('storage', syncStoredAccount);
+    };
   }, [logout]);
+  useEffect(() => {
+    if (!token) return undefined;
+    let cancelled = false;
+    api('/api/auth/me', { method: 'POST', token, body: { token } }).then(next => {
+      if (cancelled) return;
+      setUser(current => {
+        if (!current || current.nickname !== next.nickname || current.tag_number !== next.tag_number) return current;
+        const merged = { ...current, user_id: next.user_id };
+        localStorage.setItem(USER_KEY, JSON.stringify(merged));
+        return merged;
+      });
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [token]);
   const value = useMemo(() => ({ token, user, isAuthenticated: Boolean(token && user), login, signup, updateUser, logout }),
     [token, user, login, signup, updateUser, logout]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

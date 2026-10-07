@@ -1,0 +1,5 @@
+.home-slides-page [data-home-draggable]{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.home-slides-page [data-home-draggable]:focus-visible{outline:2px solid #9277b2;outline-offset:4px}
+.home-slides-page [data-home-dragging="true"],.home-slides-page[data-home-dragging="true"]{cursor:grabbing}
+.home-slides-page [data-home-dragging="true"]{will-change:translate}
+.home-slides-page :is(.frelog-scene,.architecture-showcase,.vector-showcase):has([data-home-dragging="true"]){overflow:visible}

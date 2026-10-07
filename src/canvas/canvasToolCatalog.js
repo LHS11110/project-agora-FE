@@ -3,6 +3,7 @@ export const canvasToolCategories = [
   { id: 'navigate', label: '탐색·협업', tools: [
     { id: 'select', label: '선택', description: '선택 및 이동', icon: 'select' },
     { id: 'hand', label: '손', description: '캔버스 화면 이동 · 마우스로 집어서 드래그', icon: 'hand' },
+    { id: 'user-group', label: '사용자 그룹', description: '사용자 프로필을 모아 캔버스에 배치', icon: 'user' },
     { id: 'laser', label: '포인터', description: '레이저 포인터', icon: 'laser' },
   ] },
   { id: 'draw', label: '그리기', tools: [
@@ -14,16 +15,14 @@ export const canvasToolCategories = [
     { id: 'connect', label: '연결', description: '오브젝트 연결', icon: 'connect' },
   ] },
   { id: 'write', label: '글쓰기', tools: [
-    { id: 'text', label: '텍스트', icon: 'text' },
-    { id: 'markdown', label: '마크다운', description: '배경 없는 마크다운 텍스트', mark: 'M↓' },
+    { id: 'text', label: '내용', description: '텍스트 · Markdown · LaTeX · 코드', icon: 'text' },
     { id: 'note', label: '포스트잇', icon: 'sticky' },
   ] },
   { id: 'structure', label: '자료·계산', tools: [
     { id: 'table', label: '테이블', icon: 'table' },
-    { id: 'math', label: '수식', description: '수식 작성', icon: 'math' },
-    { id: 'code', label: '코드', description: '코드 블록', icon: 'code' },
   ] },
   { id: 'media', label: '미디어', tools: [
+    { id: 'pdf', label: 'PDF', description: 'PDF 문서 올리기', icon: 'document', upload: true, accept: 'application/pdf,.pdf' },
     { id: 'image', label: '사진', description: '사진 올리기', icon: 'image', upload: true },
     { id: 'link', label: '링크', description: '동영상·링크 공유', icon: 'link' },
   ] },

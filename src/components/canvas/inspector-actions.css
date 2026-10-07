@@ -1,0 +1,13 @@
+.canvas-inspector .inspector-secondary-action{
+  display:flex;align-items:center;justify-content:center;gap:7px;
+  width:100%;min-height:32px;box-sizing:border-box;margin:10px 0;
+  padding:7px 10px;border:1px solid var(--line);border-radius:7px;
+  background:var(--surface-soft);color:var(--ink-strong);
+  font:500 10px/1.4 var(--display);cursor:pointer;
+  transition:background .15s,border-color .15s;
+}
+.canvas-inspector .inspector-secondary-action svg{flex:0 0 auto;color:var(--ink-muted)}
+.canvas-inspector .inspector-secondary-action:hover{background:var(--panel-soft);border-color:var(--ink-muted)}
+.canvas-inspector .inspector-secondary-action:active{background:var(--surface)}
+.canvas-inspector .inspector-secondary-action:focus-visible{outline:2px solid var(--ink-strong);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){.canvas-inspector .inspector-secondary-action{transition:none}}

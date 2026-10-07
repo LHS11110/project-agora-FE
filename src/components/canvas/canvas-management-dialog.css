@@ -1,0 +1,3 @@
+dialog.canvas-management-dialog{box-sizing:border-box;margin:auto;border:0;width:min(620px,calc(100vw - 32px));max-height:90dvh;color:var(--text,#364c40)}
+dialog.canvas-management-dialog::backdrop{background:#14241d80;backdrop-filter:blur(3px)}
+.canvas-management-dialog .participant-chip button:disabled{opacity:.4;cursor:wait}

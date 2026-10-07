@@ -1,3 +1,4 @@
+import { contentMode, isTextContent } from './content/contentPresentation.js';
 import { objectFontSize, objectBaseFontSize, hasIndependentContentSize } from './objectSize.js';
 import './object-size-controls.css';
 import { Children, Fragment, cloneElement, isValidElement, useLayoutEffect, useRef, useState } from 'react';
@@ -36,5 +37,5 @@ export function scaleObjectElement(element, item) {
   const className = String(element.props.className || '').split(' ').filter(name =>
     !['canvas-object', 'tutorial-item', 'selected', 'movable', 'resizeable', 'connection-source'].includes(name)).join(' ');
   return cloneElement(element, { className: `${element.props.className} scalable-object-frame` },
-    <ScalableObjectContent className={className} scaleX={objectContentScale(item, 'X')} scaleY={objectContentScale(item, 'Y')} fixedHeight={Boolean(item.height)} fillSpace={hasIndependentContentSize(item) ? item.kind : null} fontScale={hasIndependentContentSize(item) ? objectFontSize(item) / objectBaseFontSize(item) : undefined}>{content}</ScalableObjectContent>, controls);
+    <ScalableObjectContent className={className} scaleX={objectContentScale(item, 'X')} scaleY={objectContentScale(item, 'Y')} fixedHeight={Boolean(item.height)} fillSpace={isTextContent(item) && contentMode(item) === 'code' ? 'code' : hasIndependentContentSize(item) ? item.kind : null} fontScale={hasIndependentContentSize(item) ? objectFontSize(item) / objectBaseFontSize(item) : undefined}>{content}</ScalableObjectContent>, controls);
 }

@@ -1,14 +1,7 @@
+import { ARROW_HEAD_OPTIONS, headNeedsTrim, makeArrowHead } from './arrowheads/headShapes.js';
+export { ARROW_HEAD_OPTIONS } from './arrowheads/headShapes.js';
 export const DEFAULT_ARROW_START_HEAD = 'none';
 export const DEFAULT_ARROW_END_HEAD = 'triangle';
-
-export const ARROW_HEAD_OPTIONS = [
-  { value: 'none', label: '없음' },
-  { value: 'triangle', label: '삼각형' },
-  { value: 'open', label: '열린 화살촉' },
-  { value: 'diamond', label: '마름모' },
-  { value: 'circle', label: '원형' },
-  { value: 'bar', label: '막대' },
-];
 
 const validHeads = new Set(ARROW_HEAD_OPTIONS.map(({ value }) => value));
 
@@ -58,76 +51,6 @@ function trimPolyline(points, startDistance, endDistance, totalLength) {
   return [start, ...middle, end];
 }
 
-function makeHead(type, tip, axis, size, strokeWidth, basePoint) {
-  if (type === 'none') return null;
-  const perpendicular = { x: -axis.y, y: axis.x };
-  const halfWidth = size * (type === 'diamond' ? 0.34 : 0.42);
-  const base = basePoint || { x: tip.x - axis.x * size, y: tip.y - axis.y * size };
-  if (type === 'triangle') {
-    return {
-      type,
-      filled: true,
-      tip,
-      points: [
-        tip,
-        { x: base.x + perpendicular.x * halfWidth, y: base.y + perpendicular.y * halfWidth },
-        { x: base.x - perpendicular.x * halfWidth, y: base.y - perpendicular.y * halfWidth },
-      ],
-    };
-  }
-  if (type === 'open') {
-    return {
-      type,
-      tip,
-      points: [
-        { x: base.x + perpendicular.x * halfWidth, y: base.y + perpendicular.y * halfWidth },
-        tip,
-        { x: base.x - perpendicular.x * halfWidth, y: base.y - perpendicular.y * halfWidth },
-      ],
-    };
-  }
-  if (type === 'diamond') {
-    const middle = { x: (tip.x + base.x) / 2, y: (tip.y + base.y) / 2 };
-    return {
-      type,
-      filled: true,
-      tip,
-      points: [
-        tip,
-        { x: middle.x + perpendicular.x * halfWidth, y: middle.y + perpendicular.y * halfWidth },
-        base,
-        { x: middle.x - perpendicular.x * halfWidth, y: middle.y - perpendicular.y * halfWidth },
-      ],
-    };
-  }
-  if (type === 'circle') {
-    const radius = Math.hypot(tip.x - base.x, tip.y - base.y) / 2;
-    const center = { x: (tip.x + base.x) / 2, y: (tip.y + base.y) / 2 };
-    return {
-      type,
-      tip,
-      center,
-      radius,
-      points: Array.from({ length: 12 }, (_, index) => {
-        const angle = index / 12 * Math.PI * 2;
-        return { x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius };
-      }),
-    };
-  }
-  if (type === 'bar') {
-    const barHalfWidth = Math.max(size * 0.42, Number(strokeWidth) || 1.5);
-    return {
-      type,
-      tip,
-      points: [
-        { x: tip.x + perpendicular.x * barHalfWidth, y: tip.y + perpendicular.y * barHalfWidth },
-        { x: tip.x - perpendicular.x * barHalfWidth, y: tip.y - perpendicular.y * barHalfWidth },
-      ],
-    };
-  }
-  return null;
-}
-
 export function arrowPathGeometry(points, {
   startHead = DEFAULT_ARROW_START_HEAD,
   endHead = DEFAULT_ARROW_END_HEAD,
@@ -136,30 +59,31 @@ export function arrowPathGeometry(points, {
 } = {}) {
   if (!Array.isArray(points) || points.length < 2) return { points: points || [], curvePoints: points || [], heads: [], start: points?.[0], end: points?.at(-1) };
 
-  const curvePoints = points;
+  // Routing can repeat its port/tip. Remove duplicates before deriving an end direction.
+  const curvePoints = [];
+  for (const point of points) {
+    if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) continue;
+    const last = curvePoints.at(-1);
+    if (!last || Math.hypot(point.x - last.x, point.y - last.y) > 1e-6) curvePoints.push(point);
+  }
   const totalLength = polylineLength(curvePoints);
-  const safeSize = Math.max(2, Number(headSize) || 14);
+  if (curvePoints.length < 2 || totalLength < 1e-6) return { points: curvePoints, curvePoints, heads: [], start: curvePoints[0], end: curvePoints.at(-1) };
   const startType = normalizeArrowHead(startHead, DEFAULT_ARROW_START_HEAD);
   const endType = normalizeArrowHead(endHead, DEFAULT_ARROW_END_HEAD);
-  let startTrim = ['none', 'open', 'bar'].includes(startType) ? 0 : safeSize;
-  let endTrim = ['none', 'open', 'bar'].includes(endType) ? 0 : safeSize;
-  const requestedTrim = startTrim + endTrim;
-  const maxTrim = totalLength * 0.72;
-  if (requestedTrim > maxTrim && requestedTrim > 0) {
-    const ratio = maxTrim / requestedTrim;
-    startTrim *= ratio;
-    endTrim *= ratio;
-  }
-
-  const startAxis = vectorBetween(curvePoints[1], curvePoints[0]);
-  const endAxis = vectorBetween(curvePoints[curvePoints.length - 2], curvePoints[curvePoints.length - 1]);
-  const start = curvePoints[0];
-  const end = curvePoints[curvePoints.length - 1];
-  const startBase = pointAtDistance(curvePoints, startTrim);
-  const endBase = pointAtDistance(curvePoints, Math.max(startTrim, totalLength - endTrim));
+  const count = Number(startType !== 'none') + Number(endType !== 'none');
+  // Even open heads occupy space: shrink both ends together on short connections.
+  const safeSize = Math.min(Math.max(2, Number(headSize) || 14), totalLength * .72 / Math.max(1, count));
+  const startTrim = headNeedsTrim(startType) ? safeSize : 0;
+  const endTrim = headNeedsTrim(endType) ? safeSize : 0;
+  const start = curvePoints[0], end = curvePoints.at(-1);
+  const headAt = (type, tip, base, fallbackAxis) => {
+    const length = Math.hypot(tip.x - base.x, tip.y - base.y);
+    return makeArrowHead(type, tip, length > 1e-6 ? vectorBetween(base, tip) : fallbackAxis, length > 1e-6 ? length : safeSize, strokeWidth);
+  };
+  // Head dimensions are independent of shaft trimming; open heads always have a base.
   const heads = [
-    makeHead(startType, start, startAxis, Math.max(2, startTrim || safeSize), strokeWidth, startBase),
-    makeHead(endType, end, endAxis, Math.max(2, endTrim || safeSize), strokeWidth, endBase),
+    headAt(startType, start, pointAtDistance(curvePoints, safeSize), vectorBetween(curvePoints[1], start)),
+    headAt(endType, end, pointAtDistance(curvePoints, totalLength - safeSize), vectorBetween(curvePoints.at(-2), end)),
   ].filter(Boolean);
 
   return {

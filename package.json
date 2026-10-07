@@ -13,6 +13,7 @@
     "liquid-ripple": "0.1.1",
     "mathjax": "^4.1.3",
     "monaco-editor": "0.57.0",
+    "pdfjs-dist": "6.4.299",
     "perfect-freehand": "1.2.3",
     "pixi.js": "^8.21.0",
     "react": "^18.3.1",

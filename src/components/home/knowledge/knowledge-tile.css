@@ -7,7 +7,7 @@
 .knowledge-diagram text{fill:currentColor;font:8px var(--mono)}
 .knowledge-formula{display:block;min-height:16px;font-size:9px;text-align:center;overflow-x:auto;overflow-y:hidden}
 .knowledge-formula .mathjax-output{color:inherit}
-.slide-context-card .context-card-icon{display:none}
+.home-slides-page .slide-context-card .context-card-icon{display:grid}
 .home-slides-page .slide-context-card{gap:15px;padding:15px}
 .home-slides-page .slide-context-card .context-card-copy strong{font-size:12px}
 .home-slides-page .slide-context-card .context-card-copy>span{font-size:9px}
@@ -43,3 +43,9 @@
   .home-slides-page .home-slide.slide-hero .hero-scene-setting .frelog-scene{height:220px;max-height:none}
   .home-knowledge-stage .vector-showcase{max-height:none}
 }
+
+.knowledge-tile-distribution{background:#f5eadc;color:#a1723f}
+.knowledge-tile-helix{background:#e3f1ef;color:#448b85}
+.knowledge-tile-vector{background:#e9edfa;color:#647daf}
+.knowledge-tile-sets{background:#f5e6ed;color:#aa6685}
+.knowledge-tile-spiral{background:#edf1d9;color:#829b48}

@@ -1,0 +1,10 @@
+.user-avatar{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:40px;height:40px;border:2px solid #8ca89b;border-radius:50%;overflow:hidden;background:#eef2ea;color:#517360;font-weight:600}
+.user-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.user-avatar.avatar-xl{width:92px;height:92px;font-size:32px}
+.user-avatar.avatar-small{width:34px;height:34px}
+.profile-image-controls{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:14px 0}
+.profile-image-controls button{font-size:11px;padding:7px 10px;border:1px solid #d2dacc;border-radius:8px;background:#fff;color:#476354;cursor:pointer}
+.profile-image-controls button:disabled{opacity:.5;cursor:default}
+.profile-image-message{font-size:11px;line-height:1.6;color:#8d564b;overflow-wrap:anywhere}
+
+.collaborator-avatars .user-avatar>span{width:auto;height:auto;border:0;margin:0;background:transparent}

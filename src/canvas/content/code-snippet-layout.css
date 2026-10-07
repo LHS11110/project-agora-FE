@@ -1,0 +1,31 @@
+/* Scope to unified snippets so text styles and older header rules cannot collapse inputs. */
+.canvas-stage .code-object .code-snippet-header,.tutorial-stage .code-object .code-snippet-header{
+  display:flex;flex-wrap:wrap;align-items:center;gap:8px;flex:none;
+  height:auto;min-height:42px;padding:8px 10px;box-sizing:border-box;
+  border-bottom:1px solid #40536d;border-top:2px solid var(--code-language-accent);
+  background:#243249;color:#e5edf9;
+}
+.canvas-stage .code-object.selected .code-snippet-header[data-editing="false"]{padding-left:46px}
+.canvas-stage .code-object.selected .code-snippet-header[data-editing="true"]{padding-left:10px}
+.code-snippet-header .code-file-heading{display:flex;align-items:center;gap:7px;flex:1 1 100px;min-width:0;max-width:100%}
+.code-file-heading>svg{flex:none;color:var(--code-language-accent)}
+.canvas-stage .code-object .code-file-heading>strong,.tutorial-stage .code-object .code-file-heading>strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 11px/1.5 var(--mono);color:#e5edf9}
+.canvas-stage .code-object .code-snippet-header .code-filename-input,.tutorial-stage .code-object .code-snippet-header .code-filename-input{
+  flex:1 1 auto;display:block;width:100%;min-width:0;height:28px;box-sizing:border-box;
+  padding:4px 7px;border:1px solid #506581;border-radius:5px;background:#19273b;
+  color:#e5edf9;font:11px/1.5 var(--mono);outline:0;
+}
+.code-filename-input::placeholder{color:#9aaec9}
+.code-language-badge{display:inline-flex;align-items:center;gap:6px;flex:0 1 auto;min-width:0;max-width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid color-mix(in srgb,var(--code-language-accent) 50%,#31425b);border-radius:6px;background:color-mix(in srgb,var(--code-language-accent) 12%,#1b283d);color:var(--code-language-accent);font:600 10px/1.5 var(--mono);white-space:nowrap}
+.code-language-badge>i{width:6px;height:6px;flex:none;border-radius:50%;background:var(--code-language-accent)}
+.code-language-badge>span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.canvas-stage .code-object .code-snippet-header .code-language-badge .code-language-select,.tutorial-stage .code-object .code-snippet-header .code-language-badge .code-language-select{
+  flex:1 1 auto;min-width:0;max-width:150px;width:auto;height:22px;margin:0;padding:0 3px;
+  border:0;background:transparent;color:var(--code-language-accent);font:600 10px/1.5 var(--mono);outline:0;cursor:pointer;
+}
+.code-language-select option,.code-language-select optgroup{background:#243249;color:#e5edf9}
+.code-snippet-header .code-file-heading>.code-filename-input:focus,.code-language-badge:focus-within{outline:2px solid var(--code-language-accent);outline-offset:2px;box-shadow:none}
+.canvas-stage .unified-content-object.code-object .unified-content-body,.tutorial-stage .unified-content-object.code-object .unified-content-body{display:flex;flex-direction:column;min-width:0;min-height:0;background:#192233}
+.unified-content-object.code-object .unified-content-body>.canvas-code-editor{width:100%;flex:0 0 260px;min-height:120px;box-sizing:border-box}
+.unified-content-object.code-object.has-custom-height .unified-content-body>.canvas-code-editor{flex:1 1 0;height:100%;min-height:0}
+.unified-content-object.code-object .code-object-foot{flex:none;min-height:34px;height:auto;box-sizing:border-box;gap:8px;padding:5px 10px}

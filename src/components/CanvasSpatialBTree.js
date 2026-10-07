@@ -95,6 +95,13 @@ function objectBounds(item, items, viewportWidth = 1, viewportHeight = 1) {
     }
   }
 
+  if (item?.kind === 'connector') {
+    const target = items?.[item.from] || items?.[item.to];
+    if (target && target.kind !== 'connector') {
+      const anchor = objectBounds(target, items, width, height);
+      return { minX: anchor.minX, minY: anchor.maxY + .012, maxX: anchor.minX + .2, maxY: anchor.maxY + .06 };
+    }
+  }
   const [defaultWidth, defaultHeight] = OBJECT_SIZES[item?.kind] || [0.2, 0.12];
   const x = Number(item?.x) || 0;
   const y = Number(item?.y) || 0;
@@ -144,7 +151,14 @@ export default class CanvasSpatialBTree {
     this.fanout = fanout;
     const width = viewSize.width || 1;
     const height = viewSize.height || 1;
-    const entries = Object.entries(items).map(([id, item]) => ({ id, item, bounds: objectBounds(item, items, width, height) }));
+    const entries = Object.entries(items).flatMap(([id, item]) => {
+      if (!item || item.type === 'chat_room') return [];
+      try {
+        const bounds = objectBounds(item, items, width, height);
+        if (!Object.values(bounds).every(Number.isFinite) || bounds.maxX < bounds.minX || bounds.maxY < bounds.minY) return [];
+        return [{ id, item, bounds }];
+      } catch { return []; }
+    });
     this.root = this.#build(entries);
   }
 

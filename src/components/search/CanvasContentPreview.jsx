@@ -1,4 +1,7 @@
-import { shapeOutlinePaths } from '../../canvas/shapeGeometry.js';
+import UserGroupContent from '../../canvas/userGroups/UserGroupContent.jsx';
+import RenderedContent from '../../canvas/content/RenderedContent.jsx';
+import { isTextContent, contentMode, contentSource } from '../../canvas/content/contentPresentation.js';
+import { shapeOutlinePaths, shapeFillPaths } from '../../canvas/shapeGeometry.js';
 import { objectBounds } from '../CanvasSpatialBTree.js';
 import { connectorGeometry, OBJECT_SIZES } from '../connectorGeometry.js';
 import { shapeArrowGeometry } from '../shapeArrowGeometry.js';
@@ -9,13 +12,14 @@ import MathFormula from '../MathFormula.jsx';
 
 const WIDTH = 1000;
 const HEIGHT = 600;
-const kinds = new Set(['note', 'text', 'code', 'math', 'table', 'image', 'link', 'shape', 'stroke', 'connector']);
+const kinds = new Set(['note', 'text', 'code', 'math', 'table', 'image', 'link', 'shape', 'stroke', 'connector', 'pdf', 'user-group']);
 
 function PreviewContent({ item, token }) {
+  if (item.kind === 'user-group') return <UserGroupContent item={item} token={token} />;
+  if (item.kind === 'pdf') return <div className="canvas-preview-pdf"><AuthenticatedImage src={item.thumbnail} token={token} alt={item.filename || 'PDF'} fallback={<strong>PDF · {item.filename || '문서'}</strong>} /></div>;
   if (item.kind === 'image') return <AuthenticatedImage src={item.src} token={token} alt={item.filename || '공유 이미지'} fallback={<span>{item.filename || '이미지'}</span>} />;
   if (item.kind === 'table') return <table><thead><tr>{(item.columns || []).map((value, i) => <th key={i}>{String(value)}</th>)}</tr></thead><tbody>{(item.rows || []).map((row, i) => <tr key={i}>{(Array.isArray(row) ? row : []).map((value, j) => <td key={j}>{String(value)}</td>)}</tr>)}</tbody></table>;
-  if (item.kind === 'math') return <MathFormula formula={String(item.formula ?? item.text ?? '')} />;
-  if (item.kind === 'code') return <><small>{item.filename || item.language || '코드'}</small><pre>{item.code || ''}</pre></>;
+  if (isTextContent(item)) return <RenderedContent value={contentSource(item)} mode={contentMode(item)} language={item.language || 'javascript'} />;
   if (item.kind === 'link') return <><strong>{item.title || '공유 링크'}</strong><p>{item.url || ''}</p></>;
   return item.format === 'markdown' || item.kind === 'note' ? <MarkdownText source={item.text || ''} /> : <p>{item.text || ''}</p>;
 }
@@ -35,6 +39,7 @@ function PreviewObject({ item, token }) {
     const color = item.color || '#617d68';
     const arrow = item.shapeType === 'arrow' ? shapeArrowGeometry(width, height, item.bend, item.startHead, item.endHead) : null;
     return <g transform={`translate(${x} ${y}) rotate(${rotation} ${width / 2} ${height / 2})`} style={{ color }} fill="none" stroke={color} strokeWidth={item.strokeWidth || 2}>
+      {!arrow && /^#[0-9a-f]{6}$/i.test(item.fill || '') && shapeFillPaths(item.shapeType, width, height).map((path, index) => <polygon key={`fill-${index}`} points={path.map(p => `${p.x},${p.y}`).join(' ')} fill={item.fill} stroke="none" />)}
       {arrow ? <><polyline points={arrow.points.map(p => `${p.x},${p.y}`).join(' ')} /><ConnectorArrowheads geometry={arrow} offsetX={0} offsetY={0} strokeWidth={item.strokeWidth || 2} /></> : shapeOutlinePaths(item.shapeType, width, height).map((path, index) => <polyline key={index} points={path.map(p => `${p.x},${p.y}`).join(' ')} strokeLinejoin="round" />)}
     </g>;
   }

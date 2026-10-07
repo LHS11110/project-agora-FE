@@ -1,3 +1,4 @@
+import { connectorControlHandles, connectorPointCount, sampleControlCurve } from '../canvas/connectors/controlPoints.js';
 import { strokePaintSize } from '../canvas/inkStroke.js';
 import { obstacleRoute } from '../canvas/connectors/obstacleRoute.js';
 import { connectorObjectSize, connectorMetricsRevision } from '../canvas/connectors/objectMetrics.js';
@@ -6,6 +7,8 @@ import { arrowPathGeometry } from './arrowheadGeometry.js';
 import { shapeOutlinePaths } from '../canvas/shapeGeometry.js';
 
 export const OBJECT_SIZES = {
+  pdf: [0.3, 0.48],
+  'user-group': [0.3, 0.2],
   image: [0.3, 0.2],
   code: [0.32, 0.2],
   shape: [0.14, 0.12],
@@ -137,9 +140,20 @@ function calculateConnectorGeometry(item, items, width, height) {
     { x: end.x - directionX * gap * 0.2, y: end.y - directionY * gap * 0.2 },
     end,
   ];
-  const curvePoints = Array.from({ length: 33 }, (_, index) => bezierPoint(curve, index / 32));
+  const hasControls = connectorPointCount(item) > 1 || Array.isArray(item.bendPoints);
+  const controls = connectorControlHandles(item, start, end);
+  let curvePoints = Array.from({ length: 33 }, (_, index) => bezierPoint(curve, index / 32));
+  if (hasControls) {
+    const attached = (rect, point, fallback) => {
+      const dx = point.x - rect.centerX, dy = point.y - rect.centerY, length = Math.hypot(dx, dy);
+      if (length < 1) return fallback;
+      const reach = distanceToEdge(rect, dx / length, dy / length) + edgePadding;
+      return { x: rect.centerX + dx / length * reach, y: rect.centerY + dy / length * reach };
+    };
+    curvePoints = sampleControlCurve([attached(from, controls[0], start), ...controls, attached(to, controls.at(-1), end)]);
+  }
   const routed = obstacleRoute({ preferred: curvePoints, rectangles, from, to,
-    padding: headSize + strokeWidth / 2 + 4, preserveBend: bend > 0,
+    padding: headSize + strokeWidth / 2 + 4, preserveBend: bend > 0, guides: hasControls ? controls : null,
     anchor: (rect, direction, padding) => {
       const reach = distanceToEdge(rect, direction.x, direction.y) + padding;
       return { x: rect.centerX + direction.x * reach, y: rect.centerY + direction.y * reach };
@@ -152,7 +166,7 @@ function calculateConnectorGeometry(item, items, width, height) {
     headSize,
     strokeWidth: Number(item.strokeWidth) || 1.5,
   });
-  return { ...arrowPath, directionX, directionY, normalX, normalY, gap, bend, bendStart: start, bendEnd: end, routed: routed.routed };
+  return { ...arrowPath, directionX, directionY, normalX, normalY, gap, bend, bendStart: start, bendEnd: end, controlSourcePoints: curvePoints, controlHandles: hasControls ? (routed.handles || controls) : [routed.points[Math.floor((routed.points.length - 1) / 2)]], routed: routed.routed };
 }
 
 const geometryCache = new WeakMap();

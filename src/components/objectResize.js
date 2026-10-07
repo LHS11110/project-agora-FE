@@ -1,7 +1,7 @@
 import { hasIndependentContentSize } from '../canvas/objectSize.js';
 import { isContentScalable, objectContentScale, MIN_CONTENT_SCALE, MAX_CONTENT_SCALE } from '../canvas/objectContentScale.js';
-const MIN_WIDTHS = { image: 100, code: 190, note: 170, text: 110 };
-const MIN_HEIGHTS = { shape: 38, code: 64, note: 148, math: 33, text: 38, table: 60, link: 60 };
+const MIN_WIDTHS = { pdf: 140, image: 100, code: 190, note: 170, text: 110 };
+const MIN_HEIGHTS = { pdf: 140, shape: 38, code: 64, note: 148, math: 33, text: 38, table: 60, link: 60 };
 
 function rotateAround(point, center, angle) {
   const cosine = Math.cos(angle);

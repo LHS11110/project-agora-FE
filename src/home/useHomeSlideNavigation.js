@@ -20,6 +20,7 @@ export function useHomeSlideNavigation() {
     if (moveInDirection(rowOffset, columnOffset)) navigationCooldownRef.current = Date.now() + 620;
   };
   const handleWheel = (event) => {
+    if (event.currentTarget.closest('[data-home-dragging="true"]')) return;
     if (Date.now() < navigationCooldownRef.current) return;
     const vertical = Math.abs(event.deltaY) >= Math.abs(event.deltaX);
     const target = event.target instanceof Element ? event.target : null;
@@ -42,7 +43,7 @@ export function useHomeSlideNavigation() {
   };
   const handleTouchStart = (event) => {
     const target = event.target instanceof Element ? event.target : null;
-    if (target?.closest('a, button, input, textarea, select')) {
+    if (target?.closest('a, button, input, textarea, select, [data-home-draggable]')) {
       gestureStartRef.current = null;
       return;
     }

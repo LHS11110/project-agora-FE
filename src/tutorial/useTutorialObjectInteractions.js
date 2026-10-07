@@ -1,3 +1,4 @@
+import { connectorControlFromPointer, connectorPointCount } from '../canvas/connectors/controlPoints.js';
 import { inkPointAtPointer } from '../canvas/inkStroke.js';
 import { captureResize, resizeItemAtPointer } from '../components/objectResize.js';
 import { rotationAtPointer } from '../components/RotationHandles.jsx';
@@ -101,7 +102,7 @@ export function useTutorialObjectInteractions(options) {
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
-  const startArrowBend = (event, id, item) => {
+  const startArrowBend = (event, id, item, bendPointIndex = 0) => {
     const isShapeArrow = item?.kind === 'shape' && item.shapeType === 'arrow';
     const isConnectorArrow = item?.kind === 'connector';
     if (event.button !== 0 || activeTool !== 'select' || (!isShapeArrow && !isConnectorArrow)) return;
@@ -112,7 +113,7 @@ export function useTutorialObjectInteractions(options) {
     const element = event.currentTarget.closest('.tutorial-item');
     setSelectedItemId(id);
     element?.classList.add('object-bending');
-    dragRef.current = { mode: 'bend', id, initial: item, viewport: { width: board.width, height: board.height }, element };
+    dragRef.current = { mode: 'bend', bendPointIndex, id, initial: item, viewport: { width: board.width, height: board.height }, element };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
   const startItemRotation = (event, id, item) => {
@@ -171,10 +172,11 @@ export function useTutorialObjectInteractions(options) {
       }
       const point = position(event);
       if (mode === 'bend') {
+        const bendPointIndex = dragRef.current?.bendPointIndex ?? 0;
         setItems((current) => {
           if (!current[id]) return current;
           const bend = initial.kind === 'connector'
-            ? connectorBendFromPointer(connectorGeometry(initial, current, viewport.width, viewport.height), point, viewport)
+            ? (connectorPointCount(initial) > 1 || Array.isArray(initial.bendPoints) ? connectorControlFromPointer(initial, connectorGeometry(initial, current, viewport.width, viewport.height), point, viewport, bendPointIndex) : connectorBendFromPointer(connectorGeometry(initial, current, viewport.width, viewport.height), point, viewport))
             : { bend: shapeArrowBendFromPointer(initial, point, viewport) };
           return { ...current, [id]: { ...initial, ...bend } };
         });

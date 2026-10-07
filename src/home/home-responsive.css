@@ -1,0 +1,78 @@
+/* The viewport is a frame; each scene owns its scrollable content and layout. */
+.home-slides-page{height:100svh;min-height:0;overflow:hidden}
+.home-slides-page .home-slide-window{flex:1;min-height:0;container-type:size}
+.home-slides-page .home-slide-track{height:100%;min-height:0}
+.home-slides-page .home-slide{height:100%;min-height:0;overflow:hidden}
+.home-slides-page .home-slide-inner{
+  width:min(1600px,calc(100% - clamp(32px,6vw,112px)));
+  height:100%;min-height:0;box-sizing:border-box;
+  padding:clamp(18px,3vh,32px) 8px;
+  gap:clamp(20px,3vw,64px);
+  overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;
+  scrollbar-width:thin;scrollbar-color:#8e999e55 transparent;
+}
+.home-slides-page .home-slide-copy{min-width:0;max-width:640px}
+.home-slides-page .home-slide-copy h1{font-size:clamp(32px,min(4.3vw,7.3vh),69px)}
+.home-slides-page .hero-scene-setting,.home-slides-page .home-knowledge-stage,.home-slides-page .collab-showcase-stack{min-width:0;max-width:760px;justify-self:center}
+.home-slides-page .slide-hero .hero-scene-setting .frelog-scene{height:clamp(250px,44vh,580px);min-height:0}
+.home-slides-page .home-knowledge-stage .vector-showcase{max-height:none;aspect-ratio:1.59}
+.home-slides-page .collab-showcase-stack{margin:0 auto;width:100%}
+.home-slides-page .knowledge-strip{display:grid}
+.home-slides-page .slide-start .home-slide-inner{display:grid;grid-template-columns:minmax(0,1fr);align-content:safe center;gap:24px}
+.home-slides-page .start-slide-card{max-width:900px;width:100%;padding:12px 0;box-sizing:border-box}
+.home-slides-page .start-slide-card h1{font-size:clamp(36px,min(5.4vw,8vh),76px)}
+.home-slides-page .start-slide-links{flex-wrap:wrap}
+
+/* Wide but shallow windows retain the two-column composition and start at the top. */
+@media(min-width:901px) and (max-height:800px){
+  .home-slides-page .home-slide-inner{align-items:start;align-content:start;grid-template-rows:auto}
+  .home-slides-page .home-slide-copy{padding:6px 0}
+  .home-slides-page .home-slide-copy h1{margin:14px 0 12px}
+  .home-slides-page .slide-desk{margin-top:16px}
+  .home-slides-page .home-slide-note{margin-top:18px}
+  .home-slides-page .hero-scene-setting{gap:10px}
+  .home-slides-page .slide-hero .hero-scene-setting .frelog-scene{height:clamp(250px,43vh,370px)}
+  .home-slides-page .architecture-node{min-height:150px;padding:14px 12px}
+  .home-slides-page .architecture-slide-note{margin-top:18px;white-space:normal;flex-wrap:wrap}
+}
+
+/* Portrait/tablet layouts place the diagram after its explanation, without overlap. */
+@media(max-width:900px), (max-aspect-ratio:1/1) and (max-width:1200px){
+  .home-slides-page .marketing-header{height:64px;flex-basis:64px;width:calc(100% - 32px)}
+  .home-slides-page .marketing-nav{display:none}
+  .home-slides-page .home-slide-controls{height:58px;flex-basis:58px;width:calc(100% - 32px)}
+  .home-slides-page .home-slide-inner,.home-slides-page .slide-hero .home-slide-inner{
+    display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto;
+    align-items:start;align-content:start;justify-items:stretch;gap:24px;
+    width:calc(100% - 24px);height:100%;min-height:0;padding:24px 8px 32px;
+  }
+  .home-slides-page .home-slide-copy{max-width:760px;width:100%;justify-self:center;padding:0}
+  .home-slides-page .home-slide-copy h1,.home-slides-page .home-slide.slide-hero .home-slide-copy h1,.home-slides-page .slide-architecture .home-slide-copy h1{font-size:clamp(30px,6vw,52px);line-height:1.16}
+  .home-slides-page .home-slide-copy>p,.home-slides-page .start-slide-card>p{font-size:clamp(11px,1.8vw,14px)}
+  .home-slides-page .home-slide-actions{margin-top:20px}
+  .home-slides-page .slide-desk{max-width:560px}
+  .home-slides-page .hero-scene-setting,.home-slides-page .slide-hero .hero-scene-setting{display:flex;height:auto;gap:12px}
+  .home-slides-page .slide-hero .hero-scene-setting .frelog-scene{height:clamp(280px,48vw,440px);min-height:280px}
+  .home-slides-page .home-knowledge-stage,.home-slides-page .collab-showcase-stack{width:100%;margin:0 auto;gap:12px}
+  .home-slides-page .slide-context-ribbon{display:none}
+  .home-slides-page .slide-start .home-slide-inner{grid-template-rows:auto;align-content:safe center;justify-items:center}
+  .home-slides-page .start-slide-card{padding:12px 0}
+}
+@media(max-width:480px){
+  .home-slides-page .home-slide-inner{padding-top:20px;gap:20px}
+  .home-slides-page .knowledge-strip{gap:6px}
+  .home-slides-page .knowledge-tile{padding:6px}
+  .home-slides-page .knowledge-strip .knowledge-diagram{height:48px}
+  .home-slides-page .knowledge-tile-heading{font-size:7px}
+  .home-slides-page .knowledge-formula{font-size:8px}
+  .home-slides-page .hero-side-note{letter-spacing:.5px;font-size:7px}
+  .home-slides-page .marketing-actions{gap:8px}
+}
+/* Container height also covers browser chrome and a split-screen resize. */
+@container (max-height:520px){
+  .home-slides-page .home-slide-inner{align-items:start;align-content:start}
+  .home-slides-page .slide-start .home-slide-inner{align-content:start}
+}
+@media(min-width:1200px) and (min-height:850px){
+  .home-slides-page .home-slide-inner{grid-template-rows:minmax(max-content,1fr) auto}
+}

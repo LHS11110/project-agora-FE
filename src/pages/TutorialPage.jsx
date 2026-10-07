@@ -1,5 +1,11 @@
-import SyntaxCode from '../components/code/SyntaxCode.jsx';
-import CodeCopyButton from '../components/code/CodeCopyButton.jsx';
+import ConnectorBendHandles from '../components/canvas/ConnectorBendHandles.jsx';
+import ConnectorPointControls from '../components/canvas/ConnectorPointControls.jsx';
+import { resizeConnectorControls } from '../canvas/connectors/controlPoints.js';
+import ConnectorLabel from '../components/canvas/ConnectorLabel.jsx';
+import ConnectorLabelControls from '../components/canvas/ConnectorLabelControls.jsx';
+import UnifiedTextContent from '../canvas/content/UnifiedTextContent.jsx';
+import ContentRenderControls from '../canvas/content/ContentRenderControls.jsx';
+import { isTextContent, contentMode } from '../canvas/content/contentPresentation.js';
 import { usePenStyle } from '../canvas/usePenStyle.js';
 import PenStyleControls from '../canvas/PenStyleControls.jsx';
 import { inkPointAtPointer } from '../canvas/inkStroke.js';
@@ -10,9 +16,6 @@ import ShapePicker from '../canvas/ShapePicker.jsx';
 import { shapeCreationSize } from '../canvas/shapeCatalog.js';
 import { useEraserSize } from '../canvas/useEraserSize.js';
 import EraserSizeControl from '../canvas/EraserSizeControl.jsx';
-import CanvasCodeEditor from '../canvas/CanvasCodeEditor.jsx';
-import CodeLanguageOptions from '../canvas/CodeLanguageOptions.jsx';
-import { codeLanguageLabel } from '../canvas/codeLanguages.js';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from '../routing.jsx';
 import Icon from '../components/Icon.jsx';
@@ -56,12 +59,10 @@ const tools = [
   { id: 'eraser', label: '드로잉 지우개', icon: 'eraser' },
   { id: 'connect', label: '오브젝트 연결', icon: 'connect' },
   { id: 'shape', label: '도형', icon: 'shape' },
-  { id: 'text', label: '텍스트', icon: 'text' },
+  { id: 'text', label: '내용', icon: 'text' },
   { id: 'note', label: '포스트잇', icon: 'sticky' },
   { id: 'table', label: '테이블', icon: 'table' },
-  { id: 'math', label: '수식', icon: 'math' },
   { id: 'link', label: '동영상·링크 공유', icon: 'link' },
-  { id: 'code', label: '코드 블록', icon: 'code' },
 ];
 
 const makeId = () => globalThis.crypto?.randomUUID?.() || `tutorial-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -342,7 +343,7 @@ export default function TutorialPage() {
     }
     if (activeTool === 'text' || activeTool === 'code' || activeTool === 'note') {
       const id = addItem(activeTool === 'text'
-        ? { kind: 'text', text: '', x: point.x - 0.11, y: point.y - 0.06, width: 0.22 }
+        ? { kind: 'text', renderMode: 'markdown', text: '', x: point.x - 0.11, y: point.y - 0.06, width: 0.22 }
         : activeTool === 'code'
           ? { kind: 'code', code: '', filename: 'idea.js', language: 'javascript', x: point.x - 0.16, y: point.y - 0.1, width: 0.32 }
           : { kind: 'note', text: '', x: point.x - 0.12, y: point.y - 0.08, width: 0.24, color: noteColor, rotation: Math.random() * 3 - 1.5 });
@@ -649,6 +650,9 @@ export default function TutorialPage() {
               <button type="button" onClick={reset}>예시 복원</button>
             </div>
           </div>
+          {selectedConnector && <ConnectorPointControls item={selectedConnector} onChange={count => setItems(current => ({ ...current, [selectedItemId]: { ...current[selectedItemId], ...resizeConnectorControls(current[selectedItemId], connectorGeometry(current[selectedItemId], current, boardSize.width, boardSize.height), count) } }))} />}
+          {selectedConnector && <ConnectorLabelControls item={selectedConnector} onChange={(field, value) => changeMetadata(selectedItemId, field, value)} />}
+          {isTextContent(selectedItem) && <ContentRenderControls item={selectedItem} onChange={(field, value) => changeMetadata(selectedItemId, field, value)} />}
           {(activeTool === 'table' || selectedTable) && <div className="tutorial-table-settings" onPointerDown={(event) => event.stopPropagation()}><strong>{activeTool === 'table' ? '새 테이블 설정' : '테이블 설정'}</strong><label>행<input type="number" min="1" max={MAX_TABLE_ROWS} value={activeTool === 'table' ? tableConfig.rows : selectedTable.rows?.length || 1} onChange={(event) => changeTableCount('rows', event)} /></label><label>열<input type="number" min="1" max={MAX_TABLE_COLUMNS} value={activeTool === 'table' ? tableConfig.columns : selectedTable.columns?.length || 1} onChange={(event) => changeTableCount('columns', event)} /></label><label>너비 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.width : Math.round((selectedTable.width || 0.42) * 100)} onChange={(event) => changeTableSize('width', event)} /></label><label>높이 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.height : Math.round((selectedTable.height || 0.32) * 100)} onChange={(event) => changeTableSize('height', event)} /></label><small>{activeTool === 'table' ? '캔버스를 클릭해 놓으세요.' : '컬럼 이름과 셀을 두 번 클릭해 Markdown으로 편집하세요.'}</small></div>}
           <div
             className={`tutorial-stage${showGrid ? '' : ' no-grid'}${activeTool === 'pen' ? ' pen-active' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}`}
@@ -709,12 +713,10 @@ export default function TutorialPage() {
                   const offsetY = bounds.minY * boardSize.height;
                   const curvePath = curve?.points.map((point, index) => `${index ? 'L' : 'M'}${point.x - offsetX} ${point.y - offsetY}`).join(' ');
                   const connectorEnds = [curve?.start, curve?.end].filter(Boolean);
-                  const bendPoints = curve?.curvePoints || curve?.points;
-                  const curveMidpoint = bendPoints?.[Math.floor((bendPoints.length - 1) / 2)];
-                  const bendHandle = curveMidpoint && selectedItemId === id && activeTool === 'select'
-                    ? <button type="button" className="shape-arrow-bend-handle" style={{ left: `${(curveMidpoint.x - offsetX) / geometryWidth * 100}%`, top: `${(curveMidpoint.y - offsetY) / geometryHeight * 100}%` }} title="몸통을 드래그해 곡률 조절" aria-label="연결 화살표 몸통 곡률 조절" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); startArrowBend(event, id, item); }} />
+                  const bendHandle = selectedItemId === id && activeTool === 'select'
+                    ? <ConnectorBendHandles geometry={curve} offsetX={offsetX} offsetY={offsetY} width={geometryWidth} height={geometryHeight} onStart={(event, index) => startArrowBend(event, id, item, index)} />
                     : null;
-                  return <div key={id} className={`tutorial-item tutorial-vector-hit${itemClass}`} style={{ ...style, left: `${bounds.minX * 100}%`, top: `${bounds.minY * 100}%`, width: `${Math.max(0.01, bounds.maxX - bounds.minX) * 100}%`, height: `${Math.max(0.01, bounds.maxY - bounds.minY) * 100}%` }} {...commonHandlers} title="한 번 클릭해 선택 · 두 번 클릭해 연결된 객체로 이동">{curvePath && <svg className="tutorial-connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} />{connectorEnds.map((point, index) => <circle key={index} cx={point.x - offsetX} cy={point.y - offsetY} r="9" />)}</svg>}{bendHandle}{resizeHandles}</div>;
+                  return <div key={id} className={`tutorial-item tutorial-vector-hit${itemClass}`} style={{ ...style, left: `${bounds.minX * 100}%`, top: `${bounds.minY * 100}%`, width: `${Math.max(0.01, bounds.maxX - bounds.minX) * 100}%`, height: `${Math.max(0.01, bounds.maxY - bounds.minY) * 100}%` }} {...commonHandlers} title="한 번 클릭해 선택 · 두 번 클릭해 연결된 객체로 이동">{curvePath && <svg className="tutorial-connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} />{connectorEnds.map((point, index) => <circle key={index} cx={point.x - offsetX} cy={point.y - offsetY} r="9" />)}</svg>}<ConnectorLabel item={item} geometry={curve} offsetX={offsetX} offsetY={offsetY} />{bendHandle}{resizeHandles}</div>;
                 }
                 if (item.kind === 'link') {
                   return <div key={id} className={`tutorial-item tutorial-media-link-item ${item.mediaType === 'link' ? 'external-link-object' : 'video-link-object'}${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.3) * 100}%`, height: `${(Number(item.height) || 0.15) * 100}%` }} {...commonHandlers}>
@@ -740,25 +742,9 @@ export default function TutorialPage() {
                     {resizeHandles}
                   </div>;
                 }
-                if (item.kind === 'text') {
-                  return <div key={id} className={`tutorial-item tutorial-text-item${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.22) * 100}%` }} {...commonHandlers}>
-                    {editingId === id ? <textarea autoFocus value={item.text || ''} placeholder="여기에 텍스트를 입력하세요." aria-label="텍스트 편집" onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeText(id, event.target.value)} onBlur={() => setEditingId((current) => current === id ? null : current)} /> : <span title="두 번 클릭해 편집">{item.text || '두 번 클릭해 편집'}</span>}
-                    {resizeHandles}
-                  </div>;
-                }
-                if (item.kind === 'math') {
-                  return <div key={id} className={`tutorial-item tutorial-math-item${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.22) * 100}%` }} {...commonHandlers}>
-                    {editingId === id
-                      ? <input className="tutorial-math-input" autoFocus aria-label="수식 편집" value={String(item.formula ?? '')} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'formula', event.target.value)} onBlur={() => setEditingId((current) => current === id ? null : current)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }} />
-                      : <span className="tutorial-math-preview" onDoubleClick={(event) => { event.stopPropagation(); setSelectedItemId(id); setEditingId(id); }} title="두 번 클릭해 수식 편집"><MathFormula formula={item.formula ?? ''} /></span>}
-                    {resizeHandles}
-                  </div>;
-                }
-                if (item.kind === 'code') {
-                  return <div key={id} className={`tutorial-item tutorial-code-item${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.32) * 100}%` }} {...commonHandlers}>
-                    <div className="tutorial-code-head"><Icon name="code" size={14} />{editingId === id ? <><input value={item.filename || ''} aria-label="파일 이름" maxLength={80} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'filename', event.target.value)} /><select value={item.language || 'javascript'} aria-label="코드 언어" onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'language', event.target.value)}><CodeLanguageOptions value={item.language || 'javascript'} /></select></> : <><span>{item.filename || 'idea.js'}</span><small>{codeLanguageLabel(item.language || 'javascript')}</small></>}</div>
-                    {editingId === id ? <CanvasCodeEditor key="code-editor" value={item.code || ''} language={item.language || 'javascript'} onChange={value => changeCode(id, value)} onSave={() => setEditingId(null)} onStopEditing={() => setEditingId(current => current === id ? null : current)} /> : <SyntaxCode value={item.code || ''} language={item.language || 'javascript'} title="두 번 클릭해 편집" />}
-                    <div className="tutorial-code-copy-row"><CodeCopyButton value={item.code || ''} /></div>
+                if (isTextContent(item)) {
+                  return <div key={id} className={`tutorial-item unified-content-object ${contentMode(item) === 'code' ? 'tutorial-code-item code-object' : 'tutorial-text-item'}${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.22) * 100}%` }} {...commonHandlers}>
+                    <UnifiedTextContent id={id} item={item} editing={editingId === id} onTextChange={item.kind === 'code' ? changeCode : changeText} onFormulaChange={(key, value) => changeMetadata(key, 'formula', value)} onMetadataChange={changeMetadata} onSave={() => {}} onStopEditing={() => setEditingId(current => current === id ? null : current)} />
                     {resizeHandles}
                   </div>;
                 }

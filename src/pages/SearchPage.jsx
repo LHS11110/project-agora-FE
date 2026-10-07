@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import CanvasDeleteDialog from '../components/canvas/CanvasDeleteDialog.jsx';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from '../routing.jsx';
 import Icon from '../components/Icon.jsx';
 import CanvasPreview from '../components/search/CanvasPreview.jsx';
@@ -81,12 +82,15 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [notice, setNotice] = useState('');
+  const deletedIds = useRef(new Set());
   const load = useCallback(async (name = '') => {
     setLoading(true); setError('');
     try {
       const path = name.trim() ? `/api/canvases/search?name=${encodeURIComponent(name.trim())}` : '/api/canvases';
       const result = await api(path, { token });
-      setCanvases(Array.isArray(result) ? result : []);
+      setCanvases(Array.isArray(result) ? result.filter(canvas => !deletedIds.current.has(String(canvas.canvas_id))) : []);
     } catch (err) {
       if (err.status === 401) {
         logout();
@@ -105,9 +109,15 @@ export default function SearchPage() {
     <div className="page-topline"><span className="section-kicker">YOUR IDEAS, TOGETHER</span><span className="breadcrumbs">워크스페이스 <b>/</b> 캔버스 탐색</span></div>
     <section className="search-hero"><div className="search-hero-copy"><span className="search-welcome"><i /> 좋은 생각은 어디서 시작될까요?</span><h1>다음 이야기를<br /><em>함께 그려봐요.</em></h1><p>팀의 생각이 모이는 캔버스를 찾아보세요.<br />새로운 공간을 만들어도 좋아요.</p></div><div className="search-orbit-art"><div className="search-art-sheet"><span className="sheet-tiny-label">IDEA BOARD / 01</span><span className="sheet-note">start with<br /><strong>one idea.</strong></span><span className="sheet-stroke">〰</span><span className="sheet-spark">✳</span><span className="sheet-tag">you + me</span></div><span className="search-art-shadow" /></div><button className="button button-cream search-hero-create" onClick={() => setShowCreate(true)}><Icon name="plus" size={18} /> 새 캔버스 만들기</button></section>
     <section className="canvas-library"><div className="library-heading"><div><span className="section-kicker">CANVAS LIBRARY</span><h2>함께하는 캔버스 <span>{canvases.length}</span></h2></div><div className="library-actions"><form className="search-field" onSubmit={search}><Icon name="search" size={18} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="캔버스 이름 검색" aria-label="캔버스 이름 검색" /><button type="submit">검색</button></form><button className="button button-outline create-inline" onClick={() => setShowCreate(true)}><Icon name="plus" size={17} /> 새 캔버스</button></div></div>
-      {loading ? <div className="loading-state"><span className="loader" /> 캔버스를 불러오고 있어요.</div> : error ? <div className="empty-state error-state"><span className="empty-icon"><Icon name="grid" size={23} /></span><h3>캔버스를 불러오지 못했어요.</h3><p>{error}</p><button className="button button-outline" onClick={() => load(query)}>다시 시도</button></div> : canvases.length ? <div className="canvas-grid">{canvases.map((canvas, index) => <Link to={`/canvases/${canvas.canvas_id}`} className="canvas-card" key={canvas.canvas_id}><CanvasPreview index={index} canvas={canvas} token={token} /><div className="canvas-card-copy"><div><h3>{canvas.canvas_name || '이름 없는 캔버스'}</h3><p>{canvas.description || '함께 아이디어를 만들어가는 공간'}</p></div><span className="round-arrow" aria-hidden="true"><Icon name="arrow" size={17} /></span></div><div className="canvas-card-meta"><span className="member-pile"><i>나</i><i>✦</i></span><span>참여자 {canvas.user_count ?? 0}명</span><span className="meta-spacer" /><span className="canvas-open-label">열기 <Icon name="chevron" size={14} /></span></div></Link>)}</div> : <div className="empty-state"><span className="empty-icon"><Icon name="grid" size={23} /></span><h3>{query ? '검색 결과가 없어요.' : '아직 캔버스가 없어요.'}</h3><p>{query ? '다른 이름으로 검색하거나 새 캔버스를 만들어보세요.' : '첫 번째 캔버스를 열고 생각을 모아보세요.'}</p><button className="button button-dark" onClick={() => setShowCreate(true)}><Icon name="plus" size={17} /> 새 캔버스 만들기</button></div>}
+      {loading ? <div className="loading-state"><span className="loader" /> 캔버스를 불러오고 있어요.</div> : error ? <div className="empty-state error-state"><span className="empty-icon"><Icon name="grid" size={23} /></span><h3>캔버스를 불러오지 못했어요.</h3><p>{error}</p><button className="button button-outline" onClick={() => load(query)}>다시 시도</button></div> : canvases.length ? <div className="canvas-grid">{canvases.map((canvas, index) => <article className="canvas-library-entry" key={canvas.canvas_id}><Link to={`/canvases/${canvas.canvas_id}`} className="canvas-card" key={canvas.canvas_id}><CanvasPreview index={index} canvas={canvas} token={token} /><div className="canvas-card-copy"><div><h3>{canvas.canvas_name || '이름 없는 캔버스'}</h3><p>{canvas.description || '함께 아이디어를 만들어가는 공간'}</p></div><span className="round-arrow" aria-hidden="true"><Icon name="arrow" size={17} /></span></div><div className="canvas-card-meta"><span className="member-pile"><i>나</i><i>✦</i></span><span>참여자 {canvas.user_count ?? 0}명</span><span className="meta-spacer" /><span className="canvas-open-label">열기 <Icon name="chevron" size={14} /></span></div></Link><button type="button" className="canvas-delete-trigger" aria-label={`${canvas.canvas_name || '이름 없는 캔버스'} 삭제`} onClick={() => { setNotice(''); setDeleteTarget(canvas); }}><Icon name="trash" size={14} />삭제</button></article>)}</div> : <div className="empty-state"><span className="empty-icon"><Icon name="grid" size={23} /></span><h3>{query ? '검색 결과가 없어요.' : '아직 캔버스가 없어요.'}</h3><p>{query ? '다른 이름으로 검색하거나 새 캔버스를 만들어보세요.' : '첫 번째 캔버스를 열고 생각을 모아보세요.'}</p><button className="button button-dark" onClick={() => setShowCreate(true)}><Icon name="plus" size={17} /> 새 캔버스 만들기</button></div>}
     </section>
     <section className="search-bottom-note"><span className="note-icon"><Icon name="sparkle" size={17} /></span><span><strong>생각을 함께 펼쳐보세요.</strong><small>초대된 멤버들과 같은 캔버스에서 실시간으로 만들 수 있어요.</small></span><Icon name="arrow" size={17} /></section>
+    {notice && <p role="status" aria-live="polite">{notice}</p>}
+    {deleteTarget && <CanvasDeleteDialog canvas={deleteTarget} token={token} onClose={() => setDeleteTarget(null)} onDeleted={id => {
+      deletedIds.current.add(String(id));
+      setCanvases(current => current.filter(canvas => String(canvas.canvas_id) !== String(id)));
+      setDeleteTarget(null); setNotice('캔버스를 삭제했습니다.');
+    }} />}
     {showCreate && <CreateCanvasDialog onClose={() => setShowCreate(false)} onCreated={created} />}
   </main>;
 }
