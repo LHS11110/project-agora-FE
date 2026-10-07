@@ -3,6 +3,7 @@ import { brushBristlePaths, paintBrush } from './brushStroke.js';
 import { addSprayToPath } from './sprayStroke.js';
 import { strokeOpacity } from './penStyles.js';
 import { INK_BRUSH, inkStrokeOutline, strokePaintSize } from './inkStroke.js';
+import { addPenOutline } from './penStroke.js';
 
 const completedPaths = new WeakMap();
 
@@ -25,8 +26,11 @@ function strokePath(stroke, width, height) {
     addHighlighterToPath(path, points, strokePaintSize(stroke));
   } else if (stroke.brush === INK_BRUSH || stroke.brush === 'pen') {
     const outline = inkStrokeOutline(points, stroke);
-    outline.forEach(([x, y], i) => i ? path.lineTo(x, y) : path.moveTo(x, y));
-    path.closePath();
+    if (stroke.brush === 'pen') addPenOutline(path, outline);
+    else {
+      outline.forEach(([x, y], i) => i ? path.lineTo(x, y) : path.moveTo(x, y));
+      path.closePath();
+    }
     if (stroke.brush === INK_BRUSH) bristles = brushBristlePaths(points, stroke);
   } else if (points.length === 1) {
     path.arc(points[0].x, points[0].y, strokePaintSize(stroke) / 2, 0, Math.PI * 2);

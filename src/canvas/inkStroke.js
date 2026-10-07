@@ -1,4 +1,6 @@
 import { getStroke } from 'perfect-freehand';
+import { freehandOptions } from './freehandOptions.js';
+import { penStrokePoints } from './penStroke.js';
 
 export const INK_BRUSH = 'ink';
 export function inkStrokeSize(width) {
@@ -19,16 +21,9 @@ export function inkPointAtPointer(event, point) {
 /** Pixel-space outline shared by saved strokes, live previews and local drawing. */
 export function inkStrokeOutline(points, stroke) {
   const size = inkStrokeSize(stroke.strokeWidth);
-  const pen = stroke.brush === 'pen';
-  return getStroke(points.map(point => ({
+  const samples = points.map(point => ({
     x: point.x, y: point.y,
     pressure: Number.isFinite(point.pressure) ? Math.max(0, Math.min(1, point.pressure)) : 0.5,
-  })), {
-    size, thinning: pen ? 0.7 : 0.85, smoothing: 0.6, streamline: 0.15,
-    easing: pressure => pen ? pressure : Math.pow(pressure, .8),
-    simulatePressure: stroke.simulatePressure !== false,
-    start: { cap: true, taper: false },
-    end: { cap: true, taper: false },
-    last: stroke.complete !== false,
-  });
+  }));
+  return getStroke(stroke.brush === 'pen' ? penStrokePoints(samples, stroke) : samples, freehandOptions(stroke, size));
 }

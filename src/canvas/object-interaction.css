@@ -29,3 +29,9 @@
 .canvas-stage.panning * { pointer-events: none !important; }
 .shared-media-preview { position: relative; }
 .shared-media-activate { position: absolute; inset: 0; display: grid; place-items: center; background: #29254122; color: #fff; text-shadow: 0 1px 4px #000; font-size: 11px; cursor: default; }
+
+/* The hand tool moves the camera even when pressed over objects or media. */
+.canvas-stage.hand-mode { cursor: grab; touch-action: none; }
+.canvas-stage.hand-mode .canvas-object,
+.canvas-stage.hand-mode .canvas-object * { pointer-events: none !important; }
+.canvas-stage.hand-mode .canvas-scene { cursor: grab; }

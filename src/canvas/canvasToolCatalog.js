@@ -2,6 +2,7 @@
 export const canvasToolCategories = [
   { id: 'navigate', label: '탐색·협업', tools: [
     { id: 'select', label: '선택', description: '선택 및 이동', icon: 'select' },
+    { id: 'hand', label: '손', description: '캔버스 화면 이동 · 마우스로 집어서 드래그', icon: 'hand' },
     { id: 'laser', label: '포인터', description: '레이저 포인터', icon: 'laser' },
   ] },
   { id: 'draw', label: '그리기', tools: [

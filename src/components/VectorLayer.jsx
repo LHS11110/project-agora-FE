@@ -1,3 +1,4 @@
+import { CONNECTOR_METRICS_EVENT } from '../canvas/connectors/objectMetrics.js';
 import { shapeOutlinePaths } from '../canvas/shapeGeometry.js';
 import { useEffect, useRef } from 'react';
 import { Application, Graphics } from 'pixi.js';
@@ -98,7 +99,7 @@ function vectorSceneChanged(previous, current) {
     if (!before || !after || before.kind !== after.kind) return true;
     if (before === after) continue;
     if (['stroke', 'shape', 'connector'].includes(after.kind)) return true;
-    if (before.x !== after.x || before.y !== after.y || before.width !== after.width || before.height !== after.height) return true;
+    if (before.x !== after.x || before.y !== after.y || before.width !== after.width || before.height !== after.height || before.rotation !== after.rotation || before.fontSize !== after.fontSize) return true;
   }
   return false;
 }
@@ -148,6 +149,11 @@ export default function VectorLayer({ items, referenceItems = items, visibleItem
     lastSceneItemsRef.current = referenceItems;
     lastVisibleItemsRef.current = items;
   }, [items, referenceItems]);
+
+  useEffect(() => {
+    window.addEventListener(CONNECTOR_METRICS_EVENT, renderScene);
+    return () => window.removeEventListener(CONNECTOR_METRICS_EVENT, renderScene);
+  }, []);
 
   useEffect(() => {
     visibleItemIdsRef.current = visibleItemIds;

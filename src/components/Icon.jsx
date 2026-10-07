@@ -30,6 +30,7 @@ const paths = {
   database: <><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></>,
   select: <path d="m5 3 14 11-7 .8L9 21 5 3Z"/>,
   move: <><path d="M12 3v18M3 12h18"/><path d="m8 7 4-4 4 4m-8 10 4 4 4-4M7 8l-4 4 4 4m10-8 4 4-4 4"/></>,
+  hand: <path d="M8 12V5a1.5 1.5 0 0 1 3 0v6-8a1.5 1.5 0 0 1 3 0v8-6a1.5 1.5 0 0 1 3 0v7-3a1.5 1.5 0 0 1 3 0v6c0 4-2.5 7-6 7h-1c-2 0-3.5-1-4.5-2.5L4 13a1.5 1.5 0 0 1 2.5-1.5L8 13Z" />,
   connect: <><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="m8.2 8.2 7.6 7.6"/></>,
   shape: <><rect x="3" y="4" width="10" height="10" rx="2"/><circle cx="17.5" cy="16.5" r="3.5"/></>,
   text: <><path d="M4 5h16M12 5v14M8 19h8"/></>,

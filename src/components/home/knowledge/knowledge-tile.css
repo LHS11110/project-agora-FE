@@ -1,0 +1,45 @@
+.knowledge-tile{display:flex;flex-direction:column;gap:3px;flex:0 0 136px;min-width:0;padding:8px;border:1px solid #a1aabc33;border-radius:8px;background:#f0f4f8;color:#54718d}
+.knowledge-tile-blueprint{background:#213e63;color:#a9d9f4;border-color:#335778}
+.knowledge-tile-circuit,.knowledge-tile-mechanics{background:#e8f0e7;color:#63836a}
+.knowledge-tile-matrix,.knowledge-tile-orbit{background:#eee7f3;color:#8a6ca4}
+.knowledge-tile-heading{font-size:8px;letter-spacing:.3px;line-height:1.3;text-align:left}
+.knowledge-diagram{width:100%;height:70px;overflow:visible}
+.knowledge-diagram text{fill:currentColor;font:8px var(--mono)}
+.knowledge-formula{display:block;min-height:16px;font-size:9px;text-align:center;overflow-x:auto;overflow-y:hidden}
+.knowledge-formula .mathjax-output{color:inherit}
+.slide-context-card .context-card-icon{display:none}
+.home-slides-page .slide-context-card{gap:15px;padding:15px}
+.home-slides-page .slide-context-card .context-card-copy strong{font-size:12px}
+.home-slides-page .slide-context-card .context-card-copy>span{font-size:9px}
+.home-slides-page .home-slide.slide-hero .hero-scene-setting .frelog-scene{max-height:48vh}
+.home-slide[aria-hidden="false"] .knowledge-trace{stroke-dasharray:500;stroke-dashoffset:500;animation:knowledge-reveal 2.4s ease forwards}
+.home-slide[aria-hidden="false"] .knowledge-link{stroke-dasharray:5 8;animation:knowledge-flow 2.8s linear infinite;animation-delay:var(--knowledge-delay,0s)}
+.home-slide[aria-hidden="false"] .knowledge-node,.home-slide[aria-hidden="false"] .knowledge-matrix-value{animation:knowledge-signal 4s ease-in-out infinite;animation-delay:var(--knowledge-delay,0s)}
+@keyframes knowledge-reveal{to{stroke-dashoffset:0}}
+@keyframes knowledge-flow{to{stroke-dashoffset:-52}}
+@keyframes knowledge-signal{0%,100%{opacity:.5}45%,65%{opacity:1}}
+@media(prefers-reduced-motion:reduce){.home-slide .knowledge-diagram *{animation:none!important;stroke-dashoffset:0!important}}
+@media(min-width:1200px) and (min-height:850px){
+  .home-slides-page .home-slide-inner{gap:16px 50px}
+}
+.home-knowledge-stage{display:flex;flex-direction:column;gap:12px;min-width:0;width:100%}
+.knowledge-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;min-width:0;width:100%}
+.knowledge-strip .knowledge-tile{flex:none;min-width:0}
+.knowledge-strip .knowledge-diagram{height:58px}
+.knowledge-strip .knowledge-tile-heading{font-size:8px}
+.home-knowledge-stage .vector-showcase{width:100%;max-height:45vh}
+.start-slide-card>.knowledge-strip{max-width:560px;margin:18px auto}
+.collab-showcase-stack>.knowledge-strip{margin-top:12px}
+@media(min-width:1200px) and (min-height:850px){
+  .knowledge-strip{display:none}
+  .home-knowledge-stage .vector-showcase{max-height:none}
+}
+@media(max-width:700px){
+  .knowledge-strip{gap:6px}
+  .knowledge-strip .knowledge-tile{padding:6px}
+  .knowledge-strip .knowledge-diagram{height:45px}
+  .knowledge-strip .knowledge-formula{font-size:8px}
+  .home-slides-page .slide-hero .hero-scene-setting{grid-template-rows:minmax(160px,1fr) auto auto;height:auto}
+  .home-slides-page .home-slide.slide-hero .hero-scene-setting .frelog-scene{height:220px;max-height:none}
+  .home-knowledge-stage .vector-showcase{max-height:none}
+}

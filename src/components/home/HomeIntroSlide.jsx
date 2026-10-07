@@ -1,3 +1,5 @@
+import KnowledgeStrip from './knowledge/KnowledgeStrip.jsx';
+import SlideContextRibbon from './SlideContextRibbon.jsx';
 import PointerWater from '../frelog/PointerWater.jsx';
 import SlideDeskObjects from './SlideDeskObjects.jsx';
 import Icon from '../Icon.jsx';
@@ -16,10 +18,10 @@ export default function HomeIntroSlide({navigate, target, selectSlide}) {
               <span className="home-scroll-hint" aria-hidden="true">↓ 아래로 FreLog 둘러보기</span>
             </div>
             <div className="hero-scene-setting">
-              <FreLogMotionScene variant="home" />
+              <FreLogMotionScene variant="home" /><KnowledgeStrip variant="intro" />
               <div className="hero-side-note"><span>01</span><span className="vertical-rule" aria-hidden="true" /><span>IDEAS IN GOOD COMPANY</span></div>
             </div>
-          </div>
+          <SlideContextRibbon variant="intro" /></div>
         </section>
   );
 }

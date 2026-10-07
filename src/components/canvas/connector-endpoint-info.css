@@ -1,0 +1,11 @@
+.connector-endpoint-section{display:flex;flex-direction:column;gap:10px}
+.connector-endpoint-card{min-width:0;padding:12px;border:1px solid var(--line);border-radius:9px;background:var(--surface-soft);color:var(--ink-strong)}
+.connector-endpoint-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px}
+.connector-endpoint-heading>span{padding:3px 6px;border-radius:5px;background:var(--panel-soft);color:var(--ink-muted);font-size:9px;flex-shrink:0}
+.connector-endpoint-id{display:block;margin-top:8px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--ink-muted);font:9px var(--mono)}
+.connector-endpoint-summary{margin:10px 0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;line-height:1.6;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
+.connector-endpoint-details{display:flex;flex-direction:column;gap:5px;margin:10px 0;font-size:9px}
+.connector-endpoint-details>div{display:flex;justify-content:space-between;gap:10px}.connector-endpoint-details dt{color:var(--ink-muted)}.connector-endpoint-details dd{margin:0;font-family:var(--mono);text-align:right}
+.connector-endpoint-card button{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:7px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink-strong);font-size:10px;cursor:pointer}
+.connector-endpoint-card button:hover{background:var(--panel-soft)}.connector-endpoint-card button:focus-visible{outline:2px solid var(--ink-strong);outline-offset:2px}
+.connector-endpoint-direction{align-self:center;color:var(--ink-muted);font-size:14px;line-height:1}

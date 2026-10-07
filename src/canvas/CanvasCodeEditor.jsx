@@ -11,7 +11,7 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
   const runtimeRef = useRef(null);
   const applyingRemoteRef = useRef(false);
   const latest = useRef({ value, language, onChange, onSave, onStopEditing });
-  latest.current = { value, language, onChange, onSave };
+  latest.current = { value, language, onChange, onSave, onStopEditing };
   const [status, setStatus] = useState('loading');
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
       model.setEOL(monaco.editor.EndOfLineSequence.LF);
       subscriptions.push(runtime.registerModelCompletions(monaco, model, () => latest.current.language));
       editor = monaco.editor.create(hostRef.current, {
-        model, theme: 'vs-dark', automaticLayout: true,
+        model, theme: 'frelog-night', automaticLayout: true,
         fontSize: 13, lineHeight: 20, tabSize: 2, insertSpaces: true,
         minimap: { enabled: false }, scrollBeyondLastLine: false,
         lineNumbersMinChars: 3, padding: { top: 10, bottom: 10 },
@@ -38,6 +38,8 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
         autoClosingBrackets: 'always', autoClosingQuotes: 'always',
         formatOnPaste: true, formatOnType: true,
         fixedOverflowWidgets: false, mouseWheelZoom: false,
+        // Keep browser native editing contexts from retargeting pointer/focus events.
+        editContext: false,
         scrollbar: { alwaysConsumeMouseWheel: true },
         ariaLabel: '공동 편집 코드 에디터',
       });

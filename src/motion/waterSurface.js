@@ -1,10 +1,13 @@
 import { createLiquidRipple } from 'liquid-ripple';
 import { createClickRipples } from './clickRipples.js';
+import { waterAppearance } from './waterAppearance.js';
 
 export function createWaterSurface(layer) {
   const scene = layer.parentElement, canvas = layer.querySelector('canvas');
+  const appearance = waterAppearance(scene);
+  layer.dataset.waterTone = appearance.dark ? 'dark' : 'light';
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-  const clicks = createClickRipples(layer);
+  const clicks = createClickRipples(layer, { prominent: appearance.home });
   let water = null, visible = false, previous = null, lastDrop = 0;
   const sync = () => {
     if (reduced.matches || document.hidden || !visible) {
@@ -12,19 +15,14 @@ export function createWaterSurface(layer) {
       layer.dataset.waterState = reduced.matches ? 'reduced' : 'paused';
       return;
     }
-    if (!water) {
-      const dark = scene.matches('.slide-start, .auth-visual-panel');
+    if (!water && !appearance.home) {
       water = createLiquidRipple(canvas, {
-        interactive: false, ambient: 0, maxRipples: 20, dprCap: 1,
-        opacity: dark ? .35 : .3,
-        palette: dark
-          ? { top: '#39324c', bottom: '#334e59', glint: '#c9eaec' }
-          : { top: '#f6f7f1', bottom: '#b6d4d5', glint: '#ffffff' },
-        wave: { swell: .15, amplitude: .42, ringSpeed: .22, decay: 1.3, wavelength: 45, life: 3, refraction: .2, caustics: .12, specular: .7 },
+        ...appearance.options,
         onUnsupported: () => { layer.dataset.waterState = 'unsupported'; },
       });
     }
-    if (water) { water.resume(); layer.dataset.waterState = 'active'; }
+    if (appearance.home) layer.dataset.waterState = 'click-only';
+    else if (water) { water.resume(); layer.dataset.waterState = 'active'; }
   };
   const pointAt = (event) => {
     const bounds = canvas.getBoundingClientRect();
@@ -33,19 +31,21 @@ export function createWaterSurface(layer) {
   const move = (event) => {
     if (reduced.matches || document.hidden || !visible || event.pointerType === 'touch') return;
     const point = pointAt(event), now = performance.now();
-    if (previous && (Math.hypot(point.x - previous.x, point.y - previous.y) < 10 || now - lastDrop < 60)) return;
+    if (previous && (Math.hypot(point.x - previous.x, point.y - previous.y) < appearance.distance || now - lastDrop < appearance.interval)) return;
     water?.drop(point.x, point.y, 'canvas'); previous = point; lastDrop = now;
   };
   const pulse = (event) => {
-    if (reduced.matches || document.hidden || event.target.closest?.('input, textarea, select')) return;
+    if (reduced.matches || document.hidden || !visible || event.target.closest?.('input, textarea, select')) return;
     const point = pointAt(event);
     water?.drop(point.x, point.y, 'canvas'); clicks.drop(point);
   };
   const leave = () => { previous = null; };
   const observer = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; sync(); }, { threshold: .02 });
   observer.observe(layer);
-  scene.addEventListener('pointermove', move, { passive: true });
-  scene.addEventListener('pointerleave', leave);
+  if (!appearance.home) {
+    scene.addEventListener('pointermove', move, { passive: true });
+    scene.addEventListener('pointerleave', leave);
+  }
   scene.addEventListener('pointerdown', pulse, { passive: true });
   reduced.addEventListener('change', sync);
   document.addEventListener('visibilitychange', sync);

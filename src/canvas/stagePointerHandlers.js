@@ -1,13 +1,14 @@
-export function stagePointerHandlers({ dragRef, panRef, spacePressedRef, startPan, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor }) {
+export function stagePointerHandlers({ activeTool, dragRef, panRef, spacePressedRef, startPan, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor }) {
   const finish = (event) => {
     if (dragRef.current) stopObjectDrag(event);
     else stopDrawing(event);
   };
   return {
     onPointerDownCapture: (event) => {
-      if (event.target.closest?.('.canvas-minimap, .canvas-code-editor')) return;
+      if (event.target.closest?.('.canvas-minimap')) return;
+      if (activeTool !== 'hand' && event.target.closest?.('.canvas-code-editor')) return;
       if (panRef.current) { event.preventDefault(); event.stopPropagation(); return; }
-      if (event.button === 1 || (event.button === 0 && spacePressedRef.current)) startPan(event);
+      if (event.button === 1 || (event.button === 0 && (activeTool === 'hand' || spacePressedRef.current))) startPan(event);
     },
     onPointerMoveCapture: (event) => {
       if (!panRef.current) return;

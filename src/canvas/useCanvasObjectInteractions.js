@@ -6,6 +6,7 @@ import { createId } from './canvasIds.js';
 import { hasItemGeometryChanged } from './useCanvasPeerGeometry.js';
 import { isCollaborativeItem } from './collaborativeSync.js';
 import { shapeArrowBendFromPointer } from '../components/shapeArrowGeometry.js';
+import { rotateGroup } from './groupGeometry.js';
 
 export function useCanvasObjectInteractions(options) {
   const {
@@ -42,6 +43,7 @@ export function useCanvasObjectInteractions(options) {
   } = options;
 
   const startObjectDrag = (event, id, item) => {
+    if (activeTool === 'hand' && event.button === 0) { startPan(event); return; }
     if (event.target.closest?.('.canvas-code-editor')) { event.stopPropagation(); return; }
     if (event.button === 1 || spacePressedRef.current) { startPan(event); return; }
     if (event.button !== 0) return;
@@ -56,7 +58,7 @@ export function useCanvasObjectInteractions(options) {
       if (connectionStartId === id) { setConnectionStartId(null); return; }
       const from = itemsRef.current[connectionStartId];
       const to = itemsRef.current[id];
-      if (from && to) addItem(createId(), { kind: 'connector', from: connectionStartId, to: id, color: connectorColor, strokeWidth: connectorWidth, startHead: connectorStartHead, endHead: connectorEndHead, permission });
+      if (from && to) addItem(createId(), { kind: 'connector', bend: 0, from: connectionStartId, to: id, color: connectorColor, strokeWidth: connectorWidth, startHead: connectorStartHead, endHead: connectorEndHead, permission });
       setConnectionStartId(null); setActiveTool('select'); return;
     }
     const key = String(id);
@@ -79,7 +81,7 @@ export function useCanvasObjectInteractions(options) {
     }
     const alreadySelected = selectedObjectIdSet.has(key);
     const targetIds = alreadySelected
-      ? selectedObjectIds
+      ? [...new Set([...selectedObjectIds, ...groupedIds])]
       : groupedIds.length ? groupedIds : [key];
     selectItems(targetIds, key);
     if (!alreadySelected) {
@@ -181,6 +183,15 @@ export function useCanvasObjectInteractions(options) {
       dragRef.current.touchStart = null;
     }
     const { mode, id, initial, offsetX, offsetY, startX, startY, resize, viewport } = dragRef.current;
+    if (mode === 'multi-rotate') {
+      const drag = dragRef.current;
+      const degrees = rotationAtPointer(0, drag.startAngle, event.clientX, event.clientY, drag.centerX, drag.centerY);
+      const changes = rotateGroup(drag.initialItems, drag.layout, degrees, boardSize);
+      itemsRef.current = { ...itemsRef.current, ...changes };
+      setItems(itemsRef.current);
+      for (const [itemId, next] of Object.entries(changes)) sendRealtimePeerItemGeometry(itemId, next);
+      return;
+    }
     if (mode === 'multi-move') {
       const { ids, initialItems, startPoint } = dragRef.current;
       const point = pointerPosition(event);
@@ -230,8 +241,9 @@ export function useCanvasObjectInteractions(options) {
     const drag = dragRef.current;
     dragRef.current = null;
     releaseObjectPointer(drag);
-    if (drag.mode === 'multi-move') {
-      drag.elements.forEach((element) => element.classList.remove('object-dragging', 'multi-object-dragging'));
+    if (drag.mode === 'multi-move' || drag.mode === 'multi-rotate') {
+      drag.elements.forEach((element) => element.classList.remove('object-dragging', 'multi-object-dragging', 'object-rotating'));
+      boardRef.current?.classList.remove('rotating');
       refreshSpatialIndex();
       for (const id of drag.ids) {
         const initial = drag.initialItems[id];
@@ -250,6 +262,7 @@ export function useCanvasObjectInteractions(options) {
           setToast('연결이 복구되면 선택한 오브젝트를 다시 이동해주세요.');
         }
       }
+      refreshSpatialIndex();
       return;
     }
     const { id, initial, element } = drag;
@@ -270,5 +283,19 @@ export function useCanvasObjectInteractions(options) {
       refreshSpatialIndex();
     }
   };
-  return { startObjectDrag, startObjectResize, startArrowBend, startObjectRotation, moveObject, stopObjectDrag };
+  const startGroupRotation = (event, ids, layout) => {
+    if (event.button !== 0 || activeTool !== 'select' || dragRef.current) return;
+    const frame = event.currentTarget.closest('.object-rotation-frame')?.getBoundingClientRect();
+    if (!frame || !layout) return;
+    event.preventDefault(); event.stopPropagation();
+    const centerX = frame.left + frame.width / 2, centerY = frame.top + frame.height / 2;
+    const initialItems = Object.fromEntries(ids.map(id => [id, itemsRef.current[id]]));
+    const elements = [...(sceneRef.current?.querySelectorAll('[data-item-id]') || [])].filter(element => ids.includes(element.dataset.itemId));
+    elements.forEach(element => element.classList.add('object-rotating'));
+    boardRef.current?.classList.add('rotating');
+    dragRef.current = { mode: 'multi-rotate', ids, initialItems, layout, elements, centerX, centerY,
+      startAngle: Math.atan2(event.clientY - centerY, event.clientX - centerX) };
+    captureObjectPointer(boardRef.current, dragRef.current, event);
+  };
+  return { startObjectDrag, startObjectResize, startArrowBend, startObjectRotation, startGroupRotation, moveObject, stopObjectDrag };
 }

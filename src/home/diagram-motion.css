@@ -1,0 +1,47 @@
+/* Animate relationships and processing stages while retaining the diagram layout. */
+.project-map-node { transform-box: fill-box; transform-origin: center; }
+.home-slides-page .home-slide.is-diagram-active .project-map-node > rect {
+  animation: diagram-node-signal 6s ease-in-out var(--diagram-delay, 0s) infinite;
+}
+.home-slides-page .home-slide.is-diagram-active .architecture-node,
+.home-slides-page .home-slide.is-diagram-active .architecture-storage-grid article {
+  animation: diagram-card-signal 6s ease-in-out var(--diagram-delay, 0s) infinite;
+}
+.home-slides-page .home-slide.is-diagram-active .architecture-flow-arrow svg {
+  animation: diagram-request-flow 1.6s ease-in-out infinite;
+}
+.home-slides-page .home-slide.is-diagram-active .architecture-storage-connector::before,
+.home-slides-page .home-slide.is-diagram-active .architecture-storage-connector::after {
+  background: linear-gradient(90deg, #dce5dc 10%, #9e87bd 50%, #dce5dc 90%);
+  background-size: 200% 100%;
+  animation: diagram-storage-flow 2s linear infinite;
+}
+.home-slides-page .home-slide.is-diagram-active .architecture-tags i {
+  animation: diagram-tag-signal 6s ease-in-out var(--diagram-delay, 0s) infinite;
+}
+.project-map-node > rect { transition: stroke .2s, stroke-width .2s; }
+.project-map-node:hover > rect { stroke: #8c72ad; stroke-width: 3; }
+.architecture-showcase article:hover { outline: 1px solid #aa96c6; outline-offset: 2px; }
+@keyframes diagram-node-signal {
+  0%, 24%, 100% { stroke-width: 2; }
+  8%, 16% { stroke: #9277b2; stroke-width: 3.5; }
+}
+@keyframes diagram-card-signal {
+  0%, 24%, 100% { box-shadow: 0 3px 10px #30463908; }
+  8%, 16% { box-shadow: 0 0 0 2px #aa92c44d, 0 5px 18px #8060a51c; }
+}
+@keyframes diagram-request-flow {
+  0%, 100% { translate: -3px 0; opacity: .4; }
+  55% { translate: 4px 0; opacity: 1; }
+}
+@keyframes diagram-storage-flow { to { background-position: -200% 0; } }
+@keyframes diagram-tag-signal {
+  0%, 24%, 100% { opacity: .75; }
+  8%, 16% { opacity: 1; background: #e9e0f4; }
+}
+@media(prefers-reduced-motion: reduce) {
+  .home-slides-page .home-slide.is-diagram-active :is(.project-map-node > rect, .architecture-node, .architecture-storage-grid article, .architecture-flow-arrow svg, .architecture-tags i),
+  .home-slides-page .home-slide.is-diagram-active .architecture-storage-connector::before,
+  .home-slides-page .home-slide.is-diagram-active .architecture-storage-connector::after { animation: none; }
+  [data-diagram-packet] { display: none; }
+}

@@ -1,0 +1,17 @@
+/* Keep the closing scene centered in both the flex and large-screen grid layouts. */
+.home-slides-page .slide-start .start-slide-card {
+  justify-self: center;
+  align-self: center;
+  margin-inline: auto;
+}
+
+.home-slides-page .slide-start .slide-desk--start {
+  width: min(480px, 100%);
+  margin-inline: auto;
+}
+
+.home-slides-page .slide-start .slide-context-ribbon {
+  width: min(1080px, 100%);
+  justify-self: center;
+  margin-inline: auto;
+}

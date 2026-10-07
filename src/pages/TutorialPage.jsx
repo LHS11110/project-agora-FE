@@ -1,3 +1,5 @@
+import SyntaxCode from '../components/code/SyntaxCode.jsx';
+import CodeCopyButton from '../components/code/CodeCopyButton.jsx';
 import { usePenStyle } from '../canvas/usePenStyle.js';
 import PenStyleControls from '../canvas/PenStyleControls.jsx';
 import { inkPointAtPointer } from '../canvas/inkStroke.js';
@@ -38,7 +40,7 @@ import '../tutorial.css';
 const demoItems = {
   'demo-rectangle': { kind: 'shape', shapeType: 'rectangle', x: 0.11, y: 0.19, width: 0.24, height: 0.15, color: '#d58165' },
   'demo-ellipse': { kind: 'shape', shapeType: 'ellipse', x: 0.6, y: 0.22, width: 0.17, height: 0.13, color: '#6c8d77' },
-  'demo-connector': { kind: 'connector', from: 'demo-note', to: 'demo-math', color: '#8b8f8c', strokeWidth: 1.5 },
+  'demo-connector': { kind: 'connector', bend: 0, from: 'demo-note', to: 'demo-math', color: '#8b8f8c', strokeWidth: 1.5 },
   'demo-note': { kind: 'text', text: '생각을 그려봐요', x: 0.15, y: 0.25, width: 0.18 },
   'demo-math': { kind: 'math', formula: 'x^2 + y^2 = z^2', x: 0.58, y: 0.28, width: 0.22 },
   'demo-sticky': { kind: 'note', text: '# 좋은 생각\n- 작게 시작하기\n**함께 발전시키기**', x: 0.36, y: 0.54, width: 0.24, color: '#f6edcf', rotation: -1.2 },
@@ -755,7 +757,8 @@ export default function TutorialPage() {
                 if (item.kind === 'code') {
                   return <div key={id} className={`tutorial-item tutorial-code-item${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.32) * 100}%` }} {...commonHandlers}>
                     <div className="tutorial-code-head"><Icon name="code" size={14} />{editingId === id ? <><input value={item.filename || ''} aria-label="파일 이름" maxLength={80} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'filename', event.target.value)} /><select value={item.language || 'javascript'} aria-label="코드 언어" onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'language', event.target.value)}><CodeLanguageOptions value={item.language || 'javascript'} /></select></> : <><span>{item.filename || 'idea.js'}</span><small>{codeLanguageLabel(item.language || 'javascript')}</small></>}</div>
-                    {editingId === id ? <CanvasCodeEditor value={item.code || ''} language={item.language || 'javascript'} onChange={value => changeCode(id, value)} onSave={() => setEditingId(null)} onStopEditing={() => setEditingId(current => current === id ? null : current)} /> : <pre title="두 번 클릭해 편집">{item.code || '두 번 클릭해 편집'}</pre>}
+                    {editingId === id ? <CanvasCodeEditor key="code-editor" value={item.code || ''} language={item.language || 'javascript'} onChange={value => changeCode(id, value)} onSave={() => setEditingId(null)} onStopEditing={() => setEditingId(current => current === id ? null : current)} /> : <SyntaxCode value={item.code || ''} language={item.language || 'javascript'} title="두 번 클릭해 편집" />}
+                    <div className="tutorial-code-copy-row"><CodeCopyButton value={item.code || ''} /></div>
                     {resizeHandles}
                   </div>;
                 }

@@ -53,7 +53,7 @@ export function useTutorialObjectInteractions(options) {
       if (!connectionStartId) setConnectionStartId(id);
       else if (connectionStartId === id) setConnectionStartId(null);
       else {
-        addItem({ kind: 'connector', from: connectionStartId, to: id, color: connectorColor, strokeWidth: connectorWidth, startHead: connectorStartHead, endHead: connectorEndHead });
+        addItem({ kind: 'connector', bend: 0, from: connectionStartId, to: id, color: connectorColor, strokeWidth: connectorWidth, startHead: connectorStartHead, endHead: connectorEndHead });
         setConnectionStartId(null);
         setActiveTool('select');
       }

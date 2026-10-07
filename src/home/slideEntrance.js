@@ -22,13 +22,16 @@ export function playSlideEntrance(slide, { direction = 1, initial = false } = {}
       { opacity: 1, translate: '0 0' },
     ], arrival + 100, 800);
   });
-  slide.querySelectorAll('.architecture-node, .collab-card-row article, .start-star').forEach((element, index) => {
+  slide.querySelectorAll('.collab-card-row article, .start-star').forEach((element, index) => {
     animate(element, [
       { opacity: 0, scale: '.92', translate: '0 10px' },
       { opacity: 1, scale: '1', translate: '0 0' },
     ], arrival + 280 + index * 90, 600);
   });
   const cancel = () => animations.forEach(animation => animation.cancel());
+  slide.querySelectorAll('.slide-context-card').forEach((element, index) => {
+    animate(element, [{ opacity: 0, translate: '0 14px' }, { opacity: 1, translate: '0 0' }], arrival + 400 + index * 85, 550);
+  });
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   const onPreferenceChange = () => { if (reduced.matches) cancel(); };
   reduced.addEventListener('change', onPreferenceChange);

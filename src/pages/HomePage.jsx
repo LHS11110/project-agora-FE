@@ -8,7 +8,6 @@ import StartSlide from '../components/home/StartSlide.jsx';
 import Icon from '../components/Icon.jsx';
 import { useHomeSlideNavigation } from '../home/useHomeSlideNavigation.js';
 import { useSlideMotion } from '../home/useSlideMotion.js';
-import { useHomeObjectMotion } from '../home/useHomeObjectMotion.js';
 import { useAuth } from '../state/AuthContext.jsx';
 import '../home-slides.css';
 import '../home-hero.css';
@@ -23,7 +22,6 @@ export default function HomePage() {
   const target = isAuthenticated ? '/search' : '/login';
   const { activeSlide, slideLabels, selectSlide, handleWheel, handleTouchStart, handleTouchEnd } = useHomeSlideNavigation();
   const { windowRef, trackRef } = useSlideMotion(activeSlide);
-  useHomeObjectMotion(trackRef, activeSlide);
   return <div className="marketing-page home-slides-page">
     <header className="marketing-header page-container">
       <FreLogBrand />

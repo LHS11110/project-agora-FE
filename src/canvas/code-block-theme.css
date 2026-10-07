@@ -1,0 +1,32 @@
+.syntax-code-preview{--code-plain:#dce6f5;--code-keyword:#c99bff;--code-string:#a8d99b;--code-number:#f2bd88;--code-type:#73d5d0;--code-function:#8ec5ff;background:#192233;color:var(--code-plain);white-space:pre;tab-size:2;overflow:auto}
+.syntax-code-preview>code{color:inherit!important;font:inherit!important;white-space:inherit;background:transparent!important;padding:0!important}
+.syntax-code-preview .syntax-plain{color:var(--code-plain)}
+.syntax-code-preview .syntax-comment{color:#8596b0;font-style:italic}
+.syntax-code-preview .syntax-keyword{color:var(--code-keyword)}
+.syntax-code-preview .syntax-string{color:var(--code-string)}
+.syntax-code-preview .syntax-number{color:var(--code-number)}
+.syntax-code-preview .syntax-type{color:var(--code-type)}
+.syntax-code-preview .syntax-function{color:var(--code-function)}
+.syntax-code-preview .syntax-attribute{color:#e5cd86}
+.syntax-code-preview .syntax-operator{color:#f19dc1}
+.syntax-code-preview .syntax-punctuation{color:#9daec7}
+.syntax-code-preview .syntax-invalid{color:#ff8b96;text-decoration:underline wavy}
+.canvas-stage .code-object,.tutorial-scene .tutorial-code-item{background:#192233;border-color:#3d506c;color:#dce6f5}
+.canvas-stage .code-object .code-object-head,.tutorial-code-item .tutorial-code-head{background:linear-gradient(110deg,#26374f,#283048);border-bottom:1px solid #40536d;color:#c8dcf5}
+.canvas-stage .code-object .code-object-head strong,.tutorial-code-item .tutorial-code-head span{color:#e5edf9}
+.canvas-stage .code-object .code-object-head small,.tutorial-code-item .tutorial-code-head small{color:#91c5d9}
+.canvas-stage .code-object pre.syntax-code-preview,.tutorial-code-item pre.syntax-code-preview{background:#192233;color:#dce6f5}
+.canvas-stage .code-object .code-object-foot{background:#202d42;color:#a6b8ce;border-top:1px solid #34475f}
+.canvas-stage .code-object .code-object-foot>span{color:#a6b8ce}
+.canvas-stage .code-copy-button,.tutorial-code-item .code-copy-button,.markdown-code-block .code-copy-button{padding:4px 8px;border:1px solid #527398;border-radius:5px;background:#30435f;color:#d8eaff;cursor:pointer;font-size:10px;white-space:nowrap}
+.code-copy-button:hover{filter:brightness(1.15)}
+.code-copy-button:focus-visible{outline:2px solid #91c9ff;outline-offset:2px}
+.tutorial-code-copy-row{display:flex;justify-content:flex-end;padding:6px 10px;background:#202d42}
+
+/* Reserve the right edge for actions; truncate only the save/presence labels. */
+.canvas-stage .code-object .code-object-foot{height:auto;min-height:34px;padding:5px 10px;gap:8px;box-sizing:border-box}
+.canvas-stage .code-object .code-object-foot>span{flex:1;min-width:0;max-width:none}
+.canvas-stage .code-object .code-object-foot>.collab-presence-label{flex:0 1 42%}
+.canvas-stage .code-copy-button,.tutorial-code-item .code-copy-button,.markdown-code-block .code-copy-button{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;min-width:68px;min-height:24px;box-sizing:border-box;line-height:1.4}
+.canvas-stage .code-object .code-object-foot>.code-copy-button{margin-left:auto}
+.canvas-stage .code-object .code-copy-button>span{display:block;flex:none;max-width:none;overflow:visible;text-overflow:clip;white-space:nowrap}

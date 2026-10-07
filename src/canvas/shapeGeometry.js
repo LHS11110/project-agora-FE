@@ -29,14 +29,13 @@ function polygon(sides, star = false) {
 }
 
 /** Shared contours for vector rendering, picker previews and connector anchors. */
-export function shapeOutlinePaths(type, width, height) {
+function createShapeOutlinePaths(type, width, height) {
   const points = values => close(values.map(([x, y]) => ({ x: x * width, y: y * height })));
   const scale = path => path.map(p => ({ x: p.x * width, y: p.y * height }));
-  if (type === 'circle') return [arc(width / 2, height / 2, Math.min(width, height) / 2, Math.min(width, height) / 2)];
+  if (type === 'circle') return [arc(width / 2, height / 2, width / 2, height / 2)];
   if (type === 'ellipse') return [arc(width / 2, height / 2, width / 2, height / 2)];
   if (type === 'square') {
-    const side = Math.min(width, height), x = (width - side) / 2, y = (height - side) / 2;
-    return [close([{ x, y }, { x: x + side, y }, { x: x + side, y: y + side }, { x, y: y + side }])];
+    return [points([[0, 0], [1, 0], [1, 1], [0, 1]])];
   }
   if (type === 'triangle') return [points([[0.5, 0], [1, 1], [0, 1]])];
   if (type === 'diamond') return [points([[0.5, 0], [1, 0.5], [0.5, 1], [0, 0.5]])];
@@ -57,8 +56,7 @@ export function shapeOutlinePaths(type, width, height) {
     [0.64, 0, 1, 0, 1, 0.3], [1, 0.57, 0.75, 0.8, 0.5, 1],
   ]))];
   if (type === 'person') {
-    const radius = Math.min(width * 0.14, height * 0.1);
-    return [arc(width / 2, height * 0.14, radius, radius), points([
+    return [arc(width / 2, height * 0.14, width * 0.14, height * 0.1), points([
       [0.34, 0.32], [0.66, 0.32], [0.85, 0.57], [0.75, 0.63], [0.63, 0.46],
       [0.63, 0.66], [0.72, 0.95], [0.59, 0.98], [0.5, 0.74], [0.41, 0.98],
       [0.28, 0.95], [0.37, 0.66], [0.37, 0.46], [0.25, 0.63], [0.15, 0.57],
@@ -66,4 +64,17 @@ export function shapeOutlinePaths(type, width, height) {
   }
   if (type === 'arrow') return [[{ x: width * 0.1, y: height / 2 }, { x: width * 0.9, y: height / 2 }], [{ x: width * 0.7, y: height * 0.25 }, { x: width * 0.9, y: height / 2 }, { x: width * 0.7, y: height * 0.75 }]];
   return [points([[0, 0], [1, 0], [1, 1], [0, 1]])];
+}
+
+// Every filled shape stretches to its selection frame on both axes.
+export function shapeOutlinePaths(type, width, height) {
+  const paths = createShapeOutlinePaths(type, width, height);
+  if (type === 'arrow') return paths;
+  const vertices = paths.flat();
+  const minX = Math.min(...vertices.map(point => point.x)), maxX = Math.max(...vertices.map(point => point.x));
+  const minY = Math.min(...vertices.map(point => point.y)), maxY = Math.max(...vertices.map(point => point.y));
+  return paths.map(path => path.map(point => ({
+    x: (point.x - minX) / (maxX - minX || 1) * width,
+    y: (point.y - minY) / (maxY - minY || 1) * height,
+  })));
 }

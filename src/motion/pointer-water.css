@@ -4,3 +4,6 @@
 .home-slides-page .home-slide-inner, .auth-page .auth-form-wrap { position: relative; z-index: 1; }
 .slide-start .pointer-water-ring, .auth-visual-panel .pointer-water-ring { border-color: #a5d6dc; }
 @media(prefers-reduced-motion:reduce) { .pointer-water { display: none; } }
+.home-slides-page .pointer-water[data-water-tone="light"] canvas { mix-blend-mode: multiply; }
+.home-slides-page .pointer-water-ring { border-color: #4e95a8; box-shadow: 0 0 0 1px #62aaba25, inset 0 0 9px #76b8c522; }
+.home-slides-page .slide-start .pointer-water-ring { border-color: #b7edf2; box-shadow: 0 0 9px #b7edf233; }

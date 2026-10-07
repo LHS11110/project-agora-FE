@@ -1,5 +1,6 @@
 export { codeModelUri, registerModelCompletions } from './completions/registerModelCompletions.js';
 import * as monaco from 'monaco-editor';
+import { registerCodeTheme } from './codeTheme.js';
 import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker';
 import JsonWorker from 'monaco-editor/language/json/json.worker.js?worker';
 import CssWorker from 'monaco-editor/language/css/css.worker.js?worker';
@@ -16,7 +17,8 @@ self.MonacoEnvironment = {
   },
 };
 
-const aliases = { text: 'plaintext', bash: 'shell', objectivec: 'objective-c', vue: 'html', svelte: 'html' };
+registerCodeTheme(monaco);
+const aliases = { text: 'plaintext', bash: 'shell', sh: 'shell', js: 'javascript', ts: 'typescript', py: 'python', yml: 'yaml', 'c++': 'cpp', 'c#': 'csharp', cs: 'csharp', objectivec: 'objective-c', vue: 'html', svelte: 'html' };
 export function editorLanguage(language) {
   const id = aliases[language] || language || 'plaintext';
   if (!monaco.languages.getLanguages().some(entry => entry.id === id) && id !== 'plaintext') {

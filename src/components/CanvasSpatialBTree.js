@@ -1,3 +1,5 @@
+import { connectorObjectSize } from '../canvas/connectors/objectMetrics.js';
+import { CANVAS_SPACE } from '../canvas/canvasSpace.js';
 import { strokePaintSize } from '../canvas/inkStroke.js';
 import { connectorGeometry, OBJECT_SIZES } from './connectorGeometry.js';
 import { shapeArrowGeometry } from './shapeArrowGeometry.js';
@@ -96,8 +98,9 @@ function objectBounds(item, items, viewportWidth = 1, viewportHeight = 1) {
   const [defaultWidth, defaultHeight] = OBJECT_SIZES[item?.kind] || [0.2, 0.12];
   const x = Number(item?.x) || 0;
   const y = Number(item?.y) || 0;
-  const objectWidth = Number(item?.width) || defaultWidth;
-  const objectHeight = Number(item?.height) || defaultHeight;
+  const measured = connectorObjectSize(item);
+  const objectWidth = measured ? measured.width / CANVAS_SPACE.width : Number(item?.width) || defaultWidth;
+  const objectHeight = measured ? measured.height / CANVAS_SPACE.height : Number(item?.height) || defaultHeight;
   if (item?.kind === 'shape' && item.shapeType === 'arrow') {
     const geometry = shapeArrowGeometry(objectWidth * width, objectHeight * height, item.bend, item.startHead, item.endHead);
     const centerX = (x + objectWidth / 2) * width;

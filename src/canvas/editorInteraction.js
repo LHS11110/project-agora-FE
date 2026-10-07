@@ -1,4 +1,4 @@
-const MONACO_CONTROLS = '.monaco-menu-container, .context-view, .monaco-hover, .suggest-widget, .parameter-hints-widget';
+const MONACO_CONTROLS = '.monaco-editor, .monaco-menu-container, .context-view, .monaco-hover, .suggest-widget, .parameter-hints-widget, .overflowingContentWidgets, .overflowingOverlayWidgets, .monaco-dialog-box';
 
 export function isMonacoControl(target) {
   return Boolean(target instanceof Element && target.closest(MONACO_CONTROLS));

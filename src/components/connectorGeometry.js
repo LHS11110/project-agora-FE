@@ -1,3 +1,7 @@
+import { strokePaintSize } from '../canvas/inkStroke.js';
+import { obstacleRoute } from '../canvas/connectors/obstacleRoute.js';
+import { connectorObjectSize, connectorMetricsRevision } from '../canvas/connectors/objectMetrics.js';
+import { CANVAS_SPACE } from '../canvas/canvasSpace.js';
 import { arrowPathGeometry } from './arrowheadGeometry.js';
 import { shapeOutlinePaths } from '../canvas/shapeGeometry.js';
 
@@ -13,11 +17,24 @@ export const OBJECT_SIZES = {
 };
 
 function objectRect(item, width, height) {
+  if (item?.kind === 'stroke' && item.points?.length) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const point of item.points) {
+      minX = Math.min(minX, point.x * width); maxX = Math.max(maxX, point.x * width);
+      minY = Math.min(minY, point.y * height); maxY = Math.max(maxY, point.y * height);
+    }
+    const pad = strokePaintSize(item) / 2;
+    return { centerX: (minX + maxX) / 2, centerY: (minY + maxY) / 2,
+      halfWidth: (maxX - minX) / 2 + pad, halfHeight: (maxY - minY) / 2 + pad,
+      rotation: (Number(item.rotation) || 0) * Math.PI / 180 };
+  }
+
   const [defaultWidth, defaultHeight] = OBJECT_SIZES[item?.kind] || [0.2, 0.12];
   const x = (Number(item?.x) || 0) * width;
   const y = (Number(item?.y) || 0) * height;
-  const objectWidth = (Number(item?.width) || defaultWidth) * width;
-  const objectHeight = (Number(item?.height) || defaultHeight) * height;
+  const measured = connectorObjectSize(item);
+  const objectWidth = (measured ? measured.width / CANVAS_SPACE.width : Number(item?.width) || defaultWidth) * width;
+  const objectHeight = (measured ? measured.height / CANVAS_SPACE.height : Number(item?.height) || defaultHeight) * height;
   return {
     centerX: x + objectWidth / 2,
     centerY: y + objectHeight / 2,
@@ -71,13 +88,16 @@ function bezierPoint(points, t) {
   }), { x: 0, y: 0 });
 }
 
-export function connectorGeometry(item, items, width = 1, height = 1) {
+function calculateConnectorGeometry(item, items, width, height) {
   const fromItem = items?.[item?.from];
   const toItem = items?.[item?.to];
   if (!fromItem || !toItem) return null;
 
-  const from = objectRect(fromItem, width, height);
-  const to = objectRect(toItem, width, height);
+  if (String(item.from) === String(item.to)) return null;
+  const rectangles = Object.entries(items).filter(([, candidate]) => candidate && candidate.kind !== 'connector').map(([id, candidate]) => ({ id, ...objectRect(candidate, width, height) }));
+  const from = rectangles.find(rect => rect.id === String(item.from));
+  const to = rectangles.find(rect => rect.id === String(item.to));
+  if (!from || !to) return null;
   const dx = to.centerX - from.centerX;
   const dy = to.centerY - from.centerY;
   const length = Math.hypot(dx, dy);
@@ -108,7 +128,7 @@ export function connectorGeometry(item, items, width = 1, height = 1) {
   const hasCustomBend = Number.isFinite(Number(item.bend));
   const bend = hasCustomBend
     ? gap * Math.max(0, Math.min(1.5, Number(item.bend)))
-    : Math.min(72, gap * 0.18);
+    : 0;
   const curve = [
     start,
     { x: start.x + directionX * gap * 0.2, y: start.y + directionY * gap * 0.2 },
@@ -118,13 +138,33 @@ export function connectorGeometry(item, items, width = 1, height = 1) {
     end,
   ];
   const curvePoints = Array.from({ length: 33 }, (_, index) => bezierPoint(curve, index / 32));
-  const arrowPath = arrowPathGeometry(curvePoints, {
+  const routed = obstacleRoute({ preferred: curvePoints, rectangles, from, to,
+    padding: headSize + strokeWidth / 2 + 4, preserveBend: bend > 0,
+    anchor: (rect, direction, padding) => {
+      const reach = distanceToEdge(rect, direction.x, direction.y) + padding;
+      return { x: rect.centerX + direction.x * reach, y: rect.centerY + direction.y * reach };
+    },
+  });
+  if (!routed) return null;
+  const arrowPath = arrowPathGeometry(routed.points, {
     startHead: item.startHead,
     endHead: item.endHead,
     headSize,
     strokeWidth: Number(item.strokeWidth) || 1.5,
   });
-  return { ...arrowPath, directionX, directionY, normalX, normalY, start, end, gap, bend };
+  return { ...arrowPath, directionX, directionY, normalX, normalY, gap, bend, bendStart: start, bendEnd: end, routed: routed.routed };
+}
+
+const geometryCache = new WeakMap();
+export function connectorGeometry(item, items, width = 1, height = 1) {
+  if (!item || !items) return null;
+  const key = `${width}:${height}:${connectorMetricsRevision()}`;
+  let cache = geometryCache.get(items);
+  if (!cache || cache.key !== key) { cache = { key, results: new WeakMap() }; geometryCache.set(items, cache); }
+  if (cache.results.has(item)) return cache.results.get(item);
+  const geometry = calculateConnectorGeometry(item, items, width, height);
+  cache.results.set(item, geometry);
+  return geometry;
 }
 
 export function connectorBendFromPointer(geometry, pointer, viewSize) {
@@ -133,8 +173,9 @@ export function connectorBendFromPointer(geometry, pointer, viewSize) {
   const height = Math.max(1, Number(viewSize?.height) || 1);
   const pointerX = (Number(pointer?.x) || 0) * width;
   const pointerY = (Number(pointer?.y) || 0) * height;
-  const centerX = (geometry.start.x + geometry.end.x) / 2;
-  const centerY = (geometry.start.y + geometry.end.y) / 2;
+  const start = geometry.bendStart || geometry.start, end = geometry.bendEnd || geometry.end;
+  const centerX = (start.x + end.x) / 2;
+  const centerY = (start.y + end.y) / 2;
   const offsetX = pointerX - centerX;
   const offsetY = pointerY - centerY;
   const offsetLength = Math.hypot(offsetX, offsetY);

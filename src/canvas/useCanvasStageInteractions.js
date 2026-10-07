@@ -284,6 +284,7 @@ export function useCanvasStageInteractions(options) {
   };
   const startDrawing = (event) => {
     if (drawingRef.current || event.button !== 0 && event.button !== 1) return;
+    if (activeTool === 'hand') { startPan(event); return; }
     updateEraserCursor(event);
     const clickedEmptySpace = event.button === 0 && !event.target.closest?.('.canvas-object, .canvas-minimap, .stage-label, .draw-cursor-label, .eraser-cursor');
     if (clickedEmptySpace) {
@@ -405,14 +406,15 @@ export function useCanvasStageInteractions(options) {
     const session = drawingSessionRef.current;
     if (!session || session.pointerId !== event.pointerId) return;
     const coalesced = event.nativeEvent?.getCoalescedEvents?.() || event.getCoalescedEvents?.() || [];
-    const samples = coalesced.length ? coalesced : [event];
+    // Some browsers omit the newest dispatch position from their coalesced list.
+    const samples = coalesced.length ? [...coalesced, event] : [event];
     let changed = false;
     for (const sample of samples) {
       if (draftRef.current.length >= MAX_REALTIME_STROKE_POINTS) break;
       const point = inkPointAtPointer(sample, pointerPosition(sample));
       const previous = draftRef.current[draftRef.current.length - 1];
       const distance = previous ? Math.hypot((point.x - previous.x) * boardSize.width, (point.y - previous.y) * boardSize.height) : Infinity;
-      if (distance < 0.5 && Math.abs((point.pressure ?? 0.5) - (previous?.pressure ?? 0.5)) < 0.02) continue;
+      if (distance < (session.brush === 'pen' ? 0.25 : 0.5) && Math.abs((point.pressure ?? 0.5) - (previous?.pressure ?? 0.5)) < 0.02) continue;
       draftRef.current.push(point);
       session.pendingPoints.push(point);
       changed = true;
