@@ -25,4 +25,4 @@ RUN npm run build
 
 # Export only the built SPA; the backend repository owns Nginx.
 FROM build AS production
-CMD ["sh", "-c", "find /output -mindepth 1 -maxdepth 1 -exec rm -rf {} + && cp -a /app/dist/. /output/"]
+CMD ["node", "build/exportDist.js", "/app/dist", "/output"]

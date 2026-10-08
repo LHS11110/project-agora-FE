@@ -63,14 +63,14 @@ BE Nginx를 개발 모드로 시작하면 공유 네트워크 `agora-web`이 준
 
 ```bash
 cd ../project-agora-BE
-FRONTEND_MODE=development docker compose -f docker-compose.nginx.yml up -d
+./scripts/nginx-docker.sh development
 cd ../project-agora-FE
 docker compose -f compose.dev.yaml up -d --build --remove-orphans
 ```
 
 브라우저에서 **http://127.0.0.1:4173**에 접속하세요. Nginx가 React 페이지와 Vite HMR, Spring `/api/`, C++ `/wss/`를 제공합니다. Vite 직접 접속은 `http://127.0.0.1:5173`이며 소스 변경은 볼륨 마운트로 즉시 반영됩니다. 기존 개발 Nginx 컨테이너도 `--remove-orphans`로 정리됩니다.
 
-개발 WebSocket은 기본적으로 `ws://127.0.0.1:4173`을 사용합니다. BE의 `NGINX_PORT`를 변경하거나 다른 호스트에서 접속할 경우 FE `.env`의 `VITE_WS_BASE_URL`도 브라우저에서 사용할 주소로 설정하세요. HTTPS 진입점에는 `wss://`를 사용합니다.
+Docker 개발 WebSocket은 현재 브라우저 origin을 사용하므로 Nginx 포트·호스트·HTTPS 변경을 자동으로 따릅니다. 별도 WebSocket 도메인만 `VITE_WS_BASE_URL`로 지정하세요. Vite를 사용자 도메인으로 접근하면 `VITE_ALLOWED_HOSTS`에 해당 호스트명을 명시합니다. Docker 밖에서 C++에 직접 연결하는 개발 모드만 `VITE_CPP_WS_HOST`를 사용합니다.
 
 ```bash
 docker compose -f compose.dev.yaml logs -f frontend
@@ -87,14 +87,24 @@ docker compose -f compose.dev.yaml down --remove-orphans
 docker compose build frontend-build
 docker compose run --rm frontend-build
 cd ../project-agora-BE
-FRONTEND_MODE=production docker compose -f docker-compose.nginx.yml up -d
+./scripts/nginx-docker.sh production
 curl -fsS http://127.0.0.1:4173/
 ```
 
-기존 FE 운영 컨테이너(`agora-frontend`)가 남아 있으면 먼저 `docker rm -f agora-frontend`로 제거해 4173 포트를 비워 주세요. 새 빌드 배포 시 위 빌드·내보내기 명령을 반복합니다. 내보내기는 기존 배포 파일을 교체하므로 실행 중 짧은 파일 교체 구간이 생길 수 있습니다.
+기존 FE 운영 컨테이너(`agora-frontend`)가 남아 있으면 먼저 `docker rm -f agora-frontend`로 제거해 4173 포트를 비워 주세요. 새 빌드 배포 시 위 빌드·내보내기 명령을 반복합니다. 내보내기는 새 release를 준비한 뒤 `current` 심볼릭 링크를 원자적으로 전환합니다. 실패하면 이전 배포를 유지하고 동시 배포는 잠금으로 차단합니다. 이전 해시 자산은 열린 페이지의 lazy loading을 위해 보존하며, release 디렉터리는 최신 두 개를 유지합니다.
 
 FE에는 Nginx 이미지나 설정이 없습니다. API·WebSocket·SPA fallback·자산 캐시·MIME 설정은 [BE의 단일 Nginx 설정](../project-agora-BE/nginx/agora.conf.example), Docker 실행 및 TLS 설정은 [BE README](../project-agora-BE/README.md#nginx와-wss)를 참고하세요. `VITE_*`는 브라우저에 포함되는 공개 설정이며 비밀값을 넣지 않습니다.
 
 ## 라이선스
 
 MathJax, PixiJS, Automerge의 라이선스 고지는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 참고하세요.
+
+## 실행 의존성 및 검증
+
+FE와 BE는 같은 Docker 엔진의 `agora-web` 네트워크와 `agora-frontend-dist` 볼륨을 공유해야 합니다. 저장소가 나란히 있을 필요는 없으며 README의 `cd ../…`는 예시입니다. 각 저장소를 독립 경로에서 실행해도 컨테이너 DNS·볼륨 이름으로 연결됩니다. Node 22와 원자적 파일 전환은 Linux 컨테이너 안에서 실행하므로 호스트 Node/Nginx 설치에 의존하지 않습니다.
+
+배포 도중 exporter가 강제 종료되어 `.deploy-lock`이 남으면 실행 중인 exporter가 없는지 확인한 뒤 공유 볼륨에서 잠금 디렉터리만 제거하세요. 데이터 볼륨 전체를 삭제하지 않습니다. 보존한 해시 자산은 배포 횟수에 따라 증가하므로 운영 환경의 자산 보존 정책에 따라 정리합니다.
+
+```bash
+node --test tests/exportDist.test.js tests/socketUrls.test.js
+```

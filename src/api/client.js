@@ -42,7 +42,7 @@ export function canvasSocketUrl(canvasId, wsPort, token) {
   const encodedToken = encodeURIComponent(token);
   const base = import.meta.env.VITE_WS_BASE_URL?.replace(/\/$/, '');
   if (base) return `${base}/wss/port/${encodeURIComponent(wsPort)}/canvas/${canvasId}?token=${encodedToken}`;
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV && import.meta.env.VITE_CPP_WS_HOST) {
     const host = import.meta.env.VITE_CPP_WS_HOST || window.location.hostname;
     const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
     return `${scheme}://${host}:${wsPort}/ws/canvas/${canvasId}?token=${encodedToken}`;
@@ -55,7 +55,7 @@ export function rtcSocketUrl(canvasId, wsPort, token) {
   const encodedToken = encodeURIComponent(token);
   const base = import.meta.env.VITE_WS_BASE_URL?.replace(/\/$/, '');
   if (base) return `${base}/wss/port/${encodeURIComponent(wsPort)}/rtc/canvas/${canvasId}?token=${encodedToken}`;
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV && import.meta.env.VITE_CPP_WS_HOST) {
     const host = import.meta.env.VITE_CPP_WS_HOST || window.location.hostname;
     const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
     return `${scheme}://${host}:${encodeURIComponent(wsPort)}/ws/rtc/canvas/${canvasId}?token=${encodedToken}`;

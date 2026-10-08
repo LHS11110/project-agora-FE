@@ -49,6 +49,6 @@ export default defineConfig(({ mode }) => {
   const apiTarget = env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8080';
   return {
     plugins: [react(), localMathJaxAssets(), localPdfAssets()],
-    server: { host: '0.0.0.0', proxy: { '/api': { target: apiTarget, changeOrigin: true } } },
+    server: { host: '0.0.0.0', allowedHosts: (env.VITE_ALLOWED_HOSTS || '').split(',').map((host) => host.trim()).filter(Boolean), proxy: { '/api': { target: apiTarget, changeOrigin: true } } },
   };
 });

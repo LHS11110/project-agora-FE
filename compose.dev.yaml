@@ -14,12 +14,12 @@ services:
       - .:/app
       - agora-fe-node-modules:/app/node_modules
     environment:
-      VITE_API_PROXY_TARGET: ${VITE_DOCKER_API_PROXY_TARGET:-http://host.docker.internal:8080}
-      VITE_WS_BASE_URL: ${VITE_WS_BASE_URL:-ws://127.0.0.1:4173}
+      VITE_API_PROXY_TARGET: ${VITE_DOCKER_API_PROXY_TARGET:-http://agora-nginx}
+      VITE_WS_BASE_URL: ${VITE_WS_BASE_URL:-}
+      VITE_CPP_WS_HOST: ""
+      VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS:-}
     networks:
       - agora-web
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:5173/ || exit 1"]
       interval: 10s
