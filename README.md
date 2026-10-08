@@ -55,25 +55,45 @@ npm run preview
 
 ## Docker
 
-개발 중에는 Vite 서버와 핫 리로드를 Docker로 실행합니다. Docker Compose는 Linux 호스트에서 `/api` 프록시를 위해 `host.docker.internal`을 호스트 게이트웨이에 연결합니다.
+Nginx 설정과 컨테이너는 BE 저장소에서 관리합니다. FE 저장소는 React·Vite 개발 서버 또는 배포용 빌드 결과만 제공합니다. Docker Desktop과 DB 스택을 먼저 시작하고, BE의 `./scripts/backend-docker.sh up`으로 백엔드를 실행하세요. 기존 `.env`를 사용하며 파일이 없을 때만 `cp .env.example .env`로 준비합니다.
+
+### 개발 서버 실행
+
+BE Nginx를 개발 모드로 시작하면 공유 네트워크 `agora-web`이 준비됩니다. 이후 FE Vite를 실행합니다.
 
 ```bash
-docker compose -f compose.dev.yaml up --build
+cd ../project-agora-BE
+FRONTEND_MODE=development docker compose -f docker-compose.nginx.yml up -d
+cd ../project-agora-FE
+docker compose -f compose.dev.yaml up -d --build --remove-orphans
 ```
 
-앱은 `http://127.0.0.1:5173`에서 열립니다. Spring Boot가 호스트의 다른 주소나 포트에서 실행되면 `VITE_DOCKER_API_PROXY_TARGET`을 `.env`에 설정하세요. 브라우저가 개발 서버에 접속하는 주소와 C++ WebSocket 주소가 다르면 `VITE_CPP_WS_HOST`도 맞춰야 합니다.
+브라우저에서 **http://127.0.0.1:4173**에 접속하세요. Nginx가 React 페이지와 Vite HMR, Spring `/api/`, C++ `/wss/`를 제공합니다. Vite 직접 접속은 `http://127.0.0.1:5173`이며 소스 변경은 볼륨 마운트로 즉시 반영됩니다. 기존 개발 Nginx 컨테이너도 `--remove-orphans`로 정리됩니다.
 
-운영/통합 환경은 빌드된 정적 파일과 Nginx를 하나의 컨테이너에 넣습니다. 기본값으로 컨테이너는 호스트 loopback의 `127.0.0.1:4173`에 공개됩니다. BE 저장소의 Nginx 예시는 해당 포트로 SPA 요청을 프록시하고 `/api`와 `/wss` 요청은 기존 백엔드 경로로 보냅니다.
+개발 WebSocket은 기본적으로 `ws://127.0.0.1:4173`을 사용합니다. BE의 `NGINX_PORT`를 변경하거나 다른 호스트에서 접속할 경우 FE `.env`의 `VITE_WS_BASE_URL`도 브라우저에서 사용할 주소로 설정하세요. HTTPS 진입점에는 `wss://`를 사용합니다.
 
 ```bash
-docker compose up -d --build
-docker compose ps
+docker compose -f compose.dev.yaml logs -f frontend
+docker compose -f compose.dev.yaml down
+```
+
+### 빌드 배포
+
+FE의 일회성 빌드 컨테이너가 정적 파일을 `agora-frontend-dist` 공유 볼륨에 기록합니다. BE Nginx가 해당 볼륨을 읽어 SPA·MathJax·PDF 자산을 제공합니다. Vite preview 서버는 배포에 사용하지 않습니다.
+
+```bash
+cd ../project-agora-FE
+docker compose -f compose.dev.yaml down --remove-orphans
+docker compose build frontend-build
+docker compose run --rm frontend-build
+cd ../project-agora-BE
+FRONTEND_MODE=production docker compose -f docker-compose.nginx.yml up -d
 curl -fsS http://127.0.0.1:4173/
 ```
 
-Vite 환경변수는 빌드 시 브라우저 번들에 포함됩니다. 같은 도메인에서 Nginx가 `/api`와 `/wss`를 제공한다면 `VITE_API_BASE_URL`과 `VITE_WS_BASE_URL`은 비워둡니다. 컨테이너를 새로 빌드하면 프런트엔드 변경 사항을 배포합니다.
+기존 FE 운영 컨테이너(`agora-frontend`)가 남아 있으면 먼저 `docker rm -f agora-frontend`로 제거해 4173 포트를 비워 주세요. 새 빌드 배포 시 위 빌드·내보내기 명령을 반복합니다. 내보내기는 기존 배포 파일을 교체하므로 실행 중 짧은 파일 교체 구간이 생길 수 있습니다.
 
-인증 토큰과 사용자 정보는 현재 브라우저 `localStorage`에 저장됩니다. 운영 배포에서는 HTTPS를 사용하고, 정적 자산과 `/mathjax/` 경로가 동일한 프런트엔드 배포본에서 제공되는지 확인하세요.
+FE에는 Nginx 이미지나 설정이 없습니다. API·WebSocket·SPA fallback·자산 캐시·MIME 설정은 [BE의 단일 Nginx 설정](../project-agora-BE/nginx/agora.conf.example), Docker 실행 및 TLS 설정은 [BE README](../project-agora-BE/README.md#nginx와-wss)를 참고하세요. `VITE_*`는 브라우저에 포함되는 공개 설정이며 비밀값을 넣지 않습니다.
 
 ## 라이선스
 

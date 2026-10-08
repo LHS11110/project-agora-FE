@@ -23,9 +23,6 @@ ENV VITE_WS_BASE_URL=${VITE_WS_BASE_URL}
 ENV VITE_WEBRTC_ICE_SERVERS=${VITE_WEBRTC_ICE_SERVERS}
 RUN npm run build
 
-FROM nginx:stable-alpine AS production
-
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/dist/ /usr/share/nginx/html/
-
-EXPOSE 80
+# Export only the built SPA; the backend repository owns Nginx.
+FROM build AS production
+CMD ["sh", "-c", "find /output -mindepth 1 -maxdepth 1 -exec rm -rf {} + && cp -a /app/dist/. /output/"]

@@ -6,7 +6,8 @@ services:
       target: development
     image: project-agora-frontend:dev
     container_name: agora-frontend-dev
-    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+    restart: unless-stopped
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 5173 --strictPort"
     ports:
       - "127.0.0.1:${VITE_PORT:-5173}:5173"
     volumes:
@@ -14,10 +15,22 @@ services:
       - agora-fe-node-modules:/app/node_modules
     environment:
       VITE_API_PROXY_TARGET: ${VITE_DOCKER_API_PROXY_TARGET:-http://host.docker.internal:8080}
+      VITE_WS_BASE_URL: ${VITE_WS_BASE_URL:-ws://127.0.0.1:4173}
+    networks:
+      - agora-web
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      disable: true
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:5173/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+networks:
+  agora-web:
+    external: true
+    name: agora-web
 
 volumes:
   agora-fe-node-modules:
