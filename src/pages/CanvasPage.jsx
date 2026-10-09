@@ -41,6 +41,7 @@ import CanvasParticipantsDialog from '../components/canvas/CanvasParticipantsDia
 import CanvasInspectorPanel from '../components/canvas/CanvasInspectorPanel.jsx';
 import CanvasChatPanel from '../components/canvas/CanvasChatPanel.jsx';
 import CanvasLoadingStatus from '../components/canvas/CanvasLoadingStatus.jsx';
+import HostCanvasStatus from '../components/canvas/HostCanvasStatus.jsx';
 import { CHAT_HISTORY_LIMIT, CHAT_ROOM_ID } from '../canvas/canvasChat.js';
 import { createId } from '../canvas/canvasIds.js';
 import { uniqueCanvasParticipants } from '../canvas/canvasParticipants.js';
@@ -58,8 +59,7 @@ import {
 import { LASER_FADE_MS, MAX_STROKE_WIDTH, MIN_STROKE_WIDTH, stickyNoteColors, MIN_ZOOM_SENSITIVITY, MAX_ZOOM_SENSITIVITY } from '../canvas/canvasConstants.js';
 import { textSpliceBetween } from '../canvas/collaborativeText.js';
 import { isCanvasSyncItem, useCanvasPeerGeometry } from '../canvas/useCanvasPeerGeometry.js';
-import { sendStrokeBatches } from '../canvas/strokeBatchTransport.js';
-import { useCanvasAutoSave } from '../canvas/useCanvasAutoSave.js';
+import { useHostCanvas } from '../canvas/host/useHostCanvas.js';
 import { useCanvasStageInteractions } from '../canvas/useCanvasStageInteractions.js';
 import { useCanvasPeerEvents } from '../canvas/useCanvasPeerEvents.js';
 import { useCanvasObjectInteractions } from '../canvas/useCanvasObjectInteractions.js';
@@ -88,7 +88,6 @@ function CanvasWorkspace() {
   const selectionRef = useRef(null);
   const stageWheelHandlerRef = useRef(null);
   const wsRef = useRef(null);
-  const strokeFrameTransportRef = useRef(null);
   const strokeSaveFlushRef = useRef(null);
   const rtcWsRef = useRef(null);
   const autoReconnectRef = useRef(false);
@@ -156,7 +155,6 @@ function CanvasWorkspace() {
   const draftRef = useRef([]);
   const vectorDraftRef = useRef(null);
   const [canvas, setCanvas] = useState(null);
-  const [items, setItems] = useState({});
   const [spatialRevision, setSpatialRevision] = useState(0);
   const [groups, setGroups] = useState([]);
   const [peerList, setPeerList] = useState([]);
@@ -208,6 +206,17 @@ function CanvasWorkspace() {
   const [showParticipants, setShowParticipants] = useState(false);
   const [settingsPending, setSettingsPending] = useState(false);
   const [toast, setToast] = useState('');
+  const { items, setItems, committedItemsRef, status: hostStatus, lastReceipt, retryRejected, sessionRef: hostSessionRef, receiveServerItems, receiveServerEvent } = useHostCanvas({
+    itemsRef, peerMeshRef, wsRef, rtcWsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems,
+  });
+  const hostReadyRef = useRef(false);
+  hostReadyRef.current = hostStatus.editable;
+  useEffect(() => {
+    if (hostStatus.editable) return;
+    setShowSettings(false); setShowParticipants(false); setShowCanvasCode(false);
+    setEditingId(null); editingIdRef.current = null;
+    dragRef.current = null; drawingRef.current = false;
+  }, [hostStatus.editable]);
   const selectItems = useCallback((ids, primaryId) => {
     const normalized = [...new Set((ids || []).filter((id) => id != null).map(String))];
     setSelectedItemIds(normalized);
@@ -254,26 +263,7 @@ function CanvasWorkspace() {
     dirtyItemsRef.current = new Set(dirtyItemsRef.current).add(key);
     setDirtyItems((current) => new Set(current).add(key));
   }, []);
-  stageOfflineGeometryRef.current = (rawId, item) => {
-    if (!serverReconnectRequestedRef.current || !item) return;
-    const id = String(rawId);
-    if (isCollaborativeItem(item)) {
-      if (!dirtyItemsRef.current.has(id)) markItemDirty(id);
-      return;
-    }
-    if (!isCanvasSyncItem(item)) return;
-    const payload = { type: 'item_update', item_id: id, item };
-    enqueueServerChange({
-      id,
-      payload,
-      previous: itemsRef.current[id],
-      item,
-      type: 'item_update',
-      wasNewCollaborative: false,
-      syncAction: 'upsert',
-      syncVersion: itemSyncVersionsRef.current.get(id) || null,
-    });
-  };
+  stageOfflineGeometryRef.current = null;
   const refreshSpatialIndex = useCallback(() => setSpatialRevision((revision) => revision + 1), []);
   useEffect(() => {
     window.addEventListener(CONNECTOR_METRICS_EVENT, refreshSpatialIndex);
@@ -394,78 +384,10 @@ function CanvasWorkspace() {
     }
     if (!queued && !serverReconnectRequestedRef.current) setToast('WebRTC 동기화 대기열이 가득 차 일부 변경을 전달하지 못했습니다. 재접속하면 다시 동기화됩니다.');
   }, []);
-  const sendItemChange = useCallback((payload, previous) => {
-    const requestPayload = payload?.request_id ? payload : { ...payload, request_id: createId() };
-    const socket = wsRef.current;
-    const id = String(requestPayload.item_id);
-    const syncItem = requestPayload.type === 'item_update' && isCanvasSyncItem(requestPayload.item) && !isCollaborativeItem(requestPayload.item)
-      ? requestPayload.item : null;
-    const syncDeleteItem = requestPayload.type === 'item_delete' && isCanvasSyncItem(previous) ? previous : null;
-    const syncVersion = syncItem || syncDeleteItem ? nextPeerSyncVersion(syncClockRef, syncActorRef) : null;
-    const previousSyncVersion = itemSyncVersionsRef.current.get(id) || null;
-    const previousTombstone = deletedItemSyncVersionsRef.current.get(id) || null;
-    if (syncVersion) {
-      itemSyncVersionsRef.current.set(id, syncVersion);
-      if (syncDeleteItem) deletedItemSyncVersionsRef.current.set(id, { version: syncVersion, permission: syncDeleteItem.permission });
-      else deletedItemSyncVersionsRef.current.delete(id);
-    }
-    const entry = enqueueServerChange({
-      id,
-      payload: requestPayload,
-      previous,
-      item: syncItem,
-      type: requestPayload.type,
-      editRevision: itemEditRevisionRef.current.get(id) || 0,
-      wasNewCollaborative: newCollaborativeItemsRef.current.has(id),
-      syncAction: syncDeleteItem ? 'delete' : syncItem ? 'upsert' : null,
-      syncVersion,
-      previousSyncVersion,
-      previousTombstone,
-    });
-    if (entry.syncAction) broadcastPeerItemState(entry);
-    if (entry.canceled) return true;
-    if (serverReconnectRequestedRef.current || !socket || socket.readyState !== WebSocket.OPEN) {
-      if (!autoReconnectRef.current) reconnectRequestRef.current?.();
-      return true;
-    }
-
-    pendingItemChangesRef.current.push(entry);
-    if (strokeFrameTransportRef.current) {
-      strokeFrameTransportRef.current.push(entry);
-      return true;
-    }
-    try {
-      socket.send(JSON.stringify(requestPayload));
-      markServerChangeSent(entry);
-      socket.send(JSON.stringify({ type: 'ping' }));
-    } catch {
-      const pendingIndex = pendingItemChangesRef.current.lastIndexOf(entry);
-      if (pendingIndex >= 0) pendingItemChangesRef.current.splice(pendingIndex, 1);
-      if (!autoReconnectRef.current) reconnectRequestRef.current?.();
-    }
-    return true;
-  }, [broadcastPeerItemState, enqueueServerChange, markServerChangeSent]);
-  const sendStrokeFrameChanges = useCallback((changes) => {
-    const entries = [];
-    strokeFrameTransportRef.current = entries;
-    try {
-      for (const change of changes) sendItemChange(change.payload, change.previous);
-    } finally {
-      strokeFrameTransportRef.current = null;
-    }
-    if (!entries.length) return;
-    const sent = new Set();
-    try {
-      sendStrokeBatches(wsRef.current, entries, (entry) => {
-        markServerChangeSent(entry);
-        sent.add(entry);
-      });
-    } catch {
-      // Unsent entries remain in the reconnect queue; do not wait for their replies.
-      pendingItemChangesRef.current = pendingItemChangesRef.current.filter(entry => !entries.includes(entry) || sent.has(entry));
-      if (!autoReconnectRef.current) reconnectRequestRef.current?.();
-    }
-  }, [markServerChangeSent, sendItemChange]);
+  // Mutations are captured by setItems as proposals. No follower can write to
+  // the persistence socket, and drafts are never rendered as committed objects.
+  const sendItemChange = useCallback(() => hostSessionRef.current.editable, []);
+  const sendStrokeFrameChanges = useCallback(() => hostSessionRef.current.editable, []);
   const updateTableItem = useCallback((id, update) => {
     const key = String(id);
     const previous = itemsRef.current[key];
@@ -683,34 +605,12 @@ function CanvasWorkspace() {
     return true;
   }, [refreshSpatialIndex, sendItemChange]);
   const saveCollaborativeItem = useCallback((id, { silent = false } = {}) => {
-    const key = String(id);
-    const item = itemsRef.current[key];
-    if (!isCollaborativeItem(item)) return false;
-    const doc = getCollaborativeDoc(key, item);
-    const baseDoc = getCollaborativeBaseDoc(key, item);
-    const field = collaborativeField(item);
-    const changes = Automerge.getChanges(baseDoc, doc).map((change) => ({ field, change: encodeBase64(change) }));
-    const savedItem = {
-      ...item,
-      [field]: doc.content,
-      automerge_snapshot: encodeBase64(Automerge.save(baseDoc)),
-      automerge_changes: changes,
-    };
-    if (!sendItemChange({ type: 'item_save', item_id: key, item: savedItem }, item)) {
-      if (!silent) setToast(item.kind === 'note' ? '서버 연결이 복구되면 포스트잇을 다시 저장해주세요.' : '서버 연결이 복구되면 Ctrl + S로 다시 저장해주세요.');
-      return false;
-    }
-    itemsRef.current = { ...itemsRef.current, [key]: savedItem };
-    setItems((current) => ({ ...current, [key]: savedItem }));
-    if (!silent) {
-      setToast('저장 요청을 처리했습니다.');
-      window.setTimeout(() => setToast(''), 2400);
-    }
+    if (!hostSessionRef.current.editable || !isCollaborativeItem(itemsRef.current[String(id)])) return false;
+    if (!silent) setToast('호스트 승인 후 자동 저장됩니다.');
     return true;
-  }, [getCollaborativeBaseDoc, getCollaborativeDoc, sendItemChange]);
+  }, []);
   saveCollaborativeItemRef.current = saveCollaborativeItem;
-  useCanvasAutoSave({ canSave: canvasSnapshotLoadedRef.current && connection !== 'disconnected', dirtyItemsRef, itemsRef, itemEditRevisionRef, pendingItemChangesRef, saveCollaborativeItem });
-  const { receivePeerData, receiveLaser } = useCanvasPeerEvents({
+  const { receivePeerData: receiveLegacyPeerData, receiveLaser } = useCanvasPeerEvents({
     collaborativeBaseDocsRef,
     collaborativeDocsRef,
     deletedItemSyncVersionsRef,
@@ -733,6 +633,11 @@ function CanvasWorkspace() {
     setToast,
     syncClockRef,
   });
+  const receivePeerData = useCallback((peer, data, channelName) => {
+    if (typeof data?.type === 'string' && data.type.startsWith('host_')) {
+      if (channelName === 'agora-sync') hostSessionRef.current.receive(peer.peer_id, data);
+    } else if (data?.type === 'editor_presence') receiveLegacyPeerData(peer, data, channelName);
+  }, [receiveLegacyPeerData]);
   const permission = groups.includes('default') ? 'default' : groups[0] || 'admin-group';
 
   useEffect(() => {
@@ -785,6 +690,7 @@ function CanvasWorkspace() {
       itemsRef,
       newCollaborativeItemsRef,
       peerMeshRef,
+      hostSessionRef,
       pendingItemChangesRef,
       pendingPeerItemEventsRef,
       pendingPeerItemEventsSizeRef,
@@ -810,7 +716,7 @@ function CanvasWorkspace() {
       setError,
       setGroups,
       setHasOlderMessages,
-      setItems,
+      setItems: receiveServerItems,
       setLaserStrokes,
       setMessages,
       setPeerList,
@@ -830,6 +736,7 @@ function CanvasWorkspace() {
       markItemDirty,
       receiveLaser,
       receivePeerData,
+      receiveServerEvent,
       refreshSpatialIndex,
       rejectServerChange,
       replacePersistedItems,
@@ -928,7 +835,7 @@ function CanvasWorkspace() {
     if (shouldGroup) selectItems(ids, ids[ids.length - 1]);
     setToast(shouldGroup ? `${ids.length}개 오브젝트를 그룹화했습니다.` : '그룹을 해제했습니다.');
   };
-  useGroupShortcuts({ editing: editingId != null, onGroup: changeSelectionGroup });
+  useGroupShortcuts({ editing: !hostStatus.editable || editingId != null, onGroup: changeSelectionGroup });
   const startEditing = (id) => {
     const key = String(id);
     const previous = editingIdRef.current;
@@ -992,7 +899,7 @@ function CanvasWorkspace() {
     sendStrokeFrameChanges, pendingItemChangesRef, strokeSaveFlushRef,
     lastCursorSentAtRef, peerMeshRef, panRef, zoomHoldRef, zoomPointerPressRef, zoomSensitivity,
     stageWheelHandlerRef, laserDrawingRef, setLaserStrokes, selectionRef, selectedItemIds,
-    setSelectionBox, selectItems, canvasSnapshotLoadedRef, finishEditing, setConnectionStartId,
+    setSelectionBox, selectItems, canvasSnapshotLoadedRef: hostReadyRef, finishEditing, setConnectionStartId,
     spacePressedRef, user, tableConfig, permission, setSharePosition, shapeType, shapeArrowStartHead,
     shapeArrowEndHead, shapeFillColor, color, noteColor, setActiveTool, startEditing, strokeWidth, penBrush, penOpacity,
     drawingRef, drawingSessionRef, draftRef, vectorDraftRef,
@@ -1120,6 +1027,7 @@ function CanvasWorkspace() {
     const isEditableTarget = (target) => target instanceof HTMLElement
       && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
     const onDeleteKeyDown = (event) => {
+      if (!hostSessionRef.current.editable) return;
       if (event.target.closest?.('.canvas-as-code-overlay, .canvas-management-dialog')) return;
       if (event.repeat) return;
       if (event.key !== 'Delete' && event.key !== 'Backspace') return;
@@ -1136,6 +1044,7 @@ function CanvasWorkspace() {
       if (remainingIds.length) setToast('일부 오브젝트를 삭제하지 못했습니다. 연결 상태와 삭제 권한을 확인해주세요.');
     };
     const onKeyDown = (event) => {
+      if (!hostSessionRef.current.editable) return;
       if (event.target.closest?.('.canvas-as-code-overlay, .canvas-management-dialog')) return;
       if (event.key === 'Escape') {
         if (event.repeat) return;
@@ -1190,10 +1099,10 @@ function CanvasWorkspace() {
     return () => document.removeEventListener('pointerdown', onDocumentPointerDown, true);
   }, [editingId, finishEditing]);
   const updateContentSetting = useContentSettings({ itemsRef, setItems, updateCollaborativeMetadata, sendItemChange, refreshSpatialIndex });
-  const canvasCodeApi = useCanvasAsCode({ canvasId, itemsRef, canvasSnapshotLoadedRef, permission, addItem, deleteItem, updateCollaborativeText, saveCollaborativeItem, sendItemChange, setItems, markItemDirty, refreshSpatialIndex, selectItems, peerMeshRef, syncClockRef, syncActorRef, itemSyncVersionsRef, getCollaborativeDoc });
-  const clipboardBlocked = editingId != null || showSettings || showParticipants || showCanvasCode || sharePosition != null;
+  const canvasCodeApi = useCanvasAsCode({ canvasId, itemsRef, committedItemsRef, canvasSnapshotLoadedRef: hostReadyRef, permission, addItem, deleteItem, updateCollaborativeText, saveCollaborativeItem, sendItemChange, setItems, markItemDirty, refreshSpatialIndex, selectItems, peerMeshRef, syncClockRef, syncActorRef, itemSyncVersionsRef, getCollaborativeDoc });
+  const clipboardBlocked = !hostStatus.editable || editingId != null || showSettings || showParticipants || showCanvasCode || sharePosition != null;
   const objectClipboard = useObjectClipboard({ canvasId, boardRef, itemsRef, selectedIds: selectedObjectIds,
-    permission, pointerPosition, canvasSnapshotLoadedRef, addItem, deleteItem, saveCollaborativeItem,
+    permission, pointerPosition, canvasSnapshotLoadedRef: hostReadyRef, addItem, deleteItem, saveCollaborativeItem,
     isInteracting: () => Boolean(dragRef.current || panRef.current || drawingRef.current),
     selectItems, setActiveTool, setConnectionStartId, setToast, blocked: clipboardBlocked });
   const panelLayout = usePanelLayout();
@@ -1202,7 +1111,7 @@ function CanvasWorkspace() {
   const otherParticipants = uniqueCanvasParticipants(canvasParticipants, user);
 
   return <div className="canvas-app-page" data-theme={theme}>
-    {!error && !canvasSnapshotLoadedRef.current && <CanvasLoadingStatus overlay />}
+    <div style={{ display: 'contents' }} inert={!hostStatus.editable && !error ? '' : undefined}>
     <header className="canvas-topbar">
       <div className="canvas-title-group"><Link to="/search" className="canvas-back" aria-label="캔버스 목록"><Icon name="back" size={19} /></Link><div className="canvas-cover-image"><AuthenticatedImage src={canvas?.image} token={token} alt="캔버스 대표 이미지" fallback={<div className="canvas-cover-art"><i /><i /><i /><span>FR</span></div>} loadingFallback={<div className="canvas-cover-art"><i /><i /><i /><span>FR</span></div>} /></div><div className="canvas-title-copy"><span>FRELOG CANVAS · #{canvasId}</span><h1>{canvas?.canvas_name || `캔버스 ${canvasId}`}</h1></div></div>
       <div className="canvas-header-right"><div className="canvas-description-card"><span>캔버스 설명</span><p>{canvas?.description || '함께 아이디어를 모으고 실시간으로 만들어가는 공간입니다.'}</p></div><div className="canvas-top-right"><span className={`connection-pill ${connection}`} role="status" aria-live="polite" title={connection === 'connecting' ? '다시 연결하는 중입니다. 캔버스 편집은 계속할 수 있고 변경 사항은 연결 후 저장됩니다.' : connection === 'connected' ? '서버에 연결되어 변경 사항을 동기화하고 있습니다.' : '서버 연결이 해제되었습니다.'}><i />{connection === 'connected' ? '연결됨' : connection === 'connecting' ? '연결 중' : '연결 해제'}</span><div className="collaborator-avatars"><UserAvatar user={user} token={token} className="avatar-small" />{otherParticipants.slice(0, 2).map((person) => <UserAvatar key={`${person.nickname}-${person.tag_number}`} user={person} token={token} className="avatar-small" />)}</div><button className="button button-outline canvas-settings-button" title="참여자 관리" aria-label="참여자 관리" onClick={() => { setShowSettings(false); setShowParticipants(true); }}><Icon name="user" size={17} /><span>참여자</span></button><button className="button button-outline canvas-settings-button" onClick={() => { setShowParticipants(false); setShowSettings(true); }}><Icon name="settings" size={17} /><span>설정</span></button></div></div>
@@ -1213,7 +1122,8 @@ function CanvasWorkspace() {
         if (tool === 'connect') setConnectionStartId(null);
         setActiveTool(tool);
       }} color={color} onColorChange={setColor} onUploadPdf={uploadPdf} onUploadImage={uploadImage} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} /></ResizablePanel>
-      <main className="board-region"><div className="board-topline"><span className="board-section-label"><i /> 2차 좌표 캔버스</span><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(true); }}><Icon name="code" size={15} />캔버스 코드</button><span className="board-updated" title="변경 사항은 초당 30회 주기로 자동 저장됩니다. Ctrl+S로도 저장할 수 있어요."><Icon name="clock" size={14} /> P2P {peerList.filter((peer) => peer.connected).length}명 · 자동 저장</span><button className="zoom-button" aria-label="확대" title="클릭: 한 단계 확대 · 길게 누르기: 계속 확대" onPointerDown={(event) => startZoomHold(event, 1 + 0.15 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.15 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label="축소" title="클릭: 한 단계 축소 · 길게 누르기: 계속 축소" onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.15 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.15 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => setCamera(fitCanvasCamera(viewportSize))}>맞춤</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />격자 {showGrid ? '켜짐' : '꺼짐'}</button></div></div>
+      <main className="board-region"><div className="board-topline"><span className="board-section-label"><i /> 2차 좌표 캔버스</span><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(true); }}><Icon name="code" size={15} />캔버스 코드</button><button className="zoom-button" aria-label="확대" title="클릭: 한 단계 확대 · 길게 누르기: 계속 확대" onPointerDown={(event) => startZoomHold(event, 1 + 0.15 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.15 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label="축소" title="클릭: 한 단계 축소 · 길게 누르기: 계속 축소" onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.15 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.15 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => setCamera(fitCanvasCamera(viewportSize))}>맞춤</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />격자 {showGrid ? '켜짐' : '꺼짐'}</button></div></div>
+      <HostCanvasStatus status={hostStatus} receipt={lastReceipt} onRetry={retryRejected} />
         <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ ...canvasGridStyle(camera), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ activeTool, dragRef, panRef, spacePressedRef, startPan, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor })}>
           <InteractiveAtmosphere variant="canvas" />
           <div className="stage-label"><span>FRELOG / {String(canvasId).padStart(2, '0')}</span><b>{canvas?.canvas_name || '공유 캔버스'}</b></div>
@@ -1318,6 +1228,8 @@ function CanvasWorkspace() {
     {showCanvasCode && <CanvasAsCodeDialog api={canvasCodeApi} canvasId={canvasId} onClose={() => setShowCanvasCode(false)} />}
     {showSettings && <SettingsDialog backgroundColor={backgroundColor} setBackgroundColor={setBackgroundColor} favoriteColors={favoriteColors} saveFavoriteColor={saveFavoriteColor} theme={theme} canvasId={canvasId} image={canvas?.image} token={token} onImageSaved={(image) => setCanvas(current => ({ ...current, image }))} settings={settings} pending={settingsPending} onClose={() => setShowSettings(false)} onUpdate={sendSettings} />}
     {showParticipants && <CanvasParticipantsDialog participants={canvasParticipants} token={token} settings={settings} pending={settingsPending} onClose={() => setShowParticipants(false)} onAddParticipant={(nickname, tag) => sendSettings('participant_add', null, { nickname, tag_number: tag })} onRemoveParticipant={(person) => sendSettings('participant_remove', null, { nickname: person.nickname, tag_number: person.tag_number })} />}
+    </div>
+    {!error && !hostStatus.editable && <CanvasLoadingStatus overlay message={hostStatus.message} />}
   </div>;
 }
 

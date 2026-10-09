@@ -1,9 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="16" fill="#f5f6f2"/>
-  <g transform="rotate(-8 32 32)">
-    <rect x="13" y="13" width="17" height="17" rx="5" fill="#537465"/>
-    <rect x="34" y="13" width="17" height="17" rx="5" fill="#e7a175"/>
-    <rect x="13" y="34" width="17" height="17" rx="5" fill="#d3bc73"/>
-    <rect x="34" y="34" width="17" height="17" rx="5" fill="#809b88"/>
-  </g>
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#725be4"/>
+      <stop offset="1" stop-color="#302c4a"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="18" fill="url(#brand)"/>
+  <path d="M19 48V16h26v8H28v6h14v8H28v10Z" fill="#ddf58f"/>
+  <circle cx="47" cy="43" r="7" fill="#ff8d73"/>
 </svg>

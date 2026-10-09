@@ -1,26 +1,12 @@
 import { useEffect } from 'react';
-import * as Automerge from '@automerge/automerge/slim';
 import CanvasPeerMesh from '../components/CanvasPeerMesh.js';
 import { api, canvasSocketUrl, rtcSocketUrl } from '../api/client.js';
 import { canvasPasswordGrantKey, readCanvasPasswordGrant, saveCanvasPasswordGrant } from './canvasAccess.js';
 import { mergeChatEntries, toChatEntry } from './canvasChat.js';
 import {
-  canPeerAccessItem,
-  collaborativeContent,
-  collaborativeField,
   compareSyncVersions,
-  createActorId,
-  decodeBase64,
-  encodeBase64,
-  INITIAL_SYNC_VERSION,
-  isCollaborativeItem,
-  mergeCollaborativeHistory,
   nextPeerSyncVersion,
-  sendStrokePreviewPoints,
-  sendStrokePreviewSnapshot,
 } from './collaborativeSync.js';
-import { rebaseCanvasItems } from './useCanvasServerChangeQueue.js';
-import { isCanvasSyncItem } from './useCanvasPeerGeometry.js';
 import { createId } from './canvasIds.js';
 
 export function useCanvasConnection(options) {
@@ -52,6 +38,7 @@ export function useCanvasConnection(options) {
       itemsRef,
       newCollaborativeItemsRef,
       peerMeshRef,
+      hostSessionRef,
       pendingItemChangesRef,
       pendingPeerItemEventsRef,
       pendingPeerItemEventsSizeRef,
@@ -97,6 +84,7 @@ export function useCanvasConnection(options) {
       markItemDirty,
       receiveLaser,
       receivePeerData,
+      receiveServerEvent,
       refreshSpatialIndex,
       rejectServerChange,
       replacePersistedItems,
@@ -156,6 +144,7 @@ export function useCanvasConnection(options) {
         || joinedCanvasConnectionId === canvasConnectionId) return;
       rtcSocket.send(JSON.stringify({
         type: 'rtc_join',
+        host_protocol: 1,
         request_id: createId(),
         canvas_connection_id: canvasConnectionId,
         canvas_connection_hash: canvasConnectionHash,
@@ -163,6 +152,7 @@ export function useCanvasConnection(options) {
       joinedCanvasConnectionId = canvasConnectionId;
     };
     const resetPeerMesh = () => {
+      hostSessionRef.current.pause();
       if (peerMeshRef.current) peerMeshRef.current.close();
       peerMeshRef.current = null;
       syncedPeersRef.current.clear();
@@ -248,6 +238,7 @@ export function useCanvasConnection(options) {
         const handleRtcMessage = (event) => {
           let data;
           try { data = JSON.parse(event.data); } catch { return; }
+          receiveServerEvent(data);
           if (data.type === 'server_reconnect') {
             requestServerReconnect(data);
             return;
@@ -268,66 +259,26 @@ export function useCanvasConnection(options) {
                 onPeersChanged: (peers) => {
                   setPeerList(peers);
                   const activeIds = new Set(peers.map((peer) => peer.peer_id));
+                  const session = hostSessionRef.current;
+                  const connectedIds = new Set(peers.filter(peer => peer.connected).map(peer => peer.peer_id));
+                  const needed = session.isHost ? session.members.filter(peer => peer.peer_id !== session.selfId).map(peer => peer.peer_id) : [session.hostId].filter(Boolean);
+                  if (needed.some(id => !connectedIds.has(id))) session.pause();
+                  // A failed DataChannel is not proof of membership departure.
+                  // Ask the signaling registry and rebuild its still-active peers.
+                  if (!cancelled && !mesh?.closed && needed.some(id => !activeIds.has(id))) sendRtcRaw({ type: 'rtc_list' });
                   setRemoteEditors((current) => Object.fromEntries(Object.entries(current).filter(([peerId]) => activeIds.has(peerId))));
                   setLaserStrokes((current) => current.filter((stroke) => !stroke.peerId || activeIds.has(stroke.peerId)));
-                  for (const peer of peers) {
-                    if (!peer.connected) syncedPeersRef.current.delete(peer.peer_id);
-                  }
-                  let drawingsChanged = false;
-                  for (const [key, stroke] of remoteDrawingStrokesRef.current) {
-                    if (activeIds.has(stroke.peerId)) continue;
-                    remoteDrawingStrokesRef.current.delete(key);
-                    drawingsChanged = true;
-                  }
-                  if (drawingsChanged) setRemoteDrawingStrokes([...remoteDrawingStrokesRef.current.values()]);
-                  for (const peer of peers) {
-                    if (!peer.connected) continue;
-                    if (editingIdRef.current) broadcastEditorPresence(editingIdRef.current, true);
-                    if (syncedPeersRef.current.has(peer.peer_id)) continue;
-                    syncedPeersRef.current.add(peer.peer_id);
-                    const activeStroke = drawingSessionRef.current;
-                    if (activeStroke) {
-                      const pendingPoints = activeStroke.pendingPoints.splice(0);
-                      if (pendingPoints.length) sendStrokePreviewPoints(mesh, activeStroke, pendingPoints);
-                      sendStrokePreviewSnapshot(mesh, peer, activeStroke, draftRef.current);
-                    }
-                    let snapshotSendFailed = false;
-                    for (const [id, item] of Object.entries(itemsRef.current)) {
-                      if (!isCanvasSyncItem(item) || !canPeerAccessItem(item, peer)) continue;
-                      if (isCollaborativeItem(item)) {
-                        try {
-                          const doc = getCollaborativeDoc(id, item);
-                          const field = collaborativeField(item);
-                          snapshotSendFailed = !mesh.sendToPeer(peer.peer_id, {
-                            type: 'doc_snapshot', item_id: id,
-                            item: { ...item, [field]: doc.content },
-                            snapshot: encodeBase64(Automerge.save(doc)),
-                            version: itemSyncVersionsRef.current.get(String(id)) || INITIAL_SYNC_VERSION,
-                            dirty: dirtyItemsRef.current.has(String(id)),
-                          }) || snapshotSendFailed;
-                        } catch { /* A later snapshot can recover an interrupted peer sync. */ }
-                        continue;
-                      }
-                      snapshotSendFailed = !mesh.sendToPeer(peer.peer_id, {
-                        type: 'item_sync_state', action: 'upsert', item_id: id, item,
-                        version: itemSyncVersionsRef.current.get(String(id)) || INITIAL_SYNC_VERSION,
-                      }) || snapshotSendFailed;
-                    }
-                    for (const [id, tombstone] of deletedItemSyncVersionsRef.current) {
-                      const accessItem = { permission: tombstone.permission };
-                      if (!canPeerAccessItem(accessItem, peer)) continue;
-                      snapshotSendFailed = !mesh.sendToPeer(peer.peer_id, {
-                        type: 'item_sync_state', action: 'delete', item_id: id,
-                        permission: tombstone.permission, version: tombstone.version,
-                      }) || snapshotSendFailed;
-                    }
-                    if (snapshotSendFailed && !serverReconnectRequestedRef.current) setToast('일부 객체가 너무 커서 WebRTC 초기 동기화 대기열에 추가되지 않았습니다. 다시 접속해 동기화를 재시도해주세요.');
-                  }
                 },
               });
               peerMeshRef.current = mesh;
             }
             mesh.setInitialPeers(data.self_peer_id, data.peers);
+            hostSessionRef.current.configure(data.self_peer_id, data.host);
+            return;
+          }
+          if (data.type === 'rtc_host_changed') {
+            const mesh = peerMeshRef.current;
+            if (mesh) hostSessionRef.current.configure(mesh.selfPeerId, data.host);
             return;
           }
           if (data.type === 'rtc_peer_joined') {
@@ -369,6 +320,7 @@ export function useCanvasConnection(options) {
         socket.onmessage = (event) => {
           let data;
           try { data = JSON.parse(event.data); } catch { return; }
+          receiveServerEvent(data);
           if (data.type === 'server_reconnect') {
             requestServerReconnect(data);
             return;
@@ -376,91 +328,17 @@ export function useCanvasConnection(options) {
           if (data.type === 'init_items') {
             strokeSaveFlushRef.current?.({ force: true });
             const initialItems = data.items && typeof data.items === 'object' ? data.items : {};
-            const queuedChanges = getPendingServerChanges();
-            const changesToReplay = queuedChanges.filter((change) => {
-              if (change.type !== 'item_delete' || Object.prototype.hasOwnProperty.call(initialItems, change.id)) return true;
-              acknowledgeServerChange(change);
-              return false;
-            });
-            const localItems = itemsRef.current;
-            const localCollaborativeDocs = new Map(collaborativeDocsRef.current);
-            const localCollaborativeBaseDocs = new Map(collaborativeBaseDocsRef.current);
-            const dirtyItemIds = new Set(dirtyItemsRef.current);
             replacePersistedItems(initialItems);
-            for (const id of Object.keys(initialItems)) newCollaborativeItemsRef.current.delete(String(id));
-            itemSyncVersionsRef.current = new Map(Object.keys(initialItems).map((id) => [String(id), INITIAL_SYNC_VERSION]));
+            pendingItemChangesRef.current = [];
+            itemSyncVersionsRef.current = new Map();
             deletedItemSyncVersionsRef.current.clear();
-            pendingPeerItemEventsRef.current.clear();
-            pendingPeerItemEventsSizeRef.current = 0;
-            syncClockRef.current = Math.max(syncClockRef.current, Date.now());
             collaborativeDocsRef.current.clear();
             collaborativeBaseDocsRef.current.clear();
-            const loadCollaborativeState = (item) => {
-              const baseDoc = item?.automerge_snapshot
-                ? Automerge.load(decodeBase64(item.automerge_snapshot), { actor: createActorId() })
-                : Automerge.from({ content: collaborativeContent(item || { kind: 'text' }) });
-              let doc = baseDoc;
-              for (const entry of item?.automerge_changes || []) {
-                const change = typeof entry === 'string' ? entry : entry?.change;
-                if (change) doc = Automerge.loadIncremental(doc, decodeBase64(change));
-              }
-              return { baseDoc, doc };
-            };
-            const hydratedItems = rebaseCanvasItems({
-              serverItems: initialItems,
-              localItems,
-              dirtyItemIds,
-              queuedChanges: changesToReplay,
-              mergeDirtyItem: (serverItem, localItem, id) => {
-                if (!isCollaborativeItem(serverItem) || !isCollaborativeItem(localItem) || serverItem.kind !== localItem.kind) return localItem;
-                try {
-                  const { baseDoc: serverBaseDoc, doc: serverDoc } = loadCollaborativeState(serverItem);
-                  let localDoc = localCollaborativeDocs.get(id);
-                  if (!localDoc) localDoc = loadCollaborativeState(localItem).doc;
-                  const doc = Automerge.merge(localDoc, serverDoc);
-                  collaborativeBaseDocsRef.current.set(id, serverBaseDoc);
-                  collaborativeDocsRef.current.set(id, doc);
-                  const field = collaborativeField(localItem);
-                  return {
-                    ...serverItem,
-                    ...localItem,
-                    [field]: doc.content,
-                    automerge_snapshot: serverItem.automerge_snapshot,
-                    automerge_changes: mergeCollaborativeHistory(serverItem.automerge_changes, localItem.automerge_changes),
-                  };
-                } catch { return localItem; }
-              },
-            });
-            for (const [id, item] of Object.entries(hydratedItems)) {
-              if (!isCollaborativeItem(item) || collaborativeDocsRef.current.has(id)) continue;
-              try {
-                const localDoc = dirtyItemIds.has(id) ? localCollaborativeDocs.get(id) : null;
-                const state = loadCollaborativeState(item);
-                const baseDoc = dirtyItemIds.has(id) ? localCollaborativeBaseDocs.get(id) || state.baseDoc : state.baseDoc;
-                const doc = localDoc || state.doc;
-                collaborativeBaseDocsRef.current.set(id, baseDoc);
-                collaborativeDocsRef.current.set(id, doc);
-                hydratedItems[id] = { ...item, [collaborativeField(item)]: doc.content };
-              } catch { /* Keep the stored plain-text fallback for damaged legacy snapshots. */ }
-            }
-            const syncSnapshotIds = new Set([...dirtyItemIds, ...changesToReplay.map((change) => change.id)]);
-            for (const id of syncSnapshotIds) {
-              const item = hydratedItems[id];
-              const queuedDelete = changesToReplay.find((change) => change.id === id && change.type === 'item_delete');
-              if (!item) {
-                if (queuedDelete) {
-                  const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
-                  deletedItemSyncVersionsRef.current.set(id, { version, permission: queuedDelete.previous?.permission });
-                }
-                continue;
-              }
-              const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
-              itemSyncVersionsRef.current.set(id, version);
-              if (queuedDelete) deletedItemSyncVersionsRef.current.set(id, { version, permission: queuedDelete.previous?.permission });
-            }
-            itemsRef.current = hydratedItems;
-            setItems(hydratedItems);
-            refreshSpatialIndex();
+            dirtyItemsRef.current = new Set();
+            setDirtyItems(new Set());
+            // Only stored baseline enters the coordinator; reconnect drafts never
+            // masquerade as approved state. Its prior approved records are retained.
+            setItems(initialItems);
             canvasSnapshotLoadedRef.current = true;
             serverReconnectRequestedRef.current = false;
             autoReconnectRef.current = false;
@@ -476,12 +354,6 @@ export function useCanvasConnection(options) {
             joinRtcSocket();
             sendRaw({ type: 'canvas_settings_get' });
             requestChatHistory();
-            const strokeChanges = [];
-            for (const change of changesToReplay) {
-              if (change.type === 'item_delete' || change.payload?.item?.kind === 'stroke') strokeChanges.push(change);
-              else sendItemChange(change.payload, change.previous);
-            }
-            if (strokeChanges.length) sendStrokeFrameChanges(strokeChanges);
             return;
           }
           if (data.type === 'canvas_settings_snapshot' || data.type === 'canvas_settings_changed') {
@@ -497,79 +369,8 @@ export function useCanvasConnection(options) {
             return;
           }
           if (data.type === 'item_crdt_change') return;
-          if (data.type === 'item_update' || data.type === 'item_add' || data.type === 'update_item' || data.type === 'item_save') {
-            const id = data.item_id ?? data['item-id'];
-            const item = data.item || data.data;
-            if (id != null && item && typeof item === 'object') {
-              const key = String(id);
-              const existing = itemsRef.current[key];
-              let nextItem = item;
-              if (isCollaborativeItem(item)) {
-                try {
-                  let doc;
-                  let savedDoc;
-                  if (data.type === 'item_save' && item.automerge_snapshot) {
-                    const incomingBaseDoc = Automerge.load(decodeBase64(item.automerge_snapshot), { actor: createActorId() });
-                    if (!collaborativeBaseDocsRef.current.has(key)) collaborativeBaseDocsRef.current.set(key, incomingBaseDoc);
-                    savedDoc = incomingBaseDoc;
-                    for (const entry of item.automerge_changes || []) {
-                      const change = typeof entry === 'string' ? entry : entry?.change;
-                      if (change) savedDoc = Automerge.loadIncremental(savedDoc, decodeBase64(change));
-                    }
-                    doc = existing && isCollaborativeItem(existing)
-                      ? Automerge.merge(getCollaborativeDoc(key, existing), savedDoc)
-                      : savedDoc;
-                  } else if (existing && existing.kind === item.kind) {
-                    doc = getCollaborativeDoc(key, existing);
-                    for (const entry of item.automerge_changes || []) {
-                      const change = typeof entry === 'string' ? entry : entry?.change;
-                      if (change) doc = Automerge.loadIncremental(doc, decodeBase64(change));
-                    }
-                  } else if (item.automerge_snapshot) {
-                    doc = Automerge.load(decodeBase64(item.automerge_snapshot), { actor: createActorId() });
-                  } else {
-                    doc = Automerge.from({ content: collaborativeContent(item) });
-                  }
-                  collaborativeDocsRef.current.set(key, doc);
-                  const field = collaborativeField(item);
-                  nextItem = {
-                    ...(existing || {}),
-                    ...item,
-                    [field]: doc.content,
-                    automerge_changes: mergeCollaborativeHistory(existing?.automerge_changes, item.automerge_changes),
-                  };
-                  if (data.type === 'item_save') {
-                    newCollaborativeItemsRef.current.delete(key);
-                    if (savedDoc && doc.content !== savedDoc.content) markItemDirty(key);
-                    else setDirtyItems((current) => { const next = new Set(current); next.delete(key); return next; });
-                  }
-                } catch { /* Keep the server-sent item if its legacy CRDT data cannot be read. */ }
-              }
-              const next = { ...itemsRef.current, [key]: nextItem };
-              itemsRef.current = next;
-              if (nextItem === item) collaborativeDocsRef.current.delete(key);
-              setItems(next);
-              if (!existing || existing.x !== nextItem.x || existing.y !== nextItem.y
-                || existing.width !== nextItem.width || existing.height !== nextItem.height) refreshSpatialIndex();
-            }
-            return;
-          }
-          if (data.type === 'item_delete' || data.type === 'delete_item') {
-            const id = data.item_id ?? data['item-id'];
-            if (id != null) {
-              const key = String(id);
-              const next = { ...itemsRef.current };
-              delete next[key];
-              itemsRef.current = next;
-              collaborativeDocsRef.current.delete(key);
-              collaborativeBaseDocsRef.current.delete(key);
-              newCollaborativeItemsRef.current.delete(key);
-              setItems(next);
-              refreshSpatialIndex();
-              setRemoteEditors((current) => Object.fromEntries(Object.entries(current).filter(([, editor]) => editor.itemId !== key)));
-            }
-            return;
-          }
+          if (data.type === 'host_batch_result') return;
+          if (['item_update', 'item_add', 'update_item', 'item_save', 'item_delete', 'delete_item'].includes(data.type)) return;
           if (data.type === 'chat_history') {
             if (chatHistoryRequestRef.current && data.request_id !== chatHistoryRequestRef.current) return;
             chatHistoryRequestRef.current = null;

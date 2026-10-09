@@ -1,4 +1,4 @@
-/** Persistent coordinates are normalized against this fixed world, never the browser viewport. */
+/** Normalization units for persistent coordinates, never bounds on the unbounded world. */
 export const CANVAS_SPACE = Object.freeze({ width: 1600, height: 1000 });
 
 export function canvasPointAtPointer(event, viewport, camera, space = CANVAS_SPACE) {

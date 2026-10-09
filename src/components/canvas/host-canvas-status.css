@@ -1,0 +1,30 @@
+.host-canvas-status {
+  flex: 0 0 auto;
+  height: 48px;
+  margin: 4px 0 8px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--ink-muted);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  overflow-y: auto;
+}
+
+.host-canvas-status.is-reconnecting {
+  border-left: 3px solid #c49543;
+  color: var(--ink-strong);
+}
+
+.host-canvas-status button {
+  margin-left: 8px;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--ink-strong);
+  font: inherit;
+  cursor: pointer;
+}

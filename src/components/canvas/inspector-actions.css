@@ -1,3 +1,13 @@
+.canvas-inspector button{
+  -webkit-appearance:none;appearance:none;
+  font-family:inherit;
+}
+.canvas-inspector .theme-switch button{min-width:0;padding:0 6px}
+.canvas-inspector .theme-switch button svg{flex-shrink:0}
+.canvas-inspector .toggle-switch{flex:0 0 34px}
+.canvas-inspector .sticky-note-colors{flex-wrap:wrap;padding:2px}
+.canvas-inspector .sticky-note-colors button{flex:0 0 22px}
+.canvas-inspector .canvas-color-swatch{padding:0}
 .canvas-inspector .inspector-secondary-action{
   display:flex;align-items:center;justify-content:center;gap:7px;
   width:100%;min-height:32px;box-sizing:border-box;margin:10px 0;

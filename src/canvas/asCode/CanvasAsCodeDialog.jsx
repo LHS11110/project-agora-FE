@@ -56,7 +56,7 @@ export default function CanvasAsCodeDialog({ api, canvasId, onClose }) {
     }
   }}><section className="canvas-as-code-dialog" role="dialog" aria-modal="true" aria-labelledby="canvas-as-code-title">
     <header><div><small>FRELOG · CANVAS AS CODE</small><h2 id="canvas-as-code-title">캔버스를 코드로 관리</h2></div><button ref={closeRef} onClick={onClose} aria-label="캔버스 코드 닫기">닫기</button></header>
-    <p>고정 공간 1600 × 1000의 픽셀 좌표로 작성합니다. 같은 ID는 수정하고 새 ID는 생성합니다.</p>
+    <p>크기 제한 없는 캔버스의 픽셀 좌표로 작성합니다. 음수 좌표도 사용할 수 있습니다. 같은 ID는 수정하고 새 ID는 생성합니다.</p>
     <nav aria-label="캔버스 코드 파일"><button onClick={() => change(stringify(api.read()))}>현재 캔버스 불러오기</button><button onClick={() => change(stringify(exampleManifest))}>예제</button><button onClick={() => fileRef.current?.click()}>JSON 가져오기</button><button onClick={download}>JSON 다운로드</button><input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={importFile} /></nav>
     <div className="canvas-as-code-editor"><CanvasCodeEditor language="json" value={source} onChange={change} onSave={review} onStopEditing={noop} /></div>
     <div className="canvas-as-code-results" aria-live="polite">

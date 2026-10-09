@@ -29,8 +29,29 @@
   .context-start .context-card-icon{background:#ffffff10;border-color:#ffffff18}
   .context-start .slide-context-card:hover{background:#ffffff18;border-color:#b4a6c9}
 }
-.home-slides-page .home-slide.slide-hero{background:linear-gradient(120deg,#f9f2e8,#f6eeeb 52%,#e9edf5)}
-.home-slides-page .home-slide.slide-architecture{background:linear-gradient(115deg,#edf3f5,#e5ecef 60%,#e2eee8)}
-.home-slides-page .home-slide.slide-vector{background:linear-gradient(115deg,#f4f4e7,#eaf1e7 60%,#e1ece7)}
-.home-slides-page .home-slide.slide-collab{background:linear-gradient(120deg,#f8ede7,#f1e7ed 60%,#e9e7f4)}
-.home-slides-page .home-slide.slide-start{background:linear-gradient(125deg,#302c45,#3b344e 55%,#354852)}
+/* Soft pools of color frame each scene without covering its content. */
+.home-slides-page .home-slide.slide-hero{
+  background:radial-gradient(ellipse at 82% 24%,#cdbfff80,transparent 58%),
+    radial-gradient(ellipse at 12% 88%,#ffd7bd80,transparent 55%),
+    linear-gradient(120deg,#fff7ed,#f8edf3 52%,#e6eafa);
+}
+.home-slides-page .home-slide.slide-architecture{
+  background:radial-gradient(ellipse at 85% 22%,#bcd8f080,transparent 58%),
+    radial-gradient(ellipse at 15% 85%,#c0e5d680,transparent 55%),
+    linear-gradient(115deg,#f2f7fb,#e5edf6 60%,#dceee5);
+}
+.home-slides-page .home-slide.slide-vector{
+  background:radial-gradient(ellipse at 82% 25%,#c8e7b880,transparent 58%),
+    radial-gradient(ellipse at 12% 88%,#f4e5b580,transparent 55%),
+    linear-gradient(115deg,#faf7e9,#eaf3e5 60%,#daece6);
+}
+.home-slides-page .home-slide.slide-collab{
+  background:radial-gradient(ellipse at 85% 22%,#d3bff080,transparent 58%),
+    radial-gradient(ellipse at 12% 85%,#ffcdbd80,transparent 55%),
+    linear-gradient(120deg,#fff1e9,#f4e6ef 60%,#e6e3f8);
+}
+.home-slides-page .home-slide.slide-start{
+  background:radial-gradient(ellipse at 75% 20%,#8e6bc44d,transparent 58%),
+    radial-gradient(ellipse at 15% 90%,#548e9340,transparent 55%),
+    linear-gradient(125deg,#29253e,#403453 55%,#304b55);
+}

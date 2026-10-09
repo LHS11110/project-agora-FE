@@ -6,6 +6,7 @@ const KINDS = new Set(['text', 'note', 'code', 'math', 'shape', 'table', 'image'
 const NUMBERS = new Set(['x', 'y', 'width', 'height', 'rotation', 'fontSize', 'strokeWidth', 'bend', 'opacity', 'contentScale', 'contentScaleX', 'contentScaleY', 'bendPointCount']);
 const STRINGS = new Set(['kind', 'text', 'code', 'formula', 'format', 'filename', 'language', 'shapeType', 'color', 'fill', 'permission', 'groupId', 'src', 'url', 'title', 'mediaType', 'from', 'to', 'startHead', 'endHead', 'brush', 'embedUrl', 'videoId', 'renderMode', 'label', 'labelMode', 'groupTitle', 'thumbnail']);
 const FIELDS = new Set([...NUMBERS, ...STRINGS, 'points', 'rows', 'columns', 'simulatePressure', 'complete', 'bendPoints', 'members']);
+export const CANVAS_ITEM_FIELDS = FIELDS;
 const unsafeId = id => !id || ['__proto__', 'constructor', 'prototype'].includes(id);
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const fail = message => { throw new Error(message); };
@@ -29,7 +30,7 @@ function convert(item, direction) {
   return result;
 }
 export function exportManifest(items) {
-  return { version: 1, mode: 'merge', canvas: { ...CANVAS_SPACE }, items: Object.fromEntries(Object.entries(items).filter(([, item]) => item?.type !== 'chat_room').map(([id, item]) => [id, convert(item, 'export')])), remove: [] };
+  return { version: 1, mode: 'merge', items: Object.fromEntries(Object.entries(items).filter(([, item]) => item?.type !== 'chat_room').map(([id, item]) => [id, convert(item, 'export')])), remove: [] };
 }
 function validateItem(id, item) {
   if (unsafeId(id) || !plain(item)) fail(`${id}: 올바른 객체 ID와 객체 정의가 필요합니다.`);
@@ -64,7 +65,8 @@ export function planManifest(source, currentItems, permission) {
   for (const key of Object.keys(manifest)) if (!['version', 'mode', 'canvas', 'items', 'remove'].includes(key)) fail(`${key}: 지원하지 않는 최상위 필드입니다.`);
   const mode = manifest.mode || 'merge';
   if (!['merge', 'replace'].includes(mode)) fail('mode는 merge 또는 replace입니다.');
-  if (manifest.canvas && (manifest.canvas.width !== CANVAS_SPACE.width || manifest.canvas.height !== CANVAS_SPACE.height)) fail('캔버스 공간은 1600 × 1000으로 고정되어 있습니다.');
+  // Legacy canvas dimensions are metadata, not bounds or a coordinate scale.
+  // Coordinates always use world pixels, including negative and out-of-frame values.
   const remove = manifest.remove || [];
   if (!Array.isArray(remove) || remove.some(id => typeof id !== 'string' || unsafeId(id))) fail('remove는 삭제할 ID의 문자열 배열입니다.');
   if (remove.some(id => currentItems[id]?.type === 'chat_room') || Object.keys(manifest.items).some(id => currentItems[id]?.type === 'chat_room')) fail('채팅방 내부 데이터는 객체로 수정하거나 삭제할 수 없습니다.');
@@ -95,7 +97,7 @@ export function assertPlanCurrent(plan, items) {
   if (stable(Object.keys(items).sort()) !== stable(plan.existingIds) || Object.entries(plan.baseline).some(([id, value]) => stable(items[id] ? convert(items[id], 'export') : null) !== value)) fail('검토 후 객체가 변경되었습니다. 변경 검토를 다시 실행해주세요.');
 }
 export const exampleManifest = {
-  version: 1, mode: 'merge', canvas: { ...CANVAS_SPACE }, items: {
+  version: 1, mode: 'merge', items: {
     'iac-title': { kind: 'text', x: 160, y: 120, width: 400, fontSize: 26, renderMode: 'markdown', text: '# Canvas as Code\n객체와 연결을 코드로 관리합니다.' },
     'iac-service': { kind: 'text', renderMode: 'code', x: 760, y: 180, width: 460, height: 260, filename: 'hello.py', language: 'python', text: 'print("Hello, FreLog!")' },
     'iac-link': { kind: 'connector', bend: 0, from: 'iac-title', to: 'iac-service', color: '#617d68', strokeWidth: 2, endHead: 'triangle' },

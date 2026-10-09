@@ -13,6 +13,6 @@ export default function UnifiedTextContent({ id, item, editing, dirty, remoteEdi
       ? <CanvasCodeEditor key="code-editor" value={value} language={item.language || 'javascript'} onChange={next => item.kind === 'math' ? onFormulaChange(id, next) : onTextChange(id, next)} onSave={() => onSave(id)} onStopEditing={() => onStopEditing(id)} />
       : <InlineContentInput key="inline-input" value={value} mode={mode} onChange={next => item.kind === 'math' ? onFormulaChange(id, next) : onTextChange(id, next)} onSave={() => onSave(id)} onStopEditing={() => onStopEditing(id)} />
       : value ? <RenderedContent value={value} mode={mode} language={item.language || 'javascript'} /> : <p className="unified-content-empty">두 번 클릭해 내용을 작성하세요</p>}</div>
-    {mode === 'code' ? <div className="code-object-foot"><span>{remoteEditorLabel || (dirty ? '저장 대기 중' : '두 번 클릭해 편집')}</span><CodeCopyButton value={value} /></div> : editing && <small className="collab-save-hint">{remoteEditorLabel || (dirty ? '저장 대기 중 · Ctrl / ⌘ + S' : '자동 저장')}</small>}
+    {mode === 'code' ? <div className="code-object-foot"><span>{remoteEditorLabel || (dirty ? '변경 승인 대기 중' : '두 번 클릭해 편집')}</span><CodeCopyButton value={value} /></div> : editing && <small className="collab-save-hint">{remoteEditorLabel || (dirty ? '변경 승인 대기 중' : '자동 저장')}</small>}
   </>;
 }

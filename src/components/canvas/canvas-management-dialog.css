@@ -1,3 +1,33 @@
-dialog.canvas-management-dialog{box-sizing:border-box;margin:auto;border:0;width:min(620px,calc(100vw - 32px));max-height:90dvh;color:var(--text,#364c40)}
+dialog.canvas-management-dialog{
+  --surface:#fff;--surface-soft:#fcfdfa;--line:#e7ebe4;
+  --ink-strong:#3c5144;--ink-muted:#879288;--panel-soft:#f4f6f1;
+  box-sizing:border-box;margin:auto;border:1px solid var(--line);
+  width:min(620px,calc(100vw - 32px));max-height:90dvh;
+  background:var(--surface);color:var(--ink-strong);color-scheme:light;
+}
+dialog.canvas-management-dialog[data-theme="dark"]{
+  --surface:#202923;--surface-soft:#1b231e;--line:#35433a;
+  --ink-strong:#e0e9df;--ink-muted:#9ba99d;--panel-soft:#28342c;
+  color-scheme:dark;
+}
 dialog.canvas-management-dialog::backdrop{background:#14241d80;backdrop-filter:blur(3px)}
 .canvas-management-dialog .participant-chip button:disabled{opacity:.4;cursor:wait}
+.canvas-management-dialog button{-webkit-appearance:none;appearance:none}
+.canvas-management-dialog .setting-row>.button{flex-shrink:0}
+.canvas-management-dialog .button{
+  min-height:34px;padding:8px 12px;font-size:11px;line-height:1.4;
+  border-radius:7px;
+}
+.canvas-management-dialog .button-outline{
+  border-color:var(--line);background:var(--surface);color:var(--ink-strong);
+}
+.canvas-management-dialog .button-outline:hover:not(:disabled){background:var(--panel-soft);border-color:var(--ink-muted)}
+.canvas-management-dialog .button-dark{background:#354e3f;color:#fff;box-shadow:none}
+.canvas-management-dialog .button-dark:hover:not(:disabled){background:#496652}
+.canvas-management-dialog .button:disabled{opacity:.45;cursor:not-allowed}
+.canvas-management-dialog .icon-button{color:var(--ink-muted)}
+.canvas-management-dialog .icon-button:hover{background:var(--panel-soft);color:var(--ink-strong)}
+.canvas-management-dialog>h2,.canvas-management-dialog .form-field>span{color:var(--ink-strong)}
+.canvas-management-dialog>p,.canvas-management-dialog>.section-kicker{color:var(--ink-muted)}
+.canvas-management-dialog .plain-input{background:var(--surface-soft);color:var(--ink-strong);border-color:var(--line)}
+.canvas-management-dialog .settings-dialog-footer{border-color:var(--line);color:var(--ink-muted)}

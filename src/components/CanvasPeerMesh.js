@@ -7,7 +7,7 @@ const QUEUE_LOW_WATER = 128 * 1024;
 const TRANSFER_CHUNK_TYPE = '__agora_transfer_chunk';
 
 function configuredIceServers() {
-  const raw = import.meta.env.VITE_WEBRTC_ICE_SERVERS;
+  const raw = import.meta.env?.VITE_WEBRTC_ICE_SERVERS;
   if (!raw) return DEFAULT_ICE_SERVERS;
   try {
     const parsed = JSON.parse(raw);
@@ -132,8 +132,11 @@ export default class CanvasPeerMesh {
       this.#flushQueue(peer, channel.label);
       this.#emitPeersChanged();
     };
-    channel.onclose = () => this.#emitPeersChanged();
-    channel.onerror = () => this.#emitPeersChanged();
+    channel.onclose = () => {
+      if (channel.label !== 'agora-cursor' && this.peers.has(peer.metadata.peer_id)) this.#removePeer(peer.metadata.peer_id);
+      else this.#emitPeersChanged();
+    };
+    channel.onerror = channel.onclose;
     channel.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
@@ -150,6 +153,8 @@ export default class CanvasPeerMesh {
   }
 
   sendData(payload, canSend = () => true) {
+    // Persistent objects are exclusively replicated by HostCanvasSession.
+    if (payload.type !== 'editor_presence') return true;
     const encoded = JSON.stringify(payload);
     let queued = true;
     for (const peer of this.peers.values()) {
@@ -162,6 +167,7 @@ export default class CanvasPeerMesh {
   }
 
   sendRealtimeData(payload, canSend = () => true) {
+    if (!['cursor', 'laser'].includes(payload.type)) return true;
     const encoded = JSON.stringify(payload);
     let sent = true;
     for (const peer of this.peers.values()) {
@@ -177,6 +183,7 @@ export default class CanvasPeerMesh {
   }
 
   sendToPeer(peerId, payload, channelName = 'agora-sync') {
+    if (!['editor_presence', 'cursor', 'laser'].includes(payload.type)) return true;
     const peer = this.peers.get(peerId);
     if (channelName === 'agora-cursor') {
       const channel = peer?.cursor;
@@ -187,6 +194,13 @@ export default class CanvasPeerMesh {
     const target = channelName === 'agora-bulk' || (encoded.length > TRANSFER_CHUNK_SIZE && peer?.bulk?.readyState === 'open')
       ? 'agora-bulk' : 'agora-sync';
     return Boolean(peer && this.#enqueue(peer, target, encoded));
+  }
+
+  // One reliable ordered channel for snapshots, acknowledgements and commits:
+  // using a separate bulk channel could overtake the initial snapshot barrier.
+  sendHostData(peerId, payload) {
+    const peer = this.peers.get(peerId);
+    return Boolean(peer && this.#enqueue(peer, 'agora-sync', JSON.stringify(payload)));
   }
 
   #enqueue(peer, channelName, encoded) {
@@ -285,6 +299,11 @@ export default class CanvasPeerMesh {
       if (peer.sync?.readyState === 'open' && peer.bulk?.readyState === 'open') count += 1;
     }
     return count;
+  }
+
+  isPeerConnected(peerId) {
+    const peer = this.peers.get(peerId);
+    return peer?.sync?.readyState === 'open' && peer?.bulk?.readyState === 'open';
   }
 
   #removePeer(peerId) {
