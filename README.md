@@ -41,7 +41,7 @@ python3 scripts/setup-projects.py --tls-dir /path/to/certificates
 
 ## 캔버스와 수식
 
-실시간 캔버스는 PixiJS로 스트로크·도형·연결선을 그리고, 텍스트·이미지·코드·테이블·수식은 React DOM 오브젝트로 표시합니다. 캔버스 데이터 변경은 C++ WebSocket으로 전달하고, 공유 텍스트 편집은 Automerge를 사용합니다. P2P 데이터 채널 연결은 별도 RTC WebSocket의 시그널링과 브라우저 WebRTC를 사용합니다.
+실시간 캔버스는 PixiJS로 스트로크·도형·연결선을 그리고, 텍스트·이미지·코드·테이블·수식은 React DOM 오브젝트로 표시합니다. 저장 요청은 Phoenix 브로커가 지속 WSS 소켓으로 C++에 전달하고 응답과 브로드캐스트를 라우팅합니다. 공유 텍스트 편집은 Automerge를 사용하며 P2P 데이터 채널과 별도 RTC 시그널링 소켓은 기존 경로를 유지합니다.
 
 수식은 MathJax 4의 로컬 TeX-to-SVG 렌더러를 사용합니다. 실시간 캔버스와 튜토리얼에서 수식을 두 번 클릭해 편집할 수 있으며, Enter 또는 입력란 포커스 해제로 편집을 마칩니다. 튜토리얼 아이템은 현재 브라우저 메모리에서만 유지되고 서버에 저장되지 않습니다. 크기 조절 영역은 보이지 않지만 드래그 동작은 유지됩니다.
 
@@ -52,11 +52,11 @@ npm run build
 npm run preview
 ```
 
-빌드 파일은 `dist/`에 생성됩니다. 서버는 SPA 경로를 `index.html`로 fallback하고, `/mathjax/` 요청은 `dist/mathjax/` 파일로 제공해야 합니다. Vite 빌드 설정이 MathJax 런타임 파일을 `dist/mathjax/`에 복사합니다. Nginx 예시는 [백엔드 저장소 설정](https://github.com/LHS11110/project-agora-BE/blob/main/nginx/agora.conf.example)에 있습니다.
+빌드 파일은 `dist/`에 생성됩니다. 서버는 SPA 경로를 `index.html`로 fallback하고, `/mathjax/` 요청은 `dist/mathjax/` 파일로 제공해야 합니다. Vite 빌드 설정이 MathJax 런타임 파일을 `dist/mathjax/`에 복사합니다. Nginx 예시는 [Wall 저장소 설정](https://github.com/LHS11110/project-agora-Wall/blob/main/nginx/agora.conf.example)에 있습니다.
 
 ## Docker
 
-Nginx 설정과 컨테이너는 BE 저장소에서 관리합니다. FE 저장소는 React·Vite 개발 서버 또는 배포용 빌드 결과만 제공합니다. Docker 엔진과 DB 스택을 먼저 시작하고, BE의 `./scripts/backend-docker.sh up`으로 백엔드를 실행하세요. 기존 `.env`를 사용하며 파일이 없을 때만 `cp .env.example .env`로 준비합니다.
+Nginx와 Phoenix 브로커는 Wall 저장소에서 관리합니다. FE 저장소는 React·Vite 개발 서버 또는 배포용 빌드 결과를 제공합니다. Docker 엔진과 DB 스택을 먼저 시작하고 BE 백엔드, Wall 브로커, Nginx 순서로 실행합니다. 기존 `.env`를 사용하며 파일이 없을 때만 `cp .env.example .env`로 준비합니다.
 
 ### 개발 서버 실행
 
@@ -68,17 +68,19 @@ Nginx 설정과 컨테이너는 BE 저장소에서 관리합니다. FE 저장소
 직접 인증서를 갱신한 뒤 설정 명령으로 검증하고 BE의 `service-tls-init`을 `--force-recreate`로 실행한 뒤 관련 서비스를 재시작하세요.
 로컬 인증서는 localhost·127.0.0.1·::1용이며, 공개 서비스에는 해당 도메인의 공인 인증서가 필요합니다.
 
-BE Nginx를 개발 모드로 시작하면 공유 네트워크 `agora-web`이 준비됩니다. 이후 FE Vite를 실행합니다.
+Wall Nginx를 개발 모드로 시작하면 공유 네트워크 `agora-web`이 준비됩니다. 이후 FE Vite를 실행합니다.
 
 ```bash
 cd ../project-agora-BE
 docker compose -f docker-compose.backend.yml up -d --build --wait
+cd ../project-agora-Wall
+./scripts/broker-docker.sh up
 ./scripts/nginx-docker.sh development
 cd ../project-agora-FE
 docker compose -f compose.dev.yaml up -d --build --remove-orphans
 ```
 
-브라우저에서 **https://localhost:8443** 또는 **https://127.0.0.1:8443**에 접속하세요. HTTP 4173 포트는 닫혀 있으며 리다이렉트도 제공하지 않습니다. Nginx가 React 페이지와 Vite HMR, Spring `/api/`, C++ `/wss/`를 제공합니다. Vite 5173과 Spring·C++ 포트는 Docker 내부에만 열려 있고 모두 TLS를 사용합니다. Nginx는 내부 서버의 CA와 호스트명을 검증합니다. 소스 변경은 볼륨 마운트로 즉시 반영됩니다. 기존 개발 Nginx 컨테이너도 `--remove-orphans`로 정리됩니다.
+브라우저에서 **https://localhost:8443** 또는 **https://127.0.0.1:8443**에 접속하세요. HTTP 4173 포트는 닫혀 있으며 리다이렉트도 제공하지 않습니다. Nginx가 React 페이지와 Vite HMR, Spring `/api/`, Phoenix `/wss/`를 제공합니다. Vite 5173과 Spring·C++·브로커 포트는 Docker 내부에만 열려 있고 모두 TLS를 사용합니다. Nginx와 브로커는 내부 서버의 CA와 호스트명을 검증합니다. 소스 변경은 볼륨 마운트로 즉시 반영됩니다.
 
 Docker 개발 WebSocket은 현재 브라우저 origin을 사용하므로 Nginx 포트·호스트·HTTPS 변경을 자동으로 따릅니다. 별도 WebSocket 도메인만 `VITE_WS_BASE_URL`로 지정하세요. Vite를 사용자 도메인으로 접근하면 `VITE_ALLOWED_HOSTS`에 해당 호스트명을 명시합니다. HTTP API origin 및 WS origin은 빌드·실행 시 거절됩니다. 직접 평문 C++ 연결 경로는 제거했습니다.
 
@@ -89,21 +91,21 @@ docker compose -f compose.dev.yaml down
 
 ### 빌드 배포
 
-FE의 일회성 빌드 컨테이너가 정적 파일을 `agora-frontend-dist` 공유 볼륨에 기록합니다. BE Nginx가 해당 볼륨을 읽어 SPA·MathJax·PDF 자산을 제공합니다. Vite preview 서버는 배포에 사용하지 않습니다.
+FE의 일회성 빌드 컨테이너가 정적 파일을 `agora-frontend-dist` 공유 볼륨에 기록합니다. Wall Nginx가 해당 볼륨을 읽어 SPA·MathJax·PDF 자산을 제공합니다. Vite preview 서버는 배포에 사용하지 않습니다.
 
 ```bash
 cd ../project-agora-FE
 docker compose -f compose.dev.yaml down --remove-orphans
 docker compose build frontend-build
 docker compose run --rm frontend-build
-cd ../project-agora-BE
+cd ../project-agora-Wall
 ./scripts/nginx-docker.sh production
 curl -fsS https://localhost:8443/
 ```
 
 기존 FE 운영 컨테이너(`agora-frontend`)가 남아 있으면 새 게이트웨이를 실행하기 전에 해당 컨테이너를 정리하세요. 새 빌드 배포 시 위 빌드·내보내기 명령을 반복합니다. 내보내기는 새 release를 준비한 뒤 `current` 심볼릭 링크를 원자적으로 전환합니다. 실패하면 이전 배포를 유지하고 동시 배포는 잠금으로 차단합니다. 이전 해시 자산은 열린 페이지의 lazy loading을 위해 보존하며, release 디렉터리는 최신 두 개를 유지합니다.
 
-FE에는 Nginx 이미지나 설정이 없습니다. API·WebSocket·SPA fallback·자산 캐시·MIME 설정은 [BE의 단일 Nginx 설정](../project-agora-BE/nginx/agora.conf.example), Docker 실행 및 TLS 설정은 [BE README](../project-agora-BE/README.md#nginx와-wss)를 참고하세요. `VITE_*`는 브라우저에 포함되는 공개 설정이며 비밀값을 넣지 않습니다.
+FE에는 Nginx 이미지나 설정이 없습니다. API·WebSocket·SPA fallback·자산 캐시·MIME 설정은 [Wall의 단일 Nginx 설정](../project-agora-Wall/nginx/agora.conf.example), Docker 실행 및 TLS 설정은 [Wall README](../project-agora-Wall/README.md)를 참고하세요. `VITE_*`는 브라우저에 포함되는 공개 설정이며 비밀값을 넣지 않습니다.
 
 HTTPS 설정은 [Nginx 공식 문서](https://nginx.org/en/docs/http/configuring_https_servers.html)를 참고하세요.
 
@@ -113,7 +115,7 @@ MathJax, PixiJS, Automerge의 라이선스 고지는 [THIRD_PARTY_NOTICES.md](TH
 
 ## 실행 의존성 및 검증
 
-FE와 BE는 같은 Docker 엔진의 `agora-web` 네트워크와 `agora-frontend-dist` 볼륨을 공유해야 합니다. 저장소가 나란히 있을 필요는 없으며 README의 `cd ../…`는 예시입니다. 각 저장소를 독립 경로에서 실행해도 컨테이너 DNS·볼륨 이름으로 연결됩니다. Node 22와 원자적 파일 전환은 컨테이너 안에서 실행하므로 호스트 Node/Nginx 설치에 의존하지 않습니다.
+FE와 Wall은 같은 Docker 엔진의 `agora-web` 네트워크와 `agora-frontend-dist` 볼륨을 공유해야 합니다. BE와 Wall은 DB가 준비한 `agora-net`에 연결됩니다. 저장소가 나란히 있을 필요는 없으며 README의 `cd ../…`는 예시입니다. 각 저장소를 독립 경로에서 실행해도 컨테이너 DNS·볼륨 이름으로 연결됩니다. Node 22와 원자적 파일 전환은 컨테이너 안에서 실행하므로 호스트 Node/Nginx 설치에 의존하지 않습니다.
 
 배포 도중 exporter가 강제 종료되어 `.deploy-lock`이 남으면 실행 중인 exporter가 없는지 확인한 뒤 공유 볼륨에서 잠금 디렉터리만 제거하세요. 데이터 볼륨 전체를 삭제하지 않습니다. 보존한 해시 자산은 배포 횟수에 따라 증가하므로 운영 환경의 자산 보존 정책에 따라 정리합니다.
 

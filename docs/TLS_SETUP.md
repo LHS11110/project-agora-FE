@@ -2,12 +2,13 @@
 
 Docker Engine, Docker Compose v2, Python 3.10 이상, OpenSSL이 필요합니다. Docker로 실행하면 호스트에 Java·Node·Nginx를 설치할 필요는 없습니다. SQL Server 이미지는 `linux/amd64`를 사용하므로 다른 아키텍처에서는 Docker의 해당 플랫폼 실행 지원이 필요합니다.
 
-세 저장소를 clone하고 BE 서브모듈을 준비합니다. 다른 경로에 두었다면 설정 명령의 `--backend-dir`, `--db-dir`로 지정할 수 있습니다.
+네 저장소를 clone하고 BE 서브모듈을 준비합니다. 다른 경로에 두었다면 설정 명령의 `--backend-dir`, `--db-dir`로 지정할 수 있습니다.
 
 ```bash
 git clone https://github.com/LHS11110/project-agora-FE.git
 git clone --recurse-submodules https://github.com/LHS11110/project-agora-BE.git
 git clone https://github.com/LHS11110/project-agora-DB.git
+git clone https://github.com/LHS11110/project-agora-Wall.git
 ```
 
 ## 1. 인증서 직접 준비
@@ -62,7 +63,7 @@ python3 scripts/setup-projects.py \
   --public-origin https://app.example.com
 ```
 
-이 명령은 세 프로젝트의 `.env`를 만들고, placeholder 비밀번호·JWT 키·내부 토큰을 독립 난수로 바꾸며, DB 계정과 CA 경로를 BE에 동기화합니다. 기존 비밀번호는 보존하고 파일 권한은 `0600`으로 설정합니다. 인증서가 없거나 검증에 실패하면 중단하고 파일 또는 검증 문제를 안내합니다. 서비스는 아직 시작하지 않습니다. 초기 관리자 비밀번호는 BE `.env`의 `ADMIN_PASSWORD`를 직접 확인하며 로그에 출력되지 않습니다.
+이 명령은 FE·BE·DB·Wall의 `.env`를 만들고, placeholder 비밀번호·JWT 키·내부 토큰을 독립 난수로 바꾸며, DB 계정과 CA 경로를 BE에 동기화합니다. 기존 비밀번호는 보존하고 파일 권한은 `0600`으로 설정합니다. 인증서가 없거나 검증에 실패하면 중단하고 파일 또는 검증 문제를 안내합니다. 서비스는 아직 시작하지 않습니다. 초기 관리자 비밀번호는 BE `.env`의 `ADMIN_PASSWORD`를 직접 확인하며 로그에 출력되지 않습니다.
 
 ## 3. 실행
 
@@ -76,9 +77,14 @@ docker compose up -d --wait --wait-timeout 240
 ./elasticsearch/ensure-elasticsearch-initialized.sh
 ./elasticsearch/sync-elasticsearch-users.sh
 
+cd ../project-agora-Wall
+./scripts/storage-broker-docker.sh up
+
 cd ../project-agora-BE
 git submodule update --init --recursive
 ./scripts/backend-docker.sh up
+cd ../project-agora-Wall
+./scripts/broker-docker.sh up
 ./scripts/nginx-docker.sh development
 
 cd ../project-agora-FE
@@ -88,3 +94,11 @@ docker compose -f compose.dev.yaml up -d --build --wait
 기본 접속 주소는 **https://localhost:8443**입니다. HTTP·WS 접속은 제공하지 않으며 인증서 오류를 무시하는 옵션은 사용하지 않습니다. DB가 SQL Server·Redis Insight의 TLS 볼륨을 직접 초기화하므로 BE보다 먼저 시작할 수 있습니다. 컨테이너는 필요한 서버 키와 공개 CA만 복사하여 서비스 UID에 맞는 권한을 적용합니다.
 
 인증서를 갱신한 경우 같은 설정 명령으로 검증한 뒤 DB의 TLS 초기화 서비스와 BE의 `service-tls-init`을 다시 실행하고 해당 서비스들을 재시작합니다. 데이터 볼륨은 삭제하지 않습니다. 운영 HA의 listener·사설 주소·외부 snapshot/백업 저장소는 [DB 운영 안내](../../project-agora-DB/ops/README.md)의 별도 구성 대상입니다.
+
+## TLS 프로토콜 정책
+
+웹 HTTPS/WSS, Wall nginx, Phoenix 브로커, Spring, C++의 HTTPS/WSS·Redis·Elasticsearch 연결과 Redis/Sentinel·Elasticsearch 서버는 TLS 1.3을 사용합니다. TLS 1.2로의 하향 연결은 허용하지 않습니다. 기존 CA 및 인증서를 그대로 사용할 수 있으며, 설정 반영에는 해당 서비스 재빌드·재시작이 필요합니다.
+
+예외는 현재 SQL Server 2022 Linux 컨테이너입니다. [Microsoft의 지원 문서](https://learn.microsoft.com/en-us/sql/linux/sql-server-linux-known-issues?view=sql-server-ver17#tls-13-not-supported-on-sql-server-2022)에 따라 이 의존성은 TLS 1.3을 지원하지 않으므로 SQL 연결은 인증서 검증을 수행하는 TLS 1.2 암호화를 유지합니다. SQL까지 TLS 1.3을 요구하려면 지원되는 SQL 서버 환경 및 TDS 드라이버로 별도 전환해야 합니다. SQL 호환성을 위해 JVM 전체에 TLS 1.3 전용 설정을 적용하지 않고 연결별로 제한합니다.
+
+저장소 연결은 [Wall 저장소 브로커](../../project-agora-Wall/STORAGE_BROKER.md)를 경유합니다. Spring·C++는 저장소 네트워크에 직접 참여하지 않습니다. 인증서 SAN은 기존 저장소 이름·IP를 유지하며 브로커 인증서는 추가로 필요하지 않습니다.

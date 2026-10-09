@@ -23,6 +23,6 @@ ENV VITE_WS_BASE_URL=${VITE_WS_BASE_URL}
 ENV VITE_WEBRTC_ICE_SERVERS=${VITE_WEBRTC_ICE_SERVERS}
 RUN npm run build
 
-# Export only the built SPA; the backend repository owns Nginx.
+# Export only the built SPA; project-agora-Wall owns Nginx.
 FROM build AS production
 CMD ["node", "build/exportDist.js", "/app/dist", "/output"]

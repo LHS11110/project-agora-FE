@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Configure FE, BE and DB for TLS; certificates must be supplied manually."""
+"""Configure FE, BE, DB and Wall for TLS; certificates must be supplied manually."""
 from __future__ import annotations
 
 import argparse
@@ -15,10 +15,14 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--backend-dir', type=Path, default=ROOT.parent / 'project-agora-BE')
+    parser.add_argument('--wall-dir', type=Path, default=ROOT.parent / 'project-agora-Wall')
     parser.add_argument('--db-dir', type=Path, default=ROOT.parent / 'project-agora-DB')
     parser.add_argument('--tls-dir', type=Path, required=True, help='Directory of manually supplied certificates; see docs/TLS_SETUP.md.')
     parser.add_argument('--public-origin', default='https://localhost:8443')
     args = parser.parse_args()
+    wall = args.wall_dir.expanduser().resolve()
+    if not (wall / "scripts/setup.py").is_file():
+        raise ValueError("Clone project-agora-Wall or provide --wall-dir before configuring the stack.")
     backend = args.backend_dir.expanduser().resolve()
     tls = args.tls_dir.expanduser().resolve()
     spec = importlib.util.spec_from_file_location('agora_backend_setup', backend / 'scripts/setup-docker.py')
@@ -44,7 +48,11 @@ def main():
         'SERVICE_TLS_CA': str(tls / 'root-ca.pem'),
         'VITE_ALLOWED_HOSTS': ','.join(dict.fromkeys(allowed_hosts)),
     })
-    print('FE, BE and DB configured for TLS. No certificates generated and no services started.')
+    backend_values = sync.read_env(backend / '.env')
+    subprocess.run([sys.executable, str(wall / 'scripts/setup.py'), '--tls-dir', str(tls),
+                    '--backend-dir', str(backend), '--public-origin', args.public_origin,
+                    '--backend-ip', backend_values.get('NGINX_BACKEND_IP', '172.23.0.250')], check=True)
+    print('FE, BE, DB and Wall configured for TLS. No certificates generated and no services started.')
     print('Continue with the startup commands in docs/TLS_SETUP.md.')
 
 

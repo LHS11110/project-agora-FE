@@ -57,9 +57,9 @@ export default defineConfig(({ mode, command }) => {
   const https = command === 'serve' ? {
     cert: readFileSync(env.SERVICE_TLS_CERT || resolve(tlsRoot, 'fullchain.pem')),
     key: readFileSync(env.SERVICE_TLS_KEY || resolve(tlsRoot, 'privkey.pem')),
-    minVersion: 'TLSv1.2',
+    minVersion: 'TLSv1.3',
   } : undefined;
-  const agent = command === 'serve' ? new Agent({ ca: readFileSync(env.SERVICE_TLS_CA || resolve(tlsRoot, 'ca.pem')) }) : undefined;
+  const agent = command === 'serve' ? new Agent({ minVersion: 'TLSv1.3', ca: readFileSync(env.SERVICE_TLS_CA || resolve(tlsRoot, 'ca.pem')) }) : undefined;
   return {
     plugins: [react(), localMathJaxAssets(), localPdfAssets()],
     server: { https, host: '0.0.0.0', allowedHosts: (env.VITE_ALLOWED_HOSTS || '').split(',').map((host) => host.trim()).filter(Boolean), proxy: { '/api': { target: apiTarget, agent, secure: true, changeOrigin: true } } },

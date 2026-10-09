@@ -88,4 +88,4 @@ TURN 자격 증명은 연결을 위해 브라우저에 전달되므로 비밀로
 - `/profile`, `/search`, `/tutorial`, `/canvases/...` 같은 SPA 경로는 `index.html`로 fallback해야 합니다.
 - 배포할 때 `dist/`의 전체 내용을 웹 서버의 정적 루트에 복사합니다.
 
-Nginx 예시는 [백엔드 저장소의 설정 파일](https://github.com/LHS11110/project-agora-BE/blob/main/nginx/agora.conf.example)입니다. 경로 또는 프록시 설정을 바꾸면 Nginx location과 `VITE_*` 값을 함께 확인합니다.
+Nginx 예시는 [Wall 저장소의 설정 파일](https://github.com/LHS11110/project-agora-Wall/blob/main/nginx/agora.conf.example)입니다. 경로 또는 프록시 설정을 바꾸면 Nginx location과 `VITE_*` 값을 함께 확인합니다.
