@@ -47,6 +47,8 @@ export default function AuthenticatedImage({ src, token, alt = '', className, fa
     })
       .then((response) => {
         if (!response.ok) throw new Error(`Image request failed (${response.status})`);
+        // A valid account without an uploaded avatar returns no content.
+        if (response.status === 204) return null;
         const contentType = response.headers.get('content-type') || '';
         if (contentType && !contentType.startsWith('image/') && !contentType.includes('octet-stream')) {
           throw new Error('Image endpoint returned a non-image response');
@@ -54,7 +56,8 @@ export default function AuthenticatedImage({ src, token, alt = '', className, fa
         return response.blob();
       })
       .then((blob) => {
-        if (cancelled || !blob.size) throw new Error('Image response was empty');
+        if (cancelled) return;
+        if (!blob?.size) { setFailedKey(key); return; }
         objectUrl = URL.createObjectURL(blob);
         setResolved({ key, src: objectUrl });
       })

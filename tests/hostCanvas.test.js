@@ -57,6 +57,19 @@ test('highest eligible ID wins; disconnected membership is not silently removed'
   assert.equal(net.sessions.get('a').hostId, 'z');
 });
 
+test('a server without host protocol fails visibly instead of waiting forever', () => {
+  const net = network(['a']);
+  const session = net.sessions.get('a');
+  let status;
+  session.status = next => { status = next; };
+  session.configure('a', undefined);
+  assert.equal(session.ready, false);
+  assert.equal(session.editable, false);
+  assert.match(status.message, /프로토콜을 지원하지/);
+  net.configure(); net.synchronize();
+  assert.equal(session.editable, true);
+});
+
 test('a follower proposal is not applied before host acceptance', () => {
   const net = network(); const follower = net.sessions.get('a'), host = net.sessions.get('z');
   assert.equal(follower.submit([{ id: 'box', action: 'patch', patch: { x: 20 } }]), true);

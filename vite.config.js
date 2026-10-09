@@ -1,7 +1,8 @@
 import { localPdfAssets } from './build/pdfAssets.js';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
-import { createReadStream, existsSync, mkdirSync, cpSync, copyFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, cpSync, copyFileSync, readFileSync } from 'node:fs';
+import { Agent } from 'node:https';
 import { extname, resolve, sep } from 'node:path';
 
 function localMathJaxAssets() {
@@ -44,11 +45,24 @@ function localMathJaxAssets() {
   };
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const apiTarget = env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8080';
+  const apiTarget = env.VITE_API_PROXY_TARGET || 'https://localhost:8443';
+  for (const [name, value, protocol] of [
+    ['VITE_API_PROXY_TARGET', apiTarget, 'https:'],
+    ['VITE_API_BASE_URL', env.VITE_API_BASE_URL, 'https:'],
+    ['VITE_WS_BASE_URL', env.VITE_WS_BASE_URL, 'wss:'],
+  ]) if (value && new URL(value).protocol !== protocol) throw new Error(`${name} requires ${protocol}`);
+  const tlsRoot = resolve('.local-https/internal/frontend');
+  const https = command === 'serve' ? {
+    cert: readFileSync(env.SERVICE_TLS_CERT || resolve(tlsRoot, 'fullchain.pem')),
+    key: readFileSync(env.SERVICE_TLS_KEY || resolve(tlsRoot, 'privkey.pem')),
+    minVersion: 'TLSv1.2',
+  } : undefined;
+  const agent = command === 'serve' ? new Agent({ ca: readFileSync(env.SERVICE_TLS_CA || resolve(tlsRoot, 'ca.pem')) }) : undefined;
   return {
     plugins: [react(), localMathJaxAssets(), localPdfAssets()],
-    server: { host: '0.0.0.0', allowedHosts: (env.VITE_ALLOWED_HOSTS || '').split(',').map((host) => host.trim()).filter(Boolean), proxy: { '/api': { target: apiTarget, changeOrigin: true } } },
+    server: { https, host: '0.0.0.0', allowedHosts: (env.VITE_ALLOWED_HOSTS || '').split(',').map((host) => host.trim()).filter(Boolean), proxy: { '/api': { target: apiTarget, agent, secure: true, changeOrigin: true } } },
+    preview: { https },
   };
 });

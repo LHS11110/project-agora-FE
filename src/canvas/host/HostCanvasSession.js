@@ -63,7 +63,11 @@ export class HostCanvasSession {
     this.publish(this.items, []);
   }
   configure(selfId, host) {
-    if (!host || host.protocol !== HOST_PROTOCOL || typeof host.term !== 'string' || !host.term
+    if (!host || host.protocol !== HOST_PROTOCOL) {
+      this.abort('서버가 호스트 선출 프로토콜을 지원하지 않습니다. 최신 서버를 적용한 뒤 다시 접속해주세요.');
+      return;
+    }
+    if (typeof host.term !== 'string' || !host.term
       || !Array.isArray(host.members) || host.members.some(peer => !hasId(peer.peer_id))
       || new Set(host.members.map(peer => peer.peer_id)).size !== host.members.length
       || !host.members.some(peer => peer.peer_id === selfId) || electHost(host.members) !== host.peer_id) {

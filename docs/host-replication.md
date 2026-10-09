@@ -4,6 +4,14 @@ Persistent canvas objects use the hosted protocol (`host_protocol: 1`). Cursor,
 laser and editor presence still use direct peer channels. Media connections are
 unchanged. Object drawing previews remain local until approved by the host.
 
+The running C++ image must include this protocol; updating source files alone
+does not update an existing container. Rebuild and recreate the backend's `cpp`
+service after protocol changes. A missing or incompatible host protocol now
+shows an explicit server compatibility error instead of waiting indefinitely.
+After changing `VITE_WS_BASE_URL`, recreate the frontend development container
+as well. Keep it empty when using the HTTPS gateway so both canvas and RTC
+sockets follow the current browser origin using WSS.
+
 ## Election and fencing
 
 The signaling registry supplies a complete membership and a unique `host.term`.
@@ -134,8 +142,3 @@ and fencing check can also be built without the server's external dependencies:
 c++ -std=c++17 -I cpp/include cpp/tests/canvas_host_test.cpp -o /tmp/canvas-host-test
 /tmp/canvas-host-test
 ```
-
-Local validation: 39 frontend tests, the production frontend build, and the
-standalone C++ election/fencing test passed. Full server compilation is blocked
-on this machine by the missing `httplib.h` dependency. Live multi-browser
-WebRTC/server integration has not been verified locally.

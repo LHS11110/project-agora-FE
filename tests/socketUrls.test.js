@@ -14,10 +14,17 @@ test('Docker development uses the current browser origin including custom port a
   assert.equal(api.rtcSocketUrl(42, 8002, 'token'), 'wss://agora.example.com:4443/wss/port/8002/rtc/canvas/42?token=token');
 });
 
-test('explicit local host and public WebSocket origins remain supported', async () => {
-  globalThis.window = { location: { protocol: 'http:', hostname: 'localhost', host: 'localhost:5173' } };
-  const direct = await client({ DEV: true, VITE_CPP_WS_HOST: '127.0.0.1' });
-  assert.equal(direct.canvasSocketUrl(42, 8002, 'token'), 'ws://127.0.0.1:8002/ws/canvas/42?token=token');
+test('only secure explicit origins are accepted', async () => {
+  globalThis.window = { location: { protocol: 'https:', host: 'localhost:8443', href: 'https://localhost:8443/' } };
   const explicit = await client({ DEV: true, VITE_WS_BASE_URL: 'wss://other.example.com/' });
   assert.equal(explicit.rtcSocketUrl(42, 8002, 'token'), 'wss://other.example.com/wss/port/8002/rtc/canvas/42?token=token');
+  assert.equal(explicit.apiUrl('/api/auth/me'), 'https://localhost:8443/api/auth/me');
+  assert.throws(() => explicit.apiUrl('http://localhost:8080/api/auth/me'), /HTTPS/);
+  const insecure = await client({ VITE_WS_BASE_URL: 'ws://localhost:4173', VITE_API_BASE_URL: 'http://localhost:8080' });
+  assert.throws(() => insecure.canvasSocketUrl(42,8002,'token'), /WSS/);
+  assert.throws(() => insecure.apiUrl('/api/auth/me'), /HTTPS/);
+  globalThis.window.location = { protocol: 'http:', host: 'localhost:5173', href: 'http://localhost:5173/' };
+  assert.throws(() => explicit.rtcSocketUrl(42,8002,'token'), /HTTPS/);
+  const relative = await client({});
+  assert.throws(() => relative.apiUrl('/api/auth/me'), /HTTPS/);
 });

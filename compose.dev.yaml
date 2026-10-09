@@ -8,20 +8,24 @@ services:
     container_name: agora-frontend-dev
     restart: unless-stopped
     command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 5173 --strictPort"
-    ports:
-      - "127.0.0.1:${VITE_PORT:-5173}:5173"
     volumes:
       - .:/app
+      # Hide host CA signing material from the workspace bind mount.
+      - type: tmpfs
+        target: /app/.local-https
       - agora-fe-node-modules:/app/node_modules
+      - frontend-tls:/run/tls:ro
     environment:
-      VITE_API_PROXY_TARGET: ${VITE_DOCKER_API_PROXY_TARGET:-http://agora-nginx}
+      VITE_API_PROXY_TARGET: ${VITE_DOCKER_API_PROXY_TARGET:-https://agora-nginx}
       VITE_WS_BASE_URL: ${VITE_WS_BASE_URL:-}
-      VITE_CPP_WS_HOST: ""
+      SERVICE_TLS_CERT: /run/tls/fullchain.pem
+      SERVICE_TLS_KEY: /run/tls/privkey.pem
+      SERVICE_TLS_CA: /run/tls/ca.pem
       VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS:-}
     networks:
       - agora-web
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:5173/ || exit 1"]
+      test: ["CMD", "node", "-e", "require('https').get('https://localhost:5173/',{ca:require('fs').readFileSync('/run/tls/ca.pem')},r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -34,3 +38,6 @@ networks:
 
 volumes:
   agora-fe-node-modules:
+  frontend-tls:
+    external: true
+    name: agora-frontend-tls

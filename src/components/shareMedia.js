@@ -28,7 +28,7 @@ export function inspectShareUrl(value) {
   } catch {
     return null;
   }
-  if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password) return null;
+  if (url.protocol !== 'https:' || !url.hostname || url.username || url.password) return null;
 
   const videoId = youtubeVideoId(url);
   if (videoId) {
