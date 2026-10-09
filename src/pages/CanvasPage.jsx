@@ -748,6 +748,17 @@ function CanvasWorkspace() {
     },
   });
 
+  const editorsByItem = useMemo(() => {
+    const grouped = new Map();
+    for (const editor of Object.values(remoteEditors)) {
+      const id = String(editor.itemId);
+      if (!grouped.has(id)) grouped.set(id, []);
+      grouped.get(id).push(editor);
+    }
+    return grouped;
+  }, [remoteEditors]);
+  const drawableItemCount = useMemo(() => Object.values(items).filter(item => item?.type !== 'chat_room').length, [items]);
+
   const viewportSize = useCanvasViewport({ boardRef, setCamera, refreshKey: error });
   const spatialIndex = useMemo(() => new CanvasSpatialBTree(items, boardSize), [items, spatialRevision, boardSize]);
   const {
@@ -1130,7 +1141,7 @@ function CanvasWorkspace() {
           <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true"><span className="coordinate-x" /><span className="coordinate-y" /><i className="coordinate-origin">0</i><b className="coordinate-x-label">X</b><b className="coordinate-y-label">Y</b></div>
           <VectorLayer worldSize={boardSize} items={visibleVectorItems} referenceItems={items} previewStrokes={remoteDrawingStrokes} camera={camera} onReady={(setDraft) => { vectorDraftRef.current = setDraft; }} />
           <div className="canvas-scene" ref={sceneRef} style={{ width: boardSize.width, height: boardSize.height, right: 'auto', bottom: 'auto', transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}>
-            {sortedItems.map(([id, item, bounds, connectorCurve]) => <CanvasObject key={id} id={id} item={item} bounds={bounds} connectorCurve={connectorCurve} viewSize={boardSize} token={token} selected={selectedObjectIdSet.has(String(id))} allowSingleSelectionControls={hasSingleSelection} activeTool={activeTool} connectionStartId={connectionStartId} editing={editingId === id} dirty={dirtyItems.has(String(id))} remoteEditors={Object.values(remoteEditors).filter((editor) => editor.itemId === String(id))} onStartEditing={startEditing} onTextChange={updateCollaborativeText} onMetadataChange={(id, field, value) => ['renderMode', 'filename', 'language'].includes(field) ? updateContentSetting(id, field, value) : updateCollaborativeMetadata(id, field, value)} onFormulaChange={updateFormulaItem} onTableChange={updateTableItem} onStopEditing={stopEditing} onSave={saveCollaborativeItem} onPointerDown={startObjectDrag} onResizeStart={startObjectResize} onArrowBendStart={startArrowBend} onPointerMove={moveObject} onPointerUp={stopObjectDrag} onCopy={(value) => navigator.clipboard?.writeText(value)} onConnectorDoubleClick={focusConnectorTarget} />)}
+            {sortedItems.map(([id, item, bounds, connectorCurve]) => <CanvasObject key={id} id={id} item={item} bounds={bounds} connectorCurve={connectorCurve} viewSize={boardSize} token={token} selected={selectedObjectIdSet.has(String(id))} allowSingleSelectionControls={hasSingleSelection} activeTool={activeTool} connectionStartId={connectionStartId} editing={editingId === id} dirty={dirtyItems.has(String(id))} remoteEditors={(editorsByItem.get(String(id)) || [])} onStartEditing={startEditing} onTextChange={updateCollaborativeText} onMetadataChange={(id, field, value) => ['renderMode', 'filename', 'language'].includes(field) ? updateContentSetting(id, field, value) : updateCollaborativeMetadata(id, field, value)} onFormulaChange={updateFormulaItem} onTableChange={updateTableItem} onStopEditing={stopEditing} onSave={saveCollaborativeItem} onPointerDown={startObjectDrag} onResizeStart={startObjectResize} onArrowBendStart={startArrowBend} onPointerMove={moveObject} onPointerUp={stopObjectDrag} onCopy={(value) => navigator.clipboard?.writeText(value)} onConnectorDoubleClick={focusConnectorTarget} />)}
             {selectedItem && selectedItem.kind !== 'connector' && activeTool === 'select' && !editingId && <RotationHandles sceneRef={sceneRef} id={String(primarySelectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startObjectRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
             {selectionIsSingleGroup && selectedObjectIds.length > 1 && activeTool === 'select' && !editingId && <GroupRotationHandles sceneRef={sceneRef} ids={selectedObjectIds} items={items} viewSize={boardSize} onPointerDown={startGroupRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
             <RemoteCursorLayer updaterRef={remoteCursorUpdaterRef} activePeerIds={activePeerIds} visibleBounds={visibleBounds} />
@@ -1155,7 +1166,7 @@ function CanvasWorkspace() {
           {activeTool === 'eraser' && <div className="eraser-cursor" ref={eraserCursorRef} style={{ width: `${eraserWidth}px`, height: `${eraserWidth}px` }} aria-hidden="true" />}
           {sharePosition && <ShareComposer onCancel={() => { setSharePosition(null); setActiveTool('select'); }} onSubmit={placeSharedLink} />}
           {activeTool === 'laser' && <div className="draw-cursor-label laser-cursor-label"><Icon name="laser" size={13} /> 가리키는 중 · 1.6초 후 사라짐</div>}{activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} /> 그리는 중</div>}{activeTool === 'eraser' && <div className="draw-cursor-label"><Icon name="eraser" size={13} /> 드로잉을 드래그해 지우기</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? '도착 오브젝트 선택' : '시작 오브젝트 선택'}</div>}{activeTool === 'link' && !sharePosition && <div className="draw-cursor-label"><Icon name="link" size={13} /> 공유 자료를 놓을 위치 선택</div>}
-        </div><div className="board-footer"><span>무한 좌표 평면 · X/Y축</span><span className="board-footer-center">빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동</span><span>{visibleItemIds.size}/{Object.values(items).filter(item => item?.type !== 'chat_room').length}개 표시</span></div>
+        </div><div className="board-footer"><span>무한 좌표 평면 · X/Y축</span><span className="board-footer-center">빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동</span><span>{visibleItemIds.size}/{drawableItemCount}개 표시</span></div>
       </main>
 <ResizablePanel {...panelLayout.handle('inspector')}><CanvasInspectorPanel updateContentSetting={updateContentSetting} onNavigateObject={focusCanvasObject} {...{
         activeTool,

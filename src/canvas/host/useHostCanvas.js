@@ -73,7 +73,8 @@ export function useHostCanvas({ itemsRef, peerMeshRef, wsRef, rtcWsRef, collabor
     },
     persist: (changes, term) => {
       const socket = wsRef.current;
-      if (!sessionRef.current.isHost || !sessionRef.current.ready || socket?.readyState !== 1) return false;
+      if (!sessionRef.current.isHost || !sessionRef.current.ready || socket?.readyState !== 1
+        || socket.bufferedAmount >= 4 * 1024 * 1024 || pendingSaves.current.size >= 8) return false;
       const inFlight = new Set([...pendingSaves.current.values()].filter(entry => entry.term === term).flatMap(entry => entry.changes.map(change => change.id)));
       const batch = [], selected = []; let bytes = 0;
       for (const change of changes) {

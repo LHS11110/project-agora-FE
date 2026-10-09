@@ -48,7 +48,7 @@ export default class CanvasPeerMesh {
     const pc = new RTCPeerConnection({ iceServers: this.iceServers });
     const peer = {
       metadata, pc, sync: null, bulk: null, cursor: null, pendingCandidates: [],
-      syncQueue: [], bulkQueue: [], syncQueuedSize: 0, bulkQueuedSize: 0,
+      syncQueue: [], bulkQueue: [], syncHead: 0, bulkHead: 0, syncQueuedSize: 0, bulkQueuedSize: 0,
       incomingTransfers: new Map(),
     };
     this.peers.set(metadata.peer_id, peer);
@@ -239,11 +239,17 @@ export default class CanvasPeerMesh {
     const queue = isBulk ? peer.bulkQueue : peer.syncQueue;
     const sizeName = isBulk ? 'bulkQueuedSize' : 'syncQueuedSize';
     if (!channel || channel.readyState !== 'open') return;
-    while (queue.length && channel.bufferedAmount < QUEUE_HIGH_WATER) {
-      const frame = queue[0];
+    const headName = isBulk ? 'bulkHead' : 'syncHead';
+    peer[headName] ??= 0;
+    while (peer[headName] < queue.length && channel.bufferedAmount < QUEUE_HIGH_WATER) {
+      const frame = queue[peer[headName]];
       try { channel.send(frame); } catch { return; }
-      queue.shift();
+      queue[peer[headName]++] = null;
       peer[sizeName] = Math.max(0, peer[sizeName] - frame.length);
+    }
+    if (peer[headName] === queue.length) { queue.length = 0; peer[headName] = 0; }
+    else if (peer[headName] >= 1024 && peer[headName] * 2 >= queue.length) {
+      queue.splice(0, peer[headName]); peer[headName] = 0;
     }
   }
 
@@ -282,14 +288,18 @@ export default class CanvasPeerMesh {
   sendCursor(payload) {
     const encoded = JSON.stringify(payload);
     for (const peer of this.peers.values()) {
-      if (peer.cursor?.readyState === 'open') peer.cursor.send(encoded);
+      if (peer.cursor?.readyState === 'open' && (peer.cursor.bufferedAmount || 0) < QUEUE_LOW_WATER) {
+        try { peer.cursor.send(encoded); } catch { /* Ephemeral updates expire instead of blocking edits. */ }
+      }
     }
   }
 
   sendLaser(payload) {
     const encoded = JSON.stringify(payload);
     for (const peer of this.peers.values()) {
-      if (peer.cursor?.readyState === 'open') peer.cursor.send(encoded);
+      if (peer.cursor?.readyState === 'open' && (peer.cursor.bufferedAmount || 0) < QUEUE_LOW_WATER) {
+        try { peer.cursor.send(encoded); } catch { /* Ephemeral updates expire instead of blocking edits. */ }
+      }
     }
   }
 

@@ -3,6 +3,7 @@ import { collaborativeField, isCollaborativeItem } from '../collaborativeSync.js
 import { loadItemDoc, HOST_TOMBSTONE_KIND, HOST_VERSION_FIELD } from './hostOperations.js';
 import { electHost, HOST_PEER_FPS, HOST_PROTOCOL, HOST_SAVE_FPS, reduceHostOperations } from './hostOperations.js';
 
+const encoder = new TextEncoder();
 const clone = value => JSON.parse(JSON.stringify(value));
 const objects = records => Object.fromEntries(Object.entries(records).filter(([, record]) => record.item).map(([id, record]) => [id, record.item]));
 const hasId = id => typeof id === 'string' && id.length > 0 && id.length <= 128 && !['__proto__', 'constructor', 'prototype'].includes(id);
@@ -17,10 +18,10 @@ const summarize = operations => {
 export class HostCanvasSession {
   constructor({ send, persist, publish, status, reject, receipt = () => {}, available, now = () => Date.now() }) {
     Object.assign(this, { send, persist, publish, status, reject, receipt, available, now });
-    this.records = {}; this.members = []; this.term = ''; this.selfId = ''; this.hostId = '';
+    this.records = {}; this.members = []; this.memberIndex = new Map(); this.term = ''; this.selfId = ''; this.hostId = '';
     this.ready = false; this.seeded = false; this.sequence = 0; this.clock = 0;
     this.localCounter = 0; this.localQueue = []; this.pending = new Map();
-    this.inbox = []; this.broadcasts = []; this.serverDirty = new Map();
+    this.inbox = []; this.broadcasts = []; this.broadcastBytes = 0; this.serverDirty = new Map();
     this.states = new Map(); this.snapshotAcks = new Set(); this.snapshotSent = new Set();
     this.peerSequence = new Map(); this.lastPeerTick = -Infinity; this.lastSaveTick = -Infinity;
     this.outgoingStates = new Map();
@@ -75,8 +76,9 @@ export class HostCanvasSession {
     }
     if (this.term === host.term && this.selfId === selfId) return;
     this.selfId = selfId; this.hostId = host.peer_id; this.term = host.term; this.members = clone(host.members);
+    this.memberIndex = new Map(this.members.map(peer => [peer.peer_id, peer]));
     this.sequence = 0; this.faulted = false; this.states.clear(); this.snapshotAcks.clear(); this.snapshotSent.clear();
-    this.peerSequence.clear(); this.inbox = []; this.broadcasts = [];
+    this.peerSequence.clear(); this.inbox = []; this.broadcasts = []; this.broadcastBytes = 0;
     for (const entry of this.pending.values()) { entry.sentAt = -Infinity; entry.confirmation = null; }
     this.peerClients.clear(); this.clientRegistered = false; this.lastHelloTick = -Infinity;
     this.serverDirty.clear(); this.stateAssembled = false;
@@ -85,7 +87,7 @@ export class HostCanvasSession {
     this.setReady(false, this.hostId ? '호스트와 최신 상태를 동기화하고 있습니다.' : '모든 참여자의 권한을 동기화할 호스트를 기다리고 있습니다.');
     this.publish(this.items, []);
   }
-  member(id) { return this.members.find(peer => peer.peer_id === id); }
+  member(id) { return this.memberIndex.get(id); }
   clientKey(peer, clientId) { return JSON.stringify([peer?.nickname || '', peer?.tag_number ?? 0, clientId]); }
   filteredRecords(peer) { return Object.fromEntries(Object.entries(this.records).filter(([, record]) => canPeerAccessItem(record.item || { permission: record.permission }, peer))); }
   frame(type, fields = {}) { return { type, protocol: HOST_PROTOCOL, term: this.term, ...fields }; }
@@ -176,7 +178,7 @@ export class HostCanvasSession {
     }
     const partitions = []; let current = {}, bytes = 0;
     for (const [id, record] of Object.entries(records)) {
-      const size = new TextEncoder().encode(JSON.stringify({ [id]: record })).length;
+      const size = encoder.encode(JSON.stringify({ [id]: record })).length;
       if (size > 15 * 1024 * 1024) { this.abort('객체의 동기화 데이터가 전송 한도를 초과했습니다.'); return false; }
       if (bytes && bytes + size > 4 * 1024 * 1024) { partitions.push(current); current = {}; bytes = 0; }
       current[id] = record; bytes += size;
@@ -290,8 +292,13 @@ export class HostCanvasSession {
     if (data.type === 'host_proposal' && this.isHost) {
       if (!this.ready) { this.send(peerId, this.frame('host_retry', { requestId: data.requestId, message: '호스트가 최신 상태를 동기화하고 있습니다.' })); return; }
       if (!this.checkRequest(peer, data)) return;
+      if (this.inbox.some(entry => entry.peer.peer_id === peerId && entry.requestId === data.requestId)) return;
+      const bytes = encoder.encode(JSON.stringify(data.operations)).length;
+      if (this.inbox.length >= 256 || bytes + this.inbox.reduce((total, entry) => total + (entry.bytes || 0), 0) > 32 * 1024 * 1024) {
+        this.respond(peerId, 'host_retry', { requestId: data.requestId, message: '호스트가 대기 중인 변경을 처리하고 있습니다.' }); return;
+      }
       this.respond(peerId, 'host_received', { clientId: data.clientId, requestCount: data.requestCount, requestId: data.requestId, status: 'received' });
-      this.inbox.push({ peer, clientId: data.clientId, requestCount: data.requestCount, requestId: data.requestId, operations: data.operations }); return;
+      this.inbox.push({ peer, bytes, clientId: data.clientId, requestCount: data.requestCount, requestId: data.requestId, operations: data.operations }); return;
     }
     if (data.type === 'host_reject' && peerId === this.hostId) {
       const entry = this.pending.get(data.requestId);
@@ -361,7 +368,9 @@ export class HostCanvasSession {
       this.sequence += 1;
       const key = this.clientKey(entry.peer, entry.clientId);
       this.lastCounts.set(key, entry.requestCount);
-      this.broadcasts.push({ sequence: this.sequence, origin: entry.peer.peer_id, requestId: entry.requestId,
+      const bytes = encoder.encode(JSON.stringify(changed)).length;
+      this.broadcastBytes += bytes;
+      this.broadcasts.push({ bytes, sequence: this.sequence, origin: entry.peer.peer_id, requestId: entry.requestId,
         counter: [key, entry.requestCount], records: changed, previousPermissions });
       this.respond(entry.peer.peer_id, 'host_ack', { ...fields, status: 'accepted', summary: summarize(entry.operations), lastCount: entry.requestCount });
       this.publish(this.items, result.touched);
@@ -420,23 +429,33 @@ export class HostCanvasSession {
         if (this.localQueue.length && !this.pending.size) {
           if (this.localCounter >= Number.MAX_SAFE_INTEGER) { this.abort('요청 카운트 한도에 도달했습니다.'); return; }
           const operations = []; let bytes = 0;
-          while (this.localQueue.length && operations.length < 512) {
-            const size = new TextEncoder().encode(JSON.stringify(this.localQueue[0])).length;
+          while (operations.length < this.localQueue.length && operations.length < 512) {
+            const size = encoder.encode(JSON.stringify(this.localQueue[operations.length])).length;
             if (size > 12 * 1024 * 1024) { this.abort('변경 데이터가 전송 한도를 초과했습니다.'); return; }
             if (bytes && bytes + size > 4 * 1024 * 1024) break;
-            operations.push(this.localQueue.shift()); bytes += size;
+            operations.push(this.localQueue[operations.length]); bytes += size;
           }
+          this.localQueue.splice(0, operations.length);
           const requestId = `${this.clientId}-${++this.localCounter}`;
           this.pending.set(requestId, { operations, requestCount: this.localCounter, sentAt: -Infinity, confirmation: null });
         }
         for (const [requestId, entry] of this.pending) {
           if (entry.stage === 'rejected') continue;
           const request = { clientId: this.clientId, requestCount: entry.requestCount, requestId, operations: entry.operations };
-          if (this.isHost) this.inbox.push({ peer: this.member(this.selfId), ...request });
+          if (this.isHost) {
+            if (!this.inbox.some(queued => queued.requestId === requestId)) this.inbox.push({ peer: this.member(this.selfId), ...request });
+          }
           else if (now - entry.sentAt >= 500 && this.send(this.hostId, this.frame('host_proposal', request))) entry.sentAt = now;
         }
         if (this.isHost) {
-          for (const entry of this.inbox.splice(0)) this.accept(entry);
+          // Bound work per frame; remaining proposals retain FIFO ordering.
+          const started = performance.now(); let processed = 0;
+          while (processed < this.inbox.length && processed < 32
+            && this.broadcasts.length < 256 && this.broadcastBytes < 64 * 1024 * 1024) {
+            this.accept(this.inbox[processed++]);
+            if (performance.now() - started >= 8) break;
+          }
+          this.inbox.splice(0, processed);
           for (const peer of this.members) {
             if (peer.peer_id === this.selfId) continue;
             const commits = this.broadcasts.filter(commit => commit.sequence > (this.peerSequence.get(peer.peer_id) || 0)).map(commit => ({
@@ -453,6 +472,7 @@ export class HostCanvasSession {
           }
           const floor = Math.min(this.sequence, ...this.members.filter(peer => peer.peer_id !== this.selfId).map(peer => this.peerSequence.get(peer.peer_id) || 0));
           this.broadcasts = this.broadcasts.filter(commit => commit.sequence > floor);
+          this.broadcastBytes = this.broadcasts.reduce((bytes, commit) => bytes + commit.bytes, 0);
         }
       }
     }

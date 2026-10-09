@@ -496,3 +496,44 @@ test('a rejected head blocks later work and retries only the same request count'
   // The follow-up remains separate and is sent only after that success.
   assert.equal(author.localQueue.length, 1); assert.equal(host.items.box.x, 0);
 });
+
+test('duplicate proposals consume one host inbox slot before approval', () => {
+  const net = network(); const follower = net.sessions.get('a'), host = net.sessions.get('z');
+  follower.submit([{ id: 'box', action: 'patch', patch: { x: 8 } }]);
+  net.advance();
+  assert.equal(host.inbox.length, 1);
+  const entry = host.inbox[0];
+  for (let i = 0; i < 1000; i++) host.receive('a', host.frame('host_proposal', {
+    clientId: entry.clientId, requestCount: entry.requestCount, requestId: entry.requestId, operations: entry.operations,
+  }));
+  assert.equal(host.inbox.length, 1);
+  net.advance();
+  assert.equal(host.items.box.x, 8);
+  assert.equal(host.sequence, 1);
+});
+
+test('congested cursor links drop ephemeral updates without blocking other peers', () => {
+  const mesh = new CanvasPeerMesh({}); const sent = [];
+  mesh.peers.set('slow', { cursor: { readyState: 'open', bufferedAmount: 128 * 1024, send: () => assert.fail('slow peer must not queue stale presence') } });
+  mesh.peers.set('fast', { cursor: { readyState: 'open', bufferedAmount: 0, send: value => sent.push(JSON.parse(value)) } });
+  mesh.sendCursor({ x: 1 }); mesh.sendLaser({ x: 2 });
+  assert.deepEqual(sent, [{ x: 1 }, { x: 2 }]);
+});
+
+test('a slow peer bounds commit retention and resumes every queued edit in order', () => {
+  const net = network(); const host = net.sessions.get('z'), follower = net.sessions.get('a');
+  const send = host.send; let congested = true;
+  host.send = (id, data) => congested && data.type === 'host_commit' ? false : send(id, data);
+  for (let x = 1; x <= 300; x++) {
+    host.submit([{ id: 'box', action: 'patch', patch: { x } }]); net.advance();
+  }
+  assert.equal(host.broadcasts.length, 256);
+  assert.ok(host.pendingOperations.length > 0);
+  assert.ok(host.inbox.length <= 1, 'local retries must not fill the inbox');
+  congested = false;
+  for (let i = 0; i < 10; i++) net.advance();
+  assert.equal(host.pendingOperations.length, 0);
+  assert.equal(host.broadcasts.length, 0);
+  assert.equal(host.items.box.x, 300);
+  assert.equal(follower.items.box.x, 300);
+});
