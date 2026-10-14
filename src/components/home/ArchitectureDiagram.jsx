@@ -16,7 +16,7 @@ export default function ArchitectureDiagram() {
         <span className="architecture-node-kicker">02 / BACKEND</span>
         <h3>백엔드</h3>
         <strong>Spring Boot + C++</strong>
-        <p>Spring은 로그인·권한·API를, C++은 캔버스 세션·저장과 WebRTC 신호 전달을 맡아요.</p>
+        <p>Spring은 로그인·권한·API를, C++은 캔버스 저장을, 브로커는 실시간 변경과 통화 신호 전달을 맡아요.</p>
         <div className="architecture-tags"><i>REST</i><i>WebSocket</i><i>Realtime</i></div>
       </article>
     </div>

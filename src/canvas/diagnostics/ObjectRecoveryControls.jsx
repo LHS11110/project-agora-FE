@@ -5,7 +5,7 @@ import { CANVAS_SPACE } from '../canvasSpace.js';
 import './object-recovery.css';
 const kinds = new Set(['image','link','code','note','table','shape','text','math','stroke','connector','pdf','user-group']);
 export const finiteBounds = bounds => bounds && Object.values(bounds).every(Number.isFinite) && bounds.maxX >= bounds.minX && bounds.maxY >= bounds.minY;
-export default function ObjectRecoveryControls({ items, onDelete }) {
+export default function ObjectRecoveryControls({ items, spatialIndex, onDelete }) {
   const problems = useMemo(() => Object.entries(items).flatMap(([id, item]) => {
     if (item?.type === 'chat_room') return [];
     let reason;
@@ -17,7 +17,7 @@ export default function ObjectRecoveryControls({ items, onDelete }) {
     }
     else if (item.kind === 'stroke' && !item.points?.length) reason = '좌표가 없는 드로잉';
     else {
-      try { if (!finiteBounds(objectBounds(item, items, CANVAS_SPACE.width, CANVAS_SPACE.height))) reason = '비정상 좌표 또는 크기'; }
+      try { if (!finiteBounds(spatialIndex ? spatialIndex.entries.get(id)?.bounds : objectBounds(item, items, CANVAS_SPACE.width, CANVAS_SPACE.height))) reason = '비정상 좌표 또는 크기'; }
       catch { reason = '계산할 수 없는 객체 정보'; }
     }
     return reason ? [{ id, reason }] : [];

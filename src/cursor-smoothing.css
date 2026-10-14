@@ -3,6 +3,26 @@
   will-change: left, top;
 }
 
+.remote-selection-marquee {
+  position: absolute;
+  z-index: 18;
+  box-sizing: border-box;
+  border: 1px solid var(--cursor-color);
+  background: color-mix(in srgb, var(--cursor-color) 10%, transparent);
+  pointer-events: none;
+}
+.remote-selection-marquee > span {
+  position: absolute;
+  left: -1px;
+  bottom: calc(100% + 3px);
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: var(--cursor-color);
+  color: #fff;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .remote-cursor {
     transition: none;

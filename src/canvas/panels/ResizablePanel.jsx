@@ -8,7 +8,7 @@ export default function ResizablePanel({ children, panel, mobile, value, limits,
   const gesture = useRef(null), frame = useRef(0), latest = useRef(null);
   latest.current = { onChange, onFinish, value, mobile };
   const vertical = !mobile && panel !== 'chat';
-  const direction = mobile || panel === 'tools' ? 1 : -1;
+  const direction = panel === 'chat' ? -1 : mobile || panel === 'tools' ? 1 : -1;
   const clear = () => { cancelAnimationFrame(frame.current); frame.current = 0; delete document.documentElement.dataset.panelResizing; };
   useEffect(() => () => { clear(); gesture.current = null; }, []);
   const update = (event, drag) => {

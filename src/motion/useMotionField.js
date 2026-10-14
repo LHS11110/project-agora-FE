@@ -17,6 +17,7 @@ export function useMotionField(canvasRef, quiet) {
     let visible = true;
     const render = (now) => {
       frame = 0;
+      if(quiet && scope.classList.contains('camera-moving')){state.waves=[];ctx.clearRect(0,0,state.width,state.height);previous=0;return;}
       if (preference.matches || document.hidden || !visible) return;
       if (quiet && previous && now - previous < 1000 / 30) {
         frame = requestAnimationFrame(render);

@@ -53,7 +53,7 @@ export function useCanvasPeerEvents(options) {
       for (const entry of queued) receivePeerData(entry.peer, entry.data, entry.channelName);
     };
     if (data.type === 'item_sync_state') {
-      if (!['agora-sync', 'agora-bulk'].includes(channelName) || !peer?.peer_id || typeof data.item_id !== 'string'
+      if (channelName !== 'broker' || !peer?.peer_id || typeof data.item_id !== 'string'
         || !data.item_id || data.item_id.length > 128) return;
       const key = data.item_id;
       const version = normalizeSyncVersion(data.version);
@@ -360,7 +360,7 @@ export function useCanvasPeerEvents(options) {
       return;
     }
     if (data.type === 'item_geometry' && data.item_id) {
-      if (!['agora-sync', 'agora-bulk', 'agora-cursor'].includes(channelName)) return;
+      if (channelName !== 'broker') return;
       const key = String(data.item_id);
       const item = itemsRef.current[key];
       if (!item) {

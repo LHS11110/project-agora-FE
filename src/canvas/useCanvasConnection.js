@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import CanvasPeerMesh from '../components/CanvasPeerMesh.js';
+import CanvasBrokerPeers from '../components/CanvasBrokerPeers.js';
 import { api, canvasSocketUrl, rtcSocketUrl } from '../api/client.js';
 import { canvasPasswordGrantKey, readCanvasPasswordGrant, saveCanvasPasswordGrant } from './canvasAccess.js';
 import { mergeChatEntries, toChatEntry } from './canvasChat.js';
@@ -145,6 +145,7 @@ export function useCanvasConnection(options) {
       rtcSocket.send(JSON.stringify({
         type: 'rtc_join',
         host_protocol: 1,
+        canvas_transport: 'broker-v1',
         request_id: createId(),
         canvas_connection_id: canvasConnectionId,
         canvas_connection_hash: canvasConnectionHash,
@@ -251,7 +252,7 @@ export function useCanvasConnection(options) {
           if (data.type === 'rtc_peers') {
             let mesh = peerMeshRef.current;
             if (!mesh) {
-              mesh = new CanvasPeerMesh({
+              mesh = new CanvasBrokerPeers({
                 sendSignal: sendRtcRaw,
                 onData: receivePeerData,
                 onLaser: receiveLaser,
@@ -263,8 +264,7 @@ export function useCanvasConnection(options) {
                   const connectedIds = new Set(peers.filter(peer => peer.connected).map(peer => peer.peer_id));
                   const needed = session.isHost ? session.members.filter(peer => peer.peer_id !== session.selfId).map(peer => peer.peer_id) : [session.hostId].filter(Boolean);
                   if (needed.some(id => !connectedIds.has(id))) session.pause();
-                  // A failed DataChannel is not proof of membership departure.
-                  // Ask the signaling registry and rebuild its still-active peers.
+                  // Reconcile membership with the authenticated broker room.
                   if (!cancelled && !mesh?.closed && needed.some(id => !activeIds.has(id))) sendRtcRaw({ type: 'rtc_list' });
                   setRemoteEditors((current) => Object.fromEntries(Object.entries(current).filter(([peerId]) => activeIds.has(peerId))));
                   setLaserStrokes((current) => current.filter((stroke) => !stroke.peerId || activeIds.has(stroke.peerId)));
@@ -291,26 +291,30 @@ export function useCanvasConnection(options) {
             setRemoteEditors((current) => { const next = { ...current }; delete next[data.peer_id]; return next; });
             return;
           }
-          if (data.type === 'rtc_signal') {
-            void peerMeshRef.current?.handleSignal(data);
+          if (data.type === 'canvas_relay') {
+            peerMeshRef.current?.handleRelay(data);
             return;
           }
           if (data.type === 'rtc_disconnected') {
             if (!autoReconnectRef.current || !canvasSnapshotLoadedRef.current) resetPeerMesh();
             return;
           }
-          if (data.type === 'error' && data.code?.startsWith('RTC_')) {
-            if (!autoReconnectRef.current) setToast(`P2P 연결 오류: ${data.code}`);
+          if (data.type === 'error' && (data.code?.startsWith('RTC_') || data.code?.startsWith('CANVAS_RELAY_') || ['HOST_FENCED', 'ITEM_ACCESS_DENIED', 'RATE_LIMITED'].includes(data.code))) {
+            if (!autoReconnectRef.current) setToast(`브로커 연결 오류: ${data.code}`);
+            if (data.code === 'RATE_LIMITED' || data.code?.startsWith('CANVAS_RELAY_')) requestServerReconnect({ retry_after_ms: 500 });
           }
         };
         rtcSocket.onmessage = handleRtcMessage;
         rtcSocket.onerror = () => {
-          if (!cancelled && !autoReconnectRef.current && wsRef.current?.readyState === WebSocket.OPEN) setToast('P2P 신호 서버에 연결할 수 없습니다.');
+          if (!cancelled && canvasSnapshotLoadedRef.current) requestServerReconnect({ retry_after_ms: 500 });
+          if (!cancelled && !autoReconnectRef.current && wsRef.current?.readyState === WebSocket.OPEN) setToast('캔버스 브로커에 연결할 수 없습니다.');
         };
         rtcSocket.onclose = () => {
           if (rtcWsRef.current === rtcSocket) rtcWsRef.current = null;
+          hostSessionRef.current.pause();
+          if (!cancelled && canvasSnapshotLoadedRef.current && wsRef.current?.readyState === WebSocket.OPEN) requestServerReconnect({ retry_after_ms: 500 });
           if (!autoReconnectRef.current || !canvasSnapshotLoadedRef.current) resetPeerMesh();
-          if (!cancelled && !autoReconnectRef.current && wsRef.current?.readyState === WebSocket.OPEN) setToast('P2P 신호 연결이 종료되었습니다.');
+          if (!cancelled && !autoReconnectRef.current && wsRef.current?.readyState === WebSocket.OPEN) setToast('캔버스 브로커 연결이 종료되었습니다.');
         };
         socket.onopen = () => {
           if (cancelled) return;

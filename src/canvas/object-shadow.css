@@ -1,0 +1,8 @@
+.canvas-stage .canvas-object:not(.canvas-object-shape):not(.canvas-object-connector):not(.canvas-object-stroke):not(.canvas-object-text):not(.scalable-object-frame){box-shadow:var(--object-shadow-box)}
+.canvas-stage .scalable-object-content{filter:var(--object-shadow-filter)}
+.canvas-stage .canvas-scene .canvas-object-stroke{padding:0;border:0;background:transparent;box-shadow:none;pointer-events:none}
+.canvas-stage.select-mode .canvas-object-stroke.selected{outline:1px solid #9883d1;outline-offset:2px}
+.stroke-selection-path{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.canvas-stage.select-mode .stroke-selection-path :is(polyline,circle){pointer-events:stroke;cursor:default;stroke:transparent;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.canvas-stage.select-mode .canvas-object-stroke.selected .stroke-selection-path :is(polyline,circle){cursor:grab}
+.canvas-stage.select-mode .canvas-object-stroke :is(.object-resize-handle,.object-move-handle){pointer-events:auto}

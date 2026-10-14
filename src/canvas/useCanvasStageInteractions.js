@@ -1,6 +1,6 @@
 import { groupMember } from './userGroups/userGroupModel.js';
 import { shapeCreationSize } from './shapeCatalog.js';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { INK_BRUSH, inkPointAtPointer } from './inkStroke.js';
 import { canvasPointAtPointer, zoomCanvasCamera } from './canvasSpace.js';
 import { useCanvasStrokeSaveBatch } from './useCanvasStrokeSaveBatch.js';
@@ -20,20 +20,45 @@ import { DEFAULT_SHAPE_ARROW_BEND } from '../components/shapeArrowGeometry.js';
 export function useCanvasStageInteractions(options) {
   const {
     boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth = ERASER_RADIUS * 2,
-    addItem, setToast, setItems, refreshSpatialIndex,
+    addItem, setToast, setItems, refreshSpatialIndex, spatialIndexRef,
     sendStrokeFrameChanges, pendingItemChangesRef, strokeSaveFlushRef,
     lastCursorSentAtRef, peerMeshRef, panRef, zoomHoldRef, zoomPointerPressRef,
     zoomSensitivity, stageWheelHandlerRef, laserDrawingRef, setLaserStrokes,
     selectionRef, selectedItemIds, setSelectionBox, selectItems,
     canvasSnapshotLoadedRef, finishEditing, setConnectionStartId, spacePressedRef,
     user, tableConfig, permission, setSharePosition, shapeType, shapeArrowStartHead,
-    shapeArrowEndHead, shapeFillColor, color, noteColor, setActiveTool, startEditing, strokeWidth, penBrush, penOpacity,
+    shapeArrowEndHead, shapeFillColor, shapeVisualStyle, shapeStrokeEnabled, color, noteColor, setActiveTool, startEditing, strokeWidth, penBrush, penOpacity,
     drawingRef, drawingSessionRef, draftRef, vectorDraftRef,
   } = options;
 
   const { enqueue: enqueueStrokeChange, flush: flushStrokeChanges } = useCanvasStrokeSaveBatch({
     sendBatch: sendStrokeFrameChanges, pendingItemChangesRef, flushRef: strokeSaveFlushRef,
   });
+  const cameraMotionRef = useRef({ frame: 0 });
+  const cancelPanInertia = () => {
+    if (cameraMotionRef.current.frame) cancelAnimationFrame(cameraMotionRef.current.frame);
+    cameraMotionRef.current.frame = 0;
+    boardRef.current?.classList.remove('camera-coasting');
+  };
+  useEffect(() => () => {
+    if (cameraMotionRef.current.frame) cancelAnimationFrame(cameraMotionRef.current.frame);
+  }, []);
+  const samplePanVelocity = (pan, event) => {
+    const now = performance.now();
+    const elapsed = now - pan.lastAt;
+    if (elapsed > 0 && elapsed < 90) {
+      const instantX = (event.clientX - pan.lastX) / elapsed;
+      const instantY = (event.clientY - pan.lastY) / elapsed;
+      pan.velocityX = pan.velocityX * 0.55 + instantX * 0.45;
+      pan.velocityY = pan.velocityY * 0.55 + instantY * 0.45;
+    } else if (elapsed >= 90) {
+      pan.velocityX = 0;
+      pan.velocityY = 0;
+    }
+    pan.lastX = event.clientX;
+    pan.lastY = event.clientY;
+    pan.lastAt = now;
+  };
   const queueDrawingStroke = () => {
     const session = drawingSessionRef.current;
     if (!session || !draftRef.current.length) return;
@@ -58,7 +83,12 @@ export function useCanvasStageInteractions(options) {
   };
   const hideEraserCursor = () => eraserCursorRef.current?.classList.remove('is-visible');
   const eraseStrokesBetween = (from, to) => {
-    const entries = Object.entries(itemsRef.current).filter(([, item]) => item?.kind === 'stroke');
+    const radius = eraserWidth / 2 / Math.max(.01,camera.scale);
+    const region = { minX: Math.min(from.x,to.x)-radius/boardSize.width, minY: Math.min(from.y,to.y)-radius/boardSize.height,
+      maxX: Math.max(from.x,to.x)+radius/boardSize.width, maxY: Math.max(from.y,to.y)+radius/boardSize.height };
+    const entries = spatialIndexRef?.current
+      ? spatialIndexRef.current.query(region).filter(entry=>entry.item?.kind === 'stroke').map(entry=>[entry.id,itemsRef.current[entry.id]])
+      : Object.entries(itemsRef.current).filter(([, item]) => item?.kind === 'stroke');
     for (const [id, item] of entries) {
       if (itemsRef.current[id]?.kind !== 'stroke') continue;
       const remainingPaths = eraseStrokeWithEraser(item, from, to, boardSize, camera.scale, eraserWidth / 2);
@@ -92,26 +122,60 @@ export function useCanvasStageInteractions(options) {
       y: (viewHeight / 2 - camera.y) / (boardSize.height * camera.scale) - height / 2,
     };
   };
-  const sendCursorPosition = (event) => {
-    const now = performance.now();
-    if (now - lastCursorSentAtRef.current < 40) return;
-    lastCursorSentAtRef.current = now;
+  const cursorSendFrameRef = useRef(0);
+  const pendingCursorRef = useRef(null);
+  const flushCursorFrame = now => {
+    if (now - lastCursorSentAtRef.current < 1000 / 30) {
+      cursorSendFrameRef.current = requestAnimationFrame(flushCursorFrame);
+      return;
+    }
+    cursorSendFrameRef.current = 0;
+    const payload = pendingCursorRef.current;
+    pendingCursorRef.current = null;
+    if (payload) {
+      lastCursorSentAtRef.current = now;
+      peerMeshRef.current?.sendCursor(payload);
+    }
+  };
+  useEffect(() => () => cancelAnimationFrame(cursorSendFrameRef.current), []);
+  const sendCursorPosition = (event, force = false) => {
     const point = pointerPosition(event);
-    peerMeshRef.current?.sendCursor({ type: 'cursor', x: point.x, y: point.y });
+    const selection = selectionRef.current;
+    const payload = { type: 'cursor', x: point.x, y: point.y,
+      selection: selection ? { start: selection.start, end: point } : null };
+    if (force) {
+      cancelAnimationFrame(cursorSendFrameRef.current);
+      cursorSendFrameRef.current = 0;
+      pendingCursorRef.current = null;
+      lastCursorSentAtRef.current = performance.now();
+      peerMeshRef.current?.sendCursor(payload);
+    } else {
+      pendingCursorRef.current = payload;
+      if (!cursorSendFrameRef.current) cursorSendFrameRef.current = requestAnimationFrame(flushCursorFrame);
+    }
   };
   const hideCursor = () => {
+    cancelAnimationFrame(cursorSendFrameRef.current);
+    cursorSendFrameRef.current = 0;
+    pendingCursorRef.current = null;
     peerMeshRef.current?.sendCursor({ type: 'cursor', visible: false });
     hideEraserCursor();
   };
   const startPan = (event) => {
     if (panRef.current) return;
+    cancelPanInertia();
     event.preventDefault();
     event.stopPropagation();
-    panRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, cameraX: camera.x, cameraY: camera.y };
+    panRef.current = {
+      pointerId: event.pointerId, x: event.clientX, y: event.clientY,
+      lastX: event.clientX, lastY: event.clientY, lastAt: performance.now(),
+      velocityX: 0, velocityY: 0, cameraX: camera.x, cameraY: camera.y,
+    };
     boardRef.current?.classList.add('panning');
     boardRef.current?.setPointerCapture?.(event.pointerId);
   };
   const zoomBy = (factor, clientX, clientY) => {
+    cancelPanInertia();
     const bounds = boardRef.current?.getBoundingClientRect();
     if (!bounds) return;
     const targetX = clientX ?? bounds.left + bounds.width / 2;
@@ -162,9 +226,10 @@ export function useCanvasStageInteractions(options) {
       return;
     }
     if (!panRef.current && editorCanScroll(event)) return;
+    cancelPanInertia();
     event.preventDefault();
     if (event.ctrlKey || event.metaKey) {
-      zoomBy(Math.exp(-event.deltaY * 0.0015 * zoomSensitivity), event.clientX, event.clientY);
+      zoomBy(Math.exp(-event.deltaY * 0.003 * zoomSensitivity), event.clientX, event.clientY);
     } else {
       setCamera((current) => ({ ...current, x: current.x - event.deltaX, y: current.y - event.deltaY }));
     }
@@ -226,6 +291,7 @@ export function useCanvasStageInteractions(options) {
     const startClient = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
     const baseIds = event.shiftKey ? selectedItemIds : [];
     selectionRef.current = { pointerId: event.pointerId, start, startClient, baseIds };
+    sendCursorPosition(event, true);
     setSelectionBox({ left: startClient.x, top: startClient.y, width: 0, height: 0 });
     if (!event.shiftKey) selectItems([]);
     event.preventDefault();
@@ -250,6 +316,7 @@ export function useCanvasStageInteractions(options) {
     const selection = selectionRef.current;
     if (!selection || selection.pointerId !== event.pointerId) return;
     selectionRef.current = null;
+    sendCursorPosition(event, true);
     setSelectionBox(null);
     if (event.type !== 'pointercancel') {
       const end = pointerPosition(event);
@@ -259,20 +326,17 @@ export function useCanvasStageInteractions(options) {
         maxX: Math.max(selection.start.x, end.x),
         maxY: Math.max(selection.start.y, end.y),
       };
-      const hits = Object.entries(itemsRef.current).filter(([, item]) => item && ['image', 'link', 'code', 'note', 'table', 'shape', 'text', 'math', 'pdf', 'user-group'].includes(item.kind))
-        .filter(([, item]) => {
-          const bounds = objectBounds(item, itemsRef.current, boardSize.width, boardSize.height);
-          return bounds && bounds.minX >= marquee.minX && bounds.maxX <= marquee.maxX
-            && bounds.minY >= marquee.minY && bounds.maxY <= marquee.maxY;
-        }).map(([id]) => id);
+      const candidates = spatialIndexRef?.current?.query(marquee)
+        || Object.entries(itemsRef.current).map(([id,item])=>({id,item,bounds:objectBounds(item,itemsRef.current,boardSize.width,boardSize.height)}));
+      const contains = bounds => bounds && bounds.minX >= marquee.minX && bounds.maxX <= marquee.maxX
+        && bounds.minY >= marquee.minY && bounds.maxY <= marquee.maxY;
+      const hits = candidates.filter(({item,bounds}) => item && ['image','link','code','note','table','shape','text','math','stroke','pdf','user-group'].includes(item.kind) && contains(bounds)).map(({id})=>id);
       const expanded = new Set([...selection.baseIds, ...hits]);
       const selectedGroups = new Set([...expanded].map((id) => itemsRef.current[id]?.groupId).filter(Boolean));
       if (selectedGroups.size) {
-        Object.entries(itemsRef.current).forEach(([id, item]) => {
+        candidates.forEach(({id,item,bounds}) => {
           if (item?.type === 'chat_room' || !item?.groupId || !selectedGroups.has(item.groupId) || ['stroke', 'connector'].includes(item.kind)) return;
-          const bounds = objectBounds(item, itemsRef.current, boardSize.width, boardSize.height);
-          if (bounds && bounds.minX >= marquee.minX && bounds.maxX <= marquee.maxX
-            && bounds.minY >= marquee.minY && bounds.maxY <= marquee.maxY) expanded.add(id);
+          if (contains(bounds)) expanded.add(id);
         });
       }
       selectItems([...expanded]);
@@ -331,7 +395,7 @@ export function useCanvasStageInteractions(options) {
       const x = point.x - itemWidth / 2;
       const y = point.y - (activeTool === 'shape' ? shapeSize.height / 2 : activeTool === 'code' ? 0.1 : activeTool === 'note' ? 0.08 : 0.06);
       let item;
-      if (activeTool === 'shape') item = { kind: 'shape', shapeType, fill: shapeType === 'arrow' ? '' : shapeFillColor, ...(shapeType === 'arrow' ? { bend: DEFAULT_SHAPE_ARROW_BEND, startHead: shapeArrowStartHead, endHead: shapeArrowEndHead } : {}), x, y, width: itemWidth, height: shapeSize.height, color, permission };
+      if (activeTool === 'shape') item = { kind: 'shape', shapeType, visualStyle: shapeVisualStyle, strokeEnabled: shapeStrokeEnabled, fill: shapeType === 'arrow' ? '' : shapeFillColor, ...(shapeType === 'arrow' ? { bend: DEFAULT_SHAPE_ARROW_BEND, startHead: shapeArrowStartHead, endHead: shapeArrowEndHead } : {}), x, y, width: itemWidth, height: shapeSize.height, color, permission };
       else if (activeTool === 'text' || activeTool === 'markdown') item = { kind: 'text', text: '', renderMode: 'markdown', ...(activeTool === 'markdown' ? { format: 'markdown' } : {}), x, y, width: itemWidth, permission };
       else if (activeTool === 'note') item = { kind: 'note', text: '', x, y, width: itemWidth, color: noteColor, rotation: Math.random() * 3 - 1.5, permission };
       else if (activeTool === 'code') item = { kind: 'text', text: '', renderMode: 'code', filename: 'idea.js', language: 'javascript', x, y, width: itemWidth, permission };
@@ -394,6 +458,7 @@ export function useCanvasStageInteractions(options) {
     if (panRef.current) {
       const pan = panRef.current;
       if (pan.pointerId !== event.pointerId) return;
+      samplePanVelocity(pan, event);
       setCamera((current) => ({ ...current, x: pan.cameraX + event.clientX - pan.x, y: pan.cameraY + event.clientY - pan.y }));
       return;
     }
@@ -436,11 +501,38 @@ export function useCanvasStageInteractions(options) {
   const stopDrawing = (event) => {
     if (selectionRef.current) { finishMarqueeSelection(event); return; }
     if (panRef.current) {
-      if (panRef.current.pointerId !== event.pointerId) return;
+      const pan = panRef.current;
+      if (pan.pointerId !== event.pointerId) return;
+      if (event.type === 'pointerup') samplePanVelocity(pan, event);
       panRef.current = null;
       const stage = boardRef.current;
       stage?.classList.remove('panning');
       if (stage?.hasPointerCapture?.(event.pointerId)) stage.releasePointerCapture(event.pointerId);
+      setCamera((current) => ({
+        ...current,
+        x: pan.cameraX + event.clientX - pan.x,
+        y: pan.cameraY + event.clientY - pan.y,
+      }));
+      if (event.type !== 'pointerup' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+      let velocityX = Math.max(-1.25, Math.min(1.25, pan.velocityX * 0.82));
+      let velocityY = Math.max(-1.25, Math.min(1.25, pan.velocityY * 0.82));
+      if (Math.hypot(velocityX, velocityY) < 0.12) return;
+      let previousAt = performance.now();
+      stage?.classList.add('camera-coasting');
+      const coast = (now) => {
+        const elapsed = Math.min(32, Math.max(0, now - previousAt));
+        previousAt = now;
+        velocityX *= Math.exp(-elapsed / 230);
+        velocityY *= Math.exp(-elapsed / 230);
+        setCamera((current) => ({ ...current, x: current.x + velocityX * elapsed, y: current.y + velocityY * elapsed }));
+        if (Math.hypot(velocityX, velocityY) < 0.025) {
+          cameraMotionRef.current.frame = 0;
+          stage?.classList.remove('camera-coasting');
+          return;
+        }
+        cameraMotionRef.current.frame = requestAnimationFrame(coast);
+      };
+      cameraMotionRef.current.frame = requestAnimationFrame(coast);
       return;
     }
     if (eraserRef.current) {
@@ -508,6 +600,7 @@ export function useCanvasStageInteractions(options) {
   return {
     pointerPosition,
     startPan,
+    cancelPanInertia,
     centeredItemPosition,
     hideCursor,
     startZoomHold,

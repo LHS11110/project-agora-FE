@@ -3,9 +3,9 @@ import { MAX_BEND_POINTS } from '../connectors/controlPoints.js';
 import { CANVAS_SPACE } from '../canvasSpace.js';
 
 const KINDS = new Set(['text', 'note', 'code', 'math', 'shape', 'table', 'image', 'link', 'connector', 'stroke', 'pdf', 'user-group']);
-const NUMBERS = new Set(['x', 'y', 'width', 'height', 'rotation', 'fontSize', 'strokeWidth', 'bend', 'opacity', 'contentScale', 'contentScaleX', 'contentScaleY', 'bendPointCount']);
-const STRINGS = new Set(['kind', 'text', 'code', 'formula', 'format', 'filename', 'language', 'shapeType', 'color', 'fill', 'permission', 'groupId', 'src', 'url', 'title', 'mediaType', 'from', 'to', 'startHead', 'endHead', 'brush', 'embedUrl', 'videoId', 'renderMode', 'label', 'labelMode', 'groupTitle', 'thumbnail']);
-const FIELDS = new Set([...NUMBERS, ...STRINGS, 'points', 'rows', 'columns', 'simulatePressure', 'complete', 'bendPoints', 'members']);
+const NUMBERS = new Set(['shadowBlur', 'shadowOpacity', 'shadowOffsetX', 'shadowOffsetY', 'depth', 'x', 'y', 'width', 'height', 'rotation', 'fontSize', 'strokeWidth', 'bend', 'opacity', 'contentScale', 'contentScaleX', 'contentScaleY', 'bendPointCount']);
+const STRINGS = new Set(['kind', 'text', 'code', 'formula', 'format', 'filename', 'language', 'shapeType', 'visualStyle', 'color', 'fill', 'permission', 'groupId', 'src', 'url', 'title', 'mediaType', 'from', 'to', 'startHead', 'endHead', 'brush', 'embedUrl', 'videoId', 'renderMode', 'label', 'labelMode', 'groupTitle', 'thumbnail']);
+const FIELDS = new Set([...NUMBERS, ...STRINGS, 'points', 'rows', 'columns', 'simulatePressure', 'complete', 'strokeEnabled', 'shadowEnabled', 'bendPoints', 'members']);
 export const CANVAS_ITEM_FIELDS = FIELDS;
 const unsafeId = id => !id || ['__proto__', 'constructor', 'prototype'].includes(id);
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -43,6 +43,11 @@ function validateItem(id, item) {
   }
   if (item.groupTitle != null && item.groupTitle.length > 80) fail(`${id}.groupTitle: 최대 80자입니다.`);
   if (item.members != null && (!Array.isArray(item.members) || item.members.length > 50 || item.members.some(member => !plain(member) || !Number.isInteger(member.user_id) || member.user_id < 1 || typeof member.nickname !== 'string' || member.nickname.length > 100 || !Number.isInteger(member.tag_number) || member.tag_number < 0 || (member.profile_image && !/^\/api\/users\/profile-images\/\d+$/.test(member.profile_image)) || ['borderColor', 'nameColor'].some(field => member[field] != null && !/^#[0-9a-f]{6}$/i.test(member[field]))))) fail(`${id}.members: 올바른 사용자 프로필 배열이 필요합니다(최대 50명).`);
+  if (item.shadowEnabled != null && typeof item.shadowEnabled !== 'boolean') fail(`${id}.shadowEnabled: 불리언이 필요합니다.`);
+  for (const [field, min, max] of [['shadowBlur',0,24],['shadowOpacity',0,1],['shadowOffsetX',-24,24],['shadowOffsetY',-24,24]]) if (item[field] != null && (item[field] < min || item[field] > max)) fail(`${id}.${field}: ${min}~${max} 범위가 필요합니다.`);
+  if (item.depth != null && !Number.isSafeInteger(item.depth)) fail(`${id}.depth: 정수가 필요합니다.`);
+  if (item.visualStyle != null && !['standard', 'sketch'].includes(item.visualStyle)) fail(`${id}.visualStyle: standard 또는 sketch가 필요합니다.`);
+  if (item.strokeEnabled != null && typeof item.strokeEnabled !== 'boolean') fail(`${id}.strokeEnabled: 불리언이 필요합니다.`);
   if (item.fill != null && item.fill !== '' && !/^#[0-9a-f]{6}$/i.test(item.fill)) fail(`${id}.fill: #RRGGBB 색상 또는 빈 문자열이 필요합니다.`);
   for (const key of ['startHead', 'endHead']) if (item[key] != null && normalizeArrowHead(item[key], null) === null) fail(`${id}.${key}: 지원하는 화살표 머리 모양을 선택해주세요.`);
   if (item.bendPointCount != null && (!Number.isInteger(item.bendPointCount) || item.bendPointCount < 1 || item.bendPointCount > MAX_BEND_POINTS)) fail(`${id}.bendPointCount: 1~${MAX_BEND_POINTS} 사이의 정수가 필요합니다.`);

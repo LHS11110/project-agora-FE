@@ -1,17 +1,10 @@
+import RBush from 'rbush';
+import { objectShadow } from '../canvas/objectShadow.js';
 import { connectorObjectSize } from '../canvas/connectors/objectMetrics.js';
 import { CANVAS_SPACE } from '../canvas/canvasSpace.js';
 import { strokePaintSize } from '../canvas/inkStroke.js';
 import { connectorGeometry, OBJECT_SIZES } from './connectorGeometry.js';
 import { shapeArrowGeometry } from './shapeArrowGeometry.js';
-
-function unionBounds(entries) {
-  return entries.reduce((bounds, entry) => ({
-    minX: Math.min(bounds.minX, entry.bounds.minX),
-    minY: Math.min(bounds.minY, entry.bounds.minY),
-    maxX: Math.max(bounds.maxX, entry.bounds.maxX),
-    maxY: Math.max(bounds.maxY, entry.bounds.maxY),
-  }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
-}
 
 function rotatedBounds(bounds, rotation, viewportWidth, viewportHeight) {
   const degrees = Number(rotation);
@@ -139,63 +132,82 @@ function objectBounds(item, items, viewportWidth = 1, viewportHeight = 1) {
   return rotatedBounds({ minX: x, minY: y, maxX: x + objectWidth, maxY: y + objectHeight }, item?.rotation, width, height);
 }
 
-function intersects(a, b) {
-  return a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
+// Keep the public query API while RBush incrementally updates changed rectangles.
+const geometryFields = ['kind','type','x','y','width','height','rotation','shapeType','bend','bendPoints','startHead','endHead','strokeWidth','brush','simulatePressure','points','from','to'];
+function geometryKey(item) {
+  return geometryFields.map(field => item[field]);
+}
+function sameKey(a,b) { return a?.length === b.length && b.every((value,index) => value === a[index]); }
+function paintedBounds(bounds,item,width,height) {
+  const shadow = objectShadow(item);
+  const blur = shadow.enabled && shadow.opacity > 0 ? shadow.blur * 3 : 0;
+  // Include only the actual painted fringe, so edge shadows don't disappear.
+  const fringe = item.kind === 'shape' ? Math.max(2,(Number(item.strokeWidth)||1.5)/2+2) : 2;
+  return { minX: bounds.minX-(blur+fringe+Math.max(0,-shadow.x))/width,
+    minY: bounds.minY-(blur+fringe+Math.max(0,-shadow.y))/height,
+    maxX: bounds.maxX+(blur+fringe+Math.max(0,shadow.x))/width,
+    maxY: bounds.maxY+(blur+fringe+Math.max(0,shadow.y))/height };
 }
 
-// A packed spatial B-tree: each internal node stores a bounding rectangle for
-// up to FANOUT children, and leaves store item rectangles. It is bulk-rebuilt
-// on document changes and queried in logarithmic-ish time for the visible area.
 export default class CanvasSpatialBTree {
   constructor(items = {}, viewSize = { width: 1, height: 1 }, fanout = 12) {
-    this.fanout = fanout;
-    const width = viewSize.width || 1;
-    const height = viewSize.height || 1;
-    const entries = Object.entries(items).flatMap(([id, item]) => {
-      if (!item || item.type === 'chat_room') return [];
-      try {
-        const bounds = objectBounds(item, items, width, height);
-        if (!Object.values(bounds).every(Number.isFinite) || bounds.maxX < bounds.minX || bounds.maxY < bounds.minY) return [];
-        return [{ id, item, bounds }];
-      } catch { return []; }
-    });
-    this.root = this.#build(entries);
+    this.tree = new RBush(fanout);
+    this.entries = new Map();
+    this.connectorIds = new Set();
+    this.stats = { updates:0, boundsCalculated:0, inserted:0, removed:0, queries:0 };
+    this.update(items,viewSize);
   }
-
-  #build(entries) {
-    if (!entries.length) return null;
-    const bounds = unionBounds(entries);
-    if (entries.length <= this.fanout) return { bounds, entries };
-
-    const axis = bounds.maxX - bounds.minX >= bounds.maxY - bounds.minY ? 'x' : 'y';
-    const sorted = [...entries].sort((a, b) => {
-      const centerA = axis === 'x' ? (a.bounds.minX + a.bounds.maxX) / 2 : (a.bounds.minY + a.bounds.maxY) / 2;
-      const centerB = axis === 'x' ? (b.bounds.minX + b.bounds.maxX) / 2 : (b.bounds.minY + b.bounds.maxY) / 2;
-      return centerA - centerB;
-    });
-    const childCount = Math.ceil(sorted.length / this.fanout);
-    const chunkSize = Math.ceil(sorted.length / childCount);
-    const children = [];
-    for (let offset = 0; offset < sorted.length; offset += chunkSize) {
-      children.push(this.#build(sorted.slice(offset, offset + chunkSize)));
+  update(items,viewSize,revision = 0,changedIds = null) {
+    const width = Math.max(1,viewSize.width || 1), height = Math.max(1,viewSize.height || 1);
+    if (items === this.items && width === this.width && height === this.height && revision === this.revision) return this;
+    const resized = width !== this.width || height !== this.height;
+    const remeasured = revision !== this.revision;
+    const initial = !this.items;
+    const incremental = changedIds && !resized && !remeasured && !initial;
+    const ids = incremental ? [...new Set(changedIds.map(String))] : Object.keys(items);
+    let obstaclesChanged = resized || remeasured;
+    const removals = incremental ? ids.map(id=>[id,this.entries.get(id)]).filter(([,entry])=>entry) : this.entries;
+    for (const [id,entry] of removals) if (!Object.hasOwn(items,id) || !items[id] || items[id].type === 'chat_room') {
+      this.tree.remove(entry); this.entries.delete(id); this.stats.removed++;
+      this.connectorIds.delete(id);
+      if (entry.item.kind !== 'connector') obstaclesChanged = true;
     }
-    return { bounds, children };
-  }
-
-  query(bounds) {
-    if (!this.root) return [];
-    const result = [];
-    const visit = (node) => {
-      if (!intersects(node.bounds, bounds)) return;
-      if (node.entries) {
-        for (const entry of node.entries) if (intersects(entry.bounds, bounds)) result.push(entry);
-        return;
-      }
-      for (const child of node.children) visit(child);
+    const pending = [];
+    const updateEntry = (id,item,force) => {
+      const old = this.entries.get(id);
+      const measured = connectorObjectSize(item);
+      if (!force && old?.item === item && measured?.width === old.measuredWidth && measured?.height === old.measuredHeight) return false;
+      const key = geometryKey(item);
+      const geometryChanged = force || !old || !sameKey(old.geometryKey,key)
+        || measured?.width !== old.measuredWidth || measured?.height !== old.measuredHeight;
+      const shadowKey = JSON.stringify(objectShadow(item));
+      if (!geometryChanged && old.shadowKey === shadowKey) { old.item = item; return false; }
+      try {
+        const bounds = geometryChanged ? objectBounds(item,items,width,height) : old.bounds;
+        if (geometryChanged) this.stats.boundsCalculated++;
+        if (!Object.values(bounds).every(Number.isFinite) || bounds.maxX < bounds.minX || bounds.maxY < bounds.minY) throw Error('Invalid bounds');
+        if (old) this.tree.remove(old);
+        const entry = { id,item,bounds,...paintedBounds(bounds,item,width,height),geometryKey:key,shadowKey,
+          measuredWidth:measured?.width,measuredHeight:measured?.height };
+        this.entries.set(id,entry); pending.push(entry); this.stats.inserted++;
+        return geometryChanged;
+      } catch { if (old) { this.tree.remove(old); this.entries.delete(id); } return !!old; }
     };
-    visit(this.root);
-    return result;
+    for (const id of ids) {
+      const item=items[id];
+      if(item?.kind==='connector')this.connectorIds.add(id);else this.connectorIds.delete(id);
+      if (!item || item.type === 'chat_room' || item.kind === 'connector') continue;
+      if (updateEntry(id,item,resized)) obstaclesChanged = true;
+    }
+    // Routing depends on obstacles, so invalidate connectors only on geometry changes.
+    for (const id of obstaclesChanged ? this.connectorIds : ids) if (items[id]?.kind === 'connector') updateEntry(id,items[id],obstaclesChanged);
+    if (initial || pending.length > this.entries.size / 4) this.tree.load(pending);
+    else for (const entry of pending) this.tree.insert(entry);
+    this.items = items; this.width = width; this.height = height; this.revision = revision;
+    this.stats.updates++;
+    return this;
   }
+  query(bounds) { this.stats.queries++; return this.tree.search(bounds); }
 }
 
 export { objectBounds };

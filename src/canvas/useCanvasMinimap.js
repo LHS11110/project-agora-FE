@@ -1,3 +1,5 @@
+import { renderWindow } from './renderWindow.js';
+import StableSpatialQuery from './StableSpatialQuery.js';
 import { viewportOverview } from './minimap/viewportOverview.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { objectBounds } from '../components/CanvasSpatialBTree.js';
@@ -12,11 +14,13 @@ const MINIMAP_ITEM_COLORS = {
   shape: '#6d9a91', text: '#809084', math: '#9a7ea1', stroke: '#526d5f', connector: '#a0a59b',
 };
 
-export function useCanvasMinimap({ boardRef, boardSize, viewportSize = boardSize, camera, setCamera, items, spatialIndex }) {
+export function useCanvasMinimap({ boardRef, boardSize, viewportSize = boardSize, camera, setCamera, items, spatialIndex, spatialRevision, cancelCameraMotion }) {
   const minimapWidgetRef = useRef(null);
   const minimapPointerRef = useRef(null);
   const minimapMoveRef = useRef(null);
   const minimapPositionRef = useRef(null);
+  const queryRef=useRef(null),minimapEntriesRef=useRef(null);
+  if(!queryRef.current)queryRef.current=new StableSpatialQuery();
   const [minimapPosition, setMinimapPosition] = useState(() => {
     try {
       const stored = JSON.parse(localStorage.getItem(MINIMAP_POSITION_KEY) || 'null');
@@ -44,22 +48,20 @@ export function useCanvasMinimap({ boardRef, boardSize, viewportSize = boardSize
     maxX: visibleWorldBounds.maxX / Math.max(1, boardSize.width),
     maxY: visibleWorldBounds.maxY / Math.max(1, boardSize.height),
   }), [boardSize, visibleWorldBounds]);
-  const minimap = useMemo(() => {
-    const worldWidth = Math.max(1, boardSize.width), worldHeight = Math.max(1, boardSize.height);
-    const viewport = visibleWorldBounds;
-    const bounds = viewportOverview(viewport, MINIMAP_ASPECT, MINIMAP_OVERVIEW_SCALE);
-    const query = { minX: bounds.minX / worldWidth, minY: bounds.minY / worldHeight, maxX: bounds.maxX / worldWidth, maxY: bounds.maxY / worldHeight };
-    const entries = spatialIndex ? spatialIndex.query(query)
-      : Object.entries(items).map(([id, item]) => ({ id, item, bounds: objectBounds(item, items, worldWidth, worldHeight) }));
-    const minimapItems = entries.filter(entry => {
-      const item = items[entry.id] || entry.item, b = entry.bounds;
-      return MINIMAP_ITEM_KINDS.has(item?.kind) && b.maxX >= query.minX && b.minX <= query.maxX && b.maxY >= query.minY && b.minY <= query.maxY;
-    }).map(entry => ({ id: entry.id, item: items[entry.id] || entry.item, bounds: {
-      minX: entry.bounds.minX * worldWidth, minY: entry.bounds.minY * worldHeight,
-      maxX: entry.bounds.maxX * worldWidth, maxY: entry.bounds.maxY * worldHeight,
-    } }));
-    return { bounds, viewport, items: minimapItems };
-  }, [boardSize, items, visibleWorldBounds, spatialIndex]);
+  const overviewBounds = useMemo(() => viewportOverview(visibleWorldBounds, MINIMAP_ASPECT, MINIMAP_OVERVIEW_SCALE), [visibleWorldBounds]);
+  const worldWidth = Math.max(1, boardSize.width), worldHeight = Math.max(1, boardSize.height);
+  const overviewWindow = renderWindow({minX:overviewBounds.minX/worldWidth,minY:overviewBounds.minY/worldHeight,maxX:overviewBounds.maxX/worldWidth,maxY:overviewBounds.maxY/worldHeight},boardSize,camera.scale);
+  const minimapItems = useMemo(() => {
+    const entries = spatialIndex ? queryRef.current.query(spatialIndex,overviewWindow.bounds)
+      : Object.entries(items).map(([id,item])=>({id,item,bounds:objectBounds(item,items,worldWidth,worldHeight)}));
+    const previous=minimapEntriesRef.current;
+    if(previous?.entries===entries && previous.items===items && previous.worldWidth===worldWidth && previous.worldHeight===worldHeight)return previous.value;
+    const value=entries.filter(entry=>MINIMAP_ITEM_KINDS.has((items[entry.id] || entry.item)?.kind)).map(entry=>({
+      id:entry.id,item:items[entry.id] || entry.item,bounds:{minX:entry.bounds.minX*worldWidth,minY:entry.bounds.minY*worldHeight,maxX:entry.bounds.maxX*worldWidth,maxY:entry.bounds.maxY*worldHeight}
+    }));
+    minimapEntriesRef.current={entries,items,worldWidth,worldHeight,value};return value;
+  },[worldWidth,worldHeight,items,spatialIndex,spatialRevision,overviewWindow.key]);
+  const minimap = useMemo(() => ({bounds:overviewBounds,viewport:visibleWorldBounds,items:minimapItems}),[overviewBounds,visibleWorldBounds,minimapItems]);
 
   useEffect(() => {
     if (!minimapPosition || viewportSize.width <= 1 || viewportSize.height <= 1) return;
@@ -91,6 +93,7 @@ export function useCanvasMinimap({ boardRef, boardSize, viewportSize = boardSize
   };
   const startMinimapWidgetMove = (event) => {
     if (event.button !== 0) return;
+    cancelCameraMotion?.();
     event.preventDefault();
     event.stopPropagation();
     const widget = minimapWidgetRef.current?.getBoundingClientRect();
@@ -130,6 +133,7 @@ export function useCanvasMinimap({ boardRef, boardSize, viewportSize = boardSize
   };
   const startMinimapPan = (event) => {
     if (event.button !== 0) return;
+    cancelCameraMotion?.();
     event.preventDefault();
     event.stopPropagation();
     minimapPointerRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false };

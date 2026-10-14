@@ -1,3 +1,4 @@
+import { objectShadow } from './objectShadow.js';
 import { addHighlighterToPath } from './highlighterStroke.js';
 import { brushBristlePaths, paintBrush } from './brushStroke.js';
 import { addSprayToPath } from './sprayStroke.js';
@@ -43,10 +44,16 @@ function strokePath(stroke, width, height) {
   return result;
 }
 
-function drawStroke(context, stroke, width, height) {
+export function drawStroke(context, stroke, width, height) {
   if (!stroke?.points?.length) return;
   const { path, bristles, centerX, centerY, dot } = strokePath(stroke, width, height);
   context.save();
+  const shadow = objectShadow(stroke);
+  const transform = context.getTransform();
+  const scale = Math.hypot(transform.a, transform.b);
+  context.shadowColor = shadow.enabled ? `rgba(24,34,43,${shadow.opacity})` : 'transparent';
+  context.shadowBlur = shadow.blur * scale;
+  context.shadowOffsetX = shadow.x * scale; context.shadowOffsetY = shadow.y * scale;
   if (stroke.rotation) {
     context.translate(centerX, centerY);
     context.rotate(Number(stroke.rotation) * Math.PI / 180);
@@ -78,7 +85,7 @@ export function createInkStrokeRenderer(host, vectorCanvas) {
   host.appendChild(live);
   const savedContext = saved.getContext('2d');
   const liveContext = live.getContext('2d');
-  let state;
+  let state, savedPainted=false, livePainted=false;
   function prepare(canvas, context) {
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
     const pixelWidth = Math.max(1, Math.round(state.viewportWidth * ratio));
@@ -94,17 +101,23 @@ export function createInkStrokeRenderer(host, vectorCanvas) {
   function renderDraft(draft) {
     if (!state) return;
     state.draft = draft;
-    prepare(live, liveContext);
+    if(!state.previews.length && !draft){
+      if(livePainted)liveContext.clearRect(0,0,live.width,live.height);
+      livePainted=false;return;
+    }
+    livePainted=true;prepare(live, liveContext);
     for (const preview of state.previews) drawStroke(liveContext, { ...preview, complete: false }, state.width, state.height);
     if (draft) drawStroke(liveContext, { ...draft, complete: false }, state.width, state.height);
   }
   return {
     render(next) {
       state = next;
-      prepare(saved, savedContext);
+      const entries=Object.entries(state.items || {});
+      if(entries.length || savedPainted)prepare(saved, savedContext);
+      savedPainted=entries.length>0;
       const hidden = new Set(state.previews.map(p => String(p.id)));
       if (state.draft?.id) hidden.add(String(state.draft.id));
-      for (const [id, stroke] of Object.entries(state.items || {})) {
+      for (const [id, stroke] of entries) {
         if (stroke?.kind !== 'stroke' || hidden.has(id) || (state.visibleItemIds && !state.visibleItemIds.has(id))) continue;
         drawStroke(savedContext, stroke, state.width, state.height);
       }

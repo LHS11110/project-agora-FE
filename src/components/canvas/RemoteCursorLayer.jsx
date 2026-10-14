@@ -1,4 +1,12 @@
-import { memo, useEffect, useState } from 'react';
+import { Fragment, memo, useEffect, useState } from 'react';
+import '../../cursor-smoothing.css';
+
+function selectionBounds(selection) {
+  const { start, end } = selection || {};
+  if (![start?.x, start?.y, end?.x, end?.y].every(Number.isFinite)) return null;
+  return { minX: Math.min(start.x, end.x), minY: Math.min(start.y, end.y),
+    maxX: Math.max(start.x, end.x), maxY: Math.max(start.y, end.y) };
+}
 
 function cursorColor(nickname, tagNumber) {
   const identity = `${nickname || ''}#${tagNumber ?? ''}`;
@@ -28,12 +36,14 @@ const RemoteCursorLayer = memo(function RemoteCursorLayer({ updaterRef, activePe
       const x = Number(cursor.x);
       const y = Number(cursor.y);
       if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+      const selection = selectionBounds(cursor.selection);
       setCursors((current) => {
         const previous = current[peer.peer_id];
         const color = cursorColor(peer.nickname, peer.tag_number);
         if (previous?.x === x && previous?.y === y && previous?.color === color
-          && previous?.nickname === peer.nickname && previous?.tag_number === peer.tag_number) return current;
-        return { ...current, [peer.peer_id]: { ...peer, x, y, color } };
+          && previous?.nickname === peer.nickname && previous?.tag_number === peer.tag_number
+          && JSON.stringify(previous?.selection) === JSON.stringify(selection)) return current;
+        return { ...current, [peer.peer_id]: { ...peer, x, y, color, selection } };
       });
     };
     updaterRef.current = updateCursor;
@@ -50,10 +60,21 @@ const RemoteCursorLayer = memo(function RemoteCursorLayer({ updaterRef, activePe
     });
   }, [activePeerIds]);
 
-  return Object.entries(cursors)
-    .filter(([, cursor]) => cursor.x >= visibleBounds.minX && cursor.x <= visibleBounds.maxX
-      && cursor.y >= visibleBounds.minY && cursor.y <= visibleBounds.maxY)
-    .map(([peerId, cursor]) => <div className="remote-cursor" key={peerId} style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%`, '--cursor-color': cursor.color }} title={`${cursor.nickname}#${cursor.tag_number}`}><svg viewBox="0 0 18 22" aria-hidden="true"><path d="M1 1v17l4.5-4.3 3.1 7.1 3.1-1.4-3.2-6.8H15z" /></svg><span>{cursor.nickname}</span></div>);
+  return Object.entries(cursors).map(([peerId, cursor]) => {
+    const selection = cursor.selection;
+    const selectionVisible = selection && selection.minX <= visibleBounds.maxX && selection.maxX >= visibleBounds.minX
+      && selection.minY <= visibleBounds.maxY && selection.maxY >= visibleBounds.minY;
+    const cursorVisible = cursor.x >= visibleBounds.minX && cursor.x <= visibleBounds.maxX
+      && cursor.y >= visibleBounds.minY && cursor.y <= visibleBounds.maxY;
+    return <Fragment key={peerId}>
+      {selectionVisible && <div className="remote-selection-marquee" data-peer-id={peerId} aria-hidden="true"
+        style={{ left: `${selection.minX * 100}%`, top: `${selection.minY * 100}%`,
+          width: `${(selection.maxX - selection.minX) * 100}%`, height: `${(selection.maxY - selection.minY) * 100}%`, '--cursor-color': cursor.color }}>
+        <span>{cursor.nickname} · 선택 중</span>
+      </div>}
+      {cursorVisible && <div className="remote-cursor" style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%`, '--cursor-color': cursor.color }} title={`${cursor.nickname}#${cursor.tag_number}`}><svg viewBox="0 0 18 22" aria-hidden="true"><path d="M1 1v17l4.5-4.3 3.1 7.1 3.1-1.4-3.2-6.8H15z" /></svg><span>{cursor.nickname}</span></div>}
+    </Fragment>;
+  });
 });
 
 

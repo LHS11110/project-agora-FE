@@ -34,10 +34,12 @@ export function itemOperations(previous, next, docs) {
   const operations = [];
   for (const id of new Set([...Object.keys(previous), ...Object.keys(next)])) {
     const before = previous[id], after = next[id];
+    if (before === after) continue;
     if (before?.type === 'chat_room' || after?.type === 'chat_room') continue;
     if (!after) { if (before) operations.push({ id, action: 'delete' }); continue; }
     const patch = {}, unset = [];
     for (const field of CANVAS_ITEM_FIELDS) {
+      if (before?.[field] === after[field]) continue;
       if (stable(before?.[field]) === stable(after[field])) continue;
       if (after[field] === undefined) unset.push(field);
       else patch[field] = after[field];

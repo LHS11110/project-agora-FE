@@ -4,7 +4,7 @@ import * as Automerge from '@automerge/automerge';
 import { HostCanvasSession } from '../src/canvas/host/HostCanvasSession.js';
 import { electHost, itemOperations, loadItemDoc, reduceHostOperations, storedHostItem } from '../src/canvas/host/hostOperations.js';
 import { encodeBase64 } from '../src/canvas/collaborativeSync.js';
-import CanvasPeerMesh from '../src/components/CanvasPeerMesh.js';
+import CanvasBrokerPeers from '../src/components/CanvasBrokerPeers.js';
 
 const peer = id => ({ peer_id: id, groups: ['default'], is_admin: false });
 const shape = { kind: 'shape', shapeType: 'rectangle', x: 0, y: 0, width: 0.1, height: 0.1, permission: 'default' };
@@ -224,22 +224,20 @@ test('partial persistence admission retains records not accepted by the batch', 
   assert.equal(host.serverDirty.has('two'), true);
 });
 
-test('object changes use the host channel while cursor and laser remain direct', () => {
-  const mesh = new CanvasPeerMesh({}); const sent = [];
-  const channel = label => ({ readyState: 'open', bufferedAmount: 0, send: raw => sent.push({ label, payload: JSON.parse(raw) }) });
-  for (const id of ['host', 'other']) mesh.peers.set(id, {
-    metadata: peer(id), sync: channel(`${id}:sync`), bulk: channel(`${id}:bulk`), cursor: channel(`${id}:cursor`),
-    syncQueue: [], bulkQueue: [], syncQueuedSize: 0, bulkQueuedSize: 0,
-  });
+test('object changes use host commits while cursor and laser use broker broadcasts', () => {
+  const sent = [];
+  const mesh = new CanvasBrokerPeers({ sendSignal: frame => { sent.push(frame); return true; } });
+  mesh.setInitialPeers('self', [peer('host'), peer('other')]);
   mesh.sendData({ type: 'item_update', item: shape });
   mesh.sendRealtimeData({ type: 'item_update', item: shape });
   assert.equal(sent.length, 0, 'legacy object broadcasts are disabled');
   assert.equal(mesh.sendHostData('host', { type: 'host_proposal', operations: [] }), true);
-  assert.deepEqual(sent.map(frame => frame.label), ['host:sync']);
+  assert.deepEqual(sent[0].peer_ids, ['host']);
   sent.length = 0;
   mesh.sendRealtimeData({ type: 'cursor', x: 1, y: 2 });
   mesh.sendRealtimeData({ type: 'laser', points: [] });
-  assert.deepEqual(sent.map(frame => frame.label), ['host:cursor', 'other:cursor', 'host:cursor', 'other:cursor']);
+  assert.deepEqual(sent.map(frame => frame.payload.type), ['cursor', 'laser']);
+  assert.ok(sent.every(frame => frame.peer_ids.join(',') === 'host,other'));
 });
 
 test('host handoff retains unsent and in-flight requests and accepts more work during sync', () => {
@@ -512,12 +510,11 @@ test('duplicate proposals consume one host inbox slot before approval', () => {
   assert.equal(host.sequence, 1);
 });
 
-test('congested cursor links drop ephemeral updates without blocking other peers', () => {
-  const mesh = new CanvasPeerMesh({}); const sent = [];
-  mesh.peers.set('slow', { cursor: { readyState: 'open', bufferedAmount: 128 * 1024, send: () => assert.fail('slow peer must not queue stale presence') } });
-  mesh.peers.set('fast', { cursor: { readyState: 'open', bufferedAmount: 0, send: value => sent.push(JSON.parse(value)) } });
-  mesh.sendCursor({ x: 1 }); mesh.sendLaser({ x: 2 });
-  assert.deepEqual(sent, [{ x: 1 }, { x: 2 }]);
+test('unavailable broker drops ephemeral updates and reports failed sends', () => {
+  const mesh = new CanvasBrokerPeers({ sendSignal: () => false });
+  mesh.setInitialPeers('self', [peer('other')]);
+  assert.equal(mesh.sendCursor({ type: 'cursor', x: 1 }), false);
+  assert.equal(mesh.sendLaser({ type: 'laser', x: 2 }), false);
 });
 
 test('a slow peer bounds commit retention and resumes every queued edit in order', () => {
@@ -536,4 +533,35 @@ test('a slow peer bounds commit retention and resumes every queued edit in order
   assert.equal(host.broadcasts.length, 0);
   assert.equal(host.items.box.x, 300);
   assert.equal(follower.items.box.x, 300);
+});
+
+test('drawing frames and eraser tombstones reach late joiners before the next persistence tick', async () => {
+  const { applyStrokeFrame } = await import('../src/canvas/strokeFrameChanges.js');
+  const net = network();
+  const author = net.sessions.get('a'), host = net.sessions.get('z');
+  const persistedBefore = net.saved.length;
+  host.persist = () => false; // Simulate storage backpressure throughout joining.
+  const stroke = { kind: 'stroke', points: [{ x: 0.1, y: 0.1 }], color: '#222222', strokeWidth: 3, complete: false, permission: 'default' };
+  const apply = frame => {
+    const previous = author.items;
+    assert.equal(author.submit(itemOperations(previous, applyStrokeFrame(previous, frame), new Map())), true);
+    net.advance(); net.advance();
+  };
+  apply([{ id: 'live-stroke', payload: { type: 'item_update', item: stroke } }]);
+  const points = [...stroke.points, { x: 0.2, y: 0.2 }, { x: 0.3, y: 0.2 }];
+  apply([{ id: 'live-stroke', payload: { type: 'item_update', item: { ...stroke, points } } }]);
+  assert.equal(host.items['live-stroke'].complete, false);
+  assert.equal(host.items['live-stroke'].points.length, 3);
+  assert.ok(host.items.box, 'frame updates preserve unrelated items');
+  const newcomer = net.add('b');
+  net.configure();
+  assert.equal(newcomer.editable, false);
+  net.synchronize();
+  assert.deepEqual(newcomer.items['live-stroke'].points, points);
+  apply([{ id: 'live-stroke', payload: { type: 'item_delete' } }]);
+  assert.equal(newcomer.items['live-stroke'], undefined);
+  assert.equal(host.records['live-stroke'].item, null);
+  assert.equal(net.saved.length, persistedBefore, 'joining must use approved live state, not wait for storage');
+  const later = net.add('c'); net.configure(); net.synchronize();
+  assert.equal(later.items['live-stroke'], undefined, 'a deleted drawing cannot reappear in a late snapshot');
 });

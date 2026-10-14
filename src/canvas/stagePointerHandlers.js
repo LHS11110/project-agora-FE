@@ -1,4 +1,4 @@
-export function stagePointerHandlers({ activeTool, dragRef, panRef, spacePressedRef, startPan, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor }) {
+export function stagePointerHandlers({ activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, pickVector }) {
   const finish = (event) => {
     if (dragRef.current) stopObjectDrag(event);
     else stopDrawing(event);
@@ -6,9 +6,11 @@ export function stagePointerHandlers({ activeTool, dragRef, panRef, spacePressed
   return {
     onPointerDownCapture: (event) => {
       if (event.target.closest?.('.canvas-minimap')) return;
+      cancelCameraMotion?.();
       if (activeTool !== 'hand' && event.target.closest?.('.canvas-code-editor')) return;
       if (panRef.current) { event.preventDefault(); event.stopPropagation(); return; }
       if (event.button === 1 || (event.button === 0 && (activeTool === 'hand' || spacePressedRef.current))) startPan(event);
+      else pickVector?.(event, false, true);
     },
     onPointerMoveCapture: (event) => {
       if (!panRef.current) return;
@@ -25,7 +27,8 @@ export function stagePointerHandlers({ activeTool, dragRef, panRef, spacePressed
       event.stopPropagation();
       stopDrawing(event);
     },
-    onPointerDown: startDrawing,
+    onPointerDown: event => { if (!pickVector?.(event)) startDrawing(event); },
+    onDoubleClick: event => pickVector?.(event, true),
     onPointerMove: (event) => {
       if (dragRef.current) moveObject(event);
       else moveDrawing(event);

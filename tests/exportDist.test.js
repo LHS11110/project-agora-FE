@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, copyFile, readFile, readlink, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, copyFile, readFile, readlink, readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { exportDist } from '../build/exportDist.js';
@@ -15,6 +15,7 @@ test('publishes complete releases, keeps old chunks, preserves current on failur
     await writeFile(join(source, 'index.html'), 'version1');
     await writeFile(join(source, 'assets', 'old-hash.js'), 'old');
     await exportDist(source, output);
+    assert.equal((await stat(join(output, 'current'))).mode & 0o777, 0o755);
     assert.equal(await readFile(join(output, 'current', 'index.html'), 'utf8'), 'version1');
     await rm(join(source, 'assets', 'old-hash.js'));
     await writeFile(join(source, 'index.html'), 'version2');

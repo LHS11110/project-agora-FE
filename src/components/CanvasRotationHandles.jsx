@@ -10,7 +10,7 @@ function findObjectElement(scene, id) {
 }
 
 function getFrame(element, scene) {
-  if (element.offsetParent === scene) {
+  if (element.offsetParent === scene || element.offsetParent?.classList.contains('canvas-world-layer')) {
     return {
       left: element.offsetLeft,
       top: element.offsetTop,

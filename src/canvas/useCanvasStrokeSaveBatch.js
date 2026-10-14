@@ -26,9 +26,12 @@ export function useCanvasStrokeSaveBatch({ sendBatch, pendingItemChangesRef, flu
       frame.push({ id, previous: change.previous, payload: item
         ? { type: 'item_update', item_id: id, item }
         : { type: 'item_delete', item_id: id } });
-      changesRef.current.delete(id);
     }
-    if (frame.length) sendBatch(frame);
+    // Keep the latest frame queued while membership or connection recovery
+    // blocks editing. Never drop a stroke/deletion because a send was refused.
+    if (frame.length && sendBatch(frame) !== false) {
+      for (const { id } of frame) changesRef.current.delete(id);
+    }
   }, []);
   flushRef.current = flush;
   useEffect(() => {

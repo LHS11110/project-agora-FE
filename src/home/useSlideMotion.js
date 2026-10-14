@@ -1,18 +1,19 @@
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import { playSlideEntrance } from './slideEntrance.js';
 import { playDiagramMotion } from './diagramMotion.js';
 
-export function useSlideMotion(activeSlide) {
+export function useSlideMotion(activeSlide, enabled = true) {
   const windowRef = useRef(null);
   const trackRef = useRef(null);
   const previousSlideRef = useRef(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const slides = trackRef.current?.querySelectorAll('.home-slide') || [];
     slides.forEach((slide, index) => {
-      const active = index === activeSlide;
+      const active = enabled && index === activeSlide;
       slide.inert = !active;
       slide.setAttribute('aria-hidden', String(!active));
     });
+    if (!enabled) return undefined;
     const previous = previousSlideRef.current;
     previousSlideRef.current = activeSlide;
     const stopEntrance = playSlideEntrance(slides[activeSlide], {
@@ -21,6 +22,6 @@ export function useSlideMotion(activeSlide) {
     });
     const stopDiagram = playDiagramMotion(slides[activeSlide]);
     return () => { stopEntrance(); stopDiagram(); };
-  }, [activeSlide]);
+  }, [activeSlide, enabled]);
   return { windowRef, trackRef };
 }

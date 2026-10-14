@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { canScroll, getAdjacentSlide, HOME_SLIDES } from './slideConfig.js';
 
-export function useHomeSlideNavigation() {
+export function useHomeSlideNavigation(enabled = true) {
   const [activeSlide, setActiveSlide] = useState(0);
   const slideLabels = HOME_SLIDES.map(({ label }) => label);
   const activePosition = HOME_SLIDES[activeSlide];
@@ -79,6 +79,7 @@ export function useHomeSlideNavigation() {
   };
 
   useEffect(() => {
+    if (!enabled) return undefined;
     const onKeyDown = (event) => {
       const target = event.target instanceof HTMLElement ? event.target : null;
       if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return;
@@ -104,7 +105,7 @@ export function useHomeSlideNavigation() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activeSlide, slideLabels.length]);
+  }, [activeSlide, slideLabels.length, enabled]);
 
   return { activeSlide, activePosition, slideLabels, selectSlide, handleWheel, handleTouchStart, handleTouchEnd };
 }

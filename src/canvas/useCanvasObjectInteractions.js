@@ -8,6 +8,7 @@ import { hasItemGeometryChanged } from './useCanvasPeerGeometry.js';
 import { isCollaborativeItem } from './collaborativeSync.js';
 import { shapeArrowBendFromPointer } from '../components/shapeArrowGeometry.js';
 import { rotateGroup } from './groupGeometry.js';
+import { inheritConnectorObjectSize } from './connectors/objectMetrics.js';
 
 export function useCanvasObjectInteractions(options) {
   const {
@@ -18,11 +19,13 @@ export function useCanvasObjectInteractions(options) {
     clearPeerItemGeometryBroadcast,
     connectionStartId,
     connectorColor,
+    connectorVisualStyle = 'standard',
     connectorEndHead,
     connectorStartHead,
     connectorWidth,
     dragRef,
     itemsRef,
+    spatialIndexRef,
     markItemDirty,
     permission,
     pointerPosition,
@@ -42,6 +45,13 @@ export function useCanvasObjectInteractions(options) {
     spacePressedRef,
     startPan,
   } = options;
+  const commitGeometry = (next,ids) => {
+    for(const id of ids)inheritConnectorObjectSize(itemsRef.current[id],next[id]);
+    itemsRef.current=next;
+    const index=spatialIndexRef?.current;
+    index?.update(next,boardSize,index.revision,ids);
+    setItems(next);
+  };
 
   const startObjectDrag = (event, id, item) => {
     if (activeTool === 'hand' && event.button === 0) { startPan(event); return; }
@@ -59,14 +69,14 @@ export function useCanvasObjectInteractions(options) {
       if (connectionStartId === id) { setConnectionStartId(null); return; }
       const from = itemsRef.current[connectionStartId];
       const to = itemsRef.current[id];
-      if (from && to) addItem(createId(), { kind: 'connector', bend: 0, from: connectionStartId, to: id, color: connectorColor, strokeWidth: connectorWidth, startHead: connectorStartHead, endHead: connectorEndHead, permission });
+      if (from && to) addItem(createId(), { kind: 'connector', visualStyle: connectorVisualStyle, bend: 0, from: connectionStartId, to: id, color: connectorColor, strokeWidth: connectorWidth, startHead: connectorStartHead, endHead: connectorEndHead, permission });
       setConnectionStartId(null); setActiveTool('select'); return;
     }
     const key = String(id);
     if (activeTool !== 'select') { event.stopPropagation(); return; }
     const focusCanvas = () => boardRef.current?.focus({ preventScroll: true });
     const groupedIds = item?.groupId
-      ? Object.entries(itemsRef.current).filter(([, candidate]) => candidate?.groupId === item.groupId && !['stroke', 'connector'].includes(candidate.kind)).map(([groupedId]) => groupedId)
+      ? Object.entries(itemsRef.current).filter(([, candidate]) => candidate?.groupId === item.groupId && !['connector'].includes(candidate.kind)).map(([groupedId]) => groupedId)
       : [];
     if (event.shiftKey) {
       const toggleIds = groupedIds.length ? groupedIds : [key];
@@ -97,10 +107,11 @@ export function useCanvasObjectInteractions(options) {
     event.preventDefault(); event.stopPropagation();
     const start = pointerPosition(event);
     const touchStart = event.pointerType !== 'mouse' ? { x: event.clientX, y: event.clientY } : null;
-    const movableIds = targetIds.filter((targetId) => itemsRef.current[targetId] && !['stroke', 'connector'].includes(itemsRef.current[targetId].kind));
+    const movableIds = targetIds.filter((targetId) => itemsRef.current[targetId] && !['connector'].includes(itemsRef.current[targetId].kind));
     if (movableIds.length > 1) {
       const initialItems = Object.fromEntries(movableIds.map((targetId) => [targetId, itemsRef.current[targetId]]));
-      const elements = movableIds.map((targetId) => [...(sceneRef.current?.querySelectorAll('[data-item-id]') || [])].find((node) => node.dataset.itemId === targetId)).filter(Boolean);
+      const moving=new Set(movableIds);
+      const elements=[...(sceneRef.current?.querySelectorAll('[data-item-id]') || [])].filter(node=>moving.has(node.dataset.itemId));
       elements.forEach((element) => element.classList.add('object-dragging', 'multi-object-dragging'));
       dragRef.current = { mode: 'multi-move', ids: movableIds, initialItems, startPoint: start, touchStart, elements };
     } else {
@@ -188,8 +199,7 @@ export function useCanvasObjectInteractions(options) {
       const drag = dragRef.current;
       const degrees = rotationAtPointer(0, drag.startAngle, event.clientX, event.clientY, drag.centerX, drag.centerY);
       const changes = rotateGroup(drag.initialItems, drag.layout, degrees, boardSize);
-      itemsRef.current = { ...itemsRef.current, ...changes };
-      setItems(itemsRef.current);
+      commitGeometry({ ...itemsRef.current, ...changes },Object.keys(changes));
       for (const [itemId, next] of Object.entries(changes)) sendRealtimePeerItemGeometry(itemId, next);
       return;
     }
@@ -201,11 +211,10 @@ export function useCanvasObjectInteractions(options) {
       const nextItems = { ...itemsRef.current };
       ids.forEach((itemId) => {
         const original = initialItems[itemId];
-        nextItems[itemId] = { ...original, x: (Number(original.x) || 0) + dx, y: (Number(original.y) || 0) + dy };
+        nextItems[itemId] = original.kind === 'stroke' ? { ...original, points: original.points.map(point => ({ ...point, x: point.x + dx, y: point.y + dy })) } : { ...original, x: (Number(original.x) || 0) + dx, y: (Number(original.y) || 0) + dy };
         sendRealtimePeerItemGeometry(itemId, nextItems[itemId]);
       });
-      itemsRef.current = nextItems;
-      setItems(nextItems);
+      commitGeometry(nextItems,ids);
       return;
     }
     if (mode === 'bend') {
@@ -213,15 +222,13 @@ export function useCanvasObjectInteractions(options) {
       const next = initial.kind === 'connector'
         ? { ...initial, ...(connectorPointCount(initial) > 1 || Array.isArray(initial.bendPoints) ? connectorControlFromPointer(initial, connectorGeometry(initial, itemsRef.current, viewport.width, viewport.height), point, viewport, dragRef.current.bendPointIndex) : connectorBendFromPointer(connectorGeometry(initial, itemsRef.current, viewport.width, viewport.height), point, viewport)) }
         : { ...initial, bend: shapeArrowBendFromPointer(initial, point, viewport) };
-      itemsRef.current = { ...itemsRef.current, [id]: next };
-      setItems((current) => ({ ...current, [id]: next }));
+      commitGeometry({ ...itemsRef.current, [id]: next },[id]);
       return;
     }
     if (mode === 'rotate') {
       const { centerX, centerY, startAngle, initialRotation } = dragRef.current;
       const next = { ...initial, rotation: rotationAtPointer(initialRotation, startAngle, event.clientX, event.clientY, centerX, centerY) };
-      itemsRef.current = { ...itemsRef.current, [id]: next };
-      setItems((current) => ({ ...current, [id]: next }));
+      commitGeometry({ ...itemsRef.current, [id]: next },[id]);
       sendRealtimePeerItemGeometry(id, next);
       return;
     }
@@ -231,8 +238,7 @@ export function useCanvasObjectInteractions(options) {
       : initial.kind === 'stroke'
         ? { ...initial, points: initial.points.map((part) => ({ ...part, x: part.x + point.x - startX, y: part.y + point.y - startY })) }
         : { ...initial, x: point.x - offsetX, y: point.y - offsetY };
-    itemsRef.current = { ...itemsRef.current, [id]: next };
-    setItems((current) => ({ ...current, [id]: next }));
+    commitGeometry({ ...itemsRef.current, [id]: next },[id]);
     sendRealtimePeerItemGeometry(id, next);
   };
   const stopObjectDrag = (event) => {

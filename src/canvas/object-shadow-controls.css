@@ -1,0 +1,9 @@
+.object-shadow-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.object-shadow-fields{margin-top:12px}
+.object-shadow-fields>label{display:grid;grid-template-columns:28px minmax(0,1fr) 34px;align-items:center;gap:10px;margin-top:10px;color:var(--ink-muted);font:10px/1.4 var(--display)}
+.object-shadow-fields input[type="range"]{width:100%;min-width:0;height:3px;margin:0;accent-color:#879b89}
+.object-shadow-fields output{text-align:right;font:9px/1.4 var(--mono)}
+.object-shadow-offsets{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.object-shadow-offsets label{display:flex;align-items:center;gap:6px;color:var(--ink-muted);font:10px/1.4 var(--display)}
+.object-shadow-offsets input{box-sizing:border-box;width:100%;min-width:0;height:28px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink-strong);font:10px/1.4 var(--mono)}
+.object-shadow-offsets input:focus-visible{outline:2px solid var(--ink-muted);outline-offset:2px}

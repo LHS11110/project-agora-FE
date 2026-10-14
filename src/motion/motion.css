@@ -63,3 +63,5 @@
     transition: none;
   }
 }
+
+.canvas-stage.camera-moving .motion-field--canvas{visibility:hidden}

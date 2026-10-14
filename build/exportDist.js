@@ -1,5 +1,5 @@
 // Runs inside the Linux Node image. The host OS and repository layout are irrelevant.
-import { cp, mkdir, mkdtemp, readlink, readdir, rename, rm, stat, symlink } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, readlink, readdir, rename, rm, stat, symlink } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { realpathSync } from 'node:fs';
@@ -22,6 +22,7 @@ async function publishDist(source, output) {
       catch (error) { if (error.code !== 'ENOENT') throw error; }
     }
     await cp(source, release, { recursive: true });
+    await chmod(release, 0o755); // Nginx workers must be able to traverse the release directory.
     await symlink(`releases/${basename(release)}`, link);
     await rename(link, current); // Atomically switch the served tree, preserving the old release on failure.
     published = true;

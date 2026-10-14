@@ -1,0 +1,11 @@
+.object-depth-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.object-depth-heading>span{color:var(--ink-muted);font:500 9px/1.4 var(--display)}
+.object-depth-field{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0 10px;color:var(--ink-strong);font:500 11px/1.4 var(--display)}
+.object-depth-field input{box-sizing:border-box;width:96px;min-width:0;height:32px;padding:6px 9px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink-strong);font:500 11px/1.4 var(--mono);color-scheme:light}
+.object-depth-field input::placeholder{color:var(--ink-muted);font-family:var(--display)}
+.object-depth-field input:focus-visible{outline:2px solid var(--ink-strong);outline-offset:2px}
+.object-depth-actions{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;margin-bottom:10px}
+.canvas-inspector .object-depth-actions .inspector-secondary-action{margin:0;min-height:34px;padding:7px 6px;gap:5px;white-space:nowrap;font-size:9px}
+.object-depth-actions svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+.object-depth-actions .depth-icon-back{transform:rotate(180deg)}
+.canvas-app-page[data-theme="dark"] .object-depth-field input{color-scheme:dark}

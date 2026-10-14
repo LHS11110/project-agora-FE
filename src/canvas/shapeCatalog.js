@@ -4,6 +4,11 @@ export const shapeCatalog = [
   { id: 'triangle', label: '삼각형', aspect: 1.15 },
   { id: 'square', label: '정사각형', aspect: 1 },
   { id: 'rectangle', label: '직사각형', aspect: 1.8 },
+  { id: 'paper-a1', label: 'A1', aspect: 594 / 841, dimensions: '594 × 841 mm' },
+  { id: 'paper-a2', label: 'A2', aspect: 420 / 594, dimensions: '420 × 594 mm' },
+  { id: 'paper-a3', label: 'A3', aspect: 297 / 420, dimensions: '297 × 420 mm' },
+  { id: 'paper-a4', label: 'A4', aspect: 210 / 297, dimensions: '210 × 297 mm' },
+
   { id: 'pentagon', label: '오각형', aspect: 1 },
   { id: 'hexagon', label: '육각형', aspect: 1.15 },
   { id: 'diamond', label: '마름모', aspect: 1 },

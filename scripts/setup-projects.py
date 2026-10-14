@@ -42,7 +42,7 @@ def main():
     db.update_env_file(env, {
         'VITE_API_PROXY_TARGET': args.public_origin.rstrip('/'),
         'VITE_DOCKER_API_PROXY_TARGET': 'https://agora-nginx',
-        'VITE_API_BASE_URL': '', 'VITE_WS_BASE_URL': args.public_origin.rstrip('/'),
+        'VITE_API_BASE_URL': '', 'VITE_WS_BASE_URL': args.public_origin.rstrip('/').replace('https://', 'wss://', 1),
         'SERVICE_TLS_CERT': str(tls / 'internal/frontend/fullchain.pem'),
         'SERVICE_TLS_KEY': str(tls / 'internal/frontend/privkey.pem'),
         'SERVICE_TLS_CA': str(tls / 'root-ca.pem'),

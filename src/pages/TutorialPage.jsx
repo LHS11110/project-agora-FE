@@ -443,7 +443,7 @@ export default function TutorialPage() {
     if (event.target.closest?.('.tutorial-item, .tutorial-editor')) return;
     event.preventDefault();
     if (event.ctrlKey || event.metaKey) {
-      zoomBy(Math.exp(-event.deltaY * 0.0015 * zoomSensitivity), event.clientX, event.clientY);
+      zoomBy(Math.exp(-event.deltaY * 0.003 * zoomSensitivity), event.clientX, event.clientY);
     } else {
       setCamera((current) => ({ ...current, x: current.x - event.deltaX, y: current.y - event.deltaY }));
     }
@@ -564,7 +564,7 @@ export default function TutorialPage() {
     '--axis-y-arrow-opacity': axisOriginY >= 0 ? 1 : 0,
   };
   const stageStyle = canvasGridStyle(camera);
-  const zoomStep = 1 + 0.15 * zoomSensitivity;
+  const zoomStep = 1 + 0.3 * zoomSensitivity;
   const selectedTable = selectedItemId ? items[String(selectedItemId)]?.kind === 'table' ? items[String(selectedItemId)] : null : null;
   const selectedItem = selectedItemId ? items[String(selectedItemId)] : null;
   const selectedConnector = selectedItem?.kind === 'connector' ? selectedItem : null;

@@ -1,0 +1,5 @@
+.vector-style-options{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.vector-style-options button{display:flex;align-items:center;justify-content:center;gap:8px;padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink-muted);cursor:pointer}
+.vector-style-options button.selected{background:var(--panel-soft);border-color:#799580;color:var(--ink-strong)}
+.vector-style-options button:focus-visible{outline:2px solid var(--ink-strong);outline-offset:2px}
+.vector-style-options svg{width:40px;height:24px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}

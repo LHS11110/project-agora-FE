@@ -1,3 +1,12 @@
+import { useCanvasCamera } from '../canvas/useCanvasCamera.js';
+import { isRasterText } from '../canvas/plainTextRaster.js';
+import CanvasLayerObjects from '../canvas/CanvasLayerObjects.jsx';
+import { buildDepthLayers, itemDepth } from '../canvas/itemDepth.js';
+import CanvasMinimapObjects from '../canvas/CanvasMinimapObjects.jsx';
+import { hitTestVector } from '../canvas/vectorHitTest.js';
+import { renderWindow } from '../canvas/renderWindow.js';
+import { handleObjectDoubleClick } from '../canvas/objectDoubleClick.js';
+import StableSpatialQuery from '../canvas/StableSpatialQuery.js';
 import { usePdfUpload } from '../canvas/pdf/usePdfUpload.js';
 import { useCanvasBackground } from '../canvas/background/useCanvasBackground.js';
 import { useParticipantProfiles } from '../canvas/useParticipantProfiles.js';
@@ -27,13 +36,12 @@ import Icon from '../components/Icon.jsx';
 import InteractiveAtmosphere from '../components/frelog/InteractiveAtmosphere.jsx';
 import AuthenticatedImage from '../components/AuthenticatedImage.jsx';
 import ShareComposer from '../components/ShareComposer.jsx';
-import VectorLayer from '../components/VectorLayer.jsx';
+import VectorLayer from '../canvas/DepthVectorLayer.jsx';
 import LaserLayer from '../components/LaserLayer.jsx';
 import RotationHandles from '../components/CanvasRotationHandles.jsx';
 import GroupRotationHandles from '../components/GroupRotationHandles.jsx';
 import { useGroupShortcuts } from '../canvas/useGroupShortcuts.js';
 import CanvasSpatialBTree, { objectBounds } from '../components/CanvasSpatialBTree.js';
-import CanvasObject from '../canvas/CanvasObject.jsx';
 import CanvasToolPanel from '../canvas/CanvasToolPanel.jsx';
 import RemoteCursorLayer from '../components/canvas/RemoteCursorLayer.jsx';
 import SettingsDialog from '../components/canvas/CanvasSettingsDialog.jsx';
@@ -60,6 +68,7 @@ import { LASER_FADE_MS, MAX_STROKE_WIDTH, MIN_STROKE_WIDTH, stickyNoteColors, MI
 import { textSpliceBetween } from '../canvas/collaborativeText.js';
 import { isCanvasSyncItem, useCanvasPeerGeometry } from '../canvas/useCanvasPeerGeometry.js';
 import { useHostCanvas } from '../canvas/host/useHostCanvas.js';
+import { applyStrokeFrame } from '../canvas/strokeFrameChanges.js';
 import { useCanvasStageInteractions } from '../canvas/useCanvasStageInteractions.js';
 import { useCanvasPeerEvents } from '../canvas/useCanvasPeerEvents.js';
 import { useCanvasObjectInteractions } from '../canvas/useCanvasObjectInteractions.js';
@@ -84,6 +93,7 @@ function CanvasWorkspace() {
   const { token, user } = useAuth();
   const navigate = useNavigate();
   const boardRef = useRef(null);
+  const cancelCameraMotionRef = useRef(() => {});
   const sceneRef = useRef(null);
   const selectionRef = useRef(null);
   const stageWheelHandlerRef = useRef(null);
@@ -162,7 +172,7 @@ function CanvasWorkspace() {
   const [remoteDrawingStrokes, setRemoteDrawingStrokes] = useState([]);
   const [laserStrokes, setLaserStrokes] = useState([]);
   const [dirtyItems, setDirtyItems] = useState(() => new Set());
-  const [camera, setCamera] = useState({ x: 0, y: 0, scale: 1 });
+  const [camera, setCamera] = useCanvasCamera(boardRef,sceneRef);
   const boardSize = CANVAS_SPACE;
   const [zoomSensitivity, setZoomSensitivity] = useState(() => {
     const stored = Number(localStorage.getItem(ZOOM_SENSITIVITY_KEY));
@@ -191,8 +201,13 @@ function CanvasWorkspace() {
   });
   const [theme, setTheme] = useState(() => localStorage.getItem('agora_canvas_theme') || 'light');
   const [showGrid, setShowGrid] = useState(() => localStorage.getItem('agora_canvas_grid') !== 'false');
+  const [showXAxis, setShowXAxis] = useState(() => localStorage.getItem('agora_canvas_x_axis') !== 'false');
+  const [showYAxis, setShowYAxis] = useState(() => localStorage.getItem('agora_canvas_y_axis') !== 'false');
   const [shapeType, setShapeType] = useState('rectangle');
   const [shapeFillColor, setShapeFillColor] = useState('');
+  const [shapeVisualStyle, setShapeVisualStyle] = useState('standard');
+  const [shapeStrokeEnabled, setShapeStrokeEnabled] = useState(true);
+  const [connectorVisualStyle, setConnectorVisualStyle] = useState('standard');
   const [connectionStartId, setConnectionStartId] = useState(null);
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [selectedItemIds, setSelectedItemIds] = useState([]);
@@ -237,7 +252,9 @@ function CanvasWorkspace() {
     const socket = rtcWsRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) return false;
     const request = payload?.request_id ? payload : { ...payload, request_id: createId() };
-    socket.send(JSON.stringify(request)); return true;
+    const ephemeral = ['cursor', 'laser'].includes(payload?.payload?.type);
+    if (socket.bufferedAmount > (ephemeral ? 128 * 1024 : 16 * 1024 * 1024)) return false;
+    try { socket.send(JSON.stringify(request)); return true; } catch { return false; }
   }, []);
   const requestChatHistory = useCallback((toSequence) => {
     if (chatHistoryRequestRef.current) return false;
@@ -366,7 +383,7 @@ function CanvasWorkspace() {
         type: 'item_sync_state', action: 'delete', item_id: change.id,
         permission, version: change.syncVersion,
       }, (peer) => canPeerAccessItem(accessItem, peer));
-      if (!queued && !serverReconnectRequestedRef.current) setToast('WebRTC 동기화 대기열이 가득 차 일부 변경을 전달하지 못했습니다. 재접속하면 다시 동기화됩니다.');
+      if (!queued && !serverReconnectRequestedRef.current) setToast('브로커 동기화 대기열이 가득 차 일부 변경을 전달하지 못했습니다. 재접속하면 다시 동기화됩니다.');
       return;
     }
     const item = change.item;
@@ -382,12 +399,16 @@ function CanvasWorkspace() {
         permission: previous.permission, version: change.syncVersion,
       }, (peer) => canPeerAccessItem(previous, peer) && !canPeerAccessItem(item, peer)) && queued;
     }
-    if (!queued && !serverReconnectRequestedRef.current) setToast('WebRTC 동기화 대기열이 가득 차 일부 변경을 전달하지 못했습니다. 재접속하면 다시 동기화됩니다.');
+    if (!queued && !serverReconnectRequestedRef.current) setToast('브로커 동기화 대기열이 가득 차 일부 변경을 전달하지 못했습니다. 재접속하면 다시 동기화됩니다.');
   }, []);
   // Mutations are captured by setItems as proposals. No follower can write to
   // the persistence socket, and drafts are never rendered as committed objects.
   const sendItemChange = useCallback(() => hostSessionRef.current.editable, []);
-  const sendStrokeFrameChanges = useCallback(() => hostSessionRef.current.editable, []);
+  const sendStrokeFrameChanges = useCallback(frame => {
+    if (!hostSessionRef.current.editable) return false;
+    setItems(previous => applyStrokeFrame(previous, frame));
+    return true;
+  }, [setItems]);
   const updateTableItem = useCallback((id, update) => {
     const key = String(id);
     const previous = itemsRef.current[key];
@@ -441,6 +462,28 @@ function CanvasWorkspace() {
   };
   const updateObjectDimensions = (id, field, value) => updateObjectSize(id, field, value);
   const updateObjectFontSize = (id, value) => updateObjectSize(id, 'fontSize', value);
+  const updateItemShadow = (ids, field, value) => {
+    if (!hostSessionRef.current.editable) return;
+    const allowed = { shadowBlur: [0, 24], shadowOpacity: [0, 1], shadowOffsetX: [-24, 24], shadowOffsetY: [-24, 24] };
+    if (field !== 'shadowEnabled' && (!allowed[field] || !Number.isFinite(value))) return;
+    const nextValue = field === 'shadowEnabled' ? Boolean(value) : Math.max(allowed[field][0], Math.min(allowed[field][1], value));
+    const changes = {};
+    for (const id of Array.isArray(ids) ? ids : [ids]) {
+      const key = String(id), previous = itemsRef.current[key];
+      if (previous) changes[key] = { ...previous, [field]: nextValue };
+    }
+    itemsRef.current = { ...itemsRef.current, ...changes };
+    setItems(current => ({ ...current, ...changes }));
+  };
+  const updateItemDepth = (id, value) => {
+    const key = String(id), previous = itemsRef.current[key];
+    const depth = Number(value);
+    if (!previous || !Number.isSafeInteger(depth) || !hostSessionRef.current.editable) return;
+    const next = { ...previous, depth };
+    itemsRef.current = { ...itemsRef.current, [key]: next };
+    setItems(current => ({ ...current, [key]: next }));
+    refreshSpatialIndex();
+  };
   const updateItemRotation = (id, value) => {
     const key = String(id);
     const previous = itemsRef.current[key];
@@ -476,6 +519,21 @@ function CanvasWorkspace() {
       setItems(current => ({ ...current, [key]: previous }));
       refreshSpatialIndex();
       setToast('연결이 복구되면 그룹을 다시 변경해주세요.');
+    }
+  };
+  const updateShapeAppearance = (id, field, value) => {
+    const key = String(id), previous = itemsRef.current[key];
+    if (previous?.kind !== 'shape') return;
+    if (!(field === 'visualStyle' && ['standard', 'sketch'].includes(value)
+      || field === 'strokeEnabled' && typeof value === 'boolean'
+      || field === 'color' && /^#[0-9a-f]{6}$/i.test(value))) return;
+    const nextItem = { ...previous, [field]: value };
+    itemsRef.current = { ...itemsRef.current, [key]: nextItem };
+    setItems(current => ({ ...current, [key]: nextItem }));
+    if (!sendItemChange({ type: 'item_update', item_id: key, item: nextItem }, previous)) {
+      itemsRef.current = { ...itemsRef.current, [key]: previous };
+      setItems(current => ({ ...current, [key]: previous }));
+      setToast('연결이 복구되면 도형 스타일을 다시 변경해주세요.');
     }
   };
   const updateShapeFill = (id, value) => {
@@ -537,10 +595,11 @@ function CanvasWorkspace() {
   const updateConnectorAppearance = (id, field, value) => {
     const key = String(id);
     const previous = itemsRef.current[key];
-    if (previous?.kind !== 'connector' || !['color', 'strokeWidth', 'bend', 'label', 'labelMode', 'bendPointCount'].includes(field)) return;
+    if (previous?.kind !== 'connector' || !['color', 'strokeWidth', 'bend', 'label', 'labelMode', 'bendPointCount', 'visualStyle'].includes(field)) return;
+    if (field === 'visualStyle' && !['standard', 'sketch'].includes(value)) return;
     if (field === 'labelMode' && !['plain', 'markdown', 'latex'].includes(value)) return;
     if (field === 'label' && (typeof value !== 'string' || value.length > 2000)) return;
-    const nextValue = field === 'bendPointCount' ? Math.max(1, Math.min(MAX_BEND_POINTS, Math.trunc(Number(value) || 1))) : ['label', 'labelMode'].includes(field) ? String(value) : field === 'bend' ? Math.max(0, Math.min(1.5, Number(value) || 0)) : field === 'strokeWidth'
+    const nextValue = field === 'visualStyle' ? value : field === 'bendPointCount' ? Math.max(1, Math.min(MAX_BEND_POINTS, Math.trunc(Number(value) || 1))) : ['label', 'labelMode'].includes(field) ? String(value) : field === 'bend' ? Math.max(0, Math.min(1.5, Number(value) || 0)) : field === 'strokeWidth'
       ? Math.max(0.8, Math.min(4, Number(value) || 1.5))
       : /^#[0-9a-f]{6}$/i.test(String(value)) ? String(value) : previous.color || '#8b8f8c';
     if (previous[field] === nextValue && !(field === 'bend' && previous.bendPoints?.length)) return;
@@ -635,7 +694,7 @@ function CanvasWorkspace() {
   });
   const receivePeerData = useCallback((peer, data, channelName) => {
     if (typeof data?.type === 'string' && data.type.startsWith('host_')) {
-      if (channelName === 'agora-sync') hostSessionRef.current.receive(peer.peer_id, data);
+      if (channelName === 'broker') hostSessionRef.current.receive(peer.peer_id, data);
     } else if (data?.type === 'editor_presence') receiveLegacyPeerData(peer, data, channelName);
   }, [receiveLegacyPeerData]);
   const permission = groups.includes('default') ? 'default' : groups[0] || 'admin-group';
@@ -760,7 +819,11 @@ function CanvasWorkspace() {
   const drawableItemCount = useMemo(() => Object.values(items).filter(item => item?.type !== 'chat_room').length, [items]);
 
   const viewportSize = useCanvasViewport({ boardRef, setCamera, refreshKey: error });
-  const spatialIndex = useMemo(() => new CanvasSpatialBTree(items, boardSize), [items, spatialRevision, boardSize]);
+  const spatialIndexRef = useRef(null);
+  const spatialIndex = useMemo(() => {
+    if (!spatialIndexRef.current) spatialIndexRef.current = new CanvasSpatialBTree();
+    return spatialIndexRef.current.update(items, boardSize, spatialRevision);
+  }, [items, spatialRevision, boardSize]);
   const {
     visibleBounds,
     minimap,
@@ -773,7 +836,7 @@ function CanvasWorkspace() {
     startMinimapPan,
     moveMinimapPan,
     stopMinimapPan,
-  } = useCanvasMinimap({ boardRef, boardSize, viewportSize, camera, setCamera, items, spatialIndex });
+  } = useCanvasMinimap({ boardRef, boardSize, viewportSize, camera, setCamera, items, spatialIndex, spatialRevision, cancelCameraMotion: () => cancelCameraMotionRef.current() });
   const activePeerIds = useMemo(() => peerList.filter((peer) => peer.connected).map((peer) => peer.peer_id).sort().join('\n'), [peerList]);
   const axisOriginX = boardSize.width * camera.scale / 2 + camera.x;
   const axisOriginY = boardSize.height * camera.scale / 2 + camera.y;
@@ -783,33 +846,37 @@ function CanvasWorkspace() {
     '--axis-x-arrow-opacity': axisOriginX <= viewportSize.width ? 1 : 0,
     '--axis-y-arrow-opacity': axisOriginY >= 0 ? 1 : 0,
   };
+  const sceneWindow = renderWindow(visibleBounds, boardSize, camera.scale);
+  const sceneQueryRef=useRef(null);
+  if(!sceneQueryRef.current)sceneQueryRef.current=new StableSpatialQuery();
   const visibleEntries = useMemo(() => {
-    const entries = new Map(spatialIndex.query(visibleBounds)
-      .map((entry) => [entry.id, { ...entry, item: items[entry.id] || entry.item }]));
+    let entries=sceneQueryRef.current.query(spatialIndex,sceneWindow.bounds);
     // Keep an open editor mounted even when its measured bounds leave the viewport.
     for (const retainedId of [dragRef.current?.id, editingId].filter(Boolean)) {
       if (!items[retainedId]) continue;
       const item = items[retainedId];
-      entries.set(retainedId, {
+      if(entries.some(entry=>entry.id===retainedId))continue;
+      entries=[...entries,{
         id: retainedId,
         item,
         bounds: objectBounds(item, items, boardSize.width, boardSize.height),
-      });
+      }];
     }
-    return [...entries.values()];
-  }, [boardSize.height, boardSize.width, editingId, items, spatialIndex, visibleBounds]);
-  const visibleItemKey = visibleEntries.map((entry) => entry.id).join('\u0000');
-  const visibleItemIds = useMemo(() => new Set(visibleEntries.map((entry) => entry.id)), [visibleItemKey]);
-  const visibleVectorItems = useMemo(() => Object.fromEntries(visibleEntries
-    .filter(({ item }) => ['stroke', 'shape', 'connector'].includes(item?.kind))
-    .map(({ id, item }) => [id, item])), [visibleEntries]);
+    return entries;
+  }, [boardSize.height, boardSize.width, editingId, items, spatialIndex, spatialRevision, sceneWindow.key]);
+  const visibleItemCount = visibleEntries.reduce((count,{bounds}) => count + Number(bounds.maxX>=visibleBounds.minX && bounds.minX<=visibleBounds.maxX && bounds.maxY>=visibleBounds.minY && bounds.minY<=visibleBounds.maxY),0);
   const sortedItems = useMemo(() => visibleEntries
     .filter(({ item }) => ['image', 'link', 'code', 'note', 'table', 'shape', 'text', 'math', 'stroke', 'connector', 'pdf', 'user-group'].includes(item?.kind))
     .sort((a, b) => a.bounds.minY - b.bounds.minY)
     .map(({ id, item, bounds }) => [id, item, bounds, item.kind === 'connector' ? connectorGeometry(item, items, boardSize.width, boardSize.height) : null]), [boardSize.height, boardSize.width, items, visibleEntries]);
-  const selectedObjectIds = selectedItemIds.filter((id) => Boolean(items[id]));
-  const selectedObjectIdsKey = selectedObjectIds.join('|');
-  const selectedObjectIdSet = new Set(selectedObjectIds);
+  const usesOverview=useMemo(()=>sortedItems.some(([,item])=>!['shape','stroke','connector'].includes(item.kind) && !isRasterText(item)),[sortedItems]);
+  const representationScale=usesOverview?camera.scale:1;
+  const vectorHitOrder = useMemo(() => new Map(sortedItems.map(([id],order) => [id,order])), [sortedItems]);
+  const selectedObjectIds = useMemo(() => selectedItemIds.filter((id) => Boolean(items[id])),[selectedItemIds,items]);
+  const selectedObjectIdsKey = useMemo(()=>selectedObjectIds.join('|'),[selectedObjectIds]);
+  const selectedObjectIdSet = useMemo(() => new Set(selectedObjectIds), [selectedObjectIds]);
+  const domSelection = useMemo(() => selectedObjectIdSet.size<=64 ? selectedObjectIdSet : new Set(),[selectedObjectIdSet]);
+  const depthLayers = useMemo(() => buildDepthLayers(sortedItems,new Set([...domSelection,editingId,connectionStartId].filter(Boolean)),boardSize,representationScale,selectedObjectIdSet), [sortedItems,selectedObjectIdSet,domSelection,editingId,connectionStartId,boardSize,representationScale]);
   const hasSingleSelection = selectedObjectIds.length === 1;
   const primarySelectedItemId = selectedObjectIdSet.has(String(selectedItemId)) ? String(selectedItemId) : selectedObjectIds[selectedObjectIds.length - 1] || null;
   const selectedTable = hasSingleSelection && items[primarySelectedItemId]?.kind === 'table' ? items[primarySelectedItemId] : null;
@@ -817,7 +884,7 @@ function CanvasWorkspace() {
   const selectedConnector = selectedItem?.kind === 'connector' ? selectedItem : null;
   const selectedArrow = selectedItem?.kind === 'shape' && selectedItem.shapeType === 'arrow' ? selectedItem : null;
   const connectorToEdit = activeTool === 'connect' ? null : selectedConnector;
-  const selectedGroupIds = new Set(selectedObjectIds.map((id) => items[id]?.groupId).filter(Boolean));
+  const selectedGroupIds = useMemo(() => new Set(selectedObjectIds.map((id) => items[id]?.groupId).filter(Boolean)),[selectedObjectIds,items]);
   const selectionIsSingleGroup = selectedObjectIds.length > 0 && selectedGroupIds.size === 1
     && selectedObjectIds.every((id) => items[id]?.groupId === [...selectedGroupIds][0]);
   const changeSelectionGroup = (shouldGroup) => {
@@ -889,6 +956,7 @@ function CanvasWorkspace() {
     finishEditing(editingId);
     setActiveTool('select');
     selectItems([String(id)], String(id));
+    cancelCameraMotionRef.current();
     setCamera((current) => ({
       ...current,
       x: board.width / 2 - centerX * boardSize.width * current.scale,
@@ -904,17 +972,18 @@ function CanvasWorkspace() {
     if (participant) Object.assign(payload, participant); else payload.value = value;
     if (sendRaw(payload)) setSettingsPending(true);
   };
-  const { pointerPosition, startPan, centeredItemPosition, hideCursor, startZoomHold, stopZoomHold, cancelZoomHold, clickZoom, startDrawing, moveDrawing, stopDrawing } = useCanvasStageInteractions({
+  const { pointerPosition, startPan, cancelPanInertia, centeredItemPosition, hideCursor, startZoomHold, stopZoomHold, cancelZoomHold, clickZoom, startDrawing, moveDrawing, stopDrawing } = useCanvasStageInteractions({
     boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth,
-    addItem, setToast, setItems, refreshSpatialIndex,
+    addItem, setToast, setItems, refreshSpatialIndex, spatialIndexRef,
     sendStrokeFrameChanges, pendingItemChangesRef, strokeSaveFlushRef,
     lastCursorSentAtRef, peerMeshRef, panRef, zoomHoldRef, zoomPointerPressRef, zoomSensitivity,
     stageWheelHandlerRef, laserDrawingRef, setLaserStrokes, selectionRef, selectedItemIds,
     setSelectionBox, selectItems, canvasSnapshotLoadedRef: hostReadyRef, finishEditing, setConnectionStartId,
     spacePressedRef, user, tableConfig, permission, setSharePosition, shapeType, shapeArrowStartHead,
-    shapeArrowEndHead, shapeFillColor, color, noteColor, setActiveTool, startEditing, strokeWidth, penBrush, penOpacity,
+    shapeArrowEndHead, shapeFillColor, shapeVisualStyle, shapeStrokeEnabled, color, noteColor, setActiveTool, startEditing, strokeWidth, penBrush, penOpacity,
     drawingRef, drawingSessionRef, draftRef, vectorDraftRef,
   });
+  cancelCameraMotionRef.current = cancelPanInertia;
   const placeSharedLink = (shared) => {
     if (!sharePosition) return;
     const isVideo = shared.mediaType === 'youtube' || shared.mediaType === 'video';
@@ -968,12 +1037,14 @@ function CanvasWorkspace() {
     startGroupRotation,
   } = useCanvasObjectInteractions({
     activeTool,
+    spatialIndexRef,
     addItem,
     boardSize,
     boardRef,
     clearPeerItemGeometryBroadcast,
     connectionStartId,
     connectorColor,
+    connectorVisualStyle,
     connectorEndHead,
     connectorStartHead,
     connectorWidth,
@@ -1000,6 +1071,8 @@ function CanvasWorkspace() {
   });
   const changeTheme = (nextTheme) => { localStorage.setItem('agora_canvas_theme', nextTheme); setTheme(nextTheme); };
   const toggleGrid = () => { const next = !showGrid; localStorage.setItem('agora_canvas_grid', String(next)); setShowGrid(next); };
+  const toggleXAxis = () => { const next = !showXAxis; localStorage.setItem('agora_canvas_x_axis', String(next)); setShowXAxis(next); };
+  const toggleYAxis = () => { const next = !showYAxis; localStorage.setItem('agora_canvas_y_axis', String(next)); setShowYAxis(next); };
   const changeZoomSensitivity = (event) => {
     const next = Number(event.target.value);
     setZoomSensitivity(next);
@@ -1120,6 +1193,21 @@ function CanvasWorkspace() {
   const canvasParticipants = useParticipantProfiles(settings?.participants, token, user);
   const { backgroundColor, setBackgroundColor, backgroundStyle } = useCanvasBackground(canvasId);
   const otherParticipants = uniqueCanvasParticipants(canvasParticipants, user);
+  const objectActionsRef = useRef(null);
+  objectActionsRef.current = {
+    onStartEditing:startEditing, onTextChange:updateCollaborativeText,
+    onMetadataChange:(id,field,value)=>['renderMode','filename','language'].includes(field)
+      ? updateContentSetting(id,field,value) : updateCollaborativeMetadata(id,field,value),
+    onFormulaChange:updateFormulaItem, onTableChange:updateTableItem, onStopEditing:stopEditing,
+    onSave:saveCollaborativeItem, onPointerDown:startObjectDrag, onResizeStart:startObjectResize,
+    onArrowBendStart:startArrowBend, onPointerMove:moveObject, onPointerUp:stopObjectDrag,
+    onCopy:value=>navigator.clipboard?.writeText(value), onConnectorDoubleClick:focusConnectorTarget,
+  };
+  // One set of stable dispatchers serves every object and always calls this
+  // render's actions, including the latest camera and collaboration state.
+  const objectActions = useMemo(()=>Object.fromEntries(Object.keys(objectActionsRef.current)
+    .map(key=>[key,(...args)=>objectActionsRef.current[key](...args)])),[]);
+
 
   return <div className="canvas-app-page" data-theme={theme}>
     <div style={{ display: 'contents' }} inert={!hostStatus.editable && !error ? '' : undefined}>
@@ -1133,32 +1221,47 @@ function CanvasWorkspace() {
         if (tool === 'connect') setConnectionStartId(null);
         setActiveTool(tool);
       }} color={color} onColorChange={setColor} onUploadPdf={uploadPdf} onUploadImage={uploadImage} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} /></ResizablePanel>
-      <main className="board-region"><div className="board-topline"><span className="board-section-label"><i /> 2차 좌표 캔버스</span><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(true); }}><Icon name="code" size={15} />캔버스 코드</button><button className="zoom-button" aria-label="확대" title="클릭: 한 단계 확대 · 길게 누르기: 계속 확대" onPointerDown={(event) => startZoomHold(event, 1 + 0.15 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.15 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label="축소" title="클릭: 한 단계 축소 · 길게 누르기: 계속 축소" onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.15 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.15 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => setCamera(fitCanvasCamera(viewportSize))}>맞춤</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />격자 {showGrid ? '켜짐' : '꺼짐'}</button></div></div>
+      <main className="board-region"><div className="board-topline"><span className="board-section-label"><i /> 2차 좌표 캔버스</span><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(true); }}><Icon name="code" size={15} />캔버스 코드</button><button className="zoom-button" aria-label="확대" title="클릭: 한 단계 확대 · 길게 누르기: 계속 확대" onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label="축소" title="클릭: 한 단계 축소 · 길게 누르기: 계속 축소" onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>맞춤</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />격자 {showGrid ? '켜짐' : '꺼짐'}</button></div></div>
       <HostCanvasStatus status={hostStatus} receipt={lastReceipt} onRetry={retryRejected} />
-        <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ ...canvasGridStyle(camera), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ activeTool, dragRef, panRef, spacePressedRef, startPan, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor })}>
+        <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ ...canvasGridStyle(camera), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion: cancelPanInertia, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, pickVector: (event,doubleClick = false,capture = false) => {
+            if (!['select', 'connect'].includes(activeTool) || event.button !== 0 || event.target.closest?.('.canvas-minimap, .stage-label, button, input, textarea')) return false;
+            const target=event.target.closest?.('.canvas-object');
+            if(capture !== Boolean(target))return false;
+            const hit = hitTestVector(spatialIndex, pointerPosition(event), boardSize, camera.scale, vectorHitOrder);
+            if (!hit) return false;
+            if(target){
+              const targetId=target.dataset.itemId,below=items[targetId];
+              if(hit.id===targetId || !below || itemDepth(hit.item)<itemDepth(below))return false;
+              if(itemDepth(hit.item)===itemDepth(below) && (!['shape','stroke','connector','text'].includes(below.kind) || (vectorHitOrder.get(hit.id)||0)<=(vectorHitOrder.get(targetId)||0)))return false;
+            }
+            if(doubleClick) handleObjectDoubleClick(event,{id:hit.id,item:hit.item,activeTool,editing:editingId===hit.id,...objectActions});
+            else objectActions.onPointerDown(event, hit.id, hit.item);
+            return true;
+          } })}>
           <InteractiveAtmosphere variant="canvas" />
           <div className="stage-label"><span>FRELOG / {String(canvasId).padStart(2, '0')}</span><b>{canvas?.canvas_name || '공유 캔버스'}</b></div>
-          <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true"><span className="coordinate-x" /><span className="coordinate-y" /><i className="coordinate-origin">0</i><b className="coordinate-x-label">X</b><b className="coordinate-y-label">Y</b></div>
-          <VectorLayer worldSize={boardSize} items={visibleVectorItems} referenceItems={items} previewStrokes={remoteDrawingStrokes} camera={camera} onReady={(setDraft) => { vectorDraftRef.current = setDraft; }} />
-          <div className="canvas-scene" ref={sceneRef} style={{ width: boardSize.width, height: boardSize.height, right: 'auto', bottom: 'auto', transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}>
-            {sortedItems.map(([id, item, bounds, connectorCurve]) => <CanvasObject key={id} id={id} item={item} bounds={bounds} connectorCurve={connectorCurve} viewSize={boardSize} token={token} selected={selectedObjectIdSet.has(String(id))} allowSingleSelectionControls={hasSingleSelection} activeTool={activeTool} connectionStartId={connectionStartId} editing={editingId === id} dirty={dirtyItems.has(String(id))} remoteEditors={(editorsByItem.get(String(id)) || [])} onStartEditing={startEditing} onTextChange={updateCollaborativeText} onMetadataChange={(id, field, value) => ['renderMode', 'filename', 'language'].includes(field) ? updateContentSetting(id, field, value) : updateCollaborativeMetadata(id, field, value)} onFormulaChange={updateFormulaItem} onTableChange={updateTableItem} onStopEditing={stopEditing} onSave={saveCollaborativeItem} onPointerDown={startObjectDrag} onResizeStart={startObjectResize} onArrowBendStart={startArrowBend} onPointerMove={moveObject} onPointerUp={stopObjectDrag} onCopy={(value) => navigator.clipboard?.writeText(value)} onConnectorDoubleClick={focusConnectorTarget} />)}
+          <div className="canvas-grid-surface" aria-hidden="true" />
+          <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true">{showXAxis && <><span className="coordinate-x" /><b className="coordinate-x-label">X</b></>}{showYAxis && <><span className="coordinate-y" /><b className="coordinate-y-label">Y</b></>}{(showXAxis || showYAxis) && <i className="coordinate-origin">0</i>}</div>
+          <div className="canvas-scene" ref={sceneRef} style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }}>
+            {depthLayers.map((layer, index) => <div className="canvas-depth-layer" key={layer.depth} data-depth={layer.depth} style={{ position: 'absolute', inset: 0, zIndex: index + 1, pointerEvents: 'none' }}>
+              <VectorLayer style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }} worldSize={boardSize} items={layer.vectors} referenceItems={items} routingRevision={spatialIndex.stats.boundsCalculated} previewStrokes={layer.depth === 0 ? remoteDrawingStrokes : undefined} camera={camera} onReady={layer.depth === 0 ? (setDraft) => { vectorDraftRef.current = setDraft; } : undefined} />
+            <div className="canvas-world-layer" style={{position:'absolute',width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`}}><CanvasLayerObjects objects={layer.objects} domSelection={domSelection} editingId={editingId} connectionStartId={connectionStartId} world={boardSize} scale={representationScale} token={token} selected={selectedObjectIdSet} singleSelection={hasSingleSelection} activeTool={activeTool} dirtyItems={dirtyItems} editorsByItem={editorsByItem} actions={objectActions} /></div>
+            </div>)}
+            <div className="canvas-world-layer" style={{ position: 'absolute', width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`, zIndex: depthLayers.length + 1, pointerEvents: 'none' }}>
             {selectedItem && selectedItem.kind !== 'connector' && activeTool === 'select' && !editingId && <RotationHandles sceneRef={sceneRef} id={String(primarySelectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startObjectRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
             {selectionIsSingleGroup && selectedObjectIds.length > 1 && activeTool === 'select' && !editingId && <GroupRotationHandles sceneRef={sceneRef} ids={selectedObjectIds} items={items} viewSize={boardSize} onPointerDown={startGroupRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
             <RemoteCursorLayer updaterRef={remoteCursorUpdaterRef} activePeerIds={activePeerIds} visibleBounds={visibleBounds} />
+            </div>
           </div>
           <LaserLayer strokes={laserStrokes} width={viewportSize.width} height={viewportSize.height} worldSize={boardSize} camera={camera} />
           {selectionBox && <div className="canvas-selection-marquee" style={{ left: selectionBox.left, top: selectionBox.top, width: selectionBox.width, height: selectionBox.height }} aria-hidden="true" />}
           <div className="canvas-minimap" ref={minimapWidgetRef} style={minimapPosition ? { left: `${minimapPosition.left}px`, top: `${minimapPosition.top}px`, right: 'auto', bottom: 'auto' } : undefined} role="group" aria-label="캔버스 미니맵">
             <div className="canvas-minimap-heading" onPointerDown={startMinimapWidgetMove} onPointerMove={moveMinimapWidget} onPointerUp={stopMinimapWidgetMove} onPointerCancel={stopMinimapWidgetMove} onLostPointerCapture={stopMinimapWidgetMove}><strong>미니맵 · 현재 화면</strong><span>잡고 이동</span></div>
             <div className="canvas-minimap-map" title="클릭해 해당 위치로 이동 · 안쪽을 드래그해도 캔버스는 움직이지 않습니다" onPointerDown={startMinimapPan} onPointerMove={moveMinimapPan} onPointerUp={stopMinimapPan} onPointerCancel={stopMinimapPan} onLostPointerCapture={stopMinimapPan}>
+              <CanvasMinimapObjects minimap={minimap} colors={minimapItemColors} selected={selectedObjectIdSet} />
               <svg className="canvas-minimap-svg" viewBox={`${minimap.bounds.minX} ${minimap.bounds.minY} ${minimap.bounds.width} ${minimap.bounds.height}`} preserveAspectRatio="none" aria-label="현재 화면을 중심으로 한 주변 객체">
-                <line className="canvas-minimap-axis" x1={boardSize.width / 2} y1={minimap.bounds.minY} x2={boardSize.width / 2} y2={minimap.bounds.maxY} />
-                <line className="canvas-minimap-axis" x1={minimap.bounds.minX} y1={boardSize.height / 2} x2={minimap.bounds.maxX} y2={boardSize.height / 2} />
-                {minimap.items.map(({ id, item, bounds }) => {
-                  const itemWidth = Math.max(bounds.maxX - bounds.minX, minimap.bounds.width * 0.008);
-                  const itemHeight = Math.max(bounds.maxY - bounds.minY, minimap.bounds.height * 0.008);
-                  return <rect key={id} className={`canvas-minimap-item${selectedObjectIdSet.has(String(id)) ? ' selected' : ''}`} x={(bounds.minX + bounds.maxX - itemWidth) / 2} y={(bounds.minY + bounds.maxY - itemHeight) / 2} width={itemWidth} height={itemHeight} rx={Math.min(itemWidth, itemHeight) * 0.22} style={{ fill: item.color || minimapItemColors[item.kind] }} />;
-                })}
+                {showYAxis && <line className="canvas-minimap-axis" x1={boardSize.width / 2} y1={minimap.bounds.minY} x2={boardSize.width / 2} y2={minimap.bounds.maxY} />}
+                {showXAxis && <line className="canvas-minimap-axis" x1={minimap.bounds.minX} y1={boardSize.height / 2} x2={minimap.bounds.maxX} y2={boardSize.height / 2} />}
                 <rect className="canvas-minimap-viewport" x={minimap.viewport.minX} y={minimap.viewport.minY} width={minimap.viewport.maxX - minimap.viewport.minX} height={minimap.viewport.maxY - minimap.viewport.minY} rx="2" />
               </svg>
             </div>
@@ -1166,9 +1269,9 @@ function CanvasWorkspace() {
           {activeTool === 'eraser' && <div className="eraser-cursor" ref={eraserCursorRef} style={{ width: `${eraserWidth}px`, height: `${eraserWidth}px` }} aria-hidden="true" />}
           {sharePosition && <ShareComposer onCancel={() => { setSharePosition(null); setActiveTool('select'); }} onSubmit={placeSharedLink} />}
           {activeTool === 'laser' && <div className="draw-cursor-label laser-cursor-label"><Icon name="laser" size={13} /> 가리키는 중 · 1.6초 후 사라짐</div>}{activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} /> 그리는 중</div>}{activeTool === 'eraser' && <div className="draw-cursor-label"><Icon name="eraser" size={13} /> 드로잉을 드래그해 지우기</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? '도착 오브젝트 선택' : '시작 오브젝트 선택'}</div>}{activeTool === 'link' && !sharePosition && <div className="draw-cursor-label"><Icon name="link" size={13} /> 공유 자료를 놓을 위치 선택</div>}
-        </div><div className="board-footer"><span>무한 좌표 평면 · X/Y축</span><span className="board-footer-center">빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동</span><span>{visibleItemIds.size}/{drawableItemCount}개 표시</span></div>
+        </div><div className="board-footer"><span>무한 좌표 평면{showXAxis && showYAxis ? ' · X/Y축' : showXAxis ? ' · X축' : showYAxis ? ' · Y축' : ''}</span><span className="board-footer-center">빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동</span><span>{visibleItemCount}/{drawableItemCount}개 표시</span></div>
       </main>
-<ResizablePanel {...panelLayout.handle('inspector')}><CanvasInspectorPanel updateContentSetting={updateContentSetting} onNavigateObject={focusCanvasObject} {...{
+<ResizablePanel {...panelLayout.handle('inspector')}><CanvasInspectorPanel spatialIndex={spatialIndex} updateContentSetting={updateContentSetting} onNavigateObject={focusCanvasObject} {...{
         activeTool,
         canvasId,
         canvasParticipants,
@@ -1215,9 +1318,11 @@ function CanvasWorkspace() {
         shapeArrowStartHead,
         shapeType,
         shapeFillColor,
+        shapeVisualStyle, setShapeVisualStyle, shapeStrokeEnabled, setShapeStrokeEnabled, updateShapeAppearance,
+        connectorVisualStyle, setConnectorVisualStyle,
         setShapeFillColor,
         updateShapeFill,
-        showGrid,
+        showGrid, showXAxis, showYAxis, toggleXAxis, toggleYAxis,
         strokeWidth,
         penBrush, penOpacity, changePenBrush, changePenOpacity,
         tableConfig,
@@ -1225,7 +1330,7 @@ function CanvasWorkspace() {
         toggleGrid,
         updateArrowHead,
         updateConnectorAppearance,
-        updateItemRotation,
+        updateItemRotation, updateItemDepth, updateItemShadow,
         updateObjectDimensions,
         updateObjectFontSize,
         updateNewConnectorHead,

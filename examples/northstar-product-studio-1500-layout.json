@@ -1,0 +1,157 @@
+{
+  "name": "NORTHSTAR · Product Studio / 1,500 Objects",
+  "objects": 1500,
+  "cover": {
+    "x": 80,
+    "y": 60,
+    "width": 1420,
+    "height": 820,
+    "objects": 60
+  },
+  "sections": [
+    {
+      "id": "area-01",
+      "title": "Workspace overview",
+      "x": 1800,
+      "y": 60,
+      "width": 1340,
+      "height": 1080,
+      "objects": 90
+    },
+    {
+      "id": "area-02",
+      "title": "Analytics & reports",
+      "x": 3300,
+      "y": 60,
+      "width": 1340,
+      "height": 1080,
+      "objects": 90
+    },
+    {
+      "id": "area-03",
+      "title": "Project board",
+      "x": 4800,
+      "y": 60,
+      "width": 1340,
+      "height": 1080,
+      "objects": 90
+    },
+    {
+      "id": "area-04",
+      "title": "Team calendar",
+      "x": 6300,
+      "y": 60,
+      "width": 1340,
+      "height": 1080,
+      "objects": 90
+    },
+    {
+      "id": "area-05",
+      "title": "Mobile / Home",
+      "x": 80,
+      "y": 1250,
+      "width": 1340,
+      "height": 1080,
+      "objects": 90
+    },
+    {
+      "id": "area-06",
+      "title": "Mobile / Tasks",
+      "x": 1580,
+      "y": 1250,
+      "width": 1340,
+      "height": 1080,
+      "objects": 90
+    },
+    {
+      "id": "area-07",
+      "title": "Mobile / Insights",
+      "x": 3080,
+      "y": 1250,
+      "width": 1340,
+      "height": 1080,
+      "objects": 90
+    },
+    {
+      "id": "area-08",
+      "title": "Mobile / Checkout",
+      "x": 4580,
+      "y": 1250,
+      "width": 1340,
+      "height": 1080,
+      "objects": 90
+    },
+    {
+      "id": "area-09",
+      "title": "Foundations",
+      "x": 80,
+      "y": 2400,
+      "width": 1340,
+      "height": 1080,
+      "objects": 90
+    },
+    {
+      "id": "area-10",
+      "title": "Component library",
+      "x": 1580,
+      "y": 2400,
+      "width": 1340,
+      "height": 1080,
+      "objects": 90
+    },
+    {
+      "id": "area-11",
+      "title": "Onboarding & forms",
+      "x": 3080,
+      "y": 2400,
+      "width": 1340,
+      "height": 1080,
+      "objects": 90
+    },
+    {
+      "id": "area-12",
+      "title": "Marketing landing",
+      "x": 4580,
+      "y": 2400,
+      "width": 1340,
+      "height": 1080,
+      "objects": 90
+    },
+    {
+      "id": "area-13",
+      "title": "Customer journey",
+      "x": 80,
+      "y": 3550,
+      "width": 1340,
+      "height": 1080,
+      "objects": 90
+    },
+    {
+      "id": "area-14",
+      "title": "Research wall",
+      "x": 1580,
+      "y": 3550,
+      "width": 1340,
+      "height": 1080,
+      "objects": 90
+    },
+    {
+      "id": "area-15",
+      "title": "Release planning",
+      "x": 3080,
+      "y": 3550,
+      "width": 1340,
+      "height": 1080,
+      "objects": 90
+    },
+    {
+      "id": "area-16",
+      "title": "Design review",
+      "x": 4580,
+      "y": 3550,
+      "width": 1340,
+      "height": 1080,
+      "objects": 90
+    }
+  ]
+}

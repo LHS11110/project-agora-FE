@@ -43,8 +43,8 @@
 .object-resize-handle {
   position: absolute;
   z-index: 1;
-  width: 4px;
-  height: 4px;
+  width: 14px;
+  height: 14px;
   margin: 0;
   padding: 0;
   border: 0;
@@ -52,7 +52,7 @@
   outline: 0;
   background: transparent;
   box-shadow: none;
-  opacity: 0;
+  opacity: 1;
   pointer-events: auto;
   touch-action: none;
   transition: none;
@@ -60,14 +60,26 @@
 
 .object-resize-handle:hover {
   z-index: 2;
-  background: transparent;
 }
 
-.object-resize-handle.resize-nw { top: -2px; left: -2px; cursor: nwse-resize; }
-.object-resize-handle.resize-n { top: -2px; left: 2px; right: 2px; width: auto; cursor: ns-resize; }
-.object-resize-handle.resize-ne { top: -2px; right: -2px; cursor: nesw-resize; }
-.object-resize-handle.resize-e { top: 2px; right: -2px; bottom: 2px; height: auto; cursor: ew-resize; }
-.object-resize-handle.resize-se { right: -2px; bottom: -2px; cursor: nwse-resize; }
-.object-resize-handle.resize-s { bottom: -2px; left: 2px; right: 2px; width: auto; cursor: ns-resize; }
-.object-resize-handle.resize-sw { bottom: -2px; left: -2px; cursor: nesw-resize; }
-.object-resize-handle.resize-w { top: 2px; bottom: 2px; left: -2px; height: auto; cursor: ew-resize; }
+.object-resize-handle.resize-nw { top: -7px; left: -7px; cursor: nwse-resize; }
+.object-resize-handle.resize-ne { top: -7px; right: -7px; cursor: nesw-resize; }
+.object-resize-handle.resize-se { right: -7px; bottom: -7px; cursor: nwse-resize; }
+.object-resize-handle.resize-sw { bottom: -7px; left: -7px; cursor: nesw-resize; }
+.object-resize-handle.resize-n { top: -7px; left: 50%; width: 28px; transform: translateX(-50%); cursor: ns-resize; }
+.object-resize-handle.resize-s { bottom: -7px; left: 50%; width: 28px; transform: translateX(-50%); cursor: ns-resize; }
+.object-resize-handle.resize-e { top: 50%; right: -7px; height: 28px; transform: translateY(-50%); cursor: ew-resize; }
+.object-resize-handle.resize-w { top: 50%; left: -7px; height: 28px; transform: translateY(-50%); cursor: ew-resize; }
+
+/* Thin visible grips inside a larger transparent pointer target. */
+.object-resize-handle:is(.resize-n, .resize-s, .resize-e, .resize-w)::after {
+  content: '';
+  position: absolute;
+  inset: 5px 2px;
+  border-radius: 3px;
+  background: var(--ink-strong, #52664b);
+  box-shadow: 0 0 0 1px var(--surface, #fff);
+  pointer-events: none;
+}
+.object-resize-handle:is(.resize-e, .resize-w)::after { inset: 2px 5px; }
+.object-resize-handle:is(.resize-n, .resize-s, .resize-e, .resize-w):hover::after { background: #725be4; }

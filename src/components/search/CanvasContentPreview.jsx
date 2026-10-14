@@ -1,3 +1,4 @@
+import { itemDepth } from '../../canvas/itemDepth.js';
 import UserGroupContent from '../../canvas/userGroups/UserGroupContent.jsx';
 import RenderedContent from '../../canvas/content/RenderedContent.jsx';
 import { isTextContent, contentMode, contentSource } from '../../canvas/content/contentPresentation.js';
@@ -5,6 +6,7 @@ import { shapeOutlinePaths, shapeFillPaths } from '../../canvas/shapeGeometry.js
 import { objectBounds } from '../CanvasSpatialBTree.js';
 import { connectorGeometry, OBJECT_SIZES } from '../connectorGeometry.js';
 import { shapeArrowGeometry } from '../shapeArrowGeometry.js';
+import { vectorStrokePaths, sketchHatchPaths } from '../../canvas/vectorStyle.js';
 import ConnectorArrowheads from '../canvas/ConnectorArrowheads.jsx';
 import AuthenticatedImage from '../AuthenticatedImage.jsx';
 import MarkdownText from '../MarkdownText.jsx';
@@ -24,7 +26,13 @@ function PreviewContent({ item, token }) {
   return item.format === 'markdown' || item.kind === 'note' ? <MarkdownText source={item.text || ''} /> : <p>{item.text || ''}</p>;
 }
 
-function PreviewObject({ item, token }) {
+function PreviewLines({ paths, visualStyle, seed }) {
+  return paths.flatMap((path, index) => vectorStrokePaths(path, visualStyle, `${seed}:${index}`).map((stroke, pass) =>
+    <polyline key={`${index}:${pass}`} points={stroke.points.map(p => `${p.x},${p.y}`).join(' ')}
+      fill="none" strokeOpacity={stroke.alpha} strokeWidth={2 * stroke.widthScale} strokeLinejoin="round" />));
+}
+
+function PreviewObject({ id, item, token }) {
   const [defaultWidth, defaultHeight] = OBJECT_SIZES[item.kind] || [0.2, 0.12];
   const x = (Number(item.x) || 0) * WIDTH;
   const y = (Number(item.y) || 0) * HEIGHT;
@@ -39,8 +47,12 @@ function PreviewObject({ item, token }) {
     const color = item.color || '#617d68';
     const arrow = item.shapeType === 'arrow' ? shapeArrowGeometry(width, height, item.bend, item.startHead, item.endHead) : null;
     return <g transform={`translate(${x} ${y}) rotate(${rotation} ${width / 2} ${height / 2})`} style={{ color }} fill="none" stroke={color} strokeWidth={item.strokeWidth || 2}>
-      {!arrow && /^#[0-9a-f]{6}$/i.test(item.fill || '') && shapeFillPaths(item.shapeType, width, height).map((path, index) => <polygon key={`fill-${index}`} points={path.map(p => `${p.x},${p.y}`).join(' ')} fill={item.fill} stroke="none" />)}
-      {arrow ? <><polyline points={arrow.points.map(p => `${p.x},${p.y}`).join(' ')} /><ConnectorArrowheads geometry={arrow} offsetX={0} offsetY={0} strokeWidth={item.strokeWidth || 2} /></> : shapeOutlinePaths(item.shapeType, width, height).map((path, index) => <polyline key={index} points={path.map(p => `${p.x},${p.y}`).join(' ')} strokeLinejoin="round" />)}
+      {!arrow && /^#[0-9a-f]{6}$/i.test(item.fill || '') && shapeFillPaths(item.shapeType, width, height).map((path, index) => item.visualStyle === 'sketch'
+        ? <g key={`fill-${index}`}>{sketchHatchPaths(path, `${id}:fill`).map((hatch, line) => <polyline key={line} points={hatch.points.map(p => `${p.x},${p.y}`).join(' ')}
+          fill="none" stroke={item.fill} strokeWidth={1.2 * hatch.widthScale} strokeOpacity={hatch.alpha} strokeLinecap="round" />)}</g>
+        : <polygon key={`fill-${index}`} points={path.map(p => `${p.x},${p.y}`).join(' ')} fill={item.fill} stroke="none" />)}
+      {item.strokeEnabled !== false && (arrow ? <><PreviewLines paths={[arrow.points]} visualStyle={item.visualStyle} seed={id} /><ConnectorArrowheads geometry={arrow} visualStyle={item.visualStyle} seed={id} /></>
+        : <PreviewLines paths={shapeOutlinePaths(item.shapeType, width, height)} visualStyle={item.visualStyle} seed={id} />)}
     </g>;
   }
   return <foreignObject x={x} y={y} width={width} height={height} transform={`rotate(${rotation} ${x + width / 2} ${y + height / 2})`}><div xmlns="http://www.w3.org/1999/xhtml" className={`preview-object preview-object-${item.kind}`} style={{ background: item.kind === 'note' ? item.color || '#f6edcf' : undefined }}><PreviewContent item={item} token={token} /></div></foreignObject>;
@@ -48,7 +60,7 @@ function PreviewObject({ item, token }) {
 
 /** Frame the complete document, including objects outside the initial viewport. */
 export default function CanvasContentPreview({ items, token, name }) {
-  const entries = Object.entries(items).filter(([, item]) => item && kinds.has(item.kind));
+  const entries = Object.entries(items).filter(([, item]) => item && kinds.has(item.kind)).sort((a, b) => itemDepth(a[1]) - itemDepth(b[1]));
   const bounds = entries.map(([, item]) => objectBounds(item, items, WIDTH, HEIGHT));
   const valid = bounds.filter(b => Object.values(b).every(Number.isFinite));
   if (!valid.length) return <div className="canvas-preview-message">아직 객체가 없어요</div>;
@@ -56,10 +68,14 @@ export default function CanvasContentPreview({ items, token, name }) {
   const minY = Math.min(...valid.map(b => b.minY)) * HEIGHT - 35;
   const width = Math.max(240, Math.max(...valid.map(b => b.maxX)) * WIDTH - minX + 35);
   const height = Math.max(160, Math.max(...valid.map(b => b.maxY)) * HEIGHT - minY + 35);
-  const connectors = entries.filter(([, item]) => item.kind === 'connector').map(([id, item]) => ({ id, item, geometry: connectorGeometry(item, items, WIDTH, HEIGHT) })).filter(entry => entry.geometry);
   return <svg className="canvas-content-preview" viewBox={`${minX} ${minY} ${width} ${height}`} role="img" aria-label={`${name || '캔버스'} 객체 미리보기`}>
-    {connectors.map(({ id, item, geometry }) => <polyline key={id} points={geometry.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={item.color || '#617d68'} strokeWidth={item.strokeWidth || 1.5} />)}
-    {entries.filter(([, item]) => item.kind !== 'connector').map(([id, item]) => <PreviewObject key={id} item={item} token={token} />)}
-    {connectors.map(({ id, item, geometry }) => <g key={id} style={{ color: item.color || '#617d68' }}><ConnectorArrowheads geometry={geometry} offsetX={0} offsetY={0} strokeWidth={item.strokeWidth || 1.5} /></g>)}
+    {entries.map(([id, item]) => {
+      if (item.kind !== 'connector') return <PreviewObject key={id} id={id} item={item} token={token} />;
+      const geometry = connectorGeometry(item, items, WIDTH, HEIGHT);
+      return geometry && <g key={id} style={{ color: item.color || '#617d68' }}>
+        {vectorStrokePaths(geometry.points, item.visualStyle, id).map((stroke, pass) => <polyline key={pass} points={stroke.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={item.color || '#617d68'} strokeWidth={(item.strokeWidth || 1.5) * stroke.widthScale} strokeOpacity={stroke.alpha} />)}
+        <ConnectorArrowheads geometry={geometry} visualStyle={item.visualStyle} seed={id} />
+      </g>;
+    })}
   </svg>;
 }

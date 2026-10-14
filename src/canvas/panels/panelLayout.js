@@ -14,17 +14,25 @@ export function readPanelSizes() {
   return Object.fromEntries(Object.entries(PANEL_DEFAULTS).map(([mode, defaults]) => [mode, Object.fromEntries(Object.entries(defaults).map(([key, value]) => [key, Number.isFinite(saved?.[mode]?.[key]) ? clamp(saved[mode][key], 60, 900) : value]))]));
 }
 export function panelLimits(mode, key, bounds, sizes) {
-  if (mode === 'mobile') return { min: key === 'tools' ? 72 : 150, max: key === 'tools' ? 320 : Math.max(300, Math.min(800, window.innerHeight * .8)) };
+  if (mode === 'mobile') {
+    if (key === 'tools') return { min: 72, max: Math.max(72, Math.min(180, bounds.height * .22)) };
+    if (key === 'chat') return { min: 120, max: Math.max(120, Math.min(300, bounds.height * .3)) };
+    return { min: 120, max: Math.max(120, Math.min(420, bounds.height - sizes.tools - sizes.chat - 202)) };
+  }
   if (key === 'tools') return { min: 104, max: Math.max(104, Math.min(320, bounds.width - sizes.inspector - 240)) };
   if (key === 'inspector') return { min: 220, max: Math.max(220, Math.min(600, bounds.width - sizes.tools - 240)) };
   const min = Math.min(140, bounds.height * .3);
   return { min, max: Math.max(min, Math.min(600, bounds.height - Math.min(220, bounds.height * .55))) };
 }
 export function fitPanelSizes(raw, mode, bounds, collapsed = {}) {
-  if (mode === 'mobile') return Object.fromEntries(Object.entries(raw).map(([key, value]) => {
-    if (collapsed[key]) return [key, COLLAPSED_PANEL_SIZE];
-    const limits = panelLimits(mode, key, bounds, raw); return [key, clamp(value, limits.min, limits.max)];
-  }));
+  if (mode === 'mobile') {
+    const fitted = { ...raw };
+    for (const key of ['tools', 'chat', 'inspector']) {
+      const limits = panelLimits(mode, key, bounds, fitted);
+      fitted[key] = collapsed[key] ? COLLAPSED_PANEL_SIZE : clamp(raw[key], limits.min, limits.max);
+    }
+    return fitted;
+  }
   const tools = collapsed.tools ? COLLAPSED_PANEL_SIZE : clamp(raw.tools, 104, Math.max(104, Math.min(320, bounds.width - (collapsed.inspector ? COLLAPSED_PANEL_SIZE : 220) - 240)));
   const inspector = collapsed.inspector ? COLLAPSED_PANEL_SIZE : clamp(raw.inspector, 220, Math.max(220, Math.min(600, bounds.width - tools - 240)));
   const limits = panelLimits(mode, 'chat', bounds, { tools, inspector });

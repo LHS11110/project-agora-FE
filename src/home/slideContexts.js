@@ -6,7 +6,7 @@ export const SLIDE_CONTEXTS = {
   ],
   architecture: [
     { icon: 'grid', title: '손끝에서 시작하는 입력', detail: '고정된 좌표 위에서 이동·확대·편집', tag: 'BROWSER', to: '/tutorial' },
-    { icon: 'connect', title: '실시간으로 이어지는 변경', detail: 'WebRTC와 웹소켓이 연결하는 작업', tag: 'REALTIME', to: '/docs' },
+    { icon: 'connect', title: '실시간으로 이어지는 변경', detail: '브로커와 웹소켓이 연결하는 작업', tag: 'REALTIME', to: '/docs' },
     { icon: 'database', title: '생각을 남기는 저장소', detail: '객체 저장과 캔버스 검색의 흐름', tag: 'PERSISTENCE', to: '/docs' },
   ],
   map: [

@@ -1,0 +1,293 @@
+{
+  "date": "2026-10-14",
+  "environment": "Chrome 155 headless / SwiftShader detected; Canvas 2D fallback / 1800x1100 viewport",
+  "method": "12000 native object records injected into init_items in an isolated temporary canvas; application and renderer unmodified; canvas_relay writes blocked; 75 requestAnimationFrame-driven pans after cache preparation; not a backend throughput or hardware GPU benchmark",
+  "before": [
+    {
+      "scenario": "dense",
+      "objects": 12000,
+      "p50": 475.80000000447035,
+      "p95": 653.3999999985099,
+      "max": 866.8999999985099,
+      "domObjects": 12000,
+      "domNodes": 24663,
+      "layers": [
+        {
+          "frames": 78,
+          "rasterizations": 12100,
+          "cacheHits": 875600,
+          "descriptorsUpdated": 12100,
+          "drawnObjects": 875700,
+          "texturePages": 0,
+          "lastDrawnObjects": 12000,
+          "visibleObjects": 12000,
+          "renderer": "canvas2d"
+        }
+      ]
+    },
+    {
+      "scenario": "distributed",
+      "objects": 12000,
+      "p50": 16.600000001490116,
+      "p95": 23.299999997019768,
+      "max": 55.5,
+      "domObjects": 80,
+      "domNodes": 873,
+      "layers": [
+        {
+          "frames": 83,
+          "rasterizations": 88,
+          "cacheHits": 6176,
+          "descriptorsUpdated": 88,
+          "drawnObjects": 6104,
+          "texturePages": 0,
+          "lastDrawnObjects": 80,
+          "visibleObjects": 80,
+          "renderer": "canvas2d"
+        }
+      ]
+    }
+  ],
+  "after": [
+    {
+      "scenario": "dense",
+      "objects": 12000,
+      "coldMs": 152,
+      "p50": 16.69999998807907,
+      "p95": 34.900000005960464,
+      "max": 57.69999998807907,
+      "domObjects": 0,
+      "domNodes": 664,
+      "layers": [
+        {
+          "frames": 86,
+          "rasterizations": 2,
+          "cacheHits": 34917,
+          "descriptorsUpdated": 12000,
+          "drawnObjects": 13197,
+          "texturePages": 1,
+          "lastDrawnObjects": 1,
+          "visibleObjects": 12000,
+          "sharedRasters": 2,
+          "retainedRasters": 0,
+          "cachedPanFrames": 77,
+          "renderer": "canvas2d"
+        }
+      ]
+    },
+    {
+      "scenario": "distributed",
+      "objects": 12000,
+      "coldMs": 100,
+      "p50": 16.700000002980232,
+      "p95": 41.900000005960464,
+      "max": 59.1000000089407,
+      "domObjects": 0,
+      "domNodes": 664,
+      "layers": [
+        {
+          "frames": 84,
+          "rasterizations": 2,
+          "cacheHits": 312,
+          "descriptorsUpdated": 156,
+          "drawnObjects": 156,
+          "texturePages": 1,
+          "lastDrawnObjects": 1,
+          "visibleObjects": 156,
+          "sharedRasters": 2,
+          "retainedRasters": 0,
+          "cachedPanFrames": 79,
+          "renderer": "canvas2d"
+        }
+      ]
+    },
+    {
+      "scenario": "unique",
+      "objects": 12000,
+      "coldMs": 212,
+      "p50": 16.799999997019768,
+      "p95": 24.799999997019768,
+      "max": 26.400000005960464,
+      "domObjects": 0,
+      "domNodes": 664,
+      "layers": [
+        {
+          "frames": 144,
+          "rasterizations": 12000,
+          "cacheHits": 616482,
+          "descriptorsUpdated": 12000,
+          "drawnObjects": 28235,
+          "texturePages": 3,
+          "lastDrawnObjects": 1,
+          "visibleObjects": 12000,
+          "sharedRasters": 12000,
+          "retainedRasters": 0,
+          "cachedPanFrames": 47,
+          "renderer": "canvas2d"
+        }
+      ]
+    },
+    {
+      "scenario": "mixed",
+      "objects": 12000,
+      "coldMs": 298,
+      "p50": 16.700000002980232,
+      "p95": 38.30000001192093,
+      "max": 45.69999998807907,
+      "domObjects": 0,
+      "domNodes": 664,
+      "layers": [
+        {
+          "frames": 117,
+          "rasterizations": 2443,
+          "cacheHits": 227836,
+          "descriptorsUpdated": 12041,
+          "drawnObjects": 18282,
+          "texturePages": 1,
+          "lastDrawnObjects": 1,
+          "visibleObjects": 12000,
+          "sharedRasters": 2402,
+          "retainedRasters": 41,
+          "cachedPanFrames": 76,
+          "renderer": "canvas2d"
+        }
+      ]
+    },
+    {
+      "scenario": "overview",
+      "objects": 12000,
+      "coldMs": 197,
+      "p50": 16.69999998807907,
+      "p95": 33.900000005960464,
+      "max": 122.70000000298023,
+      "domObjects": 0,
+      "domNodes": 664,
+      "layers": [
+        {
+          "frames": 87,
+          "rasterizations": 1,
+          "cacheHits": 51958,
+          "descriptorsUpdated": 12000,
+          "drawnObjects": 12842,
+          "texturePages": 1,
+          "lastDrawnObjects": 1,
+          "visibleObjects": 12000,
+          "sharedRasters": 1,
+          "retainedRasters": 0,
+          "cachedPanFrames": 76,
+          "renderer": "canvas2d"
+        }
+      ]
+    }
+  ],
+  "deployedVerification": [
+    {
+      "scenario": "dense",
+      "objects": 12000,
+      "coldMs": 173,
+      "p50": 20.5,
+      "p95": 25.599999994039536,
+      "max": 31.899999991059303,
+      "domObjects": 0,
+      "domNodes": 664,
+      "layers": [
+        {
+          "frames": 89,
+          "rasterizations": 2,
+          "cacheHits": 45513,
+          "descriptorsUpdated": 12000,
+          "drawnObjects": 13593,
+          "texturePages": 1,
+          "lastDrawnObjects": 1,
+          "visibleObjects": 12000,
+          "sharedRasters": 2,
+          "retainedRasters": 0,
+          "cachedPanFrames": 77,
+          "renderer": "canvas2d"
+        }
+      ]
+    },
+    {
+      "scenario": "distributed",
+      "objects": 12000,
+      "coldMs": 243,
+      "p50": 17.5,
+      "p95": 37.29999999701977,
+      "max": 43.70000000298023,
+      "domObjects": 0,
+      "domNodes": 664,
+      "layers": [
+        {
+          "frames": 83,
+          "rasterizations": 2,
+          "cacheHits": 156,
+          "descriptorsUpdated": 156,
+          "drawnObjects": 156,
+          "texturePages": 1,
+          "lastDrawnObjects": 1,
+          "visibleObjects": 156,
+          "sharedRasters": 2,
+          "retainedRasters": 0,
+          "cachedPanFrames": 79,
+          "renderer": "canvas2d"
+        }
+      ]
+    }
+  ],
+  "largeSelectionVerification": [
+    {
+      "scenario": "dense",
+      "objects": 12000,
+      "coldMs": 154,
+      "p50": 16.700000002980232,
+      "p95": 47.20000000298023,
+      "max": 53.1000000089407,
+      "domObjects": 0,
+      "domNodes": 697,
+      "layers": [
+        {
+          "frames": 103,
+          "rasterizations": 4,
+          "cacheHits": 133658,
+          "descriptorsUpdated": 24000,
+          "drawnObjects": 78098,
+          "texturePages": 1,
+          "lastDrawnObjects": 1,
+          "visibleObjects": 12000,
+          "sharedRasters": 2,
+          "retainedRasters": 2,
+          "cachedPanFrames": 85,
+          "renderer": "canvas2d"
+        }
+      ]
+    }
+  ],
+  "largeSelectionDeployedVerification": [
+    {
+      "scenario": "dense",
+      "objects": 12000,
+      "coldMs": 167,
+      "p50": 16.69999998807907,
+      "p95": 49.099999994039536,
+      "max": 88.29999999701977,
+      "domObjects": 0,
+      "domNodes": 697,
+      "layers": [
+        {
+          "frames": 102,
+          "rasterizations": 4,
+          "cacheHits": 144304,
+          "descriptorsUpdated": 24000,
+          "drawnObjects": 74791,
+          "texturePages": 1,
+          "lastDrawnObjects": 1,
+          "visibleObjects": 12000,
+          "sharedRasters": 2,
+          "retainedRasters": 2,
+          "cachedPanFrames": 83,
+          "renderer": "canvas2d"
+        }
+      ]
+    }
+  ]
+}

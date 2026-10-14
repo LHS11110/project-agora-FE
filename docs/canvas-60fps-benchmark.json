@@ -1,0 +1,716 @@
+{
+  "date": "2026-10-14",
+  "hardware": "NVIDIA GeForce RTX 3060 Ti / 8 GB / driver 595.99.02",
+  "browser": "Chrome 155 headless, 1800x1100, devicePixelRatio 1",
+  "hardwareFlags": [
+    "--enable-gpu",
+    "--use-gl=angle",
+    "--use-angle=gl-egl",
+    "--ignore-gpu-blocklist"
+  ],
+  "method": "12000 native object records injected into init_items in an isolated temporary canvas; canvas_relay writes blocked; wait for model and raster preparation, fonts, GPU, then 180 requestAnimationFrame-driven input frames; fps is 1000 / mean frame interval; no GPU adapter spoofing; startup and backend throughput excluded",
+  "pan": [
+    {
+      "scenario": "dense",
+      "objects": 12000,
+      "coldMs": 1283,
+      "workerRasterUpdatesPerSecond": 0,
+      "fps": 59.99600026658929,
+      "over18ms": 1,
+      "p50": 16.69999998807907,
+      "p95": 17.099999994039536,
+      "max": 18.400000005960464,
+      "domObjects": 0,
+      "domNodes": 668,
+      "layers": [
+        {
+          "frames": 203,
+          "rasterizations": 1,
+          "cacheHits": 105250,
+          "descriptorsUpdated": 12000,
+          "drawnObjects": 92805,
+          "texturePages": 1,
+          "outputPixels": 466944,
+          "lastDrawnObjects": 12000,
+          "visibleObjects": 12000,
+          "sharedRasters": 1,
+          "retainedRasters": 0,
+          "preparing": false,
+          "deferredFrames": 19,
+          "refreshReasons": {
+            "width": 1,
+            "height": 1,
+            "metrics": 1,
+            "items": 1,
+            "references": 1,
+            "routing": 1
+          },
+          "compositePanFrames": 10,
+          "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+          "cachedPanFrames": 179,
+          "renderer": "webgl"
+        }
+      ]
+    },
+    {
+      "scenario": "distributed",
+      "objects": 12000,
+      "coldMs": 241,
+      "workerRasterUpdatesPerSecond": 0,
+      "fps": 59.990001666388935,
+      "over18ms": 1,
+      "p50": 16.69999998807907,
+      "p95": 17,
+      "max": 18.400000005960464,
+      "domObjects": 0,
+      "domNodes": 668,
+      "layers": [
+        {
+          "frames": 187,
+          "rasterizations": 1,
+          "cacheHits": 768,
+          "descriptorsUpdated": 256,
+          "drawnObjects": 512,
+          "texturePages": 1,
+          "outputPixels": 1266000,
+          "lastDrawnObjects": 256,
+          "visibleObjects": 256,
+          "sharedRasters": 1,
+          "retainedRasters": 0,
+          "preparing": false,
+          "deferredFrames": 0,
+          "refreshReasons": {
+            "width": 1,
+            "height": 1,
+            "metrics": 1,
+            "items": 3,
+            "references": 3,
+            "routing": 1,
+            "gpu": 1
+          },
+          "compositePanFrames": 3,
+          "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+          "cachedPanFrames": 179,
+          "renderer": "webgl"
+        }
+      ]
+    },
+    {
+      "scenario": "unique",
+      "objects": 12000,
+      "coldMs": 776,
+      "workerRasterUpdatesPerSecond": 0,
+      "fps": 59.992001066703224,
+      "over18ms": 3,
+      "p50": 16.700000002980232,
+      "p95": 17.19999998807907,
+      "max": 30.399999991059303,
+      "domObjects": 0,
+      "domNodes": 668,
+      "layers": [
+        {
+          "frames": 197,
+          "rasterizations": 1,
+          "cacheHits": 88135,
+          "descriptorsUpdated": 12000,
+          "drawnObjects": 67450,
+          "texturePages": 1,
+          "outputPixels": 778240,
+          "lastDrawnObjects": 12000,
+          "visibleObjects": 12000,
+          "sharedRasters": 1,
+          "retainedRasters": 0,
+          "preparing": false,
+          "deferredFrames": 13,
+          "refreshReasons": {
+            "width": 1,
+            "height": 1,
+            "metrics": 1,
+            "items": 1,
+            "references": 1,
+            "routing": 1
+          },
+          "compositePanFrames": 9,
+          "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+          "cachedPanFrames": 179,
+          "renderer": "webgl"
+        }
+      ]
+    },
+    {
+      "scenario": "mixed",
+      "objects": 12000,
+      "coldMs": 3720,
+      "workerRasterUpdatesPerSecond": 0,
+      "fps": 59.99999999999999,
+      "over18ms": 1,
+      "p50": 16.700000002980232,
+      "p95": 17,
+      "max": 18.399999991059303,
+      "domObjects": 0,
+      "domNodes": 668,
+      "layers": [
+        {
+          "frames": 336,
+          "rasterizations": 2412,
+          "cacheHits": 1373239,
+          "descriptorsUpdated": 12011,
+          "drawnObjects": 1382503,
+          "texturePages": 1,
+          "outputPixels": 155648,
+          "lastDrawnObjects": 12000,
+          "visibleObjects": 12000,
+          "sharedRasters": 2401,
+          "retainedRasters": 11,
+          "preparing": false,
+          "deferredFrames": 153,
+          "refreshReasons": {
+            "width": 1,
+            "height": 1,
+            "metrics": 1,
+            "items": 1,
+            "references": 1,
+            "routing": 1
+          },
+          "compositePanFrames": 10,
+          "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+          "cachedPanFrames": 179,
+          "renderer": "webgl"
+        }
+      ]
+    }
+  ],
+  "selection": [
+    {
+      "scenario": "dense",
+      "objects": 12000,
+      "coldMs": 1152,
+      "workerRasterUpdatesPerSecond": 0,
+      "fps": 59.98000666444519,
+      "over18ms": 29,
+      "p50": 16.700000002980232,
+      "p95": 18.700000002980232,
+      "max": 19.899999991059303,
+      "domObjects": 0,
+      "domNodes": 701,
+      "layers": [
+        {
+          "frames": 230,
+          "rasterizations": 3,
+          "cacheHits": 467191,
+          "descriptorsUpdated": 24000,
+          "drawnObjects": 469748,
+          "texturePages": 1,
+          "outputPixels": 700416,
+          "lastDrawnObjects": 12000,
+          "visibleObjects": 12000,
+          "sharedRasters": 2,
+          "retainedRasters": 1,
+          "preparing": false,
+          "deferredFrames": 45,
+          "refreshReasons": {
+            "width": 1,
+            "height": 1,
+            "metrics": 1,
+            "items": 3,
+            "references": 1,
+            "routing": 1
+          },
+          "compositePanFrames": 9,
+          "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+          "cachedPanFrames": 179,
+          "renderer": "webgl"
+        }
+      ]
+    }
+  ],
+  "zoom": [
+    {
+      "scenario": "dense",
+      "objects": 12000,
+      "coldMs": 1094,
+      "workerRasterUpdatesPerSecond": 0,
+      "fps": 59.99999999999999,
+      "over18ms": 0,
+      "p50": 16.700000002980232,
+      "p95": 17,
+      "max": 18,
+      "domObjects": 0,
+      "domNodes": 668,
+      "layers": [
+        {
+          "frames": 198,
+          "rasterizations": 1,
+          "cacheHits": 82774,
+          "descriptorsUpdated": 12000,
+          "drawnObjects": 72309,
+          "texturePages": 1,
+          "sceneObjects": 12000,
+          "outputPixels": 700416,
+          "lastDrawnObjects": 12000,
+          "visibleObjects": 12000,
+          "sharedRasters": 1,
+          "retainedRasters": 0,
+          "preparing": false,
+          "deferredFrames": 14,
+          "refreshReasons": {
+            "width": 1,
+            "height": 1,
+            "metrics": 1,
+            "items": 1,
+            "references": 1,
+            "routing": 1
+          },
+          "compositePanFrames": 9,
+          "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+          "cachedPanFrames": 179,
+          "renderer": "webgl"
+        }
+      ]
+    }
+  ],
+  "tintAndContextLoss": [
+    {
+      "scenario": "unique",
+      "objects": 12000,
+      "coldMs": 1109,
+      "workerRasterUpdatesPerSecond": 0,
+      "fps": 59.99600026658929,
+      "over18ms": 1,
+      "p50": 16.700000002980232,
+      "p95": 17,
+      "max": 20.599999994039536,
+      "domObjects": 0,
+      "domNodes": 668,
+      "layers": [
+        {
+          "frames": 201,
+          "rasterizations": 1,
+          "cacheHits": 102916,
+          "descriptorsUpdated": 12000,
+          "drawnObjects": 97101,
+          "texturePages": 1,
+          "sceneObjects": 12000,
+          "outputPixels": 622592,
+          "lastDrawnObjects": 12000,
+          "visibleObjects": 12000,
+          "sharedRasters": 1,
+          "retainedRasters": 0,
+          "preparing": false,
+          "deferredFrames": 17,
+          "refreshReasons": {
+            "width": 1,
+            "height": 1,
+            "metrics": 1,
+            "items": 1,
+            "references": 1,
+            "routing": 1
+          },
+          "compositePanFrames": 9,
+          "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+          "cachedPanFrames": 179,
+          "renderer": "webgl"
+        }
+      ]
+    }
+  ],
+  "deployedPan": [
+    {
+      "scenario": "dense",
+      "objects": 12000,
+      "coldMs": 1359,
+      "workerRasterUpdatesPerSecond": 0,
+      "fps": 59.994000599999595,
+      "over18ms": 2,
+      "p50": 16.700000002980232,
+      "p95": 17,
+      "max": 29.799999997019768,
+      "domObjects": 0,
+      "domNodes": 668,
+      "layers": [
+        {
+          "frames": 205,
+          "rasterizations": 1,
+          "cacheHits": 142232,
+          "descriptorsUpdated": 12000,
+          "drawnObjects": 136083,
+          "texturePages": 1,
+          "sceneObjects": 12000,
+          "outputPixels": 622592,
+          "lastDrawnObjects": 12000,
+          "visibleObjects": 12000,
+          "sharedRasters": 1,
+          "retainedRasters": 0,
+          "preparing": false,
+          "deferredFrames": 21,
+          "refreshReasons": {
+            "width": 1,
+            "height": 1,
+            "metrics": 1,
+            "items": 1,
+            "references": 1,
+            "routing": 1
+          },
+          "compositePanFrames": 9,
+          "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+          "cachedPanFrames": 179,
+          "renderer": "webgl"
+        }
+      ]
+    },
+    {
+      "scenario": "distributed",
+      "objects": 12000,
+      "coldMs": 299,
+      "workerRasterUpdatesPerSecond": 0,
+      "fps": 59.99600026658929,
+      "over18ms": 1,
+      "p50": 16.700000002980232,
+      "p95": 17,
+      "max": 18.200000002980232,
+      "domObjects": 0,
+      "domNodes": 668,
+      "layers": [
+        {
+          "frames": 186,
+          "rasterizations": 1,
+          "cacheHits": 512,
+          "descriptorsUpdated": 256,
+          "drawnObjects": 512,
+          "texturePages": 1,
+          "sceneObjects": 256,
+          "outputPixels": 1266000,
+          "lastDrawnObjects": 256,
+          "visibleObjects": 256,
+          "sharedRasters": 1,
+          "retainedRasters": 0,
+          "preparing": false,
+          "deferredFrames": 0,
+          "refreshReasons": {
+            "width": 1,
+            "height": 1,
+            "metrics": 1,
+            "items": 2,
+            "references": 2,
+            "routing": 1,
+            "gpu": 1
+          },
+          "compositePanFrames": 2,
+          "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+          "cachedPanFrames": 179,
+          "renderer": "webgl"
+        }
+      ]
+    },
+    {
+      "scenario": "unique",
+      "objects": 12000,
+      "coldMs": 986,
+      "workerRasterUpdatesPerSecond": 0,
+      "fps": 59.99600026658929,
+      "over18ms": 1,
+      "p50": 16.700000002980232,
+      "p95": 17,
+      "max": 18.399999991059303,
+      "domObjects": 0,
+      "domNodes": 668,
+      "layers": [
+        {
+          "frames": 203,
+          "rasterizations": 1,
+          "cacheHits": 163903,
+          "descriptorsUpdated": 12000,
+          "drawnObjects": 130037,
+          "texturePages": 1,
+          "sceneObjects": 12000,
+          "outputPixels": 856064,
+          "lastDrawnObjects": 12000,
+          "visibleObjects": 12000,
+          "sharedRasters": 1,
+          "retainedRasters": 0,
+          "preparing": false,
+          "deferredFrames": 19,
+          "refreshReasons": {
+            "width": 1,
+            "height": 1,
+            "metrics": 1,
+            "items": 1,
+            "references": 1,
+            "routing": 1
+          },
+          "compositePanFrames": 10,
+          "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+          "cachedPanFrames": 179,
+          "renderer": "webgl"
+        }
+      ]
+    },
+    {
+      "scenario": "mixed",
+      "objects": 12000,
+      "coldMs": 5293,
+      "workerRasterUpdatesPerSecond": 0,
+      "fps": 59.99800006678365,
+      "over18ms": 0,
+      "p50": 16.69999998807907,
+      "p95": 17,
+      "max": 17.200000002980232,
+      "domObjects": 0,
+      "domNodes": 668,
+      "layers": [
+        {
+          "frames": 441,
+          "rasterizations": 2414,
+          "cacheHits": 2521118,
+          "descriptorsUpdated": 12013,
+          "drawnObjects": 2528406,
+          "texturePages": 1,
+          "sceneObjects": 12000,
+          "outputPixels": 233472,
+          "lastDrawnObjects": 12000,
+          "visibleObjects": 12000,
+          "sharedRasters": 2401,
+          "retainedRasters": 13,
+          "preparing": false,
+          "deferredFrames": 257,
+          "refreshReasons": {
+            "width": 1,
+            "height": 1,
+            "metrics": 1,
+            "items": 1,
+            "references": 1,
+            "routing": 1
+          },
+          "compositePanFrames": 10,
+          "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+          "cachedPanFrames": 179,
+          "renderer": "webgl"
+        }
+      ]
+    }
+  ],
+  "deployedZoom": [
+    {
+      "scenario": "dense",
+      "objects": 12000,
+      "coldMs": 1144,
+      "workerRasterUpdatesPerSecond": 0,
+      "fps": 59.99600026658929,
+      "over18ms": 3,
+      "p50": 16.700000002980232,
+      "p95": 17.099999994039536,
+      "max": 26,
+      "domObjects": 0,
+      "domNodes": 668,
+      "layers": [
+        {
+          "frames": 198,
+          "rasterizations": 1,
+          "cacheHits": 82760,
+          "descriptorsUpdated": 12000,
+          "drawnObjects": 68995,
+          "texturePages": 1,
+          "sceneObjects": 12000,
+          "outputPixels": 622592,
+          "lastDrawnObjects": 12000,
+          "visibleObjects": 12000,
+          "sharedRasters": 1,
+          "retainedRasters": 0,
+          "preparing": false,
+          "deferredFrames": 14,
+          "refreshReasons": {
+            "width": 1,
+            "height": 1,
+            "metrics": 1,
+            "items": 1,
+            "references": 1,
+            "routing": 1
+          },
+          "compositePanFrames": 9,
+          "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+          "cachedPanFrames": 179,
+          "renderer": "webgl"
+        }
+      ]
+    }
+  ],
+  "deployedSelection": [
+    {
+      "scenario": "dense",
+      "objects": 12000,
+      "coldMs": 1310,
+      "workerRasterUpdatesPerSecond": 0,
+      "fps": 59.98800239934135,
+      "over18ms": 28,
+      "p50": 16.700000002980232,
+      "p95": 18.600000008940697,
+      "max": 19,
+      "domObjects": 0,
+      "domNodes": 701,
+      "layers": [
+        {
+          "frames": 220,
+          "rasterizations": 3,
+          "cacheHits": 314582,
+          "descriptorsUpdated": 24000,
+          "drawnObjects": 318416,
+          "texturePages": 1,
+          "sceneObjects": 12000,
+          "outputPixels": 622592,
+          "lastDrawnObjects": 12000,
+          "visibleObjects": 12000,
+          "sharedRasters": 2,
+          "retainedRasters": 1,
+          "preparing": false,
+          "deferredFrames": 34,
+          "refreshReasons": {
+            "width": 1,
+            "height": 1,
+            "metrics": 1,
+            "items": 3,
+            "references": 1,
+            "routing": 1
+          },
+          "compositePanFrames": 9,
+          "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+          "cachedPanFrames": 179,
+          "renderer": "webgl"
+        }
+      ]
+    }
+  ],
+  "softwareFallbackDuringOptimization": [
+    {
+      "scenario": "dense",
+      "objects": 12000,
+      "coldMs": 198,
+      "workerRasterUpdatesPerSecond": 0,
+      "fps": 53.466405275446654,
+      "over18ms": 45,
+      "p50": 16.700000002980232,
+      "p95": 31.200000002980232,
+      "max": 37,
+      "domObjects": 0,
+      "domNodes": 658,
+      "layers": [
+        {
+          "frames": 192,
+          "rasterizations": 2,
+          "cacheHits": 44927,
+          "descriptorsUpdated": 12000,
+          "drawnObjects": 13247,
+          "texturePages": 1,
+          "outputPixels": 815380,
+          "lastDrawnObjects": 0,
+          "visibleObjects": 12000,
+          "sharedRasters": 2,
+          "retainedRasters": 0,
+          "compositePanFrames": 9,
+          "workerFrames": 2,
+          "cachedPanFrames": 179,
+          "renderer": "canvas2d",
+          "compositor": "worker"
+        }
+      ]
+    },
+    {
+      "scenario": "distributed",
+      "objects": 12000,
+      "coldMs": 99,
+      "workerRasterUpdatesPerSecond": 0,
+      "fps": 55.97014925373134,
+      "over18ms": 32,
+      "p50": 16.700000002980232,
+      "p95": 31,
+      "max": 37.30000001192093,
+      "domObjects": 0,
+      "domNodes": 658,
+      "layers": [
+        {
+          "frames": 187,
+          "rasterizations": 2,
+          "cacheHits": 512,
+          "descriptorsUpdated": 256,
+          "drawnObjects": 256,
+          "texturePages": 1,
+          "outputPixels": 1872068,
+          "lastDrawnObjects": 0,
+          "visibleObjects": 256,
+          "sharedRasters": 2,
+          "retainedRasters": 0,
+          "compositePanFrames": 4,
+          "cachedPanFrames": 180,
+          "workerFrames": 1,
+          "renderer": "canvas2d",
+          "compositor": "worker"
+        }
+      ]
+    },
+    {
+      "scenario": "unique",
+      "objects": 12000,
+      "coldMs": 164,
+      "workerRasterUpdatesPerSecond": 6.4490372508734515,
+      "fps": 55.27746215034387,
+      "over18ms": 19,
+      "p50": 16.700000002980232,
+      "p95": 36.29999999701977,
+      "max": 45.30000001192093,
+      "domObjects": 0,
+      "domNodes": 658,
+      "layers": [
+        {
+          "frames": 255,
+          "rasterizations": 12000,
+          "cacheHits": 483075,
+          "descriptorsUpdated": 12000,
+          "drawnObjects": 26188,
+          "texturePages": 3,
+          "outputPixels": 815380,
+          "lastDrawnObjects": 0,
+          "visibleObjects": 12000,
+          "sharedRasters": 12000,
+          "retainedRasters": 0,
+          "compositePanFrames": 84,
+          "workerFrames": 75,
+          "cachedPanFrames": 170,
+          "renderer": "canvas2d",
+          "compositor": "worker"
+        }
+      ]
+    },
+    {
+      "scenario": "mixed",
+      "objects": 12000,
+      "coldMs": 184,
+      "workerRasterUpdatesPerSecond": 0.6139489194482167,
+      "fps": 55.255402750339506,
+      "over18ms": 27,
+      "p50": 16.700000002980232,
+      "p95": 30.400000005960464,
+      "max": 53,
+      "domObjects": 0,
+      "domNodes": 658,
+      "layers": [
+        {
+          "frames": 220,
+          "rasterizations": 2530,
+          "cacheHits": 208986,
+          "descriptorsUpdated": 12128,
+          "drawnObjects": 19121,
+          "texturePages": 1,
+          "outputPixels": 815380,
+          "lastDrawnObjects": 0,
+          "visibleObjects": 12000,
+          "sharedRasters": 2402,
+          "retainedRasters": 128,
+          "compositePanFrames": 38,
+          "workerFrames": 30,
+          "cachedPanFrames": 179,
+          "renderer": "canvas2d",
+          "compositor": "worker"
+        }
+      ]
+    }
+  ]
+}
