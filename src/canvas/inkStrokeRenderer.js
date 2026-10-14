@@ -112,15 +112,11 @@ export function createInkStrokeRenderer(host, vectorCanvas) {
   return {
     render(next) {
       state = next;
-      const entries=Object.entries(state.items || {});
-      if(entries.length || savedPainted)prepare(saved, savedContext);
+      const hidden=new Set(state.previews.map(p=>String(p.id)));if(state.draft?.id)hidden.add(String(state.draft.id));
+      const entries=Object.entries(state.items || {}).filter(([id,stroke])=>stroke?.kind==='stroke' && !hidden.has(id) && (!state.visibleItemIds || state.visibleItemIds.has(id)));
+      if(entries.length || savedPainted)prepare(saved,savedContext);
       savedPainted=entries.length>0;
-      const hidden = new Set(state.previews.map(p => String(p.id)));
-      if (state.draft?.id) hidden.add(String(state.draft.id));
-      for (const [id, stroke] of entries) {
-        if (stroke?.kind !== 'stroke' || hidden.has(id) || (state.visibleItemIds && !state.visibleItemIds.has(id))) continue;
-        drawStroke(savedContext, stroke, state.width, state.height);
-      }
+      for(const [,stroke] of entries)drawStroke(savedContext,stroke,state.width,state.height);
       renderDraft(state.draft);
     },
     renderDraft,

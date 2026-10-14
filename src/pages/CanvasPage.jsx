@@ -1,3 +1,5 @@
+import SceneViewModel from '../canvas/SceneViewModel.js';
+import { itemCount } from '../canvas/itemSnapshots.js';
 import { useCanvasCamera } from '../canvas/useCanvasCamera.js';
 import { isRasterText } from '../canvas/plainTextRaster.js';
 import CanvasLayerObjects from '../canvas/CanvasLayerObjects.jsx';
@@ -221,7 +223,7 @@ function CanvasWorkspace() {
   const [showParticipants, setShowParticipants] = useState(false);
   const [settingsPending, setSettingsPending] = useState(false);
   const [toast, setToast] = useState('');
-  const { items, setItems, committedItemsRef, status: hostStatus, lastReceipt, retryRejected, sessionRef: hostSessionRef, receiveServerItems, receiveServerEvent } = useHostCanvas({
+  const { items, setItems, patchItems, committedItemsRef, status: hostStatus, lastReceipt, retryRejected, sessionRef: hostSessionRef, receiveServerItems, receiveServerEvent } = useHostCanvas({
     itemsRef, peerMeshRef, wsRef, rtcWsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems,
   });
   const hostReadyRef = useRef(false);
@@ -281,7 +283,13 @@ function CanvasWorkspace() {
     setDirtyItems((current) => new Set(current).add(key));
   }, []);
   stageOfflineGeometryRef.current = null;
-  const refreshSpatialIndex = useCallback(() => setSpatialRevision((revision) => revision + 1), []);
+  const spatialDirtyIds=useRef(null);
+  const refreshSpatialIndex = useCallback(event=>{
+    const ids=Array.isArray(event)?event:event?.changedItemIds;
+    if(Array.isArray(ids) && spatialDirtyIds.current!==null)for(const id of ids)spatialDirtyIds.current.add(String(id));
+    else if(!Array.isArray(ids))spatialDirtyIds.current=null;
+    setSpatialRevision(revision=>revision+1);
+  }, []);
   useEffect(() => {
     window.addEventListener(CONNECTOR_METRICS_EVENT, refreshSpatialIndex);
     return () => window.removeEventListener(CONNECTOR_METRICS_EVENT, refreshSpatialIndex);
@@ -337,15 +345,14 @@ function CanvasWorkspace() {
     const encodedChange = Automerge.getLastLocalChange(nextDoc);
     const change = encodedChange ? encodeBase64(encodedChange) : null;
     const nextItem = { ...item, [field]: nextDoc.content };
-    itemsRef.current = { ...itemsRef.current, [id]: nextItem };
-    setItems((current) => ({ ...current, [id]: nextItem }));
+    patchItems({[id]:nextItem});
     if (change) {
       const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
       itemSyncVersionsRef.current.set(String(id), version);
       peerMeshRef.current?.sendData({ type: 'doc_change', item_id: String(id), field, change, version }, (peer) => canPeerAccessItem(item, peer));
     }
     markItemDirty(id);
-  }, [getCollaborativeDoc, markItemDirty]);
+  }, [getCollaborativeDoc, markItemDirty, patchItems]);
   const updateCollaborativeMetadata = useCallback((id, field, value) => {
     const key = String(id);
     const item = itemsRef.current[key];
@@ -406,9 +413,11 @@ function CanvasWorkspace() {
   const sendItemChange = useCallback(() => hostSessionRef.current.editable, []);
   const sendStrokeFrameChanges = useCallback(frame => {
     if (!hostSessionRef.current.editable) return false;
-    setItems(previous => applyStrokeFrame(previous, frame));
+    const changes={},removed=[];
+    for(const {id,payload} of frame)if(payload.type==='item_delete')removed.push(id);else if(payload.type==='item_update')changes[id]=payload.item;
+    patchItems(changes,removed);
     return true;
-  }, [setItems]);
+  }, [patchItems]);
   const updateTableItem = useCallback((id, update) => {
     const key = String(id);
     const previous = itemsRef.current[key];
@@ -816,13 +825,15 @@ function CanvasWorkspace() {
     }
     return grouped;
   }, [remoteEditors]);
-  const drawableItemCount = useMemo(() => Object.values(items).filter(item => item?.type !== 'chat_room').length, [items]);
+  const drawableItemCount = itemCount(items);
 
   const viewportSize = useCanvasViewport({ boardRef, setCamera, refreshKey: error });
   const spatialIndexRef = useRef(null);
   const spatialIndex = useMemo(() => {
     if (!spatialIndexRef.current) spatialIndexRef.current = new CanvasSpatialBTree();
-    return spatialIndexRef.current.update(items, boardSize, spatialRevision);
+    const dirty=spatialDirtyIds.current;
+    spatialDirtyIds.current=new Set();
+    return spatialIndexRef.current.update(items,boardSize,spatialRevision,spatialIndexRef.current.revision!==spatialRevision && dirty!==null?[...dirty]:null);
   }, [items, spatialRevision, boardSize]);
   const {
     visibleBounds,
@@ -864,19 +875,16 @@ function CanvasWorkspace() {
     }
     return entries;
   }, [boardSize.height, boardSize.width, editingId, items, spatialIndex, spatialRevision, sceneWindow.key]);
-  const visibleItemCount = visibleEntries.reduce((count,{bounds}) => count + Number(bounds.maxX>=visibleBounds.minX && bounds.minX<=visibleBounds.maxX && bounds.maxY>=visibleBounds.minY && bounds.minY<=visibleBounds.maxY),0);
-  const sortedItems = useMemo(() => visibleEntries
-    .filter(({ item }) => ['image', 'link', 'code', 'note', 'table', 'shape', 'text', 'math', 'stroke', 'connector', 'pdf', 'user-group'].includes(item?.kind))
-    .sort((a, b) => a.bounds.minY - b.bounds.minY)
-    .map(({ id, item, bounds }) => [id, item, bounds, item.kind === 'connector' ? connectorGeometry(item, items, boardSize.width, boardSize.height) : null]), [boardSize.height, boardSize.width, items, visibleEntries]);
-  const usesOverview=useMemo(()=>sortedItems.some(([,item])=>!['shape','stroke','connector'].includes(item.kind) && !isRasterText(item)),[sortedItems]);
+  const visibleItemCount = useMemo(()=>visibleEntries.reduce((count,{bounds}) => count + Number(bounds.maxX>=visibleBounds.minX && bounds.minX<=visibleBounds.maxX && bounds.maxY>=visibleBounds.minY && bounds.minY<=visibleBounds.maxY),0),[visibleEntries,visibleBounds,spatialIndex.stats.boundsCalculated]);
+  const usesOverview=useMemo(()=>visibleEntries.some(({item})=>!['shape','stroke','connector'].includes(item.kind) && !isRasterText(item)),[visibleEntries,items[selectedItemId]?.renderMode]);
   const representationScale=usesOverview?camera.scale:1;
-  const vectorHitOrder = useMemo(() => new Map(sortedItems.map(([id],order) => [id,order])), [sortedItems]);
-  const selectedObjectIds = useMemo(() => selectedItemIds.filter((id) => Boolean(items[id])),[selectedItemIds,items]);
-  const selectedObjectIdsKey = useMemo(()=>selectedObjectIds.join('|'),[selectedObjectIds]);
+  const selectedObjectIdsKey=selectedItemIds.filter(id=>Boolean(items[id])).join('|');
+  const selectedObjectIds=useMemo(()=>selectedItemIds.filter(id=>Boolean(items[id])),[selectedObjectIdsKey]);
   const selectedObjectIdSet = useMemo(() => new Set(selectedObjectIds), [selectedObjectIds]);
   const domSelection = useMemo(() => selectedObjectIdSet.size<=64 ? selectedObjectIdSet : new Set(),[selectedObjectIdSet]);
-  const depthLayers = useMemo(() => buildDepthLayers(sortedItems,new Set([...domSelection,editingId,connectionStartId].filter(Boolean)),boardSize,representationScale,selectedObjectIdSet), [sortedItems,selectedObjectIdSet,domSelection,editingId,connectionStartId,boardSize,representationScale]);
+  const sceneModelRef=useRef(null);if(!sceneModelRef.current)sceneModelRef.current=new SceneViewModel();
+  const sceneModel=sceneModelRef.current.update(visibleEntries,items,boardSize,representationScale,new Set([...domSelection,editingId,connectionStartId].filter(Boolean)),selectedObjectIdSet,spatialIndex.stats.boundsCalculated,spatialIndex);
+  const depthLayers=sceneModel.depthLayers,vectorHitOrder=sceneModel.hitOrder;
   const hasSingleSelection = selectedObjectIds.length === 1;
   const primarySelectedItemId = selectedObjectIdSet.has(String(selectedItemId)) ? String(selectedItemId) : selectedObjectIds[selectedObjectIds.length - 1] || null;
   const selectedTable = hasSingleSelection && items[primarySelectedItemId]?.kind === 'table' ? items[primarySelectedItemId] : null;
@@ -974,7 +982,7 @@ function CanvasWorkspace() {
   };
   const { pointerPosition, startPan, cancelPanInertia, centeredItemPosition, hideCursor, startZoomHold, stopZoomHold, cancelZoomHold, clickZoom, startDrawing, moveDrawing, stopDrawing } = useCanvasStageInteractions({
     boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth,
-    addItem, setToast, setItems, refreshSpatialIndex, spatialIndexRef,
+    addItem, setToast, setItems, patchItems, refreshSpatialIndex, spatialIndexRef,
     sendStrokeFrameChanges, pendingItemChangesRef, strokeSaveFlushRef,
     lastCursorSentAtRef, peerMeshRef, panRef, zoomHoldRef, zoomPointerPressRef, zoomSensitivity,
     stageWheelHandlerRef, laserDrawingRef, setLaserStrokes, selectionRef, selectedItemIds,
@@ -1244,8 +1252,8 @@ function CanvasWorkspace() {
           <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true">{showXAxis && <><span className="coordinate-x" /><b className="coordinate-x-label">X</b></>}{showYAxis && <><span className="coordinate-y" /><b className="coordinate-y-label">Y</b></>}{(showXAxis || showYAxis) && <i className="coordinate-origin">0</i>}</div>
           <div className="canvas-scene" ref={sceneRef} style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }}>
             {depthLayers.map((layer, index) => <div className="canvas-depth-layer" key={layer.depth} data-depth={layer.depth} style={{ position: 'absolute', inset: 0, zIndex: index + 1, pointerEvents: 'none' }}>
-              <VectorLayer style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }} worldSize={boardSize} items={layer.vectors} referenceItems={items} routingRevision={spatialIndex.stats.boundsCalculated} previewStrokes={layer.depth === 0 ? remoteDrawingStrokes : undefined} camera={camera} onReady={layer.depth === 0 ? (setDraft) => { vectorDraftRef.current = setDraft; } : undefined} />
-            <div className="canvas-world-layer" style={{position:'absolute',width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`}}><CanvasLayerObjects objects={layer.objects} domSelection={domSelection} editingId={editingId} connectionStartId={connectionStartId} world={boardSize} scale={representationScale} token={token} selected={selectedObjectIdSet} singleSelection={hasSingleSelection} activeTool={activeTool} dirtyItems={dirtyItems} editorsByItem={editorsByItem} actions={objectActions} /></div>
+              <VectorLayer style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }} worldSize={boardSize} items={layer.vectors} referenceItems={items} routingRevision={spatialIndex.stats.boundsCalculated} inkItems={layer.inkItems} previewStrokes={layer.depth === 0 ? remoteDrawingStrokes : undefined} camera={camera} onReady={layer.depth === 0 ? (setDraft) => { vectorDraftRef.current = setDraft; } : undefined} />
+            <div className="canvas-world-layer" style={{position:'absolute',width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`}}><CanvasLayerObjects objects={layer.domObjects} domSelection={domSelection} editingId={editingId} connectionStartId={connectionStartId} world={boardSize} scale={representationScale} token={token} selected={selectedObjectIdSet} singleSelection={hasSingleSelection} activeTool={activeTool} dirtyItems={dirtyItems} editorsByItem={editorsByItem} actions={objectActions} /></div>
             </div>)}
             <div className="canvas-world-layer" style={{ position: 'absolute', width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`, zIndex: depthLayers.length + 1, pointerEvents: 'none' }}>
             {selectedItem && selectedItem.kind !== 'connector' && activeTool === 'select' && !editingId && <RotationHandles sceneRef={sceneRef} id={String(primarySelectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startObjectRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}

@@ -1,3 +1,4 @@
+import { itemDepthRange } from './itemSnapshots.js';
 import { itemDepth } from './itemDepth.js';
 import { useMemo } from 'react';
 import './object-depth-controls.css';
@@ -10,7 +11,7 @@ function DepthIcon({ direction, edge }) {
 
 export default function ObjectDepthControls({ ids, items, onChange }) {
   const value = useMemo(()=>{const first=itemDepth(items[ids[0]]);return ids.every(id=>itemDepth(items[id])===first)?first:''},[ids,items]);
-  const range = useMemo(()=>Object.values(items).reduce((range,item)=>item?.kind ? {min:Math.min(range.min,itemDepth(item)),max:Math.max(range.max,itemDepth(item))}:range,{min:0,max:0}),[items]);
+  const range = itemDepthRange(items);
   const apply = depth => ids.forEach(id => onChange(id, depth));
   return <section className="inspector-section object-depth-controls">
     <div className="object-depth-heading"><strong className="inspector-label">객체 깊이</strong><span>{ids.length}개 선택</span></div>

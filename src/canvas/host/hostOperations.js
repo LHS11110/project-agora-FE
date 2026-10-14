@@ -1,3 +1,4 @@
+import { encodeDocument,loadEncodedDocument,cachedItemDocument,rememberItemDocument } from './documentCache.js';
 import * as Automerge from '@automerge/automerge/slim';
 import { CANVAS_ITEM_FIELDS, exportManifest, planManifest, stable } from '../asCode/manifest.js';
 import { canPeerAccessItem, collaborativeField, createActorId, decodeBase64, encodeBase64, isCollaborativeItem } from '../collaborativeSync.js';
@@ -18,11 +19,12 @@ export function electHost(members) {
 }
 
 export function loadItemDoc(item) {
+  const cached=cachedItemDocument(item);if(cached)return cached;
   let doc = item.automerge_snapshot
-    ? Automerge.load(decodeBase64(item.automerge_snapshot), { actor: createActorId() })
+    ? loadEncodedDocument(item.automerge_snapshot)
     : Automerge.from({ content: item[collaborativeField(item)] || '' });
   for (const entry of item.automerge_changes || []) doc = Automerge.loadIncremental(doc, decodeBase64(typeof entry === 'string' ? entry : entry.change));
-  return doc;
+  rememberItemDocument(item,doc);return doc;
 }
 
 export function storedHostItem(record) {
@@ -30,9 +32,9 @@ export function storedHostItem(record) {
     : { kind: HOST_TOMBSTONE_KIND, permission: record.permission, [HOST_VERSION_FIELD]: record.version };
 }
 
-export function itemOperations(previous, next, docs) {
+export function itemOperations(previous, next, docs, changedIds = null) {
   const operations = [];
-  for (const id of new Set([...Object.keys(previous), ...Object.keys(next)])) {
+  for (const id of changedIds || new Set([...Object.keys(previous), ...Object.keys(next)])) {
     const before = previous[id], after = next[id];
     if (before === after) continue;
     if (before?.type === 'chat_room' || after?.type === 'chat_room') continue;
@@ -48,7 +50,7 @@ export function itemOperations(previous, next, docs) {
       const operation = { id, action: before ? 'patch' : 'create', patch, unset };
       if (isCollaborativeItem(after)) {
         const doc = docs?.get(String(id)) || loadItemDoc(after);
-        operation.doc = encodeBase64(Automerge.save(doc));
+        operation.doc = encodeDocument(doc);
         if (!before && after.automerge_snapshot && after.automerge_snapshot !== operation.doc) operation.base = after.automerge_snapshot;
       }
       operations.push(operation);
@@ -57,9 +59,9 @@ export function itemOperations(previous, next, docs) {
   return operations;
 }
 
-export function reduceHostOperations(items, operations, peer) {
+export function reduceHostOperations(items, operations, peer, connectorDependencies = null) {
   if (!Array.isArray(operations) || !operations.length || operations.length > 512) throw new Error('올바른 변경 묶음이 필요합니다.');
-  const next = { ...items };
+  const next = Object.create(items);
   const touched = new Set();
   for (const operation of operations) {
     const { id, action, patch = {}, unset = [] } = operation || {};
@@ -67,7 +69,7 @@ export function reduceHostOperations(items, operations, peer) {
     const previous = next[id];
     if (previous?.type === 'chat_room') throw new Error('채팅방은 객체 변경으로 수정할 수 없습니다.');
     if (previous && !canPeerAccessItem(previous, peer)) throw new Error('객체를 수정할 권한이 없습니다.');
-    if (action === 'delete') { if (previous) { delete next[id]; touched.add(id); } continue; }
+    if (action === 'delete') { if (previous) { Object.defineProperty(next,id,{value:undefined,enumerable:true,configurable:true,writable:true}); touched.add(id); } continue; }
     if (!patch || typeof patch !== 'object' || Array.isArray(patch) || !Array.isArray(unset)
       || [...Object.keys(patch), ...unset].some(field => !CANVAS_ITEM_FIELDS.has(field))) throw new Error('지원하지 않는 객체 필드입니다.');
     if (action === 'create' && previous) throw new Error('이미 사용 중인 객체 ID입니다.');
@@ -84,14 +86,15 @@ export function reduceHostOperations(items, operations, peer) {
     }
     if (isCollaborativeItem(item)) {
       if (typeof operation.doc !== 'string') throw new Error('텍스트 변경 문서가 필요합니다.');
-      const incoming = Automerge.load(decodeBase64(operation.doc), { actor: createActorId() });
+      const incoming = loadEncodedDocument(operation.doc);
       const doc = previous ? Automerge.merge(loadItemDoc(previous), incoming) : incoming;
       if (typeof doc.content !== 'string') throw new Error('올바른 텍스트 문서가 필요합니다.');
       const base = previous?.automerge_snapshot || operation.base || operation.doc;
-      const baseDoc = Automerge.load(decodeBase64(base), { actor: createActorId() });
+      const baseDoc = loadEncodedDocument(base);
       item[collaborativeField(item)] = doc.content;
       item.automerge_snapshot = base;
       item.automerge_changes = Automerge.getChanges(baseDoc, doc).map(change => ({ field: collaborativeField(item), change: encodeBase64(change) }));
+      rememberItemDocument(item,doc);
     }
     next[id] = item;
     touched.add(id);
@@ -101,6 +104,21 @@ export function reduceHostOperations(items, operations, peer) {
   const manifest = exportManifest(Object.fromEntries([...touched].filter(id => next[id]).map(id => [id, next[id]])));
   for (const item of Object.values(manifest.items)) item.permission = 'host-validation';
   manifest.remove = [...touched].filter(id => !next[id]);
-  planManifest(manifest, items, 'host-validation');
+  // Validate the touched objects and affected connector graph, without exporting
+  // or serializing every unrelated item on each keystroke/stroke frame.
+  const contextIds=new Set(touched);
+  const dependants=connectorDependencies || (()=>{
+    const index=new Map(),seen=new Set();
+    for(let table=items;table && table!==Object.prototype;table=Object.getPrototypeOf(table))for(const [id] of Object.entries(table)){
+      if(seen.has(id))continue;seen.add(id);const item=items[id];
+      if(item?.kind==='connector')for(const target of [item.from,item.to]){if(!index.has(target))index.set(target,new Set());index.get(target).add(id);}
+    }return index;
+  })();
+  for(const id of touched)if(!next[id])for(const connector of dependants.get(id)||[])if(next[connector])contextIds.add(connector);
+  for(const id of [...contextIds]){
+    const item=next[id];if(item?.kind==='connector'){contextIds.add(item.from);contextIds.add(item.to);}
+  }
+  const context=Object.fromEntries([...contextIds].filter(id=>items[id]).map(id=>[id,items[id]]));
+  planManifest(manifest, context, 'host-validation');
   return { items: next, touched: [...touched] };
 }

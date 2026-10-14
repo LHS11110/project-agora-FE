@@ -1,3 +1,4 @@
+import { inheritItemDocument,includesDocument } from './documentCache.js';
 import { canPeerAccessItem, compareSyncVersions, INITIAL_SYNC_VERSION, normalizeSyncVersion } from '../collaborativeSync.js';
 import { collaborativeField, isCollaborativeItem } from '../collaborativeSync.js';
 import { loadItemDoc, HOST_TOMBSTONE_KIND, HOST_VERSION_FIELD } from './hostOperations.js';
@@ -5,7 +6,6 @@ import { electHost, HOST_PEER_FPS, HOST_PROTOCOL, HOST_SAVE_FPS, reduceHostOpera
 
 const encoder = new TextEncoder();
 const clone = value => JSON.parse(JSON.stringify(value));
-const objects = records => Object.fromEntries(Object.entries(records).filter(([, record]) => record.item).map(([id, record]) => [id, record.item]));
 const hasId = id => typeof id === 'string' && id.length > 0 && id.length <= 128 && !['__proto__', 'constructor', 'prototype'].includes(id);
 const validCount = count => Number.isSafeInteger(count) && count >= 0;
 const summarize = operations => {
@@ -18,7 +18,7 @@ const summarize = operations => {
 export class HostCanvasSession {
   constructor({ send, persist, publish, status, reject, receipt = () => {}, available, now = () => Date.now() }) {
     Object.assign(this, { send, persist, publish, status, reject, receipt, available, now });
-    this.records = {}; this.members = []; this.memberIndex = new Map(); this.term = ''; this.selfId = ''; this.hostId = '';
+    this.records = {}; this.itemCache = {}; this.connectorDependencies=new Map(); this.members = []; this.memberIndex = new Map(); this.term = ''; this.selfId = ''; this.hostId = '';
     this.ready = false; this.seeded = false; this.sequence = 0; this.clock = 0;
     this.localCounter = 0; this.localQueue = []; this.pending = new Map();
     this.inbox = []; this.broadcasts = []; this.broadcastBytes = 0; this.serverDirty = new Map();
@@ -31,7 +31,19 @@ export class HostCanvasSession {
   }
   get isHost() { return this.selfId !== '' && this.hostId === this.selfId; }
   get editable() { return this.everReady && !this.faulted; }
-  get items() { return objects(this.records); }
+  get items() { return this.itemCache; }
+  setRecord(id,record) {
+    const before=this.records[id]?.item;
+    inheritItemDocument(before,record?.item);
+    if(before?.kind==='connector')for(const target of [before.from,before.to]){
+      const ids=this.connectorDependencies.get(target);ids?.delete(id);if(!ids?.size)this.connectorDependencies.delete(target);
+    }
+    if(record)this.records[id]=record;else delete this.records[id];
+    if(record?.item)this.itemCache[id]=record.item;else delete this.itemCache[id];
+    if(record?.item?.kind==='connector')for(const target of [record.item.from,record.item.to]){
+      if(!this.connectorDependencies.has(target))this.connectorDependencies.set(target,new Set());this.connectorDependencies.get(target).add(id);
+    }
+  }
   get pendingOperations() { return [...this.pending.values()].flatMap(entry => entry.operations).concat(this.localQueue); }
   setReady(ready, message = '호스트와 최신 상태를 동기화하고 있습니다.') {
     this.ready = ready;
@@ -49,6 +61,7 @@ export class HostCanvasSession {
     if (this.isHost) for (const peer of this.members) if (peer.peer_id !== this.selfId) this.send(peer.peer_id, this.frame('host_fault', { message }));
   }
   seed(items) {
+    const touched=[];
     for (const [id, item] of Object.entries(items)) {
       if (item?.type === 'chat_room' || !hasId(id)) continue;
       const version = normalizeSyncVersion(item[HOST_VERSION_FIELD]) || INITIAL_SYNC_VERSION;
@@ -56,12 +69,12 @@ export class HostCanvasSession {
         const hydrated = clone(item);
         delete hydrated[HOST_VERSION_FIELD];
         if (isCollaborativeItem(item)) try { hydrated[collaborativeField(item)] = loadItemDoc(item).content; } catch { /* Keep legacy plain text. */ }
-        this.records[id] = { item: item.kind === HOST_TOMBSTONE_KIND ? null : hydrated, permission: item.permission, version };
+        this.setRecord(id, { item: item.kind === HOST_TOMBSTONE_KIND ? null : hydrated, permission: item.permission, version });touched.push(id);
         this.clock = Math.max(this.clock, version.clock);
       }
     }
     this.seeded = true;
-    this.publish(this.items, []);
+    this.publish(this.items, touched);
   }
   configure(selfId, host) {
     if (!host || host.protocol !== HOST_PROTOCOL) {
@@ -93,7 +106,13 @@ export class HostCanvasSession {
   frame(type, fields = {}) { return { type, protocol: HOST_PROTOCOL, term: this.term, ...fields }; }
   submit(operations) {
     if (!this.editable || !Array.isArray(operations)) return false;
-    this.localQueue.push(...clone(operations));
+    for(const operation of clone(operations)){
+      const previous=this.localQueue.at(-1),keys=Object.keys(operation.patch||{}),oldKeys=Object.keys(previous?.patch||{});
+      const textOnly=entry=>entry?.action==='patch' && typeof entry.doc==='string' && !(entry.unset||[]).length;
+      if(previous?.id===operation.id && textOnly(previous) && textOnly(operation) && keys.length===1 && oldKeys.length===1
+        && keys[0]===oldKeys[0] && ['text','code'].includes(keys[0]) && includesDocument(operation.doc,previous.doc))this.localQueue[this.localQueue.length-1]=operation;
+      else this.localQueue.push(operation);
+    }
     this.setReady(this.ready);
     return true;
   }
@@ -205,7 +224,7 @@ export class HostCanvasSession {
       if (!hasId(id) || !record || !normalizeSyncVersion(record.version)
         || !canPeerAccessItem(record.item || { permission: record.permission }, peer)) throw new Error('동기화 상태의 권한 또는 버전이 올바르지 않습니다.');
       const previous = this.records[id];
-      if (!previous || compareSyncVersions(record.version, previous.version) > 0) this.records[id] = clone(record);
+      if (!previous || compareSyncVersions(record.version, previous.version) > 0) this.setRecord(id,clone(record));
       this.clock = Math.max(this.clock, record.version.clock);
     }
   }
@@ -258,7 +277,7 @@ export class HostCanvasSession {
     if (data.type === 'host_snapshot' && peerId === this.hostId && !this.isHost) {
       if (!Number.isSafeInteger(data.sequence) || data.sequence < this.sequence) return;
       try {
-        const old = this.records; this.records = {}; this.mergeState(data.records, this.member(this.selfId));
+        const old = this.records; this.records = {}; this.itemCache={};this.connectorDependencies=new Map(); this.mergeState(data.records, this.member(this.selfId));
         this.sequence = data.sequence;
         this.mergeCounters(data.counters);
         this.finishConfirmedRequests();
@@ -341,7 +360,7 @@ export class HostCanvasSession {
         try { this.mergeState(commit.records, this.member(this.selfId)); }
         catch (error) { this.setReady(false, error.message); return; }
         Object.keys(commit.records).forEach(id => touched.add(id));
-        for (const id of commit.evict || []) if (hasId(id)) { delete this.records[id]; touched.add(id); }
+        for (const id of commit.evict || []) if (hasId(id)) { this.setRecord(id,null); touched.add(id); }
         this.sequence = commit.sequence;
         if (commit.counter) this.mergeCounters([commit.counter]);
       }
@@ -353,7 +372,7 @@ export class HostCanvasSession {
     if (!this.checkRequest(entry.peer, entry)) return;
     const fields = { requestId: entry.requestId, clientId: entry.clientId, requestCount: entry.requestCount };
     try {
-      const result = reduceHostOperations(this.items, entry.operations, entry.peer);
+      const result = reduceHostOperations(this.items, entry.operations, entry.peer, this.connectorDependencies);
       const version = { clock: Math.max(this.now(), this.clock + 1), actor: this.selfId };
       this.clock = version.clock;
       const changed = {}, previousPermissions = {};
@@ -362,7 +381,7 @@ export class HostCanvasSession {
         const item = result.items[id] || null;
         const record = { item, permission: item?.permission || previous?.permission, version };
         previousPermissions[id] = previous?.permission;
-        this.records[id] = record; changed[id] = record;
+        this.setRecord(id,record); changed[id] = record;
         this.serverDirty.set(id, { id, record, previous: previous?.item || null });
       }
       this.sequence += 1;

@@ -1,3 +1,4 @@
+import MinimapMarkers from './MinimapMarkers.js';
 import { renderWindow } from './renderWindow.js';
 import StableSpatialQuery from './StableSpatialQuery.js';
 import { viewportOverview } from './minimap/viewportOverview.js';
@@ -21,6 +22,7 @@ export function useCanvasMinimap({ boardRef, boardSize, viewportSize = boardSize
   const minimapPositionRef = useRef(null);
   const queryRef=useRef(null),minimapEntriesRef=useRef(null);
   if(!queryRef.current)queryRef.current=new StableSpatialQuery();
+  if(!minimapEntriesRef.current)minimapEntriesRef.current=new MinimapMarkers();
   const [minimapPosition, setMinimapPosition] = useState(() => {
     try {
       const stored = JSON.parse(localStorage.getItem(MINIMAP_POSITION_KEY) || 'null');
@@ -54,12 +56,7 @@ export function useCanvasMinimap({ boardRef, boardSize, viewportSize = boardSize
   const minimapItems = useMemo(() => {
     const entries = spatialIndex ? queryRef.current.query(spatialIndex,overviewWindow.bounds)
       : Object.entries(items).map(([id,item])=>({id,item,bounds:objectBounds(item,items,worldWidth,worldHeight)}));
-    const previous=minimapEntriesRef.current;
-    if(previous?.entries===entries && previous.items===items && previous.worldWidth===worldWidth && previous.worldHeight===worldHeight)return previous.value;
-    const value=entries.filter(entry=>MINIMAP_ITEM_KINDS.has((items[entry.id] || entry.item)?.kind)).map(entry=>({
-      id:entry.id,item:items[entry.id] || entry.item,bounds:{minX:entry.bounds.minX*worldWidth,minY:entry.bounds.minY*worldHeight,maxX:entry.bounds.maxX*worldWidth,maxY:entry.bounds.maxY*worldHeight}
-    }));
-    minimapEntriesRef.current={entries,items,worldWidth,worldHeight,value};return value;
+    return minimapEntriesRef.current.update(entries,items,worldWidth,worldHeight,spatialIndex);
   },[worldWidth,worldHeight,items,spatialIndex,spatialRevision,overviewWindow.key]);
   const minimap = useMemo(() => ({bounds:overviewBounds,viewport:visibleWorldBounds,items:minimapItems}),[overviewBounds,visibleWorldBounds,minimapItems]);
 

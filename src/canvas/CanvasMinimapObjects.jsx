@@ -7,6 +7,7 @@ export default function CanvasMinimapObjects({ minimap, colors, selected }) {
   const cache=useRef(null);
   useLayoutEffect(() => {
     const canvas=ref.current;
+    let cancelled=false;
     const paint=()=>{
       const ratio=Math.min(window.devicePixelRatio||1,2),width=canvas.clientWidth,height=canvas.clientHeight;
       if (!width || !height) return;
@@ -19,10 +20,14 @@ export default function CanvasMinimapObjects({ minimap, colors, selected }) {
       if(previous && previous.items===minimap.items && previous.selected===selected && (sameScale || moving) && (projection.covers || previous.complete)){
         ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(previous.canvas,projection.x*ratio,projection.y*ratio,previous.canvas.width*projection.scaleX,previous.canvas.height*projection.scaleY);return;
       }
-      const bitmap=previous?.canvas || document.createElement('canvas');
+      const bitmap=document.createElement('canvas');
       bitmap.width=Math.round((width+pad*2)*ratio);bitmap.height=Math.round((height+pad*2)*ratio);
       let complete=true;const paint=bitmap.getContext('2d');paint.setTransform(ratio,0,0,ratio,pad*ratio,pad*ratio);
-      for(const {id,item,bounds} of minimap.items){
+      let cursor=0;const chunk=()=>{
+      if(cancelled)return;
+      const started=performance.now();let visited=0;
+      while(cursor<minimap.items.length && (!visited || performance.now()-started<4)){
+        const {id,item,bounds}=minimap.items[cursor++];visited++;
         const w=Math.max(bounds.maxX-bounds.minX,overview.width*.008),h=Math.max(bounds.maxY-bounds.minY,overview.height*.008);
         const x=((bounds.minX+bounds.maxX-w)/2-overview.minX)/overview.width*width;
         const y=((bounds.minY+bounds.maxY-h)/2-overview.minY)/overview.height*height;
@@ -33,13 +38,15 @@ export default function CanvasMinimapObjects({ minimap, colors, selected }) {
         paint.fillRect(x,y,w/overview.width*width,h/overview.height*height);
         if(chosen){paint.globalAlpha=1;paint.strokeStyle='#c28b43';paint.lineWidth=1.5;paint.strokeRect(x,y,w/overview.width*width,h/overview.height*height)}
       }
+      if(cursor<minimap.items.length){frame=requestAnimationFrame(chunk);return;}
       ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,-pad*ratio,-pad*ratio);
       cache.current={canvas:bitmap,bounds:overview,items:minimap.items,selected,complete};
+      };chunk();
     };
     let frame=requestAnimationFrame(paint);
     const observer=new ResizeObserver(()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(paint)});
     observer.observe(canvas);
-    return()=>{cancelAnimationFrame(frame);observer.disconnect()};
+    return()=>{cancelled=true;cancelAnimationFrame(frame);observer.disconnect()};
   },[minimap,colors,selected]);
   return <canvas ref={ref} className="canvas-minimap-svg" aria-hidden="true" />;
 }

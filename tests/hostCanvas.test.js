@@ -565,3 +565,14 @@ test('drawing frames and eraser tombstones reach late joiners before the next pe
   const later = net.add('c'); net.configure(); net.synchronize();
   assert.equal(later.items['live-stroke'], undefined, 'a deleted drawing cannot reappear in a late snapshot');
 });
+
+test('local text queue coalesces causal successors but preserves independent branches',()=>{
+ const net=network(['z']),host=net.sessions.get('z');
+ const base=Automerge.from({content:'a'}),first=Automerge.change(Automerge.clone(base),d=>{d.content+='b'}),second=Automerge.change(first,d=>{d.content+='c'});
+ const op=doc=>({id:'text',action:'patch',patch:{text:doc.content},doc:encodeBase64(Automerge.save(doc))});
+ // first is now a historical view; serialize its exact heads via a fork.
+ const earlier=Automerge.clone(first);
+ host.submit([op(earlier)]);host.submit([op(second)]);assert.equal(host.localQueue.length,1);assert.equal(host.localQueue[0].patch.text,'abc');
+ const independent=Automerge.change(Automerge.clone(base),d=>{d.content+='x'});
+ host.submit([op(independent)]);assert.equal(host.localQueue.length,2);
+});

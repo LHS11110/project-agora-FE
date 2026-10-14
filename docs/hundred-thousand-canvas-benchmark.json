@@ -1,0 +1,1170 @@
+{
+  "date": "2026-10-14",
+  "sourceRevision": "3457ebf51dafbe7f8275a4f1d73407b43eef9aca",
+  "viewport": {
+    "width": 1800,
+    "height": 1100
+  },
+  "deviceScaleFactor": 1,
+  "chrome": "155.0.8059.39",
+  "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+  "threshold": {
+    "minimumAverageFps": 30,
+    "maximumP95Ms": 33.333333333333336,
+    "maximumFrameMsForEverySamplePass": 33.333333333333336
+  },
+  "standardDistributed": [
+    {
+      "objects": 100000,
+      "scenario": "distributed",
+      "initialized": true,
+      "ready": true,
+      "progress": [],
+      "loadAndPreparationMs": 4639,
+      "initialState": {
+        "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동80/100000개 표시",
+        "layers": [
+          {
+            "frames": 7,
+            "rasterizations": 1,
+            "cacheHits": 512,
+            "descriptorsUpdated": 256,
+            "drawnObjects": 512,
+            "texturePages": 1,
+            "sceneObjects": 256,
+            "outputPixels": 1266000,
+            "lastDrawnObjects": 256,
+            "visibleObjects": 256,
+            "sharedRasters": 1,
+            "retainedRasters": 0,
+            "preparing": false,
+            "deferredFrames": 0,
+            "refreshReasons": {
+              "width": 1,
+              "height": 1,
+              "metrics": 1,
+              "items": 2,
+              "references": 2,
+              "routing": 1,
+              "gpu": 1
+            },
+            "compositePanFrames": 2,
+            "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+            "renderer": "webgl"
+          }
+        ]
+      },
+      "pan": {
+        "fps": 59.998800024071045,
+        "elapsedMs": 5000.0999999940395,
+        "samples": 300,
+        "p50Ms": 16.700000002980232,
+        "p95Ms": 17,
+        "maxMs": 20.299999997019768,
+        "over33ms": 0,
+        "rendererFrames": 299,
+        "domObjects": 0,
+        "domNodes": 668,
+        "layers": [
+          {
+            "frames": 306,
+            "rasterizations": 1,
+            "cacheHits": 512,
+            "descriptorsUpdated": 256,
+            "drawnObjects": 512,
+            "texturePages": 1,
+            "sceneObjects": 256,
+            "outputPixels": 1266000,
+            "lastDrawnObjects": 256,
+            "visibleObjects": 256,
+            "sharedRasters": 1,
+            "retainedRasters": 0,
+            "preparing": false,
+            "deferredFrames": 0,
+            "refreshReasons": {
+              "width": 1,
+              "height": 1,
+              "metrics": 1,
+              "items": 2,
+              "references": 2,
+              "routing": 1,
+              "gpu": 1
+            },
+            "compositePanFrames": 2,
+            "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+            "cachedPanFrames": 299,
+            "renderer": "webgl"
+          }
+        ]
+      },
+      "zoom": {
+        "fps": 60,
+        "elapsedMs": 5000,
+        "samples": 300,
+        "p50Ms": 16.69999998807907,
+        "p95Ms": 17,
+        "maxMs": 18.099999994039536,
+        "over33ms": 0,
+        "rendererFrames": 299,
+        "domObjects": 0,
+        "domNodes": 668,
+        "layers": [
+          {
+            "frames": 607,
+            "rasterizations": 2,
+            "cacheHits": 2068,
+            "descriptorsUpdated": 534,
+            "drawnObjects": 2346,
+            "texturePages": 1,
+            "sceneObjects": 117,
+            "outputPixels": 1266000,
+            "lastDrawnObjects": 117,
+            "visibleObjects": 117,
+            "sharedRasters": 1,
+            "retainedRasters": 1,
+            "preparing": false,
+            "deferredFrames": 0,
+            "refreshReasons": {
+              "width": 1,
+              "height": 1,
+              "metrics": 1,
+              "items": 12,
+              "references": 2,
+              "routing": 1,
+              "gpu": 1
+            },
+            "compositePanFrames": 2,
+            "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+            "cachedPanFrames": 589,
+            "renderer": "webgl"
+          }
+        ]
+      },
+      "passes30Fps": true,
+      "passesAverageAndP9530Fps": true,
+      "passesEverySample30Fps": true
+    },
+    {
+      "objects": 200000,
+      "scenario": "distributed",
+      "initialized": true,
+      "ready": true,
+      "progress": [],
+      "loadAndPreparationMs": 5883,
+      "initialState": {
+        "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동80/200000개 표시",
+        "layers": [
+          {
+            "frames": 7,
+            "rasterizations": 1,
+            "cacheHits": 512,
+            "descriptorsUpdated": 256,
+            "drawnObjects": 512,
+            "texturePages": 1,
+            "sceneObjects": 256,
+            "outputPixels": 1266000,
+            "lastDrawnObjects": 256,
+            "visibleObjects": 256,
+            "sharedRasters": 1,
+            "retainedRasters": 0,
+            "preparing": false,
+            "deferredFrames": 0,
+            "refreshReasons": {
+              "width": 1,
+              "height": 1,
+              "metrics": 1,
+              "items": 2,
+              "references": 2,
+              "routing": 1,
+              "gpu": 1
+            },
+            "compositePanFrames": 2,
+            "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+            "renderer": "webgl"
+          }
+        ]
+      },
+      "pan": {
+        "fps": 59.998800024071045,
+        "elapsedMs": 5000.0999999940395,
+        "samples": 300,
+        "p50Ms": 16.700000002980232,
+        "p95Ms": 17,
+        "maxMs": 18.299999997019768,
+        "over33ms": 0,
+        "rendererFrames": 299,
+        "domObjects": 0,
+        "domNodes": 668,
+        "layers": [
+          {
+            "frames": 306,
+            "rasterizations": 1,
+            "cacheHits": 512,
+            "descriptorsUpdated": 256,
+            "drawnObjects": 512,
+            "texturePages": 1,
+            "sceneObjects": 256,
+            "outputPixels": 1266000,
+            "lastDrawnObjects": 256,
+            "visibleObjects": 256,
+            "sharedRasters": 1,
+            "retainedRasters": 0,
+            "preparing": false,
+            "deferredFrames": 0,
+            "refreshReasons": {
+              "width": 1,
+              "height": 1,
+              "metrics": 1,
+              "items": 2,
+              "references": 2,
+              "routing": 1,
+              "gpu": 1
+            },
+            "compositePanFrames": 2,
+            "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+            "cachedPanFrames": 299,
+            "renderer": "webgl"
+          }
+        ]
+      },
+      "zoom": {
+        "fps": 59.79907510767386,
+        "elapsedMs": 5016.79999999702,
+        "samples": 300,
+        "p50Ms": 16.700000002980232,
+        "p95Ms": 17,
+        "maxMs": 31,
+        "over33ms": 0,
+        "rendererFrames": 299,
+        "domObjects": 0,
+        "domNodes": 668,
+        "layers": [
+          {
+            "frames": 607,
+            "rasterizations": 2,
+            "cacheHits": 2068,
+            "descriptorsUpdated": 534,
+            "drawnObjects": 2346,
+            "texturePages": 1,
+            "sceneObjects": 117,
+            "outputPixels": 1266000,
+            "lastDrawnObjects": 117,
+            "visibleObjects": 117,
+            "sharedRasters": 1,
+            "retainedRasters": 1,
+            "preparing": false,
+            "deferredFrames": 0,
+            "refreshReasons": {
+              "width": 1,
+              "height": 1,
+              "metrics": 1,
+              "items": 12,
+              "references": 2,
+              "routing": 1,
+              "gpu": 1
+            },
+            "compositePanFrames": 2,
+            "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+            "cachedPanFrames": 589,
+            "renderer": "webgl"
+          }
+        ]
+      },
+      "passes30Fps": true,
+      "passesAverageAndP9530Fps": true,
+      "passesEverySample30Fps": true
+    },
+    {
+      "objects": 500000,
+      "scenario": "distributed",
+      "initialized": true,
+      "ready": true,
+      "progress": [],
+      "fixture": {
+        "initialized": true,
+        "jsonCharacters": 94161073
+      },
+      "loadAndPreparationMs": 8601,
+      "pageCrashed": false,
+      "initialState": {
+        "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동80/500000개 표시",
+        "layers": [
+          {
+            "frames": 7,
+            "rasterizations": 1,
+            "cacheHits": 512,
+            "descriptorsUpdated": 256,
+            "drawnObjects": 512,
+            "texturePages": 1,
+            "sceneObjects": 256,
+            "outputPixels": 1266000,
+            "lastDrawnObjects": 256,
+            "visibleObjects": 256,
+            "sharedRasters": 1,
+            "retainedRasters": 0,
+            "preparing": false,
+            "deferredFrames": 0,
+            "refreshReasons": {
+              "width": 1,
+              "height": 1,
+              "metrics": 1,
+              "items": 2,
+              "references": 2,
+              "routing": 1,
+              "gpu": 1
+            },
+            "compositePanFrames": 2,
+            "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+            "renderer": "webgl"
+          }
+        ]
+      },
+      "pan": {
+        "fps": 60.00240009603961,
+        "elapsedMs": 4999.79999999702,
+        "samples": 300,
+        "p50Ms": 16.69999998807907,
+        "p95Ms": 17.099999994039536,
+        "maxMs": 19.299999997019768,
+        "over33ms": 0,
+        "rendererFrames": 299,
+        "domObjects": 0,
+        "domNodes": 668,
+        "layers": [
+          {
+            "frames": 306,
+            "rasterizations": 1,
+            "cacheHits": 512,
+            "descriptorsUpdated": 256,
+            "drawnObjects": 512,
+            "texturePages": 1,
+            "sceneObjects": 256,
+            "outputPixels": 1266000,
+            "lastDrawnObjects": 256,
+            "visibleObjects": 256,
+            "sharedRasters": 1,
+            "retainedRasters": 0,
+            "preparing": false,
+            "deferredFrames": 0,
+            "refreshReasons": {
+              "width": 1,
+              "height": 1,
+              "metrics": 1,
+              "items": 2,
+              "references": 2,
+              "routing": 1,
+              "gpu": 1
+            },
+            "compositePanFrames": 2,
+            "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+            "cachedPanFrames": 299,
+            "renderer": "webgl"
+          }
+        ]
+      },
+      "zoom": {
+        "fps": 60,
+        "elapsedMs": 5000,
+        "samples": 300,
+        "p50Ms": 16.700000002980232,
+        "p95Ms": 17,
+        "maxMs": 17.5,
+        "over33ms": 0,
+        "rendererFrames": 299,
+        "domObjects": 0,
+        "domNodes": 668,
+        "layers": [
+          {
+            "frames": 607,
+            "rasterizations": 2,
+            "cacheHits": 2068,
+            "descriptorsUpdated": 534,
+            "drawnObjects": 2346,
+            "texturePages": 1,
+            "sceneObjects": 117,
+            "outputPixels": 1266000,
+            "lastDrawnObjects": 117,
+            "visibleObjects": 117,
+            "sharedRasters": 1,
+            "retainedRasters": 1,
+            "preparing": false,
+            "deferredFrames": 0,
+            "refreshReasons": {
+              "width": 1,
+              "height": 1,
+              "metrics": 1,
+              "items": 12,
+              "references": 2,
+              "routing": 1,
+              "gpu": 1
+            },
+            "compositePanFrames": 2,
+            "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+            "cachedPanFrames": 589,
+            "renderer": "webgl"
+          }
+        ]
+      },
+      "passes30Fps": true,
+      "passesAverageAndP9530Fps": true,
+      "passesEverySample30Fps": true
+    }
+  ],
+  "fastDistributed": {
+    "startedAt": "2026-10-14T05:43:47.103Z",
+    "baseUrl": "https://112.168.71.147",
+    "viewport": {
+      "width": 1800,
+      "height": 1100
+    },
+    "deviceScaleFactor": 1,
+    "chrome": "155.0.8059.39",
+    "preparationTimeoutMs": 120000,
+    "sourceRevision": "3457ebf51dafbe7f8275a4f1d73407b43eef9aca",
+    "motion": {
+      "panDelta": 24,
+      "zoomDelta": 1.8,
+      "frameCount": 600
+    },
+    "threshold": {
+      "minimumAverageFps": 30,
+      "maximumP95Ms": 33.333333333333336
+    },
+    "results": [
+      {
+        "objects": 500000,
+        "scenario": "distributed",
+        "initialized": true,
+        "ready": true,
+        "progress": [],
+        "fixture": {
+          "initialized": true,
+          "jsonCharacters": 94161073
+        },
+        "loadAndPreparationMs": 9541,
+        "pageCrashed": false,
+        "initialState": {
+          "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동80/500000개 표시",
+          "layers": [
+            {
+              "frames": 8,
+              "rasterizations": 1,
+              "cacheHits": 768,
+              "descriptorsUpdated": 256,
+              "drawnObjects": 512,
+              "texturePages": 1,
+              "sceneObjects": 256,
+              "outputPixels": 1266000,
+              "lastDrawnObjects": 256,
+              "visibleObjects": 256,
+              "sharedRasters": 1,
+              "retainedRasters": 0,
+              "preparing": false,
+              "deferredFrames": 0,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 1,
+                "items": 3,
+                "references": 3,
+                "routing": 1,
+                "gpu": 1
+              },
+              "compositePanFrames": 3,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+              "renderer": "webgl"
+            }
+          ]
+        },
+        "pan": {
+          "fps": 60.0030001500075,
+          "elapsedMs": 9999.5,
+          "samples": 600,
+          "p50Ms": 16.700000002980232,
+          "p95Ms": 17,
+          "maxMs": 19.899999991059303,
+          "over33ms": 0,
+          "rendererFrames": 599,
+          "domObjects": 0,
+          "domNodes": 668,
+          "layers": [
+            {
+              "frames": 607,
+              "rasterizations": 4,
+              "cacheHits": 7104,
+              "descriptorsUpdated": 896,
+              "drawnObjects": 7488,
+              "texturePages": 1,
+              "sceneObjects": 256,
+              "outputPixels": 1266000,
+              "lastDrawnObjects": 256,
+              "visibleObjects": 256,
+              "sharedRasters": 2,
+              "retainedRasters": 2,
+              "preparing": false,
+              "deferredFrames": 0,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 1,
+                "items": 26,
+                "references": 3,
+                "routing": 1,
+                "gpu": 1
+              },
+              "compositePanFrames": 3,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+              "cachedPanFrames": 576,
+              "renderer": "webgl"
+            }
+          ]
+        },
+        "zoom": {
+          "fps": 60.00180005407315,
+          "elapsedMs": 9999.699999988079,
+          "samples": 600,
+          "p50Ms": 16.700000002980232,
+          "p95Ms": 17,
+          "maxMs": 39.20000000298023,
+          "over33ms": 1,
+          "rendererFrames": 599,
+          "domObjects": 0,
+          "domNodes": 668,
+          "layers": [
+            {
+              "frames": 1208,
+              "rasterizations": 6,
+              "cacheHits": 10365,
+              "descriptorsUpdated": 1681,
+              "drawnObjects": 11534,
+              "texturePages": 1,
+              "sceneObjects": 256,
+              "outputPixels": 1266000,
+              "lastDrawnObjects": 256,
+              "visibleObjects": 256,
+              "sharedRasters": 3,
+              "retainedRasters": 3,
+              "preparing": false,
+              "deferredFrames": 0,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 1,
+                "items": 51,
+                "references": 3,
+                "routing": 1,
+                "gpu": 1
+              },
+              "compositePanFrames": 3,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+              "cachedPanFrames": 1151,
+              "renderer": "webgl"
+            }
+          ]
+        },
+        "passes30Fps": false,
+        "passesAverageAndP9530Fps": true,
+        "passesEverySample30Fps": false
+      }
+    ]
+  },
+  "dense": {
+    "startedAt": "2026-10-14T05:39:28.338Z",
+    "baseUrl": "https://112.168.71.147",
+    "viewport": {
+      "width": 1800,
+      "height": 1100
+    },
+    "deviceScaleFactor": 1,
+    "chrome": "155.0.8059.39",
+    "preparationTimeoutMs": 120000,
+    "sourceRevision": "3457ebf51dafbe7f8275a4f1d73407b43eef9aca",
+    "threshold": {
+      "minimumAverageFps": 30,
+      "maximumP95Ms": 33.333333333333336
+    },
+    "results": [
+      {
+        "objects": 200000,
+        "scenario": "dense",
+        "initialized": true,
+        "ready": false,
+        "progress": [
+          {
+            "elapsedMs": 20414,
+            "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동200000/200000개 표시",
+            "layers": [
+              {
+                "frames": 126,
+                "rasterizations": 1,
+                "cacheHits": 7381,
+                "descriptorsUpdated": 122,
+                "drawnObjects": 7445,
+                "texturePages": 1,
+                "sceneObjects": 200000,
+                "outputPixels": 4096,
+                "lastDrawnObjects": 122,
+                "visibleObjects": 122,
+                "sharedRasters": 1,
+                "retainedRasters": 0,
+                "preparing": true,
+                "deferredFrames": 122,
+                "refreshReasons": {
+                  "width": 1,
+                  "height": 1,
+                  "metrics": 1,
+                  "items": 1,
+                  "references": 1,
+                  "routing": 1
+                },
+                "compositePanFrames": 14,
+                "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+                "renderer": "webgl"
+              }
+            ]
+          },
+          {
+            "elapsedMs": 40421,
+            "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동200000/200000개 표시",
+            "layers": [
+              {
+                "frames": 282,
+                "rasterizations": 1,
+                "cacheHits": 38503,
+                "descriptorsUpdated": 278,
+                "drawnObjects": 38723,
+                "texturePages": 1,
+                "sceneObjects": 200000,
+                "outputPixels": 4096,
+                "lastDrawnObjects": 278,
+                "visibleObjects": 278,
+                "sharedRasters": 1,
+                "retainedRasters": 0,
+                "preparing": true,
+                "deferredFrames": 278,
+                "refreshReasons": {
+                  "width": 1,
+                  "height": 1,
+                  "metrics": 1,
+                  "items": 1,
+                  "references": 1,
+                  "routing": 1
+                },
+                "compositePanFrames": 14,
+                "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+                "renderer": "webgl"
+              }
+            ]
+          },
+          {
+            "elapsedMs": 60437,
+            "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동200000/200000개 표시",
+            "layers": [
+              {
+                "frames": 443,
+                "rasterizations": 1,
+                "cacheHits": 96141,
+                "descriptorsUpdated": 439,
+                "drawnObjects": 96522,
+                "texturePages": 1,
+                "sceneObjects": 200000,
+                "outputPixels": 4096,
+                "lastDrawnObjects": 439,
+                "visibleObjects": 439,
+                "sharedRasters": 1,
+                "retainedRasters": 0,
+                "preparing": true,
+                "deferredFrames": 439,
+                "refreshReasons": {
+                  "width": 1,
+                  "height": 1,
+                  "metrics": 1,
+                  "items": 1,
+                  "references": 1,
+                  "routing": 1
+                },
+                "compositePanFrames": 14,
+                "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+                "renderer": "webgl"
+              }
+            ]
+          },
+          {
+            "elapsedMs": 80444,
+            "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동200000/200000개 표시",
+            "layers": [
+              {
+                "frames": 578,
+                "rasterizations": 1,
+                "cacheHits": 164451,
+                "descriptorsUpdated": 574,
+                "drawnObjects": 164967,
+                "texturePages": 1,
+                "sceneObjects": 200000,
+                "outputPixels": 4096,
+                "lastDrawnObjects": 574,
+                "visibleObjects": 574,
+                "sharedRasters": 1,
+                "retainedRasters": 0,
+                "preparing": true,
+                "deferredFrames": 574,
+                "refreshReasons": {
+                  "width": 1,
+                  "height": 1,
+                  "metrics": 1,
+                  "items": 1,
+                  "references": 1,
+                  "routing": 1
+                },
+                "compositePanFrames": 14,
+                "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+                "renderer": "webgl"
+              }
+            ]
+          },
+          {
+            "elapsedMs": 100454,
+            "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동200000/200000개 표시",
+            "layers": [
+              {
+                "frames": 735,
+                "rasterizations": 1,
+                "cacheHits": 266815,
+                "descriptorsUpdated": 731,
+                "drawnObjects": 267488,
+                "texturePages": 1,
+                "sceneObjects": 200000,
+                "outputPixels": 4096,
+                "lastDrawnObjects": 731,
+                "visibleObjects": 731,
+                "sharedRasters": 1,
+                "retainedRasters": 0,
+                "preparing": true,
+                "deferredFrames": 731,
+                "refreshReasons": {
+                  "width": 1,
+                  "height": 1,
+                  "metrics": 1,
+                  "items": 1,
+                  "references": 1,
+                  "routing": 1
+                },
+                "compositePanFrames": 14,
+                "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+                "renderer": "webgl"
+              }
+            ]
+          },
+          {
+            "elapsedMs": 120454,
+            "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동200000/200000개 표시",
+            "layers": [
+              {
+                "frames": 896,
+                "rasterizations": 1,
+                "cacheHits": 397386,
+                "descriptorsUpdated": 892,
+                "drawnObjects": 398220,
+                "texturePages": 1,
+                "sceneObjects": 200000,
+                "outputPixels": 4096,
+                "lastDrawnObjects": 892,
+                "visibleObjects": 892,
+                "sharedRasters": 1,
+                "retainedRasters": 0,
+                "preparing": true,
+                "deferredFrames": 892,
+                "refreshReasons": {
+                  "width": 1,
+                  "height": 1,
+                  "metrics": 1,
+                  "items": 1,
+                  "references": 1,
+                  "routing": 1
+                },
+                "compositePanFrames": 14,
+                "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+                "renderer": "webgl"
+              }
+            ]
+          }
+        ],
+        "error": "page.waitForFunction: Timeout 120000ms exceeded.",
+        "fixture": {
+          "initialized": true,
+          "jsonCharacters": 48704097
+        },
+        "loadAndPreparationMs": 120628,
+        "pageCrashed": false,
+        "initialState": {
+          "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동200000/200000개 표시",
+          "layers": [
+            {
+              "frames": 898,
+              "rasterizations": 1,
+              "cacheHits": 399171,
+              "descriptorsUpdated": 894,
+              "drawnObjects": 400007,
+              "texturePages": 1,
+              "sceneObjects": 200000,
+              "outputPixels": 4096,
+              "lastDrawnObjects": 894,
+              "visibleObjects": 894,
+              "sharedRasters": 1,
+              "retainedRasters": 0,
+              "preparing": true,
+              "deferredFrames": 894,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 1,
+                "items": 1,
+                "references": 1,
+                "routing": 1
+              },
+              "compositePanFrames": 14,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+              "renderer": "webgl"
+            }
+          ]
+        },
+        "passes30Fps": false
+      },
+      {
+        "objects": 500000,
+        "scenario": "dense",
+        "initialized": true,
+        "ready": false,
+        "progress": [
+          {
+            "elapsedMs": 20130,
+            "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동500000/500000개 표시",
+            "layers": [
+              {
+                "frames": 30,
+                "rasterizations": 1,
+                "cacheHits": 325,
+                "descriptorsUpdated": 26,
+                "drawnObjects": 307,
+                "texturePages": 1,
+                "sceneObjects": 500000,
+                "outputPixels": 4096,
+                "lastDrawnObjects": 26,
+                "visibleObjects": 26,
+                "sharedRasters": 1,
+                "retainedRasters": 0,
+                "preparing": true,
+                "deferredFrames": 26,
+                "refreshReasons": {
+                  "width": 1,
+                  "height": 1,
+                  "metrics": 1,
+                  "items": 1,
+                  "references": 1,
+                  "routing": 1
+                },
+                "compositePanFrames": 14,
+                "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+                "renderer": "webgl"
+              }
+            ]
+          },
+          {
+            "elapsedMs": 40140,
+            "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동500000/500000개 표시",
+            "layers": [
+              {
+                "frames": 81,
+                "rasterizations": 1,
+                "cacheHits": 2926,
+                "descriptorsUpdated": 77,
+                "drawnObjects": 2959,
+                "texturePages": 1,
+                "sceneObjects": 500000,
+                "outputPixels": 4096,
+                "lastDrawnObjects": 77,
+                "visibleObjects": 77,
+                "sharedRasters": 1,
+                "retainedRasters": 0,
+                "preparing": true,
+                "deferredFrames": 77,
+                "refreshReasons": {
+                  "width": 1,
+                  "height": 1,
+                  "metrics": 1,
+                  "items": 1,
+                  "references": 1,
+                  "routing": 1
+                },
+                "compositePanFrames": 14,
+                "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+                "renderer": "webgl"
+              }
+            ]
+          },
+          {
+            "elapsedMs": 60140,
+            "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동500000/500000개 표시",
+            "layers": [
+              {
+                "frames": 132,
+                "rasterizations": 1,
+                "cacheHits": 8128,
+                "descriptorsUpdated": 128,
+                "drawnObjects": 8212,
+                "texturePages": 1,
+                "sceneObjects": 500000,
+                "outputPixels": 4096,
+                "lastDrawnObjects": 128,
+                "visibleObjects": 128,
+                "sharedRasters": 1,
+                "retainedRasters": 0,
+                "preparing": true,
+                "deferredFrames": 128,
+                "refreshReasons": {
+                  "width": 1,
+                  "height": 1,
+                  "metrics": 1,
+                  "items": 1,
+                  "references": 1,
+                  "routing": 1
+                },
+                "compositePanFrames": 14,
+                "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+                "renderer": "webgl"
+              }
+            ]
+          },
+          {
+            "elapsedMs": 80142,
+            "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동500000/500000개 표시",
+            "layers": [
+              {
+                "frames": 171,
+                "rasterizations": 1,
+                "cacheHits": 13861,
+                "descriptorsUpdated": 167,
+                "drawnObjects": 13984,
+                "texturePages": 1,
+                "sceneObjects": 500000,
+                "outputPixels": 4096,
+                "lastDrawnObjects": 167,
+                "visibleObjects": 167,
+                "sharedRasters": 1,
+                "retainedRasters": 0,
+                "preparing": true,
+                "deferredFrames": 167,
+                "refreshReasons": {
+                  "width": 1,
+                  "height": 1,
+                  "metrics": 1,
+                  "items": 1,
+                  "references": 1,
+                  "routing": 1
+                },
+                "compositePanFrames": 14,
+                "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+                "renderer": "webgl"
+              }
+            ]
+          },
+          {
+            "elapsedMs": 100152,
+            "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동500000/500000개 표시",
+            "layers": [
+              {
+                "frames": 211,
+                "rasterizations": 1,
+                "cacheHits": 21321,
+                "descriptorsUpdated": 207,
+                "drawnObjects": 21484,
+                "texturePages": 1,
+                "sceneObjects": 500000,
+                "outputPixels": 4096,
+                "lastDrawnObjects": 207,
+                "visibleObjects": 207,
+                "sharedRasters": 1,
+                "retainedRasters": 0,
+                "preparing": true,
+                "deferredFrames": 207,
+                "refreshReasons": {
+                  "width": 1,
+                  "height": 1,
+                  "metrics": 1,
+                  "items": 1,
+                  "references": 1,
+                  "routing": 1
+                },
+                "compositePanFrames": 14,
+                "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+                "renderer": "webgl"
+              }
+            ]
+          },
+          {
+            "elapsedMs": 120152,
+            "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동500000/500000개 표시",
+            "layers": [
+              {
+                "frames": 258,
+                "rasterizations": 1,
+                "cacheHits": 32131,
+                "descriptorsUpdated": 254,
+                "drawnObjects": 32341,
+                "texturePages": 1,
+                "sceneObjects": 500000,
+                "outputPixels": 4096,
+                "lastDrawnObjects": 254,
+                "visibleObjects": 254,
+                "sharedRasters": 1,
+                "retainedRasters": 0,
+                "preparing": true,
+                "deferredFrames": 254,
+                "refreshReasons": {
+                  "width": 1,
+                  "height": 1,
+                  "metrics": 1,
+                  "items": 1,
+                  "references": 1,
+                  "routing": 1
+                },
+                "compositePanFrames": 14,
+                "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+                "renderer": "webgl"
+              }
+            ]
+          }
+        ],
+        "error": "page.waitForFunction: Timeout 120000ms exceeded.",
+        "fixture": {
+          "initialized": true,
+          "jsonCharacters": 121864229
+        },
+        "loadAndPreparationMs": 120801,
+        "pageCrashed": false,
+        "initialState": {
+          "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동500000/500000개 표시",
+          "layers": [
+            {
+              "frames": 260,
+              "rasterizations": 1,
+              "cacheHits": 32640,
+              "descriptorsUpdated": 256,
+              "drawnObjects": 32852,
+              "texturePages": 1,
+              "sceneObjects": 500000,
+              "outputPixels": 4096,
+              "lastDrawnObjects": 256,
+              "visibleObjects": 256,
+              "sharedRasters": 1,
+              "retainedRasters": 0,
+              "preparing": true,
+              "deferredFrames": 256,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 1,
+                "items": 1,
+                "references": 1,
+                "routing": 1
+              },
+              "compositePanFrames": 14,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+              "renderer": "webgl"
+            }
+          ]
+        },
+        "passes30Fps": false
+      }
+    ]
+  },
+  "initial100kDenseAttempt": {
+    "note": "Preparation timed out at 120 seconds. The included FPS was measured while only a partial scene was prepared; it is not full-scene steady-state performance.",
+    "result": {
+      "scenario": "dense",
+      "objects": 100000,
+      "ready": false,
+      "coldMs": 120029,
+      "workerRasterUpdatesPerSecond": 0,
+      "fps": 8.307901922451247,
+      "over33ms": 300,
+      "p50": 112.40000000596046,
+      "p95": 128.70000000298023,
+      "max": 1139.0999999940395,
+      "domObjects": 0,
+      "domNodes": 668,
+      "layers": [
+        {
+          "frames": 2821,
+          "rasterizations": 1,
+          "cacheHits": 3966336,
+          "descriptorsUpdated": 2817,
+          "drawnObjects": 3969115,
+          "texturePages": 1,
+          "sceneObjects": 100000,
+          "outputPixels": 8192,
+          "lastDrawnObjects": 2817,
+          "visibleObjects": 2817,
+          "sharedRasters": 1,
+          "retainedRasters": 0,
+          "preparing": true,
+          "deferredFrames": 2817,
+          "refreshReasons": {
+            "width": 1,
+            "height": 1,
+            "metrics": 1,
+            "items": 1,
+            "references": 1,
+            "routing": 1
+          },
+          "compositePanFrames": 11,
+          "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+          "renderer": "webgl"
+        }
+      ]
+    }
+  },
+  "discardedAutomationInjectionAttempt": {
+    "note": "Injecting the full 500k JSON through automation disconnected the page. This attempt is excluded from application performance conclusions. Browser-local generation subsequently loaded all 500k objects successfully.",
+    "result": {
+      "objects": 500000,
+      "scenario": "distributed",
+      "initialized": true,
+      "ready": false,
+      "progress": [],
+      "error": "page.waitForFunction: Target page, context or browser has been closed",
+      "loadAndPreparationMs": 3506,
+      "pageCrashed": false,
+      "passes30Fps": false
+    }
+  },
+  "indexOnly": [
+    {
+      "objects": 100000,
+      "buildMs": 314.42342999999994,
+      "queryP50Ms": 0.0012699999999767897,
+      "queryP95Ms": 0.015466000000060376,
+      "updateIncludingStateCopyP50Ms": 39.813202000000274,
+      "updateIncludingStateCopyP95Ms": 43.38730300000043,
+      "boundsCalculatedDuring100Moves": 100
+    },
+    {
+      "objects": 200000,
+      "buildMs": 444.6613639999996,
+      "queryP50Ms": 0.0011549999999260763,
+      "queryP95Ms": 0.0018000000000029104,
+      "updateIncludingStateCopyP50Ms": 95.19299300000057,
+      "updateIncludingStateCopyP95Ms": 103.59360699999888,
+      "boundsCalculatedDuring100Moves": 100
+    },
+    {
+      "objects": 500000,
+      "buildMs": 1254.1417829999991,
+      "queryP50Ms": 0.001273999998375075,
+      "queryP95Ms": 0.0017399999996996485,
+      "updateIncludingStateCopyP50Ms": 289.23154400000203,
+      "updateIncludingStateCopyP95Ms": 304.0812440000009,
+      "boundsCalculatedDuring100Moves": 100
+    }
+  ]
+}

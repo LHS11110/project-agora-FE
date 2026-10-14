@@ -1,3 +1,5 @@
+import { changedItemIds,changeItems } from '../itemSnapshots.js';
+import { HostCanvasView } from './HostCanvasView.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Automerge from '@automerge/automerge/slim';
 import { HostCanvasSession } from './HostCanvasSession.js';
@@ -10,7 +12,8 @@ export function useHostCanvas({ itemsRef, peerMeshRef, wsRef, rtcWsRef, collabor
   const [items, publishItems] = useState({});
   const [status, setStatus] = useState({ ready: false, editable: false, queued: 0, blocked: false, isHost: false, hostId: '', message: '호스트와 최신 상태를 동기화하고 있습니다.' });
   const [lastReceipt, setLastReceipt] = useState(null);
-  const working = useRef({});
+  const view=useRef(null);if(!view.current)view.current=new HostCanvasView();
+  const working = useRef(view.current.items);
   const committedItemsRef = useRef({});
   const sessionRef = useRef(null);
   const pendingSaves = useRef(new Map());
@@ -31,37 +34,10 @@ export function useHostCanvas({ itemsRef, peerMeshRef, wsRef, rtcWsRef, collabor
     receipt: result => setLastReceipt(result),
     publish: (committed, touched) => {
       rebasing.current = true;
-      const draft = { ...committed };
-      const docs = new Map();
-      const bases = new Map();
-      for (const [id, item] of Object.entries(committed)) if (isCollaborativeItem(item)) {
-        try {
-          docs.set(id, loadItemDoc(item));
-          if (item.automerge_snapshot) bases.set(id, Automerge.load(decodeBase64(item.automerge_snapshot), { actor: createActorId() }));
-        } catch { /* A malformed server document retains its plain-text fallback. */ }
-      }
-      for (const operation of sessionRef.current.pendingOperations) {
-        if (operation.action === 'delete') { delete draft[operation.id]; docs.delete(operation.id); bases.delete(operation.id); continue; }
-        // A remote deletion/ACL revocation must not be locally resurrected by
-        // a pending patch. The host still responds to that queued request.
-        if (operation.action === 'patch' && !draft[operation.id]) continue;
-        const item = { ...draft[operation.id], ...operation.patch };
-        for (const field of operation.unset || []) delete item[field];
-        if (operation.doc) {
-          try {
-            const incoming = Automerge.load(decodeBase64(operation.doc), { actor: createActorId() });
-            const doc = docs.has(operation.id) ? Automerge.merge(docs.get(operation.id), incoming) : incoming;
-            docs.set(operation.id, doc);
-            item[collaborativeField(item)] = doc.content;
-            if (!bases.has(operation.id)) bases.set(operation.id, Automerge.load(decodeBase64(operation.base || operation.doc), { actor: createActorId() }));
-          } catch { /* The host will reject an invalid proposal. */ }
-        }
-        draft[operation.id] = item;
-      }
-      collaborativeDocsRef.current = docs;
-      collaborativeBaseDocsRef.current = bases;
-      working.current = draft; itemsRef.current = draft;
-      committedItemsRef.current = committed;
+      const draft=view.current.rebase(committed,touched,sessionRef.current.pendingOperations);
+      collaborativeDocsRef.current=view.current.docs;
+      collaborativeBaseDocsRef.current=view.current.bases;
+      working.current=draft;itemsRef.current=draft;committedItemsRef.current=committed;
       const pendingIds = new Set(sessionRef.current.pendingOperations.map(operation => operation.id));
       callbacks.current.setDirtyItems?.(current => {
         const next = new Set(pendingIds);
@@ -98,14 +74,14 @@ export function useHostCanvas({ itemsRef, peerMeshRef, wsRef, rtcWsRef, collabor
       } catch { return false; }
     },
   });
-  const setItems = useCallback(update => {
+  const setItems = useCallback((update,knownIds=null) => {
     if (rebasing.current) return;
     const session = sessionRef.current;
     const previous = working.current;
     const next = typeof update === 'function' ? update(previous) : update;
     if (!session.editable) { itemsRef.current = previous; return; }
     try {
-      const operations = itemOperations(previous, next, collaborativeDocsRef.current);
+      const operations = itemOperations(previous, next, collaborativeDocsRef.current, knownIds || changedItemIds(previous,next));
       if (!operations.length || session.submit(operations)) {
         working.current = next; itemsRef.current = next;
         if (operations.length) session.publish(session.items, []);
@@ -113,6 +89,10 @@ export function useHostCanvas({ itemsRef, peerMeshRef, wsRef, rtcWsRef, collabor
       else itemsRef.current = previous;
     } catch (error) { itemsRef.current = previous; callbacks.current.setToast(error.message); }
   }, []);
+  const patchItems=useCallback((changes,removed=[])=>{
+    const ids=[...new Set([...(changes instanceof Map?changes.keys():Object.keys(changes||{})),...removed])];
+    setItems(previous=>changeItems(previous,changes,removed),ids);
+  },[setItems]);
   const receiveServerItems = useCallback(serverItems => {
     pendingSaves.current.clear();
     sessionRef.current.seed(serverItems);
@@ -141,5 +121,5 @@ export function useHostCanvas({ itemsRef, peerMeshRef, wsRef, rtcWsRef, collabor
     const timer = setInterval(() => sessionRef.current.tick(), 10);
     return () => clearInterval(timer);
   }, []);
-  return { items, setItems, committedItemsRef, status, lastReceipt, retryRejected, sessionRef, receiveServerItems, receiveServerEvent };
+  return { items, setItems, patchItems, committedItemsRef, viewRef:view, status, lastReceipt, retryRejected, sessionRef, receiveServerItems, receiveServerEvent };
 }

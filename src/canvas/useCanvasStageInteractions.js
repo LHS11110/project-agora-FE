@@ -20,7 +20,7 @@ import { DEFAULT_SHAPE_ARROW_BEND } from '../components/shapeArrowGeometry.js';
 export function useCanvasStageInteractions(options) {
   const {
     boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth = ERASER_RADIUS * 2,
-    addItem, setToast, setItems, refreshSpatialIndex, spatialIndexRef,
+    addItem, setToast, setItems, patchItems, refreshSpatialIndex, spatialIndexRef,
     sendStrokeFrameChanges, pendingItemChangesRef, strokeSaveFlushRef,
     lastCursorSentAtRef, peerMeshRef, panRef, zoomHoldRef, zoomPointerPressRef,
     zoomSensitivity, stageWheelHandlerRef, laserDrawingRef, setLaserStrokes,
@@ -93,24 +93,22 @@ export function useCanvasStageInteractions(options) {
       if (itemsRef.current[id]?.kind !== 'stroke') continue;
       const remainingPaths = eraseStrokeWithEraser(item, from, to, boardSize, camera.scale, eraserWidth / 2);
       if (remainingPaths === null) continue;
-      const nextItems = { ...itemsRef.current };
+      const changes={},removed=[];
       if (remainingPaths.length === 0) {
         enqueueStrokeChange(id, null, item);
-        delete nextItems[id];
+        removed.push(id);
       } else {
         const updatedItem = { ...item, points: remainingPaths[0] };
         enqueueStrokeChange(id, updatedItem, item);
-        nextItems[id] = updatedItem;
+        changes[id] = updatedItem;
         for (const points of remainingPaths.slice(1)) {
           const fragmentId = createId();
           const fragment = { ...item, points };
           enqueueStrokeChange(fragmentId, fragment, null);
-          nextItems[fragmentId] = fragment;
+          changes[fragmentId] = fragment;
         }
       }
-      itemsRef.current = nextItems;
-      setItems(nextItems);
-      refreshSpatialIndex();
+      patchItems(changes,removed);
     }
   };
   const centeredItemPosition = (width, height) => {
@@ -581,9 +579,7 @@ export function useCanvasStageInteractions(options) {
     };
     if (session) sendStrokePreviewPoints(peerMeshRef.current, session, session.pendingPoints.splice(0));
     enqueueStrokeChange(id, item, itemsRef.current[id] || null);
-    itemsRef.current = { ...itemsRef.current, [id]: item };
-    setItems(itemsRef.current);
-    refreshSpatialIndex();
+    patchItems({[id]:item});
     flushStrokeChanges({ force: true });
     const added = true;
     if (session) {

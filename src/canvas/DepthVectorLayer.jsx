@@ -1,3 +1,5 @@
+import { changedItemIds } from './itemSnapshots.js';
+import ScenePreparationQueue from './ScenePreparationQueue.js';
 import { flatRectangleTint,tintRasterItem } from './flatShapeTint.js';
 import WorkerFrameCompositor from './WorkerFrameCompositor.js';
 import { rasterViewportRegion } from './rasterViewportRegion.js';
@@ -15,6 +17,7 @@ import { mergeDamage, overlaps, paintBounds } from './renderDamage.js';
 import '../components/vector-layer.css';
 
 const EMPTY_PREVIEWS = [];
+const EMPTY_ITEMS={};
 
 export default function DepthVectorLayer(props) {
   const host = useRef(null), renderer = useRef(null), latest = useRef(props);
@@ -30,6 +33,8 @@ export default function DepthVectorLayer(props) {
     let compositor=null,bufferVersion=0,surfaceChanged=false,worldPaintBounds=null,bufferCamera=null,sceneInputs=null,lastCamera=null,cameraIdleTimer=null,refreshCamera=false,cameraActive=false,viewportMetrics=null,textAppearanceCache=null;
     const ink = createInkStrokeRenderer(element, canvas);
     const records = new Map();
+    const preparationQueue = new ScenePreparationQueue();
+    let preparation = null;
     const atlas = new RasterTextureAtlas();
     const resources = new SharedRasterCache(resource => {
       if(resource.textureHandle) atlas.release(resource.textureHandle);
@@ -37,7 +42,8 @@ export default function DepthVectorLayer(props) {
     });
     const stats = element.__agoraRenderStats = { frames: 0, rasterizations: 0, cacheHits: 0, descriptorsUpdated: 0, drawnObjects: 0, texturePages: 0 };
     let app, pendingApp, releaseGpu, gpuFailed = false, disposed = false, frame = null, draft;
-    let metricsRevision = 0, inkKey = '', previousPreviews, previousPaintKey = '', previousOrder = '';
+    let types={items:null,kinds:new Map(),texts:0,connectors:0};
+    let metricsRevision = 0, inkKey = '', previousPreviews,previousDraft,previousInkItems, previousPaintKey = '', previousOrder = '';
     const destroyRecord = record => {
       record.sprite?.destroy();
       resources.release(record.resource);
@@ -82,7 +88,7 @@ export default function DepthVectorLayer(props) {
     const render = () => {
       frame = null;
       if (disposed) return;
-      const { items, referenceItems, worldSize: world, camera, routingRevision = 0, previewStrokes = EMPTY_PREVIEWS } = latest.current;
+      const { items, referenceItems, worldSize: world, camera, routingRevision = 0, previewStrokes = EMPTY_PREVIEWS, inkItems = EMPTY_ITEMS } = latest.current;
       const moved=lastCamera && (lastCamera.x!==camera.x || lastCamera.y!==camera.y || lastCamera.scale!==camera.scale);
       if(moved){cameraActive=true;clearTimeout(cameraIdleTimer);cameraIdleTimer=setTimeout(()=>{cameraActive=false;refreshCamera=true;schedule();},120);}
       lastCamera={...camera};
@@ -115,122 +121,160 @@ export default function DepthVectorLayer(props) {
         stats.outputPixels=canvas.width*canvas.height;
         stats.compositePanFrames=(stats.compositePanFrames||0)+1;
       };
-      const inputs=[items,referenceItems,world.width,world.height,routingRevision,metricsRevision,previewStrokes,draft,ratio,width,height,textAppearance.font,textAppearance.color,Boolean(gpu)];
+      if(types.items!==items){
+        const changed=changedItemIds(types.items,items);
+        if(changed===null){types={items,kinds:new Map(),texts:0,connectors:0};for(const [id,item] of Object.entries(items||{})){const kind=isRasterText(item)?'rasterText':item.kind;types.kinds.set(id,kind);if(kind==='rasterText')types.texts++;if(kind==='connector')types.connectors++;}}
+        else{for(const id of changed){const before=types.kinds.get(id),item=items[id],after=isRasterText(item)?'rasterText':item?.kind;if(before==='rasterText')types.texts--;if(before==='connector')types.connectors--;if(item)types.kinds.set(id,after);else types.kinds.delete(id);if(after==='rasterText')types.texts++;if(after==='connector')types.connectors++;}types.items=items;}
+      }
+      const nextInkKey=`${width}:${height}:${world.width}:${world.height}:${camera.x}:${camera.y}:${camera.scale}`;
+      if(nextInkKey!==inkKey || previousPreviews!==previewStrokes || previousDraft!==draft || previousInkItems!==inkItems){
+        ink.render({items:inkItems,previews:previewStrokes,draft,width:world.width,height:world.height,viewportWidth:width,viewportHeight:height,camera});
+        inkKey=nextInkKey;previousPreviews=previewStrokes;previousDraft=draft;previousInkItems=inkItems;
+        stats.inkFrames=(stats.inkFrames||0)+1;
+      }
+      const hiddenKey=[...previewStrokes.map(stroke=>String(stroke.id)),...(draft?.id?[String(draft.id)]:[])].filter(id=>items[id]).sort().join('|');
+      const inputs=[items,types.connectors?routingRevision:0,world.width,world.height,types.connectors?routingRevision:0,metricsRevision,hiddenKey,null,ratio,width,height,types.texts?textAppearance.font:'',types.texts?textAppearance.color:'',Boolean(gpu)];
       const unchanged=sceneInputs && inputs.every((value,i)=>value===sceneInputs[i]);
       if(sceneInputs && !unchanged){const names=['items','references','worldWidth','worldHeight','routing','metrics','previews','draft','ratio','width','height','font','color','gpu'];for(let i=0;i<inputs.length;i++)if(inputs[i]!==sceneInputs[i]){stats.refreshReasons ||= {};stats.refreshReasons[names[i]]=(stats.refreshReasons[names[i]]||0)+1;}}
-      if(unchanged && !surfaceChanged && !moved && !settling && (desiredRatio<=sceneInputs.quality || cameraActive) && (gpu || bufferFits))return;
+      const qualityRefresh = sceneInputs && !cameraActive && desiredRatio > sceneInputs.quality * 1.25;
+      const pending = preparationQueue.pending;
+      if(unchanged && !pending && !qualityRefresh && !surfaceChanged && !moved && !settling && (gpu || bufferFits))return;
       surfaceChanged=false;
-      if(unchanged && !settling && (desiredRatio<=sceneInputs.quality || cameraActive) && (gpu || bufferFits)){
+      if(unchanged && !pending && !qualityRefresh && (gpu || bufferFits)){
         if(gpu){app.stage.position.set(camera.x,camera.y);app.stage.scale.set(camera.scale);app.renderer.render(app.stage);}
         else blitBuffer();
-        const nextInkKey=`${width}:${height}:${world.width}:${world.height}:${camera.x}:${camera.y}:${camera.scale}`;
-        if(nextInkKey!==inkKey){ink.render({items:{},previews:previewStrokes,draft,width:world.width,height:world.height,viewportWidth:width,viewportHeight:height,camera});inkKey=nextInkKey;}
-        stats.frames++;stats.cachedPanFrames=(stats.cachedPanFrames||0)+1;stats.lastDrawnObjects=gpu?records.size:0;
+        stats.frames++;stats.cachedPanFrames=(stats.cachedPanFrames||0)+1;stats.lastDrawnObjects=gpu?preparation.count:0;
         return;
       }
-      const ids = new Set(Object.keys(items || {})), damage = [], ordered = [];stats.sceneObjects=ids.size;
-      for (const [id,record] of records) if (!ids.has(id)) {
-        if (record.paintedBounds) damage.push(record.paintedBounds);
-        destroyRecord(record); records.delete(id);
-      }
-      const hidden = new Set(previewStrokes.map(stroke => String(stroke.id)));
-      if (draft?.id) hidden.add(String(draft.id));
-      const pixelBudget = Math.min(2_000_000,8_000_000/Math.max(1,ids.size));
-      let order = 0, deferredQuality = false, qualityPrepared = 0;
-      const frameStarted = performance.now();
-      for (const [id,item] of Object.entries(items || {})) {
-        if (!['shape','connector','stroke'].includes(item?.kind) && !isRasterText(item)) continue;
-        let record = records.get(id);
-        if (hidden.has(id)) {
-          if (record?.paintedBounds && !record.hidden) damage.push(record.paintedBounds);
-          if (record) { record.hidden = true; if (record.sprite) record.sprite.visible = false; }
-          continue;
+      const damage = [];
+      const expandBounds = bounds => {
+        if (!bounds) return;
+        if (!worldPaintBounds) worldPaintBounds = {...bounds};
+        else {
+          worldPaintBounds.minX=Math.min(worldPaintBounds.minX,bounds.minX);
+          worldPaintBounds.minY=Math.min(worldPaintBounds.minY,bounds.minY);
+          worldPaintBounds.maxX=Math.max(worldPaintBounds.maxX,bounds.maxX);
+          worldPaintBounds.maxY=Math.max(worldPaintBounds.maxY,bounds.maxY);
         }
+      };
+      let partial=false;
+      if (!unchanged || qualityRefresh) {
+        const compatible=sceneInputs && !qualityRefresh && inputs.every((value,i)=>i===0 || value===sceneInputs[i]);
+        preparationQueue.setItems(items);
+        partial=compatible && preparation && preparationQueue.changedIds!==null;
+        if(partial){preparationQueue.invalidate(preparationQueue.changedIds);sceneInputs=inputs;sceneInputs.quality=preparation.lowestQuality;}
+        else {
+        preparationQueue.restart();
+        stats.sceneEnumerations=preparationQueue.enumerations;
+        stats.sceneObjects=preparationQueue.entries.length;
+        for (const [id,record] of records) if (!preparationQueue.ids.has(id)
+          || (!['shape','connector','stroke'].includes(items[id]?.kind) && !isRasterText(items[id]))) {
+          if (record.paintedBounds) damage.push(record.paintedBounds);
+          destroyRecord(record); records.delete(id);
+        }
+        const hidden = new Set(previewStrokes.map(stroke => String(stroke.id)));
+        if (draft?.id) hidden.add(String(draft.id));
+        preparation = { slots:new Array(preparationQueue.entries.length), count:0, hidden,
+          targetRatio:desiredRatio, pixelBudget:Math.min(2_000_000,8_000_000/Math.max(1,preparationQueue.entries.length)),
+          lowestQuality:Infinity };
+        worldPaintBounds=null;
+        preparationQueue.entries.forEach(([id],index)=>{
+          const record=records.get(id);
+          if (!record) return;
+          if (hidden.has(id)) {
+            if (!record.hidden && record.paintedBounds) damage.push(record.paintedBounds);
+            record.hidden=true;if(record.sprite)record.sprite.visible=false;
+          } else if (!record.hidden) {
+            preparation.slots[index]=record;preparation.count++;expandBounds(record.paintedBounds);
+            if(record.sprite)record.sprite.zIndex=index;
+          }
+        });
+        if (previousOrder !== preparationQueue.orderKey && !damage.length) {
+          for (const record of preparation.slots) if(record)damage.push(record.paintedBounds);
+        }
+        previousOrder=preparationQueue.orderKey;
+        sceneInputs=inputs;sceneInputs.quality=desiredRatio;
+        stats.preparationPasses=(stats.preparationPasses||0)+1;
+        }
+      }
+      const { slots:ordered, hidden, targetRatio, pixelBudget } = preparation;
+      const worldKey = `${world.width}:${world.height}`;
+      const preparedThisFrame=preparationQueue.run((id,item,index)=>{
+        if ((!['shape','connector','stroke'].includes(item?.kind) && !isRasterText(item)) || hidden.has(id)) return;
+        let record=records.get(id);
         const routeVersion = item.kind === 'connector' ? `${routingRevision}:${metricsRevision}`
           : item.kind==='text' ? `${textAppearance.font}:${textAppearance.color}:${metricsRevision}` : '';
-        const worldKey = `${world.width}:${world.height}`;
         const changed = !record || !sameRasterInput(record.item,item) || record.worldKey !== worldKey || record.routeVersion !== routeVersion;
-        // Expensive new appearances are prepared across frames. Already cached
-        // objects keep responding while a large scene comes into view.
-        if (changed && qualityPrepared > 0 && performance.now()-frameStarted > 8) {
-          deferredQuality=true;
-          if (!record) continue;
-        }
-        const prepare = changed && (!record || qualityPrepared === 0 || performance.now()-frameStarted <= 8);
         const tint=flatRectangleTint(item);
-        const descriptor = prepare ? rasterDescriptor(id,tintRasterItem(item,tint),world,referenceItems,routeVersion) : record.descriptor;
-        if (prepare) { stats.descriptorsUpdated++; qualityPrepared++; }
-        if (!descriptor) continue;
-        const key = descriptor.key;
-        const qualityNeeded = record && !cameraActive && desiredRatio > record.quality * 1.25;
-        // Always make progress, even when scanning the visible set alone takes
-        // the preparation budget on a slower device.
-        const qualityAllowed = qualityPrepared === 0 || performance.now() - frameStarted < 8;
-        if (qualityNeeded && !qualityAllowed) deferredQuality = true;
-        const rebuild = !record || record.key !== key || (qualityNeeded && qualityAllowed)
+        const descriptor=changed?rasterDescriptor(id,tintRasterItem(item,tint),world,referenceItems,routeVersion):record.descriptor;
+        if(changed)stats.descriptorsUpdated++;
+        if(!descriptor)return;
+        const key=descriptor.key;
+        const qualityNeeded=record && !cameraActive && targetRatio>record.quality*1.25;
+        const rebuild = !record || record.key !== key || qualityNeeded
           || (record.pixelBudget > pixelBudget*1.1 && record.raster.pixelWidth*record.raster.pixelHeight > pixelBudget*1.1);
         if (rebuild) {
-          if (qualityNeeded) qualityPrepared++;
           const sprite=gpu?record?.sprite:null;
           if (record) {damage.push(record.paintedBounds);if(sprite)resources.release(record.resource);else destroyRecord(record);}
-          const resourceKey=key+':'+desiredRatio+':'+Math.round(pixelBudget);
+          const resourceKey=key+':'+targetRatio+':'+Math.round(pixelBudget);
           const resource=resources.acquire(resourceKey,()=>{
             stats.rasterizations++;
-            const raster=rasterizeObject(id,descriptor,world,referenceItems,desiredRatio,pixelBudget,textAppearance);
+            const raster=rasterizeObject(id,descriptor,world,referenceItems,targetRatio,pixelBudget,textAppearance);
             raster.pixelWidth=raster.canvas.width;raster.pixelHeight=raster.canvas.height;
             return raster;
           });
           if(!resource.textureHandle){
             resource.textureHandle=atlas.allocate(resource.raster.canvas);
-            // The atlas is also the CPU bitmap store. Drop thousands of tiny
-            // canvas backing stores after copying them onto a shared page.
             if(resource.textureHandle.page){
               resource.raster.canvas.width=resource.raster.canvas.height=1;
               resource.raster.canvas=null;
             }
           }
-          record = { key, quality: desiredRatio, pixelBudget, raster:resource.raster, resource,sprite };
+          record = { key, quality:targetRatio, pixelBudget, raster:resource.raster, resource,sprite };
           if(sprite)sprite.texture=resource.textureHandle.texture;
           records.set(id,record);
         } else stats.cacheHits++;
-        if (changed || rebuild || record.hidden) {
-          if (record.paintedBounds) damage.push(record.paintedBounds);
-          record.paintedBounds = paintBounds(descriptor,record.raster); damage.push(record.paintedBounds);
+        if(changed || rebuild || record.hidden){
+          if(record.paintedBounds)damage.push(record.paintedBounds);
+          record.paintedBounds=paintBounds(descriptor,record.raster);damage.push(record.paintedBounds);
+          expandBounds(record.paintedBounds);
         }
-        if (!changed || prepare) { record.item = item; record.worldKey = worldKey; record.routeVersion = routeVersion; }
-        record.descriptor = descriptor;record.tint=tint; record.hidden = false;
-        const raster = record.raster;
-        const x = descriptor.x+descriptor.centerX, y = descriptor.y+descriptor.centerY;
-        const pivotX = descriptor.centerX-raster.left, pivotY = descriptor.centerY-raster.top;
-        if (gpu) {
-          const newSprite = !record.sprite;
-          if (newSprite) {
+        record.item=item;record.worldKey=worldKey;record.routeVersion=routeVersion;
+        record.descriptor=descriptor;record.tint=tint;record.hidden=false;
+        preparation.lowestQuality=Math.min(preparation.lowestQuality,record.quality);
+        const raster=record.raster;
+        if(gpu){
+          const newSprite=!record.sprite;
+          if(newSprite){
             record.resource.textureHandle ||= atlas.allocate(raster.canvas);
-            record.sprite = new Sprite(record.resource.textureHandle.texture);
-            record.sprite.eventMode = 'none'; app.stage.addChild(record.sprite);
+            record.sprite=new Sprite(record.resource.textureHandle.texture);
+            record.sprite.eventMode='none';app.stage.addChild(record.sprite);
           }
-          const sprite = record.sprite;
-          if (changed || rebuild || newSprite) {
+          const sprite=record.sprite;
+          if(changed || rebuild || newSprite){
             sprite.tint=record.tint===null?0xffffff:record.tint;
-            sprite.width = raster.width; sprite.height = raster.height;
-            sprite.pivot.set(pivotX*raster.pixelWidth/raster.width,pivotY*raster.pixelHeight/raster.height);
-            sprite.position.set(x,y); sprite.rotation = descriptor.rotation*Math.PI/180;
+            sprite.width=raster.width;sprite.height=raster.height;
+            sprite.pivot.set((descriptor.centerX-raster.left)*raster.pixelWidth/raster.width,(descriptor.centerY-raster.top)*raster.pixelHeight/raster.height);
+            sprite.position.set(descriptor.x+descriptor.centerX,descriptor.y+descriptor.centerY);
+            sprite.rotation=descriptor.rotation*Math.PI/180;
           }
-          sprite.visible = true; sprite.zIndex = order++;
+          sprite.visible=true;sprite.zIndex=index;
         }
-        ordered.push(record);
+        if(!ordered[index])preparation.count++;
+        ordered[index]=record;
+      });
+      const deferredQuality=preparationQueue.pending;
+      stats.preparedThisFrame=preparedThisFrame;stats.preparationCursor=preparationQueue.cursor;
+      stats.preparationVisited=(stats.preparationVisited||0)+preparedThisFrame;
+      if(!deferredQuality){
+        if(!partial){worldPaintBounds=null;for(const record of ordered)if(record)expandBounds(record.paintedBounds);}
+        sceneInputs.quality=Number.isFinite(preparation.lowestQuality)?preparation.lowestQuality:targetRatio;
       }
-      worldPaintBounds=null;
-      for(const record of ordered){const b=record.paintedBounds;if(!worldPaintBounds)worldPaintBounds={...b};else{worldPaintBounds.minX=Math.min(worldPaintBounds.minX,b.minX);worldPaintBounds.minY=Math.min(worldPaintBounds.minY,b.minY);worldPaintBounds.maxX=Math.max(worldPaintBounds.maxX,b.maxX);worldPaintBounds.maxY=Math.max(worldPaintBounds.maxY,b.maxY);}}
-      const orderKey = [...ids].join('\0');
-      // A reordered scene can change overlap even when each object's geometry stays put.
-      if (previousOrder !== orderKey && !damage.length) for (const record of ordered) damage.push(record.paintedBounds);
-      previousOrder = orderKey;
       let drawn = 0;
       if (gpu) {
         atlas.flush(); stats.texturePages = atlas.pages.length;
         app.stage.position.set(camera.x,camera.y); app.stage.scale.set(camera.scale);
-        app.renderer.render(app.stage); drawn = ordered.length;
+        app.renderer.render(app.stage); drawn = preparation.count;
         previousPaintKey = '';
       } else {
         const bufferWidth=Math.round((width+margin*2)*ratio),bufferHeight=Math.round((height+margin*2)*ratio);
@@ -260,6 +304,7 @@ export default function DepthVectorLayer(props) {
           }
           bufferContext.setTransform(ratio*camera.scale,0,0,ratio*camera.scale,ratio*paintCamera.x,ratio*paintCamera.y);
           for (const record of ordered) {
+            if (!record) continue;
             if (!fullPaint && !overlaps(record.paintedBounds,region)) continue;
             const descriptor=record.descriptor,raster=record.raster;
             bufferContext.save(); bufferContext.translate(descriptor.x+descriptor.centerX,descriptor.y+descriptor.centerY);
@@ -274,25 +319,18 @@ export default function DepthVectorLayer(props) {
         }
         previousPaintKey = bufferKey; element.dataset.renderer = 'canvas2d';blitBuffer();
       }
-      stats.drawnObjects += drawn; stats.lastDrawnObjects = drawn; stats.visibleObjects = ordered.length;
+      stats.drawnObjects += drawn; stats.lastDrawnObjects = drawn; stats.visibleObjects = preparation.count;
       stats.sharedRasters=resources.live.size;stats.retainedRasters=resources.idle.size;
       stats.texturePages=atlas.pages.length;
-      const nextInkKey = `${width}:${height}:${world.width}:${world.height}:${camera.x}:${camera.y}:${camera.scale}`;
-      if (nextInkKey !== inkKey || previousPreviews !== previewStrokes) {
-        ink.render({ items: {}, previews: previewStrokes, draft, width: world.width, height: world.height, viewportWidth: width, viewportHeight: height, camera });
-        inkKey = nextInkKey; previousPreviews = previewStrokes;
-      }
       stats.frames++;
       stats.preparing=deferredQuality;stats.deferredFrames=(stats.deferredFrames||0)+Number(deferredQuality);
-      sceneInputs=deferredQuality?null:inputs;
-      if(sceneInputs)sceneInputs.quality=desiredRatio;
       ensureGpu();
       if (deferredQuality) schedule();
     };
     const schedule = () => { if (!disposed && frame === null) frame = requestAnimationFrame(render); };
-    const metricsChanged = () => { metricsRevision++;textAppearanceCache=null; schedule(); };
+    const metricsChanged = event => { if(Array.isArray(event?.changedItemIds) && !types.texts && !types.connectors)return;metricsRevision++;textAppearanceCache=null; schedule(); };
     renderer.current = schedule;
-    latest.current.onReady?.(value => { draft = value; ink.renderDraft(value); schedule(); });
+    latest.current.onReady?.(value => { draft = value; schedule(); });
     const observer = new ResizeObserver(([entry])=>{viewportMetrics={width:entry.contentRect.width,height:entry.contentRect.height};schedule();}); observer.observe(element);
     const themeObserver=new MutationObserver(metricsChanged);const themeRoot=element.closest('[data-theme]');if(themeRoot)themeObserver.observe(themeRoot,{attributes:true,attributeFilter:['data-theme']});
     const stage=element.closest('.canvas-stage');

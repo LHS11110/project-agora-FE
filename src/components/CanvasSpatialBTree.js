@@ -1,3 +1,4 @@
+import { changedItemIds } from '../canvas/itemSnapshots.js';
 import RBush from 'rbush';
 import { objectShadow } from '../canvas/objectShadow.js';
 import { connectorObjectSize } from '../canvas/connectors/objectMetrics.js';
@@ -163,7 +164,8 @@ export default class CanvasSpatialBTree {
     const resized = width !== this.width || height !== this.height;
     const remeasured = revision !== this.revision;
     const initial = !this.items;
-    const incremental = changedIds && !resized && !remeasured && !initial;
+    if(changedIds==null && !remeasured && this.items)changedIds=changedItemIds(this.items,items);
+    const incremental = changedIds && !resized && !initial;
     const ids = incremental ? [...new Set(changedIds.map(String))] : Object.keys(items);
     let obstaclesChanged = resized || remeasured;
     const removals = incremental ? ids.map(id=>[id,this.entries.get(id)]).filter(([,entry])=>entry) : this.entries;
@@ -173,8 +175,10 @@ export default class CanvasSpatialBTree {
       if (entry.item.kind !== 'connector') obstaclesChanged = true;
     }
     const pending = [];
+    const affected=new Set(ids);
     const updateEntry = (id,item,force) => {
       const old = this.entries.get(id);
+      affected.add(id);
       const measured = connectorObjectSize(item);
       if (!force && old?.item === item && measured?.width === old.measuredWidth && measured?.height === old.measuredHeight) return false;
       const key = geometryKey(item);
@@ -197,14 +201,14 @@ export default class CanvasSpatialBTree {
       const item=items[id];
       if(item?.kind==='connector')this.connectorIds.add(id);else this.connectorIds.delete(id);
       if (!item || item.type === 'chat_room' || item.kind === 'connector') continue;
-      if (updateEntry(id,item,resized)) obstaclesChanged = true;
+      if (updateEntry(id,item,resized||remeasured)) obstaclesChanged = true;
     }
     // Routing depends on obstacles, so invalidate connectors only on geometry changes.
     for (const id of obstaclesChanged ? this.connectorIds : ids) if (items[id]?.kind === 'connector') updateEntry(id,items[id],obstaclesChanged);
     if (initial || pending.length > this.entries.size / 4) this.tree.load(pending);
     else for (const entry of pending) this.tree.insert(entry);
     this.items = items; this.width = width; this.height = height; this.revision = revision;
-    this.stats.updates++;
+    this.stats.updates++;this.changedIds=incremental?[...affected]:null;
     return this;
   }
   query(bounds) { this.stats.queries++; return this.tree.search(bounds); }

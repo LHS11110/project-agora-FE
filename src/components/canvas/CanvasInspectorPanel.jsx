@@ -1,3 +1,4 @@
+import { itemCount } from '../../canvas/itemSnapshots.js';
 import ObjectShadowControls from '../../canvas/ObjectShadowControls.jsx';
 import { useMemo } from 'react';
 import ObjectDepthControls from '../../canvas/ObjectDepthControls.jsx';
@@ -94,7 +95,7 @@ export default function CanvasInspectorPanel({
   zoomSensitivity
 }) {
   const shapeToEdit = activeTool === 'select' && selectedItem?.kind === 'shape' ? selectedItem : null;
-  const drawableCount=useMemo(()=>Object.values(items).filter(item=>item?.type!=='chat_room').length,[items]);
+  const drawableCount=itemCount(items);
   const selectionSummary=useMemo(()=>{let grouped=false,savedText=false,groupable=0;for(const id of selectedObjectIds){const item=items[id];grouped ||= Boolean(item?.groupId);savedText ||= ['text','code'].includes(item?.kind);if(!['stroke','connector'].includes(item?.kind))groupable++;}return {grouped,savedText,groupable};},[selectedObjectIds,items]);
   return (
       <aside className={`canvas-sidepanel canvas-inspector${activeTool === 'select' ? ' server-settings-mode' : ' tool-settings-mode'}`}><div className="inspector-heading"><div><span className="section-kicker">{activeTool === 'select' ? 'WORKSPACE' : 'TOOL SETTINGS'}</span><h2>{activeTool === 'select' ? '환경 설정' : `${({ 'user-group': '사용자 그룹', pen: '드로잉', laser: '레이저 포인터', eraser: '지우개', connect: '연결', shape: '도형', text: '텍스트', note: '포스트잇', math: '수식', table: '테이블', code: '코드', link: '동영상·링크' })[activeTool] || '도구'} 설정`}</h2></div>{activeTool === 'select' && <button className="icon-button" onClick={() => setShowSettings(true)} aria-label="캔버스 세부 설정"><Icon name="settings" size={18} /></button>}</div>

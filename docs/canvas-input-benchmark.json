@@ -1,0 +1,2746 @@
+{
+  "input-baseline-text": {
+    "startedAt": "2026-10-14T07:01:45.784Z",
+    "baseUrl": "https://112.168.71.147",
+    "viewport": {
+      "width": 1800,
+      "height": 1100
+    },
+    "assetOrigin": "https://112.168.71.147",
+    "deviceScaleFactor": 1,
+    "chrome": "155.0.8059.39",
+    "preparationTimeoutMs": 120000,
+    "sourceRevision": "3457ebf51dafbe7f8275a4f1d73407b43eef9aca",
+    "workload": "text",
+    "motion": {
+      "panDelta": 3,
+      "zoomDelta": 0.6,
+      "frameCount": 60
+    },
+    "threshold": {
+      "minimumAverageFps": 30,
+      "maximumP95Ms": 33.333333333333336,
+      "maximumFrameMs": 33.333333333333336
+    },
+    "results": [
+      {
+        "objects": 1500,
+        "scenario": "dense",
+        "initialized": true,
+        "ready": true,
+        "progress": [],
+        "fixture": {
+          "initialized": true,
+          "jsonCharacters": 331658
+        },
+        "loadAndPreparationMs": 3974,
+        "pageCrashed": false,
+        "initialState": {
+          "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동1500/1500개 표시",
+          "layers": [
+            {
+              "frames": 27,
+              "rasterizations": 544,
+              "cacheHits": 1821,
+              "descriptorsUpdated": 1542,
+              "drawnObjects": 17206,
+              "texturePages": 1,
+              "sceneEnumerations": 3,
+              "sceneObjects": 1499,
+              "preparationPasses": 7,
+              "preparedThisFrame": 41,
+              "preparationCursor": 1499,
+              "preparationVisited": 3363,
+              "outputPixels": 622592,
+              "lastDrawnObjects": 1499,
+              "visibleObjects": 1499,
+              "sharedRasters": 501,
+              "retainedRasters": 43,
+              "preparing": false,
+              "deferredFrames": 22,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 2,
+                "items": 2,
+                "references": 2,
+                "routing": 1,
+                "gpu": 1
+              },
+              "cachedPanFrames": 1,
+              "compositePanFrames": 10,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+              "renderer": "webgl"
+            },
+            {
+              "frames": 4,
+              "rasterizations": 2,
+              "cacheHits": 2,
+              "descriptorsUpdated": 2,
+              "drawnObjects": 3,
+              "texturePages": 1,
+              "sceneEnumerations": 2,
+              "sceneObjects": 1,
+              "preparationPasses": 4,
+              "preparedThisFrame": 1,
+              "preparationCursor": 1,
+              "preparationVisited": 4,
+              "outputPixels": 86016,
+              "compositePanFrames": 3,
+              "lastDrawnObjects": 1,
+              "visibleObjects": 1,
+              "sharedRasters": 1,
+              "retainedRasters": 1,
+              "preparing": false,
+              "deferredFrames": 0,
+              "refreshReasons": {
+                "metrics": 1,
+                "items": 1,
+                "references": 1,
+                "gpu": 1
+              },
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+              "renderer": "webgl"
+            }
+          ]
+        },
+        "interaction": {
+          "fps": 8.354335203769226,
+          "p95Ms": 217.6000000089407,
+          "maxMs": 222.20000000298023,
+          "over33ms": 59,
+          "samples": 60,
+          "layers": [
+            {
+              "frames": 99,
+              "rasterizations": 1044,
+              "cacheHits": 97361,
+              "descriptorsUpdated": 2042,
+              "drawnObjects": 125134,
+              "texturePages": 1,
+              "sceneEnumerations": 67,
+              "sceneObjects": 1499,
+              "preparationPasses": 72,
+              "preparedThisFrame": 1499,
+              "preparationCursor": 1499,
+              "preparationVisited": 99403,
+              "outputPixels": 622592,
+              "lastDrawnObjects": 1499,
+              "visibleObjects": 1499,
+              "sharedRasters": 501,
+              "retainedRasters": 512,
+              "preparing": false,
+              "deferredFrames": 30,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 3,
+                "items": 66,
+                "references": 62,
+                "routing": 3,
+                "gpu": 1
+              },
+              "cachedPanFrames": 1,
+              "compositePanFrames": 10,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)"
+            },
+            {
+              "frames": 69,
+              "rasterizations": 2,
+              "cacheHits": 2,
+              "descriptorsUpdated": 2,
+              "drawnObjects": 3,
+              "texturePages": 1,
+              "sceneEnumerations": 66,
+              "sceneObjects": 0,
+              "preparationPasses": 69,
+              "preparedThisFrame": 0,
+              "preparationCursor": 0,
+              "preparationVisited": 4,
+              "outputPixels": 86016,
+              "compositePanFrames": 3,
+              "lastDrawnObjects": 0,
+              "visibleObjects": 0,
+              "sharedRasters": 0,
+              "retainedRasters": 2,
+              "preparing": false,
+              "deferredFrames": 0,
+              "refreshReasons": {
+                "metrics": 2,
+                "items": 65,
+                "references": 61,
+                "gpu": 1,
+                "routing": 2
+              },
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)"
+            }
+          ],
+          "saves": 56,
+          "finalInput": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "finalSaves": [
+          {
+            "kind": "text",
+            "text": "Editable text aa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      }
+    ]
+  },
+  "input-baseline-draw": {
+    "startedAt": "2026-10-14T07:51:05.510Z",
+    "baseUrl": "https://112.168.71.147",
+    "viewport": {
+      "width": 1800,
+      "height": 1100
+    },
+    "assetOrigin": "https://112.168.71.147",
+    "deviceScaleFactor": 1,
+    "chrome": "155.0.8059.39",
+    "preparationTimeoutMs": 120000,
+    "sourceRevision": "3457ebf51dafbe7f8275a4f1d73407b43eef9aca",
+    "workload": "draw",
+    "motion": {
+      "panDelta": 3,
+      "zoomDelta": 0.6,
+      "frameCount": 60
+    },
+    "threshold": {
+      "minimumAverageFps": 30,
+      "maximumP95Ms": 33.333333333333336,
+      "maximumFrameMs": 33.333333333333336
+    },
+    "results": [
+      {
+        "objects": 1500,
+        "scenario": "dense",
+        "initialized": true,
+        "ready": true,
+        "progress": [],
+        "fixture": {
+          "initialized": true,
+          "jsonCharacters": 331700
+        },
+        "loadAndPreparationMs": 2921,
+        "pageCrashed": false,
+        "initialState": {
+          "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동1500/1500개 표시",
+          "layers": [
+            {
+              "frames": 24,
+              "rasterizations": 553,
+              "cacheHits": 1511,
+              "descriptorsUpdated": 1552,
+              "drawnObjects": 13508,
+              "texturePages": 1,
+              "sceneEnumerations": 3,
+              "sceneObjects": 1500,
+              "preparationPasses": 7,
+              "preparedThisFrame": 34,
+              "preparationCursor": 1500,
+              "preparationVisited": 3063,
+              "outputPixels": 700416,
+              "lastDrawnObjects": 1500,
+              "visibleObjects": 1500,
+              "sharedRasters": 501,
+              "retainedRasters": 52,
+              "preparing": false,
+              "deferredFrames": 19,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 2,
+                "items": 2,
+                "references": 2,
+                "routing": 1,
+                "gpu": 1
+              },
+              "cachedPanFrames": 1,
+              "compositePanFrames": 11,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+              "renderer": "webgl"
+            }
+          ]
+        },
+        "interaction": {
+          "fps": 10.123506782754635,
+          "p95Ms": 163.5,
+          "maxMs": 207.40000000596046,
+          "over33ms": 59,
+          "samples": 60,
+          "layers": [
+            {
+              "frames": 86,
+              "rasterizations": 553,
+              "cacheHits": 94511,
+              "descriptorsUpdated": 1552,
+              "drawnObjects": 106508,
+              "texturePages": 1,
+              "sceneEnumerations": 63,
+              "sceneObjects": 1501,
+              "preparationPasses": 69,
+              "preparedThisFrame": 1501,
+              "preparationCursor": 1501,
+              "preparationVisited": 96124,
+              "outputPixels": 700416,
+              "lastDrawnObjects": 1500,
+              "visibleObjects": 1500,
+              "sharedRasters": 501,
+              "retainedRasters": 52,
+              "preparing": false,
+              "deferredFrames": 19,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 2,
+                "items": 63,
+                "references": 63,
+                "routing": 61,
+                "gpu": 1,
+                "draft": 61
+              },
+              "cachedPanFrames": 1,
+              "compositePanFrames": 11,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)"
+            }
+          ],
+          "saves": 33
+        },
+        "finalSaves": [
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 1
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 2
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 3
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 4
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 6
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 7
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 8
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 10
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 12
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 14
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 16
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 18
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 20
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 22
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 24
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 26
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 28
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 30
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 32
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 34
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 36
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 38
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 39
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 41
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 43
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 45
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 47
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 49
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 51
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 53
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 55
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 56
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 58
+          },
+          {
+            "kind": "stroke",
+            "complete": true,
+            "points": 61
+          }
+        ]
+      }
+    ]
+  },
+  "input-final-text": {
+    "startedAt": "2026-10-14T07:58:39.065Z",
+    "baseUrl": "https://112.168.71.147",
+    "viewport": {
+      "width": 1800,
+      "height": 1100
+    },
+    "assetOrigin": "https://127.0.0.1:5179",
+    "deviceScaleFactor": 1,
+    "chrome": "155.0.8059.39",
+    "preparationTimeoutMs": 120000,
+    "sourceRevision": "3457ebf51dafbe7f8275a4f1d73407b43eef9aca",
+    "workload": "text",
+    "motion": {
+      "panDelta": 3,
+      "zoomDelta": 0.6,
+      "frameCount": 300
+    },
+    "threshold": {
+      "minimumAverageFps": 30,
+      "maximumP95Ms": 33.333333333333336,
+      "maximumFrameMs": 33.333333333333336
+    },
+    "results": [
+      {
+        "objects": 1500,
+        "scenario": "dense",
+        "initialized": true,
+        "ready": true,
+        "progress": [],
+        "fixture": {
+          "initialized": true,
+          "jsonCharacters": 331658
+        },
+        "loadAndPreparationMs": 3358,
+        "pageCrashed": false,
+        "initialState": {
+          "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동1500/1500개 표시",
+          "layers": [
+            {
+              "frames": 19,
+              "rasterizations": 543,
+              "cacheHits": 1402,
+              "descriptorsUpdated": 1541,
+              "drawnObjects": 5010,
+              "texturePages": 1,
+              "inkFrames": 3,
+              "sceneEnumerations": 2,
+              "sceneObjects": 1499,
+              "preparationPasses": 6,
+              "preparedThisFrame": 147,
+              "preparationCursor": 1499,
+              "preparationVisited": 2943,
+              "outputPixels": 778240,
+              "lastDrawnObjects": 1499,
+              "visibleObjects": 1499,
+              "sharedRasters": 501,
+              "retainedRasters": 42,
+              "preparing": false,
+              "deferredFrames": 14,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 2,
+                "items": 1,
+                "font": 1,
+                "color": 1,
+                "gpu": 1
+              },
+              "cachedPanFrames": 1,
+              "compositePanFrames": 13,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+              "renderer": "webgl"
+            },
+            {
+              "frames": 3,
+              "rasterizations": 2,
+              "cacheHits": 1,
+              "descriptorsUpdated": 2,
+              "drawnObjects": 3,
+              "texturePages": 1,
+              "inkFrames": 1,
+              "sceneEnumerations": 1,
+              "sceneObjects": 1,
+              "preparationPasses": 3,
+              "preparedThisFrame": 1,
+              "preparationCursor": 1,
+              "preparationVisited": 3,
+              "outputPixels": 86016,
+              "compositePanFrames": 2,
+              "lastDrawnObjects": 1,
+              "visibleObjects": 1,
+              "sharedRasters": 1,
+              "retainedRasters": 1,
+              "preparing": false,
+              "deferredFrames": 0,
+              "refreshReasons": {
+                "metrics": 1,
+                "gpu": 1
+              },
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+              "renderer": "webgl"
+            }
+          ]
+        },
+        "interaction": {
+          "fps": 59.1412687772486,
+          "p95Ms": 22.100000008940697,
+          "maxMs": 73.79999999701977,
+          "over33ms": 1,
+          "samples": 300,
+          "layers": [
+            {
+              "frames": 31,
+              "rasterizations": 1043,
+              "cacheHits": 3900,
+              "descriptorsUpdated": 2041,
+              "drawnObjects": 22998,
+              "texturePages": 1,
+              "inkFrames": 4,
+              "sceneEnumerations": 3,
+              "sceneObjects": 1499,
+              "preparationPasses": 8,
+              "preparedThisFrame": 13,
+              "preparationCursor": 1499,
+              "preparationVisited": 5941,
+              "outputPixels": 778240,
+              "lastDrawnObjects": 1499,
+              "visibleObjects": 1499,
+              "sharedRasters": 501,
+              "retainedRasters": 512,
+              "preparing": false,
+              "deferredFrames": 24,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 3,
+                "items": 2,
+                "font": 1,
+                "color": 1,
+                "gpu": 1
+              },
+              "cachedPanFrames": 1,
+              "compositePanFrames": 13,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)"
+            },
+            {
+              "frames": 4,
+              "rasterizations": 2,
+              "cacheHits": 1,
+              "descriptorsUpdated": 2,
+              "drawnObjects": 3,
+              "texturePages": 1,
+              "inkFrames": 2,
+              "sceneEnumerations": 2,
+              "sceneObjects": 0,
+              "preparationPasses": 4,
+              "preparedThisFrame": 0,
+              "preparationCursor": 0,
+              "preparationVisited": 3,
+              "outputPixels": 86016,
+              "compositePanFrames": 2,
+              "lastDrawnObjects": 0,
+              "visibleObjects": 0,
+              "sharedRasters": 0,
+              "retainedRasters": 2,
+              "preparing": false,
+              "deferredFrames": 0,
+              "refreshReasons": {
+                "metrics": 1,
+                "gpu": 1,
+                "items": 1,
+                "font": 1,
+                "color": 1
+              },
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)"
+            }
+          ],
+          "saves": 48,
+          "finalInput": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "finalSaves": [
+          {
+            "kind": "text",
+            "text": "Editable text aa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      }
+    ]
+  },
+  "input-after-draw": {
+    "startedAt": "2026-10-14T07:52:37.401Z",
+    "baseUrl": "https://112.168.71.147",
+    "viewport": {
+      "width": 1800,
+      "height": 1100
+    },
+    "assetOrigin": "https://127.0.0.1:5179",
+    "deviceScaleFactor": 1,
+    "chrome": "155.0.8059.39",
+    "preparationTimeoutMs": 120000,
+    "sourceRevision": "3457ebf51dafbe7f8275a4f1d73407b43eef9aca",
+    "workload": "draw",
+    "motion": {
+      "panDelta": 3,
+      "zoomDelta": 0.6,
+      "frameCount": 60
+    },
+    "threshold": {
+      "minimumAverageFps": 30,
+      "maximumP95Ms": 33.333333333333336,
+      "maximumFrameMs": 33.333333333333336
+    },
+    "results": [
+      {
+        "objects": 1500,
+        "scenario": "dense",
+        "initialized": true,
+        "ready": true,
+        "progress": [],
+        "fixture": {
+          "initialized": true,
+          "jsonCharacters": 331700
+        },
+        "loadAndPreparationMs": 4127,
+        "pageCrashed": false,
+        "initialState": {
+          "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동1500/1500개 표시",
+          "layers": [
+            {
+              "frames": 26,
+              "rasterizations": 552,
+              "cacheHits": 959,
+              "descriptorsUpdated": 1551,
+              "drawnObjects": 14585,
+              "texturePages": 1,
+              "inkFrames": 3,
+              "sceneEnumerations": 2,
+              "sceneObjects": 1500,
+              "preparationPasses": 6,
+              "preparedThisFrame": 135,
+              "preparationCursor": 1500,
+              "preparationVisited": 2510,
+              "outputPixels": 544768,
+              "lastDrawnObjects": 1500,
+              "visibleObjects": 1500,
+              "sharedRasters": 501,
+              "retainedRasters": 51,
+              "preparing": false,
+              "deferredFrames": 21,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 2,
+                "items": 1,
+                "font": 1,
+                "color": 1,
+                "gpu": 1
+              },
+              "cachedPanFrames": 1,
+              "compositePanFrames": 10,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+              "renderer": "webgl"
+            }
+          ]
+        },
+        "interaction": {
+          "fps": 59.988002399341354,
+          "p95Ms": 20.299999997019768,
+          "maxMs": 20.899999991059303,
+          "over33ms": 0,
+          "samples": 60,
+          "layers": [
+            {
+              "frames": 27,
+              "rasterizations": 552,
+              "cacheHits": 2459,
+              "descriptorsUpdated": 1551,
+              "drawnObjects": 16085,
+              "texturePages": 1,
+              "inkFrames": 73,
+              "sceneEnumerations": 3,
+              "sceneObjects": 1500,
+              "preparationPasses": 7,
+              "preparedThisFrame": 1500,
+              "preparationCursor": 1500,
+              "preparationVisited": 4010,
+              "outputPixels": 544768,
+              "lastDrawnObjects": 1500,
+              "visibleObjects": 1500,
+              "sharedRasters": 501,
+              "retainedRasters": 51,
+              "preparing": false,
+              "deferredFrames": 21,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 2,
+                "items": 3,
+                "font": 1,
+                "color": 1,
+                "gpu": 1
+              },
+              "cachedPanFrames": 1,
+              "compositePanFrames": 10,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)"
+            }
+          ],
+          "saves": 11
+        },
+        "finalSaves": [
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 1
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 3
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 9
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 15
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 21
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 27
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 33
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 39
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 45
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 51
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 57
+          },
+          {
+            "kind": "stroke",
+            "complete": true,
+            "points": 61
+          }
+        ]
+      }
+    ]
+  },
+  "input-final-100k-text": {
+    "startedAt": "2026-10-14T07:59:05.249Z",
+    "baseUrl": "https://112.168.71.147",
+    "viewport": {
+      "width": 1800,
+      "height": 1100
+    },
+    "assetOrigin": "https://127.0.0.1:5179",
+    "deviceScaleFactor": 1,
+    "chrome": "155.0.8059.39",
+    "preparationTimeoutMs": 120000,
+    "sourceRevision": "3457ebf51dafbe7f8275a4f1d73407b43eef9aca",
+    "workload": "text",
+    "motion": {
+      "panDelta": 3,
+      "zoomDelta": 0.6,
+      "frameCount": 300
+    },
+    "threshold": {
+      "minimumAverageFps": 30,
+      "maximumP95Ms": 33.333333333333336,
+      "maximumFrameMs": 33.333333333333336
+    },
+    "results": [
+      {
+        "objects": 100000,
+        "scenario": "dense",
+        "initialized": true,
+        "ready": true,
+        "progress": [],
+        "fixture": {
+          "initialized": true,
+          "jsonCharacters": 24216371
+        },
+        "loadAndPreparationMs": 5565,
+        "pageCrashed": false,
+        "initialState": {
+          "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동100000/100000개 표시",
+          "layers": [
+            {
+              "frames": 63,
+              "rasterizations": 1,
+              "cacheHits": 21929,
+              "descriptorsUpdated": 99999,
+              "drawnObjects": 2638794,
+              "texturePages": 1,
+              "inkFrames": 3,
+              "sceneEnumerations": 2,
+              "sceneObjects": 99999,
+              "preparationPasses": 6,
+              "preparedThisFrame": 1741,
+              "preparationCursor": 99999,
+              "preparationVisited": 121928,
+              "outputPixels": 233472,
+              "lastDrawnObjects": 99999,
+              "visibleObjects": 99999,
+              "sharedRasters": 1,
+              "retainedRasters": 0,
+              "preparing": false,
+              "deferredFrames": 59,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 2,
+                "items": 1,
+                "gpu": 1
+              },
+              "compositePanFrames": 11,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+              "renderer": "webgl"
+            },
+            {
+              "frames": 3,
+              "rasterizations": 2,
+              "cacheHits": 1,
+              "descriptorsUpdated": 2,
+              "drawnObjects": 3,
+              "texturePages": 1,
+              "inkFrames": 1,
+              "sceneEnumerations": 1,
+              "sceneObjects": 1,
+              "preparationPasses": 3,
+              "preparedThisFrame": 1,
+              "preparationCursor": 1,
+              "preparationVisited": 3,
+              "outputPixels": 86016,
+              "compositePanFrames": 2,
+              "lastDrawnObjects": 1,
+              "visibleObjects": 1,
+              "sharedRasters": 1,
+              "retainedRasters": 1,
+              "preparing": false,
+              "deferredFrames": 0,
+              "refreshReasons": {
+                "metrics": 1,
+                "gpu": 1
+              },
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+              "renderer": "webgl"
+            }
+          ]
+        },
+        "interaction": {
+          "fps": 58.814303638679284,
+          "p95Ms": 23.100000008940697,
+          "maxMs": 83.19999998807907,
+          "over33ms": 2,
+          "samples": 300,
+          "layers": [
+            {
+              "frames": 70,
+              "rasterizations": 1,
+              "cacheHits": 121928,
+              "descriptorsUpdated": 99999,
+              "drawnObjects": 3338787,
+              "texturePages": 1,
+              "inkFrames": 4,
+              "sceneEnumerations": 3,
+              "sceneObjects": 99999,
+              "preparationPasses": 7,
+              "preparedThisFrame": 407,
+              "preparationCursor": 99999,
+              "preparationVisited": 221927,
+              "outputPixels": 233472,
+              "lastDrawnObjects": 99999,
+              "visibleObjects": 99999,
+              "sharedRasters": 1,
+              "retainedRasters": 0,
+              "preparing": false,
+              "deferredFrames": 65,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 2,
+                "items": 2,
+                "gpu": 1
+              },
+              "compositePanFrames": 11,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)"
+            },
+            {
+              "frames": 4,
+              "rasterizations": 2,
+              "cacheHits": 1,
+              "descriptorsUpdated": 2,
+              "drawnObjects": 3,
+              "texturePages": 1,
+              "inkFrames": 2,
+              "sceneEnumerations": 2,
+              "sceneObjects": 0,
+              "preparationPasses": 4,
+              "preparedThisFrame": 0,
+              "preparationCursor": 0,
+              "preparationVisited": 3,
+              "outputPixels": 86016,
+              "compositePanFrames": 2,
+              "lastDrawnObjects": 0,
+              "visibleObjects": 0,
+              "sharedRasters": 0,
+              "retainedRasters": 2,
+              "preparing": false,
+              "deferredFrames": 0,
+              "refreshReasons": {
+                "metrics": 1,
+                "gpu": 1,
+                "items": 1,
+                "font": 1,
+                "color": 1
+              },
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)"
+            }
+          ],
+          "saves": 47,
+          "finalInput": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "finalSaves": [
+          {
+            "kind": "text",
+            "text": "Editable text aa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      }
+    ]
+  },
+  "input-100k-draw": {
+    "startedAt": "2026-10-14T07:53:32.078Z",
+    "baseUrl": "https://112.168.71.147",
+    "viewport": {
+      "width": 1800,
+      "height": 1100
+    },
+    "assetOrigin": "https://127.0.0.1:5179",
+    "deviceScaleFactor": 1,
+    "chrome": "155.0.8059.39",
+    "preparationTimeoutMs": 120000,
+    "sourceRevision": "3457ebf51dafbe7f8275a4f1d73407b43eef9aca",
+    "workload": "draw",
+    "motion": {
+      "panDelta": 3,
+      "zoomDelta": 0.6,
+      "frameCount": 300
+    },
+    "threshold": {
+      "minimumAverageFps": 30,
+      "maximumP95Ms": 33.333333333333336,
+      "maximumFrameMs": 33.333333333333336
+    },
+    "results": [
+      {
+        "objects": 100000,
+        "scenario": "dense",
+        "initialized": true,
+        "ready": true,
+        "progress": [],
+        "fixture": {
+          "initialized": true,
+          "jsonCharacters": 24216430
+        },
+        "loadAndPreparationMs": 5364,
+        "pageCrashed": false,
+        "initialState": {
+          "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동100000/100000개 표시",
+          "layers": [
+            {
+              "frames": 65,
+              "rasterizations": 1,
+              "cacheHits": 21098,
+              "descriptorsUpdated": 100000,
+              "drawnObjects": 2767448,
+              "texturePages": 1,
+              "inkFrames": 3,
+              "sceneEnumerations": 2,
+              "sceneObjects": 100000,
+              "preparationPasses": 5,
+              "preparedThisFrame": 2508,
+              "preparationCursor": 100000,
+              "preparationVisited": 121098,
+              "outputPixels": 233472,
+              "lastDrawnObjects": 100000,
+              "visibleObjects": 100000,
+              "sharedRasters": 1,
+              "retainedRasters": 0,
+              "preparing": false,
+              "deferredFrames": 61,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 1,
+                "items": 1,
+                "gpu": 1
+              },
+              "compositePanFrames": 13,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+              "renderer": "webgl"
+            }
+          ]
+        },
+        "interaction": {
+          "fps": 58.82006940771627,
+          "p95Ms": 22.399999991059303,
+          "maxMs": 80.8999999910593,
+          "over33ms": 4,
+          "samples": 300,
+          "layers": [
+            {
+              "frames": 71,
+              "rasterizations": 1,
+              "cacheHits": 121098,
+              "descriptorsUpdated": 100000,
+              "drawnObjects": 3367448,
+              "texturePages": 1,
+              "inkFrames": 317,
+              "sceneEnumerations": 3,
+              "sceneObjects": 100000,
+              "preparationPasses": 6,
+              "preparedThisFrame": 19728,
+              "preparationCursor": 100000,
+              "preparationVisited": 221098,
+              "outputPixels": 233472,
+              "lastDrawnObjects": 100000,
+              "visibleObjects": 100000,
+              "sharedRasters": 1,
+              "retainedRasters": 0,
+              "preparing": false,
+              "deferredFrames": 66,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 1,
+                "items": 3,
+                "gpu": 1
+              },
+              "compositePanFrames": 13,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)"
+            }
+          ],
+          "saves": 48
+        },
+        "finalSaves": [
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 1
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 5
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 13
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 19
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 25
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 31
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 37
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 42
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 50
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 56
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 62
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 68
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 71
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 75
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 81
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 91
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 97
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 103
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 109
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 115
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 121
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 129
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 135
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 141
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 147
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 153
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 159
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 167
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 175
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 181
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 187
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 193
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 199
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 205
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 211
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 219
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 225
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 233
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 241
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 247
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 253
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 259
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 265
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 271
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 277
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 285
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 291
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 297
+          },
+          {
+            "kind": "stroke",
+            "complete": true,
+            "points": 301
+          }
+        ]
+      }
+    ]
+  },
+  "input-public-text": {
+    "startedAt": "2026-10-14T08:01:52.683Z",
+    "baseUrl": "https://112.168.71.147",
+    "viewport": {
+      "width": 1800,
+      "height": 1100
+    },
+    "assetOrigin": "https://112.168.71.147",
+    "deviceScaleFactor": 1,
+    "chrome": "155.0.8059.39",
+    "preparationTimeoutMs": 120000,
+    "sourceRevision": "3457ebf51dafbe7f8275a4f1d73407b43eef9aca",
+    "workload": "text",
+    "motion": {
+      "panDelta": 3,
+      "zoomDelta": 0.6,
+      "frameCount": 300
+    },
+    "threshold": {
+      "minimumAverageFps": 30,
+      "maximumP95Ms": 33.333333333333336,
+      "maximumFrameMs": 33.333333333333336
+    },
+    "results": [
+      {
+        "objects": 100000,
+        "scenario": "dense",
+        "initialized": true,
+        "ready": true,
+        "progress": [],
+        "fixture": {
+          "initialized": true,
+          "jsonCharacters": 24216371
+        },
+        "loadAndPreparationMs": 4993,
+        "pageCrashed": false,
+        "initialState": {
+          "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동100000/100000개 표시",
+          "layers": [
+            {
+              "frames": 63,
+              "rasterizations": 1,
+              "cacheHits": 17859,
+              "descriptorsUpdated": 99999,
+              "drawnObjects": 2454397,
+              "texturePages": 1,
+              "inkFrames": 3,
+              "sceneEnumerations": 2,
+              "sceneObjects": 99999,
+              "preparationPasses": 6,
+              "preparedThisFrame": 905,
+              "preparationCursor": 99999,
+              "preparationVisited": 117858,
+              "outputPixels": 155648,
+              "lastDrawnObjects": 99999,
+              "visibleObjects": 99999,
+              "sharedRasters": 1,
+              "retainedRasters": 0,
+              "preparing": false,
+              "deferredFrames": 58,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 2,
+                "items": 1,
+                "gpu": 1
+              },
+              "cachedPanFrames": 1,
+              "compositePanFrames": 10,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+              "renderer": "webgl"
+            },
+            {
+              "frames": 3,
+              "rasterizations": 2,
+              "cacheHits": 1,
+              "descriptorsUpdated": 2,
+              "drawnObjects": 3,
+              "texturePages": 1,
+              "inkFrames": 1,
+              "sceneEnumerations": 1,
+              "sceneObjects": 1,
+              "preparationPasses": 3,
+              "preparedThisFrame": 1,
+              "preparationCursor": 1,
+              "preparationVisited": 3,
+              "outputPixels": 86016,
+              "compositePanFrames": 2,
+              "lastDrawnObjects": 1,
+              "visibleObjects": 1,
+              "sharedRasters": 1,
+              "retainedRasters": 1,
+              "preparing": false,
+              "deferredFrames": 0,
+              "refreshReasons": {
+                "metrics": 1,
+                "gpu": 1
+              },
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+              "renderer": "webgl"
+            }
+          ]
+        },
+        "interaction": {
+          "fps": 58.18125399999484,
+          "p95Ms": 24.200000002980232,
+          "maxMs": 90.59999999403954,
+          "over33ms": 3,
+          "samples": 300,
+          "layers": [
+            {
+              "frames": 69,
+              "rasterizations": 1,
+              "cacheHits": 117858,
+              "descriptorsUpdated": 99999,
+              "drawnObjects": 3054391,
+              "texturePages": 1,
+              "inkFrames": 4,
+              "sceneEnumerations": 3,
+              "sceneObjects": 99999,
+              "preparationPasses": 7,
+              "preparedThisFrame": 12130,
+              "preparationCursor": 99999,
+              "preparationVisited": 217857,
+              "outputPixels": 155648,
+              "lastDrawnObjects": 99999,
+              "visibleObjects": 99999,
+              "sharedRasters": 1,
+              "retainedRasters": 0,
+              "preparing": false,
+              "deferredFrames": 63,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 2,
+                "items": 2,
+                "gpu": 1
+              },
+              "cachedPanFrames": 1,
+              "compositePanFrames": 10,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)"
+            },
+            {
+              "frames": 4,
+              "rasterizations": 2,
+              "cacheHits": 1,
+              "descriptorsUpdated": 2,
+              "drawnObjects": 3,
+              "texturePages": 1,
+              "inkFrames": 2,
+              "sceneEnumerations": 2,
+              "sceneObjects": 0,
+              "preparationPasses": 4,
+              "preparedThisFrame": 0,
+              "preparationCursor": 0,
+              "preparationVisited": 3,
+              "outputPixels": 86016,
+              "compositePanFrames": 2,
+              "lastDrawnObjects": 0,
+              "visibleObjects": 0,
+              "sharedRasters": 0,
+              "retainedRasters": 2,
+              "preparing": false,
+              "deferredFrames": 0,
+              "refreshReasons": {
+                "metrics": 1,
+                "gpu": 1,
+                "items": 1,
+                "font": 1,
+                "color": 1
+              },
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)"
+            }
+          ],
+          "saves": 47,
+          "finalInput": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "finalSaves": [
+          {
+            "kind": "text",
+            "text": "Editable text aa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "kind": "text",
+            "text": "Editable text aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      }
+    ]
+  },
+  "input-public-draw": {
+    "startedAt": "2026-10-14T08:02:19.365Z",
+    "baseUrl": "https://112.168.71.147",
+    "viewport": {
+      "width": 1800,
+      "height": 1100
+    },
+    "assetOrigin": "https://112.168.71.147",
+    "deviceScaleFactor": 1,
+    "chrome": "155.0.8059.39",
+    "preparationTimeoutMs": 120000,
+    "sourceRevision": "3457ebf51dafbe7f8275a4f1d73407b43eef9aca",
+    "workload": "draw",
+    "motion": {
+      "panDelta": 3,
+      "zoomDelta": 0.6,
+      "frameCount": 300
+    },
+    "threshold": {
+      "minimumAverageFps": 30,
+      "maximumP95Ms": 33.333333333333336,
+      "maximumFrameMs": 33.333333333333336
+    },
+    "results": [
+      {
+        "objects": 100000,
+        "scenario": "dense",
+        "initialized": true,
+        "ready": true,
+        "progress": [],
+        "fixture": {
+          "initialized": true,
+          "jsonCharacters": 24216430
+        },
+        "loadAndPreparationMs": 5338,
+        "pageCrashed": false,
+        "initialState": {
+          "footer": "무한 좌표 평면 · X/Y축빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동100000/100000개 표시",
+          "layers": [
+            {
+              "frames": 65,
+              "rasterizations": 1,
+              "cacheHits": 17476,
+              "descriptorsUpdated": 100000,
+              "drawnObjects": 2561977,
+              "texturePages": 1,
+              "inkFrames": 3,
+              "sceneEnumerations": 2,
+              "sceneObjects": 100000,
+              "preparationPasses": 5,
+              "preparedThisFrame": 400,
+              "preparationCursor": 100000,
+              "preparationVisited": 117476,
+              "outputPixels": 233472,
+              "lastDrawnObjects": 100000,
+              "visibleObjects": 100000,
+              "sharedRasters": 1,
+              "retainedRasters": 0,
+              "preparing": false,
+              "deferredFrames": 60,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 1,
+                "items": 1,
+                "gpu": 1
+              },
+              "cachedPanFrames": 1,
+              "compositePanFrames": 10,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+              "renderer": "webgl"
+            }
+          ]
+        },
+        "interaction": {
+          "fps": 59.9976000961392,
+          "p95Ms": 23.900000005960464,
+          "maxMs": 40.79999999701977,
+          "over33ms": 1,
+          "samples": 300,
+          "layers": [
+            {
+              "frames": 71,
+              "rasterizations": 1,
+              "cacheHits": 117476,
+              "descriptorsUpdated": 100000,
+              "drawnObjects": 3161977,
+              "texturePages": 1,
+              "inkFrames": 352,
+              "sceneEnumerations": 3,
+              "sceneObjects": 100000,
+              "preparationPasses": 6,
+              "preparedThisFrame": 3255,
+              "preparationCursor": 100000,
+              "preparationVisited": 217476,
+              "outputPixels": 233472,
+              "lastDrawnObjects": 100000,
+              "visibleObjects": 100000,
+              "sharedRasters": 1,
+              "retainedRasters": 0,
+              "preparing": false,
+              "deferredFrames": 65,
+              "refreshReasons": {
+                "width": 1,
+                "height": 1,
+                "metrics": 1,
+                "items": 3,
+                "gpu": 1
+              },
+              "cachedPanFrames": 1,
+              "compositePanFrames": 10,
+              "gpuAdapter": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)"
+            }
+          ],
+          "saves": 47
+        },
+        "finalSaves": [
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 1
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 7
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 13
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 19
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 25
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 31
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 39
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 43
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 53
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 59
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 65
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 71
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 77
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 83
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 89
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 93
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 101
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 109
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 115
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 121
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 129
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 135
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 141
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 147
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 155
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 161
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 167
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 175
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 181
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 187
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 195
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 201
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 207
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 213
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 219
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 225
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 231
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 237
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 245
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 251
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 257
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 265
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 271
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 277
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 285
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 291
+          },
+          {
+            "kind": "stroke",
+            "complete": false,
+            "points": 297
+          },
+          {
+            "kind": "stroke",
+            "complete": true,
+            "points": 301
+          }
+        ]
+      }
+    ]
+  }
+}

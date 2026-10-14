@@ -4,7 +4,9 @@ import CanvasSpatialBTree from '../src/components/CanvasSpatialBTree.js';
 
 const world={width:1600,height:1000};
 const percentile=(samples,p)=>samples.toSorted((a,b)=>a-b)[Math.floor((samples.length-1)*p)];
-for(const count of [12_000,50_000]){
+const counts=(process.env.OBJECT_COUNTS || '12000,50000').split(',').map(Number);
+if(counts.some(count=>!Number.isSafeInteger(count) || count<=0))throw new Error('Invalid OBJECT_COUNTS');
+for(const count of counts){
   let items=Object.fromEntries(Array.from({length:count},(_,i)=>['s'+i,{kind:'shape',x:i%200*.1,y:Math.floor(i/200)*.1,width:.06,height:.04,shadowEnabled:false}]));
   const start=performance.now(),index=new CanvasSpatialBTree(items,world),buildMs=performance.now()-start;
   const queries=[],updates=[];
