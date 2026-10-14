@@ -1,3 +1,4 @@
+import { GRAPHICS_PROFILES, graphicsResolution, graphicsRasterRatio, normalizeGraphicsQuality } from './graphicsQuality.js';
 import { changedItemIds } from './itemSnapshots.js';
 import ScenePreparationQueue from './ScenePreparationQueue.js';
 import { flatRectangleTint,tintRasterItem } from './flatShapeTint.js';
@@ -55,7 +56,7 @@ export default function DepthVectorLayer(props) {
       releaseGpu = acquireGpuSlot();
       if (!releaseGpu){ensureWorker();return;}
       const candidate = pendingApp = new Application();
-      candidate.init({ backgroundAlpha: 0, antialias: false, autoStart: false, preference: 'webgl', powerPreference: 'high-performance', resolution: Math.min(window.devicePixelRatio || 1, 1.5), eventMode: 'none' }).then(() => {
+      candidate.init({ backgroundAlpha: 0, antialias: false, autoStart: false, preference: 'webgl', powerPreference: 'high-performance', resolution: graphicsResolution(latest.current.graphicsQuality, window.devicePixelRatio), eventMode: 'none' }).then(() => {
         pendingApp = null;
         if (disposed) { candidate.destroy(true,{children:true}); releaseGpu?.(); return; }
         const gl = candidate.renderer.gl;
@@ -93,14 +94,17 @@ export default function DepthVectorLayer(props) {
       if(moved){cameraActive=true;clearTimeout(cameraIdleTimer);cameraIdleTimer=setTimeout(()=>{cameraActive=false;refreshCamera=true;schedule();},120);}
       lastCamera={...camera};
       const settling=refreshCamera;refreshCamera=false;
-      const ratio=Math.min(window.devicePixelRatio || 1,1.5);
+      const quality=normalizeGraphicsQuality(latest.current.graphicsQuality);
+      const profile=GRAPHICS_PROFILES[quality];
+      const ratio=graphicsResolution(quality,window.devicePixelRatio);
+      stats.graphicsQuality=quality;stats.resolution=ratio;
       if(!textAppearanceCache){const styles=getComputedStyle(element);textAppearanceCache={font:styles.getPropertyValue('--display').trim() || 'serif',color:styles.getPropertyValue('--ink-strong').trim() || '#3c5144'};}
       const textAppearance=textAppearanceCache;
       const width = Math.max(1, viewportMetrics?.width || element.clientWidth), height = Math.max(1, viewportMetrics?.height || element.clientHeight);
       const pixelWidth = Math.round(width*ratio), pixelHeight = Math.round(height*ratio);
       const gpu = app && !gpuFailed;
-      if (gpu && (app.renderer.width !== pixelWidth || app.renderer.height !== pixelHeight)) app.renderer.resize(width,height);
-      const desiredRatio = camera.scale > 1.25 ? 1.5 : camera.scale < .5 ? .5 : 1;
+      if (gpu && (app.renderer.width !== pixelWidth || app.renderer.height !== pixelHeight || app.renderer.resolution !== ratio)) app.renderer.resize(width,height,ratio);
+      const desiredRatio = graphicsRasterRatio(quality,camera.scale,window.devicePixelRatio);
       const projection=cachedCameraProjection(bufferCamera,camera,width,height,margin);
       const bufferFits=Boolean(projection);
       const blitBuffer=()=>{
@@ -126,16 +130,16 @@ export default function DepthVectorLayer(props) {
         if(changed===null){types={items,kinds:new Map(),texts:0,connectors:0};for(const [id,item] of Object.entries(items||{})){const kind=isRasterText(item)?'rasterText':item.kind;types.kinds.set(id,kind);if(kind==='rasterText')types.texts++;if(kind==='connector')types.connectors++;}}
         else{for(const id of changed){const before=types.kinds.get(id),item=items[id],after=isRasterText(item)?'rasterText':item?.kind;if(before==='rasterText')types.texts--;if(before==='connector')types.connectors--;if(item)types.kinds.set(id,after);else types.kinds.delete(id);if(after==='rasterText')types.texts++;if(after==='connector')types.connectors++;}types.items=items;}
       }
-      const nextInkKey=`${width}:${height}:${world.width}:${world.height}:${camera.x}:${camera.y}:${camera.scale}`;
+      const nextInkKey=`${quality}:${ratio}:${width}:${height}:${world.width}:${world.height}:${camera.x}:${camera.y}:${camera.scale}`;
       if(nextInkKey!==inkKey || previousPreviews!==previewStrokes || previousDraft!==draft || previousInkItems!==inkItems){
-        ink.render({items:inkItems,previews:previewStrokes,draft,width:world.width,height:world.height,viewportWidth:width,viewportHeight:height,camera});
+        ink.render({items:inkItems,previews:previewStrokes,draft,width:world.width,height:world.height,viewportWidth:width,viewportHeight:height,camera,pixelRatio:ratio});
         inkKey=nextInkKey;previousPreviews=previewStrokes;previousDraft=draft;previousInkItems=inkItems;
         stats.inkFrames=(stats.inkFrames||0)+1;
       }
       const hiddenKey=[...previewStrokes.map(stroke=>String(stroke.id)),...(draft?.id?[String(draft.id)]:[])].filter(id=>items[id]).sort().join('|');
-      const inputs=[items,types.connectors?routingRevision:0,world.width,world.height,types.connectors?routingRevision:0,metricsRevision,hiddenKey,null,ratio,width,height,types.texts?textAppearance.font:'',types.texts?textAppearance.color:'',Boolean(gpu)];
+      const inputs=[items,types.connectors?routingRevision:0,world.width,world.height,types.connectors?routingRevision:0,metricsRevision,hiddenKey,null,ratio,width,height,types.texts?textAppearance.font:'',types.texts?textAppearance.color:'',Boolean(gpu),quality];
       const unchanged=sceneInputs && inputs.every((value,i)=>value===sceneInputs[i]);
-      if(sceneInputs && !unchanged){const names=['items','references','worldWidth','worldHeight','routing','metrics','previews','draft','ratio','width','height','font','color','gpu'];for(let i=0;i<inputs.length;i++)if(inputs[i]!==sceneInputs[i]){stats.refreshReasons ||= {};stats.refreshReasons[names[i]]=(stats.refreshReasons[names[i]]||0)+1;}}
+      if(sceneInputs && !unchanged){const names=['items','references','worldWidth','worldHeight','routing','metrics','previews','draft','ratio','width','height','font','color','gpu','graphicsQuality'];for(let i=0;i<inputs.length;i++)if(inputs[i]!==sceneInputs[i]){stats.refreshReasons ||= {};stats.refreshReasons[names[i]]=(stats.refreshReasons[names[i]]||0)+1;}}
       const qualityRefresh = sceneInputs && !cameraActive && desiredRatio > sceneInputs.quality * 1.25;
       const pending = preparationQueue.pending;
       if(unchanged && !pending && !qualityRefresh && !surfaceChanged && !moved && !settling && (gpu || bufferFits))return;
@@ -175,7 +179,7 @@ export default function DepthVectorLayer(props) {
         const hidden = new Set(previewStrokes.map(stroke => String(stroke.id)));
         if (draft?.id) hidden.add(String(draft.id));
         preparation = { slots:new Array(preparationQueue.entries.length), count:0, hidden,
-          targetRatio:desiredRatio, pixelBudget:Math.min(2_000_000,8_000_000/Math.max(1,preparationQueue.entries.length)),
+          targetRatio:desiredRatio, pixelBudget:Math.min(2_000_000,profile.scenePixelBudget/Math.max(1,preparationQueue.entries.length)),
           lowestQuality:Infinity };
         worldPaintBounds=null;
         preparationQueue.entries.forEach(([id],index)=>{
@@ -211,7 +215,7 @@ export default function DepthVectorLayer(props) {
         if(!descriptor)return;
         const key=descriptor.key;
         const qualityNeeded=record && !cameraActive && targetRatio>record.quality*1.25;
-        const rebuild = !record || record.key !== key || qualityNeeded
+        const rebuild = !record || record.key !== key || record.graphicsQuality !== quality || qualityNeeded
           || (record.pixelBudget > pixelBudget*1.1 && record.raster.pixelWidth*record.raster.pixelHeight > pixelBudget*1.1);
         if (rebuild) {
           const sprite=gpu?record?.sprite:null;
@@ -230,7 +234,7 @@ export default function DepthVectorLayer(props) {
               resource.raster.canvas=null;
             }
           }
-          record = { key, quality:targetRatio, pixelBudget, raster:resource.raster, resource,sprite };
+          record = { key, graphicsQuality:quality, quality:targetRatio, pixelBudget, raster:resource.raster, resource,sprite };
           if(sprite)sprite.texture=resource.textureHandle.texture;
           records.set(id,record);
         } else stats.cacheHits++;

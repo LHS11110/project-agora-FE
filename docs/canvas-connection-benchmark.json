@@ -1,0 +1,12 @@
+{
+  "objects": 100,
+  "snapshotBytes": 20021894,
+  "parts": 100,
+  "acks": 100,
+  "idleSeconds": 70,
+  "firstConnectionAttempts": 2,
+  "temporaryApiFailureRecovered": true,
+  "temporaryWebSocketFailureRecovered": true,
+  "connectedWebSockets": 4,
+  "hostFencedDuringMembershipChange": "old-term rejection observed; current session remained synchronized"
+}

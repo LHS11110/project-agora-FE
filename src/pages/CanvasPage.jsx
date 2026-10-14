@@ -39,6 +39,8 @@ import InteractiveAtmosphere from '../components/frelog/InteractiveAtmosphere.js
 import AuthenticatedImage from '../components/AuthenticatedImage.jsx';
 import ShareComposer from '../components/ShareComposer.jsx';
 import VectorLayer from '../canvas/DepthVectorLayer.jsx';
+import { SocketSendBudget } from '../canvas/socketSendBudget.js';
+import { GRAPHICS_QUALITY_KEY, normalizeGraphicsQuality } from '../canvas/graphicsQuality.js';
 import LaserLayer from '../components/LaserLayer.jsx';
 import RotationHandles from '../components/CanvasRotationHandles.jsx';
 import GroupRotationHandles from '../components/GroupRotationHandles.jsx';
@@ -202,6 +204,12 @@ function CanvasWorkspace() {
     return Number.isFinite(stored) && stored >= MIN_STROKE_WIDTH && stored <= MAX_STROKE_WIDTH ? stored : 4;
   });
   const [theme, setTheme] = useState(() => localStorage.getItem('agora_canvas_theme') || 'light');
+  const [graphicsQuality, setGraphicsQuality] = useState(() => normalizeGraphicsQuality(localStorage.getItem(GRAPHICS_QUALITY_KEY)));
+  const changeGraphicsQuality = value => {
+    const next = normalizeGraphicsQuality(value);
+    setGraphicsQuality(next);
+    localStorage.setItem(GRAPHICS_QUALITY_KEY, next);
+  };
   const [showGrid, setShowGrid] = useState(() => localStorage.getItem('agora_canvas_grid') !== 'false');
   const [showXAxis, setShowXAxis] = useState(() => localStorage.getItem('agora_canvas_x_axis') !== 'false');
   const [showYAxis, setShowYAxis] = useState(() => localStorage.getItem('agora_canvas_y_axis') !== 'false');
@@ -223,8 +231,8 @@ function CanvasWorkspace() {
   const [showParticipants, setShowParticipants] = useState(false);
   const [settingsPending, setSettingsPending] = useState(false);
   const [toast, setToast] = useState('');
-  const { items, setItems, patchItems, committedItemsRef, status: hostStatus, lastReceipt, retryRejected, sessionRef: hostSessionRef, receiveServerItems, receiveServerEvent } = useHostCanvas({
-    itemsRef, peerMeshRef, wsRef, rtcWsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems,
+  const { items, setItems, patchItems, moveItems, flushMoves, committedItemsRef, status: hostStatus, lastReceipt, retryRejected, sessionRef: hostSessionRef, receiveServerItems, receiveServerEvent } = useHostCanvas({
+    itemsRef, peerMeshRef, wsRef, rtcWsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems, reconnectRequestRef,
   });
   const hostReadyRef = useRef(false);
   hostReadyRef.current = hostStatus.editable;
@@ -250,13 +258,12 @@ function CanvasWorkspace() {
       ? payload : { ...payload, request_id: createId() };
     socket.send(JSON.stringify(request)); return true;
   }, []);
+  const rtcSendBudgetRef=useRef(new SocketSendBudget());
   const sendRtcRaw = useCallback((payload) => {
     const socket = rtcWsRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) return false;
     const request = payload?.request_id ? payload : { ...payload, request_id: createId() };
-    const ephemeral = ['cursor', 'laser'].includes(payload?.payload?.type);
-    if (socket.bufferedAmount > (ephemeral ? 128 * 1024 : 16 * 1024 * 1024)) return false;
-    try { socket.send(JSON.stringify(request)); return true; } catch { return false; }
+    return rtcSendBudgetRef.current.send(socket,request);
   }, []);
   const requestChatHistory = useCallback((toSequence) => {
     if (chatHistoryRequestRef.current) return false;
@@ -1044,6 +1051,7 @@ function CanvasWorkspace() {
     stopObjectDrag,
     startGroupRotation,
   } = useCanvasObjectInteractions({
+    moveItems, flushMoves,
     activeTool,
     spatialIndexRef,
     addItem,
@@ -1252,7 +1260,7 @@ function CanvasWorkspace() {
           <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true">{showXAxis && <><span className="coordinate-x" /><b className="coordinate-x-label">X</b></>}{showYAxis && <><span className="coordinate-y" /><b className="coordinate-y-label">Y</b></>}{(showXAxis || showYAxis) && <i className="coordinate-origin">0</i>}</div>
           <div className="canvas-scene" ref={sceneRef} style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }}>
             {depthLayers.map((layer, index) => <div className="canvas-depth-layer" key={layer.depth} data-depth={layer.depth} style={{ position: 'absolute', inset: 0, zIndex: index + 1, pointerEvents: 'none' }}>
-              <VectorLayer style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }} worldSize={boardSize} items={layer.vectors} referenceItems={items} routingRevision={spatialIndex.stats.boundsCalculated} inkItems={layer.inkItems} previewStrokes={layer.depth === 0 ? remoteDrawingStrokes : undefined} camera={camera} onReady={layer.depth === 0 ? (setDraft) => { vectorDraftRef.current = setDraft; } : undefined} />
+              <VectorLayer graphicsQuality={graphicsQuality} style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }} worldSize={boardSize} items={layer.vectors} referenceItems={items} routingRevision={spatialIndex.stats.boundsCalculated} inkItems={layer.inkItems} previewStrokes={layer.depth === 0 ? remoteDrawingStrokes : undefined} camera={camera} onReady={layer.depth === 0 ? (setDraft) => { vectorDraftRef.current = setDraft; } : undefined} />
             <div className="canvas-world-layer" style={{position:'absolute',width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`}}><CanvasLayerObjects objects={layer.domObjects} domSelection={domSelection} editingId={editingId} connectionStartId={connectionStartId} world={boardSize} scale={representationScale} token={token} selected={selectedObjectIdSet} singleSelection={hasSingleSelection} activeTool={activeTool} dirtyItems={dirtyItems} editorsByItem={editorsByItem} actions={objectActions} /></div>
             </div>)}
             <div className="canvas-world-layer" style={{ position: 'absolute', width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`, zIndex: depthLayers.length + 1, pointerEvents: 'none' }}>
@@ -1279,7 +1287,7 @@ function CanvasWorkspace() {
           {activeTool === 'laser' && <div className="draw-cursor-label laser-cursor-label"><Icon name="laser" size={13} /> 가리키는 중 · 1.6초 후 사라짐</div>}{activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} /> 그리는 중</div>}{activeTool === 'eraser' && <div className="draw-cursor-label"><Icon name="eraser" size={13} /> 드로잉을 드래그해 지우기</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? '도착 오브젝트 선택' : '시작 오브젝트 선택'}</div>}{activeTool === 'link' && !sharePosition && <div className="draw-cursor-label"><Icon name="link" size={13} /> 공유 자료를 놓을 위치 선택</div>}
         </div><div className="board-footer"><span>무한 좌표 평면{showXAxis && showYAxis ? ' · X/Y축' : showXAxis ? ' · X축' : showYAxis ? ' · Y축' : ''}</span><span className="board-footer-center">빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동</span><span>{visibleItemCount}/{drawableItemCount}개 표시</span></div>
       </main>
-<ResizablePanel {...panelLayout.handle('inspector')}><CanvasInspectorPanel spatialIndex={spatialIndex} updateContentSetting={updateContentSetting} onNavigateObject={focusCanvasObject} {...{
+<ResizablePanel {...panelLayout.handle('inspector')}><CanvasInspectorPanel graphicsQuality={graphicsQuality} changeGraphicsQuality={changeGraphicsQuality} spatialIndex={spatialIndex} updateContentSetting={updateContentSetting} onNavigateObject={focusCanvasObject} {...{
         activeTool,
         canvasId,
         canvasParticipants,

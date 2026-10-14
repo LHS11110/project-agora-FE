@@ -1,5 +1,6 @@
 import { itemCount } from '../../canvas/itemSnapshots.js';
 import ObjectShadowControls from '../../canvas/ObjectShadowControls.jsx';
+import GraphicsQualityControls from '../../canvas/GraphicsQualityControls.jsx';
 import { useMemo } from 'react';
 import ObjectDepthControls from '../../canvas/ObjectDepthControls.jsx';
 import CanvasBackgroundControls from '../../canvas/background/CanvasBackgroundControls.jsx';
@@ -29,6 +30,7 @@ import { MAX_STROKE_WIDTH, MAX_ZOOM_SENSITIVITY, MIN_STROKE_WIDTH, MIN_ZOOM_SENS
 
 export default function CanvasInspectorPanel({
   activeTool,
+  graphicsQuality, changeGraphicsQuality,
   updateContentSetting,
   canvasId,
   canvasParticipants,
@@ -100,6 +102,7 @@ export default function CanvasInspectorPanel({
   return (
       <aside className={`canvas-sidepanel canvas-inspector${activeTool === 'select' ? ' server-settings-mode' : ' tool-settings-mode'}`}><div className="inspector-heading"><div><span className="section-kicker">{activeTool === 'select' ? 'WORKSPACE' : 'TOOL SETTINGS'}</span><h2>{activeTool === 'select' ? '환경 설정' : `${({ 'user-group': '사용자 그룹', pen: '드로잉', laser: '레이저 포인터', eraser: '지우개', connect: '연결', shape: '도형', text: '텍스트', note: '포스트잇', math: '수식', table: '테이블', code: '코드', link: '동영상·링크' })[activeTool] || '도구'} 설정`}</h2></div>{activeTool === 'select' && <button className="icon-button" onClick={() => setShowSettings(true)} aria-label="캔버스 세부 설정"><Icon name="settings" size={18} /></button>}</div>
         {activeTool === 'select' && <ObjectRecoveryControls items={items} spatialIndex={spatialIndex} onDelete={deleteItem} />}
+        <GraphicsQualityControls value={graphicsQuality} onChange={changeGraphicsQuality} />
         {activeTool === 'select' && <ObjectClipboardControls actions={objectClipboard} selectedCount={selectedObjectIds.length} blocked={clipboardBlocked} />}
         {activeTool === 'select' && selectedObjectIds.length > 0 && <ObjectDepthControls ids={selectedObjectIds} items={items} onChange={updateItemDepth} />}
         {activeTool === 'select' && selectedObjectIds.length > 0 && <ObjectShadowControls ids={selectedObjectIds} items={items} onChange={updateItemShadow} />}

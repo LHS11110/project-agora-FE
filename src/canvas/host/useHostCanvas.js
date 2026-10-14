@@ -3,12 +3,12 @@ import { HostCanvasView } from './HostCanvasView.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Automerge from '@automerge/automerge/slim';
 import { HostCanvasSession } from './HostCanvasSession.js';
-import { itemOperations, loadItemDoc, storedHostItem } from './hostOperations.js';
+import { itemOperations, loadItemDoc, storedHostItem, operationIds, validateTranslation, translateItem } from './hostOperations.js';
 import { collaborativeField, createActorId, decodeBase64, isCollaborativeItem } from '../collaborativeSync.js';
 import { createId } from '../canvasIds.js';
 
 /** Local previews include queued drafts; committedItemsRef stays host-authoritative. */
-export function useHostCanvas({ itemsRef, peerMeshRef, wsRef, rtcWsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems }) {
+export function useHostCanvas({ itemsRef, peerMeshRef, wsRef, rtcWsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems, reconnectRequestRef }) {
   const [items, publishItems] = useState({});
   const [status, setStatus] = useState({ ready: false, editable: false, queued: 0, blocked: false, isHost: false, hostId: '', message: '호스트와 최신 상태를 동기화하고 있습니다.' });
   const [lastReceipt, setLastReceipt] = useState(null);
@@ -17,6 +17,8 @@ export function useHostCanvas({ itemsRef, peerMeshRef, wsRef, rtcWsRef, collabor
   const committedItemsRef = useRef({});
   const sessionRef = useRef(null);
   const pendingSaves = useRef(new Map());
+  const persistRetryAt=useRef(0);
+  const fenceRetryTimer=useRef(null);
   const rebasing = useRef(false);
   const callbacks = useRef({ setToast, setDirtyItems });
   callbacks.current = { setToast, setDirtyItems };
@@ -38,7 +40,7 @@ export function useHostCanvas({ itemsRef, peerMeshRef, wsRef, rtcWsRef, collabor
       collaborativeDocsRef.current=view.current.docs;
       collaborativeBaseDocsRef.current=view.current.bases;
       working.current=draft;itemsRef.current=draft;committedItemsRef.current=committed;
-      const pendingIds = new Set(sessionRef.current.pendingOperations.map(operation => operation.id));
+      const pendingIds = new Set(sessionRef.current.pendingOperations.flatMap(operationIds));
       callbacks.current.setDirtyItems?.(current => {
         const next = new Set(pendingIds);
         if (next.size === current.size && [...next].every(id => current.has(id))) return current;
@@ -50,7 +52,7 @@ export function useHostCanvas({ itemsRef, peerMeshRef, wsRef, rtcWsRef, collabor
     persist: (changes, term) => {
       const socket = wsRef.current;
       if (!sessionRef.current.isHost || !sessionRef.current.ready || socket?.readyState !== 1
-        || socket.bufferedAmount >= 4 * 1024 * 1024 || pendingSaves.current.size >= 8) return false;
+        || performance.now()<persistRetryAt.current || socket.bufferedAmount >= 256 * 1024 || pendingSaves.current.size >= 2) return false;
       const inFlight = new Set([...pendingSaves.current.values()].filter(entry => entry.term === term).flatMap(entry => entry.changes.map(change => change.id)));
       const batch = [], selected = []; let bytes = 0;
       for (const change of changes) {
@@ -62,7 +64,7 @@ export function useHostCanvas({ itemsRef, peerMeshRef, wsRef, rtcWsRef, collabor
         payload.item = storedHostItem(record);
         const size = new TextEncoder().encode(JSON.stringify(payload)).length;
         if (size > 12 * 1024 * 1024) { sessionRef.current.abort('객체 저장 데이터가 서버 한도를 초과했습니다.'); return false; }
-        if (bytes && bytes + size > 12 * 1024 * 1024) break;
+        if (bytes && bytes + size > 1024 * 1024) break;
         batch.push(payload); selected.push(change); bytes += size;
       }
       if (!batch.length) return false;
@@ -93,6 +95,21 @@ export function useHostCanvas({ itemsRef, peerMeshRef, wsRef, rtcWsRef, collabor
     const ids=[...new Set([...(changes instanceof Map?changes.keys():Object.keys(changes||{})),...removed])];
     setItems(previous=>changeItems(previous,changes,removed),ids);
   },[setItems]);
+  const moveItems=useCallback((ids,dx,dy)=>{
+    if(!dx && !dy)return true;
+    const session=sessionRef.current,operation={action:'translate',ids,dx,dy};
+    if(!session.editable)return false;
+    try{
+      validateTranslation(operation);
+      if(!session.isHost && !session.hostSupportsTranslations){
+        const changes=Object.fromEntries(ids.filter(id=>working.current[id]).map(id=>[id,translateItem(working.current[id],dx,dy)]));
+        patchItems(changes);return true;
+      }
+      if(!session.submit([operation]))return false;
+      session.publish(session.items,[]);return true;
+    }catch(error){callbacks.current.setToast(error.message);return false;}
+  },[patchItems]);
+  const flushMoves=useCallback(()=>sessionRef.current.flushMoves(),[]);
   const receiveServerItems = useCallback(serverItems => {
     pendingSaves.current.clear();
     sessionRef.current.seed(serverItems);
@@ -104,13 +121,21 @@ export function useHostCanvas({ itemsRef, peerMeshRef, wsRef, rtcWsRef, collabor
       const entry = pendingSaves.current.get(data.request_id);
       if (!entry) return;
       pendingSaves.current.delete(data.request_id);
+      if(!data.ok && ['BROKER_BUSY','BROKER_QUEUE_FULL','RATE_LIMITED','BROKER_BACKEND_UNAVAILABLE'].includes(data.code) && entry.term===session.term){
+        session.restorePersistence(entry.changes);
+        persistRetryAt.current=performance.now()+1000;return;
+      }
       if (!data.ok && entry.term === session.term) {
+        if(data.code==='HOST_FENCED'){
+          session.pause();clearTimeout(fenceRetryTimer.current);
+          fenceRetryTimer.current=setTimeout(()=>{if(session.term===entry.term)reconnectRequestRef?.current?.({retry_after_ms:0});},500);
+          return;
+        }
         const message = `호스트 저장을 확인하지 못해 편집을 중단했습니다: ${data.code || '저장 오류'}. 새로고침해주세요.`;
         session.abort(message); callbacks.current.setToast(message);
       }
     }
-    if (data.type === 'error' && (pendingSaves.current.has(data.request_id)
-      || ['HOST_TERM_REQUIRED', 'HOST_FENCED', 'HOST_PROTOCOL_REQUIRED', 'HOST_BATCH_INVALID'].includes(data.code))) {
+    if (data.type === 'error' && pendingSaves.current.get(data.request_id)?.term===session.term) {
       pendingSaves.current.delete(data.request_id);
       session.abort('호스트 상태를 확인하지 못했습니다. 최신 서버로 연결했는지 확인한 뒤 새로고침해주세요.');
     }
@@ -119,7 +144,7 @@ export function useHostCanvas({ itemsRef, peerMeshRef, wsRef, rtcWsRef, collabor
     // Wake more frequently than the 30 FPS boundary; the session samples with
     // drift correction instead of accidentally halving the rate at 33 ms.
     const timer = setInterval(() => sessionRef.current.tick(), 10);
-    return () => clearInterval(timer);
+    return () => {clearInterval(timer);clearTimeout(fenceRetryTimer.current);};
   }, []);
-  return { items, setItems, patchItems, committedItemsRef, viewRef:view, status, lastReceipt, retryRejected, sessionRef, receiveServerItems, receiveServerEvent };
+  return { items, setItems, patchItems, moveItems, flushMoves, committedItemsRef, viewRef:view, status, lastReceipt, retryRejected, sessionRef, receiveServerItems, receiveServerEvent };
 }

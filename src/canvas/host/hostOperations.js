@@ -6,9 +6,22 @@ import { canPeerAccessItem, collaborativeField, createActorId, decodeBase64, enc
 export const HOST_PROTOCOL = 1;
 export const HOST_PEER_FPS = 30;
 export const HOST_SAVE_FPS = 10;
+export const HOST_MOVE_INTERVAL_MS = 100;
 export const HOST_TOMBSTONE_KIND = 'host-tombstone';
 export const HOST_VERSION_FIELD = '__host_version';
 const reservedId = id => typeof id !== 'string' || !id || id.length > 128 || ['__proto__', 'constructor', 'prototype'].includes(id);
+
+export const operationIds = operation => operation?.action === 'translate' ? operation.ids : [operation?.id];
+export function validateTranslation(operation) {
+  if (!Array.isArray(operation.ids) || !operation.ids.length || operation.ids.length > 10000
+    || operation.ids.some(reservedId) || new Set(operation.ids).size !== operation.ids.length
+    || !Number.isFinite(operation.dx) || !Number.isFinite(operation.dy)) throw new Error('올바른 이동 벡터와 객체 ID가 필요합니다.');
+}
+export function translateItem(item, dx, dy) {
+  return item.kind === 'stroke'
+    ? { ...item, points: item.points.map(point => ({ ...point, x: point.x + dx, y: point.y + dy })) }
+    : { ...item, x: (Number(item.x) || 0) + dx, y: (Number(item.y) || 0) + dy };
+}
 
 // Bully priority: highest ID among participants who can serve every session group.
 // Membership comes from the signaling server, never a local connectivity timeout.
@@ -64,6 +77,16 @@ export function reduceHostOperations(items, operations, peer, connectorDependenc
   const next = Object.create(items);
   const touched = new Set();
   for (const operation of operations) {
+    if (operation?.action === 'translate') {
+      validateTranslation(operation);
+      for (const id of operation.ids) {
+        const previous = next[id];
+        if (!previous || previous.kind === 'connector' || previous.type === 'chat_room') throw new Error('이동할 객체를 확인해주세요.');
+        if (!canPeerAccessItem(previous, peer)) throw new Error('객체를 수정할 권한이 없습니다.');
+        next[id] = translateItem(previous, operation.dx, operation.dy); touched.add(id);
+      }
+      continue;
+    }
     const { id, action, patch = {}, unset = [] } = operation || {};
     if (reservedId(id) || !['create', 'patch', 'delete'].includes(action)) throw new Error('올바른 객체 변경이 필요합니다.');
     const previous = next[id];

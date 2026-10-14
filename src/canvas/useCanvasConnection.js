@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { retryableConnectionError } from './connectionRetry.js';
 import CanvasBrokerPeers from '../components/CanvasBrokerPeers.js';
 import { api, canvasSocketUrl, rtcSocketUrl } from '../api/client.js';
 import { canvasPasswordGrantKey, readCanvasPasswordGrant, saveCanvasPasswordGrant } from './canvasAccess.js';
@@ -470,12 +471,13 @@ export function useCanvasConnection(options) {
           } else if (autoReconnectRef.current) {
             if (reconnectTimer === null) scheduleReconnect(nextReconnectDelay());
           } else {
-            setError('실시간 서버에 연결할 수 없습니다. 서버 주소와 WebSocket 설정을 확인해주세요.');
+            requestServerReconnect({retry_after_ms:nextReconnectDelay()});
           }
         };
         socket.onclose = (event) => {
           if (wsRef.current === socket) wsRef.current = null;
           if (!cancelled && event.code === 1012) requestServerReconnect({ retry_after_ms: 0 });
+          if(!cancelled && !canvasSnapshotLoadedRef.current && event.code!==1008 && !autoReconnectRef.current)requestServerReconnect({retry_after_ms:nextReconnectDelay()});
           if (!cancelled && canvasSnapshotLoadedRef.current && event.code !== 1008 && !autoReconnectRef.current) {
             requestServerReconnect({ retry_after_ms: 0 });
           }
@@ -513,7 +515,12 @@ export function useCanvasConnection(options) {
           }
         };
       } catch (err) {
-        if (!cancelled && autoReconnectRef.current) {
+        if(!cancelled && [401,403,404].includes(err.status)){
+          autoReconnectRef.current=false;serverReconnectRequestedRef.current=false;
+          setConnection('disconnected');setError(err.message);
+        } else if(!cancelled && retryableConnectionError(err)){
+          requestServerReconnect({retry_after_ms:nextReconnectDelay()});
+        } else if (!cancelled && autoReconnectRef.current) {
           setConnection('connecting');
           if (reconnectTimer === null) scheduleReconnect(nextReconnectDelay());
         } else if (!cancelled) {

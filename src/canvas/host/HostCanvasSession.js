@@ -2,15 +2,15 @@ import { inheritItemDocument,includesDocument } from './documentCache.js';
 import { canPeerAccessItem, compareSyncVersions, INITIAL_SYNC_VERSION, normalizeSyncVersion } from '../collaborativeSync.js';
 import { collaborativeField, isCollaborativeItem } from '../collaborativeSync.js';
 import { loadItemDoc, HOST_TOMBSTONE_KIND, HOST_VERSION_FIELD } from './hostOperations.js';
-import { electHost, HOST_PEER_FPS, HOST_PROTOCOL, HOST_SAVE_FPS, reduceHostOperations } from './hostOperations.js';
+import { electHost, HOST_PEER_FPS, HOST_PROTOCOL, HOST_SAVE_FPS, HOST_MOVE_INTERVAL_MS, reduceHostOperations, operationIds, validateTranslation } from './hostOperations.js';
 
 const encoder = new TextEncoder();
 const clone = value => JSON.parse(JSON.stringify(value));
 const hasId = id => typeof id === 'string' && id.length > 0 && id.length <= 128 && !['__proto__', 'constructor', 'prototype'].includes(id);
 const validCount = count => Number.isSafeInteger(count) && count >= 0;
 const summarize = operations => {
-  const summary = { total: operations.length, created: 0, updated: 0, deleted: 0 };
-  for (const operation of operations) summary[operation.action === 'create' ? 'created' : operation.action === 'delete' ? 'deleted' : 'updated']++;
+  const summary = { total: operations.reduce((n, operation) => n + operationIds(operation).length, 0), created: 0, updated: 0, deleted: 0 };
+  for (const operation of operations) summary[operation.action === 'create' ? 'created' : operation.action === 'delete' ? 'deleted' : 'updated'] += operationIds(operation).length;
   return summary;
 };
 
@@ -21,10 +21,15 @@ export class HostCanvasSession {
     this.records = {}; this.itemCache = {}; this.connectorDependencies=new Map(); this.members = []; this.memberIndex = new Map(); this.term = ''; this.selfId = ''; this.hostId = '';
     this.ready = false; this.seeded = false; this.sequence = 0; this.clock = 0;
     this.localCounter = 0; this.localQueue = []; this.pending = new Map();
+    this.lastMoveProposal = -Infinity; this.translationPeers = new Set(); this.hostSupportsTranslations = false;
     this.inbox = []; this.broadcasts = []; this.broadcastBytes = 0; this.serverDirty = new Map();
     this.states = new Map(); this.snapshotAcks = new Set(); this.snapshotSent = new Set();
     this.peerSequence = new Map(); this.lastPeerTick = -Infinity; this.lastSaveTick = -Infinity;
     this.outgoingStates = new Map();
+    this.readySent=new Map();this.recordTransfers=new Map();
+    this.partAckPeers=new Set();this.partAcks=new Map();
+    this.completedTransfers=new Set();this.ackQueue=new Map();
+    this.transferFields=new Map();this.stateRequestSent=new Map();
     this.lastCounts = new Map(); this.peerClients = new Map(); this.everReady = false;
     this.clientRegistered = false; this.lastHelloTick = -Infinity;
     this.clientId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -44,7 +49,12 @@ export class HostCanvasSession {
       if(!this.connectorDependencies.has(target))this.connectorDependencies.set(target,new Set());this.connectorDependencies.get(target).add(id);
     }
   }
-  get pendingOperations() { return [...this.pending.values()].flatMap(entry => entry.operations).concat(this.localQueue); }
+  get pendingOperations() {
+    const approved=this.lastCounts.get(this.clientKey(this.member(this.selfId),this.clientId)) ?? -1;
+    // An ordered commit/snapshot may arrive before its request ACK. Keep the
+    // request pending for confirmation, but do not replay an applied delta.
+    return [...this.pending.values()].filter(entry=>entry.requestCount>approved).flatMap(entry => entry.operations).concat(this.localQueue);
+  }
   setReady(ready, message = '호스트와 최신 상태를 동기화하고 있습니다.') {
     this.ready = ready;
     if (ready) this.everReady = true;
@@ -94,9 +104,14 @@ export class HostCanvasSession {
     this.peerSequence.clear(); this.inbox = []; this.broadcasts = []; this.broadcastBytes = 0;
     for (const entry of this.pending.values()) { entry.sentAt = -Infinity; entry.confirmation = null; }
     this.peerClients.clear(); this.clientRegistered = false; this.lastHelloTick = -Infinity;
+    this.translationPeers.clear(); this.hostSupportsTranslations = false; this.lastMoveProposal = -Infinity;
     this.serverDirty.clear(); this.stateAssembled = false;
     this.stateReplySent = false; this.incomingStates = new Map();
     this.outgoingStates.clear();
+    this.readySent.clear();this.recordTransfers.clear();
+    this.partAckPeers.clear();this.partAcks.clear();
+    this.completedTransfers.clear();this.ackQueue.clear();
+    this.transferFields.clear();this.stateRequestSent.clear();
     this.setReady(false, this.hostId ? '호스트와 최신 상태를 동기화하고 있습니다.' : '모든 참여자의 권한을 동기화할 호스트를 기다리고 있습니다.');
     this.publish(this.items, []);
   }
@@ -106,8 +121,15 @@ export class HostCanvasSession {
   frame(type, fields = {}) { return { type, protocol: HOST_PROTOCOL, term: this.term, ...fields }; }
   submit(operations) {
     if (!this.editable || !Array.isArray(operations)) return false;
-    for(const operation of clone(operations)){
+    const copied=clone(operations);
+    try{for(const operation of copied)if(operation?.action==='translate')validateTranslation(operation);}
+    catch(error){this.reject(error.message);return false;}
+    for(const operation of copied){
       const previous=this.localQueue.at(-1),keys=Object.keys(operation.patch||{}),oldKeys=Object.keys(previous?.patch||{});
+      if(operation.action==='translate' && previous?.action==='translate' && operation.ids.length===previous.ids.length
+        && operation.ids.every((id,i)=>id===previous.ids[i])){
+        previous.dx+=operation.dx;previous.dy+=operation.dy;continue;
+      }
       const textOnly=entry=>entry?.action==='patch' && typeof entry.doc==='string' && !(entry.unset||[]).length;
       if(previous?.id===operation.id && textOnly(previous) && textOnly(operation) && keys.length===1 && oldKeys.length===1
         && keys[0]===oldKeys[0] && ['text','code'].includes(keys[0]) && includesDocument(operation.doc,previous.doc))this.localQueue[this.localQueue.length-1]=operation;
@@ -115,6 +137,10 @@ export class HostCanvasSession {
     }
     this.setReady(this.ready);
     return true;
+  }
+  flushMoves() { this.lastMoveProposal=-Infinity; this.lastPeerTick=-Infinity; this.tick(); }
+  restorePersistence(changes){
+    for(const change of changes)if(this.records[change.id]===change.record && !this.serverDirty.has(change.id))this.serverDirty.set(change.id,change);
   }
   snapshot(peerId) {
     const peer = this.member(peerId);
@@ -186,6 +212,8 @@ export class HostCanvasSession {
   }
   sendRecords(peerId, type, records, fields = {}) {
     const { counters, ...payloadFields } = fields;
+    const transferKey=`${peerId}:${type}:${fields.sequence ?? 0}`;
+    if(this.completedTransfers.delete(transferKey))return true;
     if (counters) {
       const counterKey = `${peerId}:${type}:${fields.sequence ?? 0}:counters`;
       for (let index = this.outgoingStates.get(counterKey) || 0; index < counters.length; index += 512) {
@@ -195,26 +223,39 @@ export class HostCanvasSession {
       }
       this.outgoingStates.set(counterKey, counters.length);
     }
-    const partitions = []; let current = {}, bytes = 0;
+    let partitions=this.recordTransfers.get(transferKey);
+    if(!partitions){partitions = []; let current = {}, bytes = 0;
     for (const [id, record] of Object.entries(records)) {
       const size = encoder.encode(JSON.stringify({ [id]: record })).length;
       if (size > 15 * 1024 * 1024) { this.abort('객체의 동기화 데이터가 전송 한도를 초과했습니다.'); return false; }
-      if (bytes && bytes + size > 4 * 1024 * 1024) { partitions.push(current); current = {}; bytes = 0; }
+      if (bytes && bytes + size > 256 * 1024) { partitions.push(current); current = {}; bytes = 0; }
       current[id] = record; bytes += size;
     }
     partitions.push(current);
+    this.recordTransfers.set(transferKey,partitions);}
+    const current=partitions[0];
     if (partitions.length === 1) {
       const sent = this.send(peerId, this.frame(type, { ...payloadFields, records: current }));
+      if(sent)this.recordTransfers.delete(transferKey);
       if (sent) this.outgoingStates.delete(`${peerId}:${type}:${fields.sequence ?? 0}:counters`);
       return sent;
     }
     const key = `${peerId}:${type}:${fields.sequence ?? 0}`;
+    this.transferFields.set(key,{peerId,type,fields});
+    const credit=this.partAckPeers.has(peerId);
+    if(credit && !this.partAcks.has(key))this.partAcks.set(key,new Set());
     for (let index = this.outgoingStates.get(key) || 0; index < partitions.length; index++) {
+      if(credit && index-this.partAcks.get(key).size>=4){this.outgoingStates.set(key,index);return false;}
       if (!this.send(peerId, this.frame('host_state_part', {
-        snapshotType: type, ...payloadFields, index, count: partitions.length, records: partitions[index],
+        snapshotType: type, ...payloadFields, part_ack:credit, index, count: partitions.length, records: partitions[index],
       }))) { this.outgoingStates.set(key, index); return false; }
+      this.outgoingStates.set(key,index+1);
     }
+    if(credit && this.partAcks.get(key).size<partitions.length)return false;
     this.outgoingStates.delete(key);
+    this.transferFields.delete(key);
+    this.partAcks.delete(key);
+    this.recordTransfers.delete(transferKey);
     this.outgoingStates.delete(`${key}:counters`);
     return true;
   }
@@ -246,6 +287,20 @@ export class HostCanvasSession {
         || (data.targetType === 'host_snapshot' && peerId === this.hostId && !this.isHost)) this.mergeCounters(data.counters);
       return;
     }
+    if(data.type==='host_part_ack'){
+      const key=`${peerId}:${data.snapshotType}:${data.sequence ?? 0}`,acks=this.partAcks.get(key);
+      if(acks && Number.isSafeInteger(data.index) && data.index>=0 && data.index<(this.outgoingStates.get(key)||0)){
+        acks.add(data.index);
+        if(acks.size===this.recordTransfers.get(key)?.length){
+          this.partAcks.delete(key);this.recordTransfers.delete(key);this.outgoingStates.delete(key);this.outgoingStates.delete(key+':counters');
+          this.transferFields.delete(key);
+          if(data.snapshotType==='host_state')this.stateReplySent=true;
+          else if(data.snapshotType==='host_snapshot')this.snapshotSent.add(peerId);
+          else this.completedTransfers.add(key);
+        }
+      }
+      return;
+    }
     if (data.type === 'host_state_part') {
       if (!['host_snapshot', 'host_state', 'host_commit'].includes(data.snapshotType) || !Number.isSafeInteger(data.index)
         || !Number.isSafeInteger(data.count) || data.count < 2 || data.count > 50000 || data.index < 0 || data.index >= data.count
@@ -257,19 +312,26 @@ export class HostCanvasSession {
       if (!transfer) { transfer = { count: data.count, parts: new Map() }; this.incomingStates.set(key, transfer); }
       if (transfer.count !== data.count) return;
       transfer.parts.set(data.index, data.records);
+      if(data.part_ack){
+        this.partAckPeers.add(peerId);
+        const ack=this.frame('host_part_ack',{snapshotType:data.snapshotType,sequence:data.sequence,index:data.index});
+        if(!this.send(peerId,ack))this.ackQueue.set(`${peerId}:${data.snapshotType}:${data.sequence}:${data.index}`,{peerId,ack});
+      }
       if (transfer.parts.size === data.count) {
         this.incomingStates.delete(key);
         const records = Object.assign({}, ...[...transfer.parts.entries()].sort(([a], [b]) => a - b).map(([, part]) => part));
         this.receive(peerId, this.frame(data.snapshotType, { sequence: data.sequence, origin: data.origin, requestId: data.requestId,
-          evict: data.evict, counter: data.counter, counters: data.counters, records }));
+          evict: data.evict, counter: data.counter, counters: data.counters, part_ack:data.part_ack, records }));
       }
       return;
     }
     if (data.type === 'host_state_request' && peerId === this.hostId && this.seeded) {
-      if (!this.stateReplySent) this.stateReplySent = this.sendRecords(peerId, 'host_state', this.records, { counters: [...this.lastCounts] });
+      if(data.part_ack)this.partAckPeers.add(peerId);
+      if (!this.stateReplySent) this.stateReplySent = this.sendRecords(peerId, 'host_state', this.records, { counters: [...this.lastCounts],part_ack:true });
       return;
     }
     if (data.type === 'host_state' && this.isHost && !this.stateAssembled && this.seeded) {
+      if(data.part_ack)this.partAckPeers.add(peerId);
       try { this.mergeState(data.records, peer); this.mergeCounters(data.counters); this.states.set(peerId, true); }
       catch (error) { this.setReady(false, error.message); }
       return;
@@ -287,11 +349,15 @@ export class HostCanvasSession {
       return;
     }
     if (data.type === 'host_snapshot_ack' && this.isHost && data.sequence === this.sequence) {
-      this.snapshotAcks.add(peerId); this.peerSequence.set(peerId, this.sequence); return;
+      this.snapshotAcks.add(peerId); this.peerSequence.set(peerId, this.sequence);this.readySent.delete(peerId); return;
     }
-    if (data.type === 'host_ready' && peerId === this.hostId && data.sequence === this.sequence) { this.setReady(true); return; }
+    if (data.type === 'host_ready' && peerId === this.hostId) {
+      if(data.sequence===this.sequence){this.hostSupportsTranslations=data.translateV1===true;this.setReady(true);}
+      else if(this.ready && Number.isSafeInteger(data.sequence) && data.sequence>this.sequence){this.setReady(false);this.send(peerId,this.frame('host_resync'));}
+      return;
+    }
     if (data.type === 'host_resync' && this.isHost && this.ready) {
-      this.snapshotAcks.delete(peerId); this.snapshotSent.delete(peerId); return;
+      this.snapshotAcks.delete(peerId); this.snapshotSent.delete(peerId);this.readySent.delete(peerId); return;
     }
     if (data.type === 'host_client_hello' && this.isHost) {
       if (!this.ready) { this.respond(peerId, 'host_retry', { message: '호스트 동기화 후 요청 카운트를 확인합니다.' }); return; }
@@ -300,6 +366,7 @@ export class HostCanvasSession {
       }
       const key = this.clientKey(peer, data.clientId);
       this.peerClients.set(peerId, data.clientId);
+      if(data.translateV1===true)this.translationPeers.add(peerId);else this.translationPeers.delete(peerId);
       if (!this.lastCounts.has(key)) this.lastCounts.set(key, 0);
       this.respond(peerId, 'host_client_state', { clientId: data.clientId, ok: true, lastCount: this.lastCounts.get(key) }); return;
     }
@@ -357,9 +424,21 @@ export class HostCanvasSession {
         if (commit.sequence !== this.sequence + 1) {
           this.setReady(false); this.send(peerId, this.frame('host_resync')); return;
         }
-        try { this.mergeState(commit.records, this.member(this.selfId)); }
-        catch (error) { this.setReady(false, error.message); return; }
-        Object.keys(commit.records).forEach(id => touched.add(id));
+        try {
+          if(commit.translations){
+            const version=normalizeSyncVersion(commit.version);
+            if(!version || !Array.isArray(commit.translations))throw new Error('올바른 이동 버전이 필요합니다.');
+            const operations=commit.translations.map(move=>({...move,action:'translate'}));
+            for(const move of operations)validateTranslation(move);
+            const result=reduceHostOperations(this.items,operations,this.member(this.selfId),this.connectorDependencies);
+            for(const id of result.touched){
+              if(compareSyncVersions(version,this.records[id].version)<=0)throw new Error('이동 기준 상태를 다시 동기화합니다.');
+            }
+            for(const id of result.touched){this.setRecord(id,{item:result.items[id],permission:result.items[id].permission,version});touched.add(id);}
+            this.clock=Math.max(this.clock,version.clock);
+          }else{this.mergeState(commit.records, this.member(this.selfId));Object.keys(commit.records).forEach(id => touched.add(id));}
+        }
+        catch (error) { this.setReady(false, error.message); this.send(peerId,this.frame('host_resync'));return; }
         for (const id of commit.evict || []) if (hasId(id)) { this.setRecord(id,null); touched.add(id); }
         this.sequence = commit.sequence;
         if (commit.counter) this.mergeCounters([commit.counter]);
@@ -387,10 +466,12 @@ export class HostCanvasSession {
       this.sequence += 1;
       const key = this.clientKey(entry.peer, entry.clientId);
       this.lastCounts.set(key, entry.requestCount);
-      const bytes = encoder.encode(JSON.stringify(changed)).length;
+      const translations=entry.operations.every(operation=>operation.action==='translate')
+        ? entry.operations.map(({ids,dx,dy})=>({ids,dx,dy})) : null;
+      const bytes = encoder.encode(JSON.stringify(translations ? {translations,version} : changed)).length;
       this.broadcastBytes += bytes;
       this.broadcasts.push({ bytes, sequence: this.sequence, origin: entry.peer.peer_id, requestId: entry.requestId,
-        counter: [key, entry.requestCount], records: changed, previousPermissions });
+        counter: [key, entry.requestCount], records: changed, previousPermissions, translations, version });
       this.respond(entry.peer.peer_id, 'host_ack', { ...fields, status: 'accepted', summary: summarize(entry.operations), lastCount: entry.requestCount });
       this.publish(this.items, result.touched);
     } catch (error) {
@@ -403,7 +484,7 @@ export class HostCanvasSession {
     if (!this.available()) {
       if (this.wasAvailable) {
         this.stateReplySent = false; this.snapshotSent.clear(); this.snapshotAcks.clear();
-        this.outgoingStates.clear(); this.incomingStates?.clear();
+        this.outgoingStates.clear(); this.incomingStates?.clear();this.recordTransfers.clear();this.partAcks.clear();this.completedTransfers.clear();this.ackQueue.clear();this.transferFields.clear();this.stateRequestSent.clear();this.readySent.clear();
         if (this.isHost) this.snapshotAcks.add(this.selfId);
       }
       this.wasAvailable = false;
@@ -411,13 +492,20 @@ export class HostCanvasSession {
       return;
     }
     this.wasAvailable = true;
+    for(const [key,{peerId,ack}] of this.ackQueue){if(!this.send(peerId,ack))break;this.ackQueue.delete(key);}
+    for(const [key,{peerId,type,fields}] of this.transferFields)if(this.sendRecords(peerId,type,{},fields)){
+      if(type==='host_state')this.stateReplySent=true;
+      else if(type==='host_snapshot')this.snapshotSent.add(peerId);
+      else this.completedTransfers.add(key);
+    }
     if (!this.term || !this.hostId || !this.seeded) return;
     if (now - this.lastPeerTick >= 1000 / HOST_PEER_FPS) {
       const interval = 1000 / HOST_PEER_FPS;
       this.lastPeerTick = Number.isFinite(this.lastPeerTick) ? now - (now - this.lastPeerTick) % interval : now;
       if (this.isHost && !this.stateAssembled) {
         this.states.set(this.selfId, true);
-        for (const peer of this.members) if (!this.states.has(peer.peer_id)) this.send(peer.peer_id, this.frame('host_state_request'));
+        for (const peer of this.members) if (!this.states.has(peer.peer_id) && now-(this.stateRequestSent.get(peer.peer_id)??-Infinity)>=500
+          && this.send(peer.peer_id, this.frame('host_state_request',{part_ack:true})))this.stateRequestSent.set(peer.peer_id,now);
         if (this.states.size === this.members.length) {
           this.stateAssembled = true; this.snapshotAcks.add(this.selfId);
           // A successor re-saves approved state, including unsaved predecessor changes.
@@ -432,7 +520,8 @@ export class HostCanvasSession {
         }
         if (this.snapshotAcks.size === this.members.length && !this.ready) this.setReady(true);
         if (this.ready) for (const peer of this.members) {
-          if (peer.peer_id !== this.selfId) this.send(peer.peer_id, this.frame('host_ready', { sequence: this.peerSequence.get(peer.peer_id) ?? this.sequence }));
+          if (peer.peer_id !== this.selfId && now-(this.readySent.get(peer.peer_id) ?? -Infinity)>=(this.peerClients.has(peer.peer_id)?5000:1000)
+            && this.send(peer.peer_id, this.frame('host_ready', { sequence: this.peerSequence.get(peer.peer_id) ?? this.sequence, translateV1:true })))this.readySent.set(peer.peer_id,now);
         }
       }
       if (this.ready) {
@@ -442,10 +531,10 @@ export class HostCanvasSession {
             const key = this.clientKey(this.member(this.selfId), this.clientId);
             if (!this.lastCounts.has(key)) this.lastCounts.set(key, 0);
             this.registerClient(this.lastCounts.get(key));
-          } else if (now - this.lastHelloTick >= 500 && this.send(this.hostId, this.frame('host_client_hello', { clientId: this.clientId }))) this.lastHelloTick = now;
+          } else if (now - this.lastHelloTick >= 500 && this.send(this.hostId, this.frame('host_client_hello', { clientId: this.clientId, translateV1:true }))) this.lastHelloTick = now;
         }
         if (!this.clientRegistered || this.faulted) return;
-        if (this.localQueue.length && !this.pending.size) {
+        if (this.localQueue.length && !this.pending.size && (this.localQueue.some(operation=>operation.action!=='translate') || now-this.lastMoveProposal>=HOST_MOVE_INTERVAL_MS)) {
           if (this.localCounter >= Number.MAX_SAFE_INTEGER) { this.abort('요청 카운트 한도에 도달했습니다.'); return; }
           const operations = []; let bytes = 0;
           while (operations.length < this.localQueue.length && operations.length < 512) {
@@ -455,6 +544,7 @@ export class HostCanvasSession {
             operations.push(this.localQueue[operations.length]); bytes += size;
           }
           this.localQueue.splice(0, operations.length);
+          if(operations.every(operation=>operation.action==='translate'))this.lastMoveProposal=now;
           const requestId = `${this.clientId}-${++this.localCounter}`;
           this.pending.set(requestId, { operations, requestCount: this.localCounter, sentAt: -Infinity, confirmation: null });
         }
@@ -484,6 +574,14 @@ export class HostCanvasSession {
                 && canPeerAccessItem({ permission: commit.previousPermissions[id] }, peer)).map(([id]) => id),
             }));
             for (const commit of commits) {
+              const source=this.broadcasts.find(entry=>entry.sequence===commit.sequence);
+              if(source.translations && this.translationPeers.has(peer.peer_id)){
+                const translations=source.translations.map(move=>({...move,ids:move.ids.filter(id=>Object.hasOwn(commit.records,id))})).filter(move=>move.ids.length);
+                const {records,...fields}=commit;
+                const payload=translations.length?{...fields,translations,version:source.version}:{...fields,records:{}};
+                if(!this.send(peer.peer_id,this.frame('host_commit',payload)))break;
+                this.peerSequence.set(peer.peer_id,commit.sequence);continue;
+              }
               const { records, ...fields } = commit;
               if (!this.sendRecords(peer.peer_id, 'host_commit', records, fields)) break;
               this.peerSequence.set(peer.peer_id, commit.sequence);

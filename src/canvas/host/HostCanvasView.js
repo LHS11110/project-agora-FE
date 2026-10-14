@@ -1,7 +1,7 @@
 import { loadEncodedDocument } from './documentCache.js';
 import * as Automerge from '@automerge/automerge/slim';
 import { itemSnapshot, changeItems } from '../itemSnapshots.js';
-import { loadItemDoc } from './hostOperations.js';
+import { loadItemDoc, operationIds, translateItem } from './hostOperations.js';
 import { collaborativeField, createActorId, decodeBase64, isCollaborativeItem } from '../collaborativeSync.js';
 
 // Rebase only changed/previously pending objects. Unrelated collaborative
@@ -13,7 +13,7 @@ export class HostCanvasView {
     this.stats={rebases:0,itemsVisited:0,documentsLoaded:0};
   }
   rebase(committed,touched,operations) {
-    const grouped=new Map();for(const operation of operations){if(!grouped.has(operation.id))grouped.set(operation.id,[]);grouped.get(operation.id).push(operation);}
+    const grouped=new Map();for(const operation of operations)for(const id of operationIds(operation)){if(!grouped.has(id))grouped.set(id,[]);grouped.get(id).push(operation);}
     const approved=new Set(touched),ids=new Set([...approved,...this.pendingIds,...grouped.keys()]),changes=new Map();
     for(const id of ids){
       this.stats.itemsVisited++;
@@ -27,6 +27,7 @@ export class HostCanvasView {
       }
       doc=this.approvedDocs.has(id)?Automerge.clone(this.approvedDocs.get(id)):null;base=this.approvedBases.get(id);
       for(const operation of grouped.get(id)||[]){
+        if(operation.action==='translate'){if(item)item=translateItem(item,operation.dx,operation.dy);continue;}
         if(operation.action==='delete'){item=null;doc=null;base=null;continue;}
         // A queued patch must not resurrect an authoritative deletion/eviction.
         if(operation.action==='patch' && !item)continue;

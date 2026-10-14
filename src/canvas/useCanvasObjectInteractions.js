@@ -27,6 +27,7 @@ export function useCanvasObjectInteractions(options) {
     itemsRef,
     spatialIndexRef,
     markItemDirty,
+    moveItems, flushMoves,
     permission,
     pointerPosition,
     refreshSpatialIndex,
@@ -113,7 +114,7 @@ export function useCanvasObjectInteractions(options) {
       const moving=new Set(movableIds);
       const elements=[...(sceneRef.current?.querySelectorAll('[data-item-id]') || [])].filter(node=>moving.has(node.dataset.itemId));
       elements.forEach((element) => element.classList.add('object-dragging', 'multi-object-dragging'));
-      dragRef.current = { mode: 'multi-move', ids: movableIds, initialItems, startPoint: start, touchStart, elements };
+      dragRef.current = { mode: 'multi-move', ids: movableIds, initialItems, startPoint: start, lastMove:{dx:0,dy:0}, touchStart, elements };
     } else {
       objectElement.classList.add('object-dragging');
       dragRef.current = { mode: 'move', id, initial: item, offsetX: start.x - (item.x || 0), offsetY: start.y - (item.y || 0), startX: start.x, startY: start.y, touchStart, element: objectElement };
@@ -208,13 +209,8 @@ export function useCanvasObjectInteractions(options) {
       const point = pointerPosition(event);
       const dx = point.x - startPoint.x;
       const dy = point.y - startPoint.y;
-      const nextItems = { ...itemsRef.current };
-      ids.forEach((itemId) => {
-        const original = initialItems[itemId];
-        nextItems[itemId] = original.kind === 'stroke' ? { ...original, points: original.points.map(point => ({ ...point, x: point.x + dx, y: point.y + dy })) } : { ...original, x: (Number(original.x) || 0) + dx, y: (Number(original.y) || 0) + dy };
-        sendRealtimePeerItemGeometry(itemId, nextItems[itemId]);
-      });
-      commitGeometry(nextItems,ids);
+      const previous=dragRef.current.lastMove;
+      if(moveItems(ids,dx-previous.dx,dy-previous.dy))dragRef.current.lastMove={dx,dy};
       return;
     }
     if (mode === 'bend') {
@@ -245,9 +241,14 @@ export function useCanvasObjectInteractions(options) {
     if (!dragRef.current) return;
     if (event && dragRef.current.pointerId !== event.pointerId) return;
     if (event?.type === 'lostpointercapture' && event.target !== dragRef.current.captureElement) return;
+    if(event?.type==='pointerup' && dragRef.current.mode==='multi-move')moveObject(event);
     const drag = dragRef.current;
     dragRef.current = null;
     releaseObjectPointer(drag);
+    if(drag.mode==='multi-move'){
+      drag.elements.forEach(element=>element.classList.remove('object-dragging','multi-object-dragging'));
+      flushMoves();return;
+    }
     if (drag.mode === 'multi-move' || drag.mode === 'multi-rotate') {
       drag.elements.forEach((element) => element.classList.remove('object-dragging', 'multi-object-dragging', 'object-rotating'));
       boardRef.current?.classList.remove('rotating');

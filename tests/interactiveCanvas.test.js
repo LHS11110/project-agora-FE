@@ -72,3 +72,13 @@ test('repeated optimistic rebases retain the writer actor and leave the approved
   assert.equal(view.approvedDocs.get('a').content,'hello');
  }
 });
+
+test('optimistic group translation preserves content and rebases on concurrent authoritative movement',()=>{
+ const text={kind:'text',text:'unchanged',x:.2,y:.2,width:.2,height:.1};
+ const view=new HostCanvasView(),items={a:shape,t:text};view.rebase(items,['a','t'],[]);
+ const before=view.items,ops=[{action:'translate',ids:['a','t'],dx:.1,dy:.2}];
+ view.rebase(items,[],ops);assert.equal(view.items.a.x,.1);assert.equal(view.items.t.x,.2+.1);assert.equal(view.docs.get('t').content,'unchanged');assert.equal(before.a.x,0);
+ view.rebase({a:{...shape,x:.3},t:{...text,text:'remote edit'}},['a','t'],ops);
+ assert.equal(view.items.a.x,.4);assert.equal(view.items.t.text,'remote edit');
+ view.rebase({t:text},['a'],ops);assert.equal(view.items.a,undefined,'deleted group members are never recreated');
+});

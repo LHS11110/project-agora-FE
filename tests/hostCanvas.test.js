@@ -8,9 +8,9 @@ import CanvasBrokerPeers from '../src/components/CanvasBrokerPeers.js';
 
 const peer = id => ({ peer_id: id, groups: ['default'], is_admin: false });
 const shape = { kind: 'shape', shapeType: 'rectangle', x: 0, y: 0, width: 0.1, height: 0.1, permission: 'default' };
-function network(ids = ['a', 'z']) {
+function network(ids = ['a', 'z'], initialItems = { box: shape }) {
   let time = 0; let term = 0;
-  const queue = [], sessions = new Map(), saved = [], errors = [], published = [], receipts = [];
+  const queue = [], sessions = new Map(), saved = [], errors = [], published = [], receipts = [], sent = [];
   const online = new Set(ids);
   const add = id => {
     online.add(id);
@@ -18,6 +18,7 @@ function network(ids = ['a', 'z']) {
       now: () => time, available: () => online.has(id),
       send: (target, message) => {
         if (!online.has(target)) return false;
+        sent.push({origin:id,target,message:structuredClone(message)});
         queue.push({ origin: id, target, message: structuredClone(message) }); return true;
       },
       persist: (changes, epoch) => { saved.push({ host: id, time, epoch, changes: structuredClone(changes) }); return true; },
@@ -25,7 +26,7 @@ function network(ids = ['a', 'z']) {
       reject: message => errors.push({ id, message }), status: () => {},
       receipt: result => receipts.push({ id, result: structuredClone(result) }),
     });
-    session.seed({ box: shape }); sessions.set(id, session); return session;
+    session.seed(initialItems); sessions.set(id, session); return session;
   };
   ids.forEach(add);
   const configure = () => {
@@ -44,7 +45,7 @@ function network(ids = ['a', 'z']) {
   const advance = (ms = 34) => { time += ms; for (const id of online) sessions.get(id).tick(); deliver(); };
   const synchronize = () => { for (let i = 0; i < 6; i++) advance(); for (const id of online) assert.equal(sessions.get(id).ready, true, `${id} synchronizes`); };
   configure(); synchronize();
-  return { sessions, saved, errors, published, receipts, queue, online, add, configure, deliver, advance, synchronize };
+  return { sessions, saved, errors, published, receipts, sent, queue, online, add, configure, deliver, advance, synchronize };
 }
 
 test('highest eligible ID wins; disconnected membership is not silently removed', () => {
@@ -181,7 +182,7 @@ test('stored versions and deletion markers survive a complete session restart', 
 });
 
 test('large live commits apply atomically after all ordered parts arrive', () => {
-  const net = network(); const host = net.sessions.get('z'), follower = net.sessions.get('a');
+  const net = network(); const host = net.sessions.get('z'), follower = net.sessions.get('a');host.partAckPeers.clear();
   const record = { item: { ...shape, label: 'x'.repeat(3 * 1024 * 1024) }, version: { clock: 999, actor: 'z' }, permission: 'default' };
   assert.equal(host.sendRecords('a', 'host_commit', { first: record, second: record }, { sequence: 1, origin: 'z', requestId: 'large' }), true);
   assert.equal(net.queue.length, 2);
@@ -195,7 +196,7 @@ test('large live commits apply atomically after all ordered parts arrive', () =>
 });
 
 test('multipart snapshot resumes after backpressure without replaying queued parts', () => {
-  const net = network(); const host = net.sessions.get('z'); const original = host.send;
+  const net = network(); const host = net.sessions.get('z'); const original = host.send;host.partAckPeers.clear();
   const record = { item: { ...shape, label: 'x'.repeat(3 * 1024 * 1024) }, version: { clock: 999, actor: 'z' }, permission: 'default' };
   let sent = 0;
   host.send = (id, frame) => ++sent === 2 ? false : original(id, frame);
@@ -575,4 +576,119 @@ test('local text queue coalesces causal successors but preserves independent bra
  host.submit([op(earlier)]);host.submit([op(second)]);assert.equal(host.localQueue.length,1);assert.equal(host.localQueue[0].patch.text,'abc');
  const independent=Automerge.change(Automerge.clone(base),d=>{d.content+='x'});
  host.submit([op(independent)]);assert.equal(host.localQueue.length,2);
+});
+
+test('group translation proposals and commits contain only IDs and one displacement, including strokes and text', () => {
+  const doc=Automerge.from({content:'unchanged collaborative text'});
+  const fixtures={box:shape,other:{...shape,x:.3},text:{kind:'text',text:doc.content,x:.2,y:.1,width:.2,height:.1,permission:'default',automerge_snapshot:encodeBase64(Automerge.save(doc)),automerge_changes:[]},ink:{kind:'stroke',points:[{x:.1,y:.2,pressure:.7},{x:.2,y:.3,pressure:.5}],strokeWidth:3,permission:'default'},image:{kind:'image',src:'data:image/png;base64,'+'a'.repeat(100000),x:0,y:0,width:.1,height:.1,permission:'default'}};
+  const net=network(['a','z'],fixtures),author=net.sessions.get('a'),host=net.sessions.get('z');net.sent.length=0;
+  assert.equal(author.hostSupportsTranslations,true);
+  author.submit([{action:'translate',ids:Object.keys(fixtures),dx:.05,dy:-.02}]);net.advance();net.advance();
+  const proposal=net.sent.find(e=>e.message.type==='host_proposal').message;
+  const commit=net.sent.find(e=>e.message.type==='host_commit').message;
+  assert.equal(JSON.stringify(proposal).length<1000,true);assert.equal(JSON.stringify(commit).length<1000,true);
+  assert.equal(commit.records,undefined);assert.deepEqual(commit.translations,[{ids:Object.keys(fixtures),dx:.05,dy:-.02}]);
+  assert.deepEqual(author.items,host.items);assert.equal(host.items.box.x,.05);
+  assert.equal(host.items.ink.points[0].x,.1+.05);
+  assert.equal(host.items.ink.points[0].pressure,.7);assert.equal(host.items.text.text,doc.content);
+  assert.equal(host.items.text.automerge_snapshot,fixtures.text.automerge_snapshot);assert.equal(host.items.image.src,fixtures.image.src);
+  author.receive('z',structuredClone(commit));assert.equal(author.items.box.x,.05,'duplicate commits do not move twice');
+  net.advance(110);assert.ok(net.saved.some(save=>save.changes.some(change=>change.id==='ink'&&change.record.item.points[0].x===host.items.ink.points[0].x)));
+});
+
+test('translations coalesce between 100ms samples and flush the final displacement immediately', () => {
+  const net=network(['z']),host=net.sessions.get('z');
+  host.submit([{action:'translate',ids:['box'],dx:.01,dy:.02}]);net.advance();assert.equal(host.items.box.x,.01);
+  for(let i=0;i<3;i++){host.submit([{action:'translate',ids:['box'],dx:.01,dy:.02}]);net.advance(10);}
+  assert.equal(host.items.box.x,.01);assert.equal(host.localQueue.length,1);
+  assert.equal(host.localQueue[0].dx,.03);host.flushMoves();
+  assert.equal(host.items.box.x,.04);assert.equal(host.items.box.y,.08);
+});
+
+test('simultaneous relative moves compose and a new user receives their latest absolute positions', () => {
+  const net=network(['a','b','z']);
+  net.sessions.get('a').submit([{action:'translate',ids:['box'],dx:.1,dy:.2}]);
+  net.sessions.get('b').submit([{action:'translate',ids:['box'],dx:.3,dy:-.1}]);
+  net.advance();net.advance();
+  for(const session of net.sessions.values()){assert.equal(session.items.box.x,.4);assert.equal(session.items.box.y,.1);}
+  const newcomer=net.add('c');net.configure();net.synchronize();assert.equal(newcomer.items.box.x,.4);
+});
+
+test('movement ACL rejection is atomic and a deleted target cannot be resurrected', () => {
+  const items={box:shape,secret:{...shape,permission:'secret'}};
+  assert.throws(()=>reduceHostOperations(items,[{action:'translate',ids:['box','secret'],dx:1,dy:1}],peer('a'),new Map()),/권한/);
+  assert.equal(items.box.x,0);
+  assert.throws(()=>reduceHostOperations(items,[{action:'translate',ids:['box','missing'],dx:1,dy:1}],peer('a'),new Map()),/이동할/);
+  assert.throws(()=>reduceHostOperations(items,[{action:'translate',ids:['box','box'],dx:1,dy:1}],peer('a'),new Map()),/벡터/);
+  assert.throws(()=>reduceHostOperations(items,[{action:'translate',ids:['box'],dx:Infinity,dy:1}],peer('a'),new Map()),/벡터/);
+});
+
+test('movement commit filters inaccessible IDs and keeps full-record compatibility with older clients', () => {
+  const net=network(),host=net.sessions.get('z'),follower=net.sessions.get('a');
+  host.seed({secret:{...shape,permission:'secret'}});host.member('z').is_admin=true;
+  host.submit([{action:'translate',ids:['box','secret'],dx:.1,dy:.2}]);net.advance();
+  const commit=net.sent.filter(e=>e.message.type==='host_commit').at(-1).message;
+  assert.deepEqual(commit.translations[0].ids,['box']);assert.equal(follower.items.secret,undefined);assert.equal(follower.items.box.x,.1);
+  host.translationPeers.delete('a');host.submit([{action:'translate',ids:['box'],dx:.2,dy:0}]);host.flushMoves();net.deliver();
+  const legacy=net.sent.filter(e=>e.message.type==='host_commit').at(-1).message;
+  assert.ok(legacy.records.box);assert.equal(legacy.translations,undefined);assert.equal(follower.items.box.x,host.items.box.x);
+});
+
+test('relative optimistic movement is not replayed when its commit arrives before the ACK', () => {
+  const net=network(),author=net.sessions.get('a'),host=net.sessions.get('z');
+  author.submit([{action:'translate',ids:['box'],dx:.1,dy:0}]);net.advance();
+  const pending=[...author.pending.keys()][0];host.accept(host.inbox.shift());
+  const ack=net.queue.splice(0).find(entry=>entry.message.type==='host_ack');
+  const approved=host.broadcasts.at(-1);
+  author.receive('z',host.frame('host_commit',{sequence:approved.sequence,origin:'a',requestId:pending,counter:approved.counter,translations:approved.translations,version:approved.version}));
+  assert.equal(author.items.box.x,.1);assert.equal(author.pending.size,1,'confirmation remains required');
+  assert.equal(author.pendingOperations.length,0,'the relative offset has already been applied');
+  author.receive('z',ack.message);assert.equal(author.pending.size,0);
+});
+
+test('accepted relative movement survives host replacement without replay after a missing ACK', () => {
+  const net=network(['a','b','z']),author=net.sessions.get('a');
+  author.submit([{action:'translate',ids:['box'],dx:.3,dy:.2}]);net.advance();
+  net.sessions.get('z').tick();net.advance();
+  assert.equal(author.items.box.x,.3);
+  // A new request is accepted but its confirmation is lost before failover.
+  author.submit([{action:'translate',ids:['box'],dx:.1,dy:0}]);net.advance(110);
+  const host=net.sessions.get('z');host.accept(host.inbox.shift());
+  net.queue.splice(0,net.queue.length,...net.queue.filter(e=>e.message.type!=='host_ack'));
+  net.advance();assert.equal(author.pending.size,1);assert.equal(author.items.box.x,.4);
+  net.online.delete('z');net.configure();net.synchronize();
+  for(let i=0;i<4;i++)net.advance();
+  assert.equal(author.items.box.x,.4);assert.equal(net.sessions.get('b').items.box.x,.4);
+  assert.equal(author.pending.size,0);
+});
+
+test('large snapshot credit waits for receiver ACKs, retries blocked ACKs and reuses its partition plan',()=>{
+ const net=network(),host=net.sessions.get('z'),follower=net.sessions.get('a');
+ let scans=0;const records=new Proxy(Object.fromEntries(Array.from({length:20},(_,i)=>['large'+i,{item:{...shape,label:'x'.repeat(100000)},version:{clock:999,actor:'z'},permission:'default'}])),{ownKeys(target){scans++;return Reflect.ownKeys(target)}});
+ let block=true;const send=follower.send;follower.send=(peer,frame)=>frame.type==='host_part_ack'&&block?false:send(peer,frame);
+ assert.equal(host.sendRecords('a','host_snapshot',records,{sequence:0}),false);
+ assert.equal(net.queue.filter(e=>e.message.type==='host_state_part').length,4);
+ net.deliver();assert.equal(follower.items.large0,undefined,'partial snapshots never publish');assert.equal(follower.ackQueue.size,4);
+ net.advance();assert.equal(host.outgoingStates.get('a:host_snapshot:0'),4,'slow receiver holds the window');
+ block=false;for(let i=0;i<12;i++)net.advance();
+ assert.equal(follower.items.large19.label.length,100000);assert.equal(follower.ackQueue.size,0);
+ assert.equal(scans,1);assert.equal(host.recordTransfers.size,0);assert.equal(host.transferFields.size,0);
+ const parts=net.sent.filter(e=>e.message.type==='host_state_part');assert.equal(parts.length,10);
+ assert.deepEqual(parts.map(e=>e.message.index),Array.from({length:10},(_,i)=>i));
+});
+
+test('ready heartbeats remain low rate and recover a missing final commit',()=>{
+ const net=network(),host=net.sessions.get('z'),follower=net.sessions.get('a');net.sent.length=0;
+ for(let i=0;i<60;i++)net.advance();
+ assert.ok(net.sent.filter(e=>e.message.type==='host_ready').length<=1);
+ follower.receive('z',host.frame('host_ready',{sequence:follower.sequence+1,translateV1:true}));
+ assert.equal(follower.ready,false);assert.ok(net.queue.some(e=>e.message.type==='host_resync'));
+ net.deliver();net.advance();assert.equal(follower.ready,true);
+});
+
+test('definite persistence overload retries the current record without replacing a newer edit',()=>{
+ const net=network(['z']),host=net.sessions.get('z');host.submit([{id:'box',action:'patch',patch:{x:1}}]);net.advance(110);
+ const old={id:'box',record:host.records.box,previous:shape};host.serverDirty.clear();host.restorePersistence([old]);assert.equal(host.serverDirty.get('box'),old);
+ host.submit([{id:'box',action:'patch',patch:{x:2}}]);net.advance(110);host.serverDirty.clear();
+ host.restorePersistence([old]);assert.equal(host.serverDirty.size,0,'stale rejected saves never overwrite newer records');
 });

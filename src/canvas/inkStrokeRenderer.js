@@ -87,7 +87,7 @@ export function createInkStrokeRenderer(host, vectorCanvas) {
   const liveContext = live.getContext('2d');
   let state, savedPainted=false, livePainted=false;
   function prepare(canvas, context) {
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const ratio = state.pixelRatio || Math.min(window.devicePixelRatio || 1, 2);
     const pixelWidth = Math.max(1, Math.round(state.viewportWidth * ratio));
     const pixelHeight = Math.max(1, Math.round(state.viewportHeight * ratio));
     if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
@@ -102,7 +102,12 @@ export function createInkStrokeRenderer(host, vectorCanvas) {
     if (!state) return;
     state.draft = draft;
     if(!state.previews.length && !draft){
-      if(livePainted)liveContext.clearRect(0,0,live.width,live.height);
+      if(livePainted){
+        // The previous stroke leaves a world/camera transform on this context.
+        // Clear in surface pixels so zoom/pan cannot leave stationary remnants.
+        liveContext.setTransform(1,0,0,1,0,0);
+        liveContext.clearRect(0,0,live.width,live.height);
+      }
       livePainted=false;return;
     }
     livePainted=true;prepare(live, liveContext);
