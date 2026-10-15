@@ -12,13 +12,13 @@ const a=figure('01-system-architecture',1600,1135);
 text(a,'title','그림 1. Project Agora의 배포 시스템 아키텍처',40,25,1520,31,true);
 text(a,'subtitle','실행 환경의 구성과 역할 경계 | 확인 기준: 2026년 10월 15일',40,76,1520,20);
 region(a,'client-plane','클라이언트',40,300);region(a,'ingress-plane','외부 진입 계층',380,280);region(a,'service-plane','애플리케이션 서비스',700,390);region(a,'storage-plane','저장소 계층',1130,430);
-node(a,'browser','브라우저 애플리케이션','React / Vite / PixiJS\n로컬 편집 초안 + Automerge\n선출된 브라우저 호스트 (term)',65,205,250,190);
+node(a,'browser','브라우저 애플리케이션','React / Vite / PixiJS\n로컬 편집 초안 + Automerge\n각 클라이언트가 독립 렌더링',65,205,250,190);
 node(a,'peer','다른 참여자 브라우저','WebRTC 음성 통화 단말',65,630,250,110);
 node(a,'edge','호스트 Nginx','외부 HTTPS / WSS :443',405,205,230,120);
 node(a,'gateway','Docker Nginx','정적 프런트엔드 / API / WSS\n경로별 서비스 라우팅',405,485,230,160);
 node(a,'spring','Spring Boot','인증·권한·캔버스 등록 관리\n접근 JWT 발급 / 서버 할당',725,205,340,135);
 node(a,'search','E5 검색 워커','임베딩 처리 (내부 게이트웨이 경유)',725,365,340,90);
-node(a,'phoenix','Phoenix 룸 브로커','참여자 관리 / 호스트 선출\n중계 / 접속 상태 브로드캐스트',725,485,340,155);
+node(a,'phoenix','Phoenix 룸 브로커','참여자 관리 / 변경 브로드캐스트\n중계 / 접속 상태 브로드캐스트',725,485,340,155);
 node(a,'cpp','C++ 캔버스 서비스','객체 상태 관리 / 쓰기 검증\nRedis 반영 / 수명주기별 스냅샷',725,700,340,135);
 node(a,'storage','HAProxy 저장소 브로커','TCP 중계 / TLS 암호문 통과\nSQL · ES · Redis · Sentinel 연결',1155,205,380,120);
 node(a,'sql','MS SQL Server','Express / 단일 노드\n계정 / 접근 권한\n캔버스 등록 정보',1155,435,180,135);
@@ -44,22 +44,22 @@ text(a,'control-body','빌드 / Docker 순차 기동 / 상태 점검 / HTTPS·WS
 text(a,'scope','배포 범위: 하나의 Docker 호스트. SQL·Elasticsearch는 단일 노드이며, Redis 복제는 비동기 방식입니다.',40,1055,1520,18);
 text(a,'legend','화살표는 요청·메시지 방향이며 응답 경로는 생략했습니다. 제어 도구는 실제 요청 처리 경로에 포함되지 않습니다.',40,1090,1520,18);
 const b=figure('02-replication-protocol',1600,870);
-text(b,'title','그림 2. 호스트를 기준으로 하는 편집 내용의 복제 흐름',40,25,1520,31,true);
+text(b,'title','그림 2. 호스트 없는 서버 저장 및 변경 공유 흐름',40,25,1520,31,true);
 text(b,'subtitle','논리적 메시지 흐름입니다. 게이트웨이와 저장소까지의 중간 경로는 저장 경로 항목으로 묶어 표시했습니다.',40,76,1520,20);
-for(const [id,title,body,x,w] of [['author','편집 중인 브라우저','로컬 미리보기 / 승인 대기 요청',40,290],['broker','Phoenix 브로커','인증된 캔버스 룸 내 중계',425,290],['host','선출된 브라우저 호스트','권한·순서 검증 / 요청 카운터',810,320],['store','저장 경로','Phoenix → C++ → HAProxy → Redis',1220,340]]){
+for(const [id,title,body,x,w] of [['author','편집 중인 브라우저','즉시 렌더링 / 서버 저장 대기',40,290],['broker','Phoenix 브로커','인증된 캔버스 룸 내 중계',425,290],['host','C++ 캔버스 서버','권한 검증 / 순서·중복 요청 관리',810,320],['store','Redis 저장소','객체 변경 + 처리 내역 원자 반영',1220,340]]){
  node(b,id,title,body,x,140,w,110);route(b,id+'-life',[[x+w/2,250],[x+w/2,710]],null,null,'#b6bdc4',false);
 }
 const X=[185,570,970,1390];
-route(b,'proposal',[[X[0],290],[X[1],290]],'1. 편집 변경 제안',[205,261,345]);
-route(b,'deliver',[[X[1],345],[X[2],345]],'2. 호스트 term과 함께 전달',[587,316,365]);
-route(b,'commit',[[X[2],410],[X[1],410]],'3. 확정 변경 + host_ack',[587,381,365]);
-route(b,'broadcast',[[X[1],465],[X[0],465]],'4. 순서가 있는 확정 변경 / 승인 응답',[205,436,365]);
-route(b,'persist',[[X[2],555],[X[3],555]],'5. 배치 저장 요청 (host_item_batch)',[990,526,380]);
-route(b,'flushed',[[X[3],620],[X[2],620]],'6. 저장 응답 (Redis 반영 확인)',[990,591,390]);
+route(b,'proposal',[[X[0],290],[X[1],290]],'1. 변경 전송 (canvas_ops)',[205,261,345]);
+route(b,'deliver',[[X[1],345],[X[2],345]],'2. 인증된 변경을 서버로 라우팅',[587,316,365]);
+route(b,'commit',[[X[2],410],[X[3],410]],'3. 객체·처리 내역 원자 저장',[990,381,365]);
+route(b,'broadcast',[[X[3],465],[X[2],465]],'4. Redis 반영 확인',[990,436,365]);
+route(b,'persist',[[X[2],555],[X[1],555]],'5. 저장 결과 + 순번이 있는 확정 변경',[587,526,380]);
+route(b,'flushed',[[X[1],620],[X[0],620]],'6. 모든 참여자에게 전달 · 각자 렌더링',[205,591,390]);
 box(b,'notes',40,735,1520,110,'#f6f7f8',line);
-text(b,'note-ack','host_ack는 브라우저 수용, host_batch_result는 C++ 적용·Redis 반영을 뜻합니다. 복제·디스크 영속성 완료와는 구분됩니다.',60,750,1480,18);
-text(b,'note-retry','복구: 크기를 제한한 분할 전송·수신 확인, 진행 정체 시 재전송, 중복 적용 방지, 순번에 기반한 재동기화.',60,786,1480,18);
-text(b,'note-media','접속 상태 이벤트는 Phoenix로 브로드캐스트하며, P2P는 음성 통화에만 사용합니다. 호스트 기반 복제로 Raft 합의 방식과는 다릅니다.',60,820,1480,18);
+text(b,'note-ack','canvas_result는 Redis 반영 확인입니다. canvas_commit은 각 사용자가 자기 화면에 렌더링할 변경입니다.',60,750,1480,18);
+text(b,'note-retry','복구: 동일 요청 재전송 / 저장 내역으로 중복 적용 방지 / 순번 누락·접속 복구 시 최신 스냅샷 조회.',60,786,1480,18);
+text(b,'note-media','마우스·레이저 등 접속 상태는 Phoenix가 중계합니다. P2P는 음성 통화 전용이며 브라우저 호스트는 없습니다.',60,820,1480,18);
 const escape=v=>String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 const items={};let n=0;
 for(const [index,f] of figures.entries()){

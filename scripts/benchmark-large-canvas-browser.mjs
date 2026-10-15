@@ -51,6 +51,7 @@ function installFixture({ count, scenario, workload, mixedText }) {
         };
         if(mixedText)for(let i=0;i<count-1;i++)if(i%3===0){const old=items['s'+i];items['s'+i]={kind:'text',text:'Label '+i,renderMode:'plain',x:old.x,y:old.y,width:old.width,height:old.height,fontSize:2,shadowEnabled:false,permission:'default'};}
         if(workload==='text')items['s'+(count-1)]={kind:'text',text:'Editable text',renderMode:'plain',x:500/1600,y:500/1000,width:400/1600,height:120/1000,fontSize:24,depth:1,shadowEnabled:false,permission:'default'};
+        this.fixture = { items, revision: Number(data.revision) || 0, count: Number(data.accepted_count) || 0, userId: data.sync_user_id };
         const json = JSON.stringify({ ...data, items });
         window.__agoraBenchmark = { initialized: true, jsonCharacters: json.length };
         const replacement = new MessageEvent('message', { data: json, origin: event.origin });
@@ -60,9 +61,28 @@ function installFixture({ count, scenario, workload, mixedText }) {
     send(message) {
       let data; try { data = JSON.parse(message); } catch { /* binary or non-JSON */ }
       // Never publish fixtures or edited fixture data to the real broker.
-      if(workload && data?.type==='host_item_batch'){
-        window.__agoraBenchmark.saves ||= [];window.__agoraBenchmark.saves.push(data);
-        queueMicrotask(()=>this.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({type:'host_batch_result',request_id:data.request_id,ok:true})})));return;
+      if(data?.type==='canvas_ops'){
+        const fixture=this.fixture,changes={};
+        if(!fixture)throw new Error('Benchmark fixture is not initialized');
+        for(const operation of data.operations){
+          if(operation.action==='translate'){
+            for(const id of operation.ids){const item=fixture.items[id];if(!item)continue;
+              fixture.items[id]=item.kind==='stroke'?{...item,points:item.points.map(p=>({...p,x:p.x+operation.dx,y:p.y+operation.dy}))}:{...item,x:(item.x||0)+operation.dx,y:(item.y||0)+operation.dy};changes[id]=fixture.items[id];}
+          }else if(operation.action==='delete'){delete fixture.items[operation.id];changes[operation.id]=null;}
+          else {const item={...fixture.items[operation.id],...operation.patch};for(const field of operation.unset||[])delete item[field];fixture.items[operation.id]=item;changes[operation.id]=item;}
+        }
+        fixture.revision++;fixture.count=data.request_count;
+        if(workload){window.__agoraBenchmark.saves ||= [];window.__agoraBenchmark.saves.push(data);}
+        const common={request_id:data.request_id,client_id:data.client_id,request_count:data.request_count,revision:fixture.revision};
+        queueMicrotask(()=>{
+          this.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({...common,type:'canvas_result',ok:true,server_revision:fixture.revision})}));
+          this.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({...common,type:'canvas_commit',author_id:fixture.userId,items:changes})}));
+        });return;
+      }
+      if(data?.type==='canvas_sync'){
+        const fixture=this.fixture;
+        if(fixture)queueMicrotask(()=>this.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({type:'canvas_snapshot',sync_protocol:2,sync_user_id:fixture.userId,items:fixture.items,revision:fixture.revision,accepted_count:fixture.count,client_id:data.client_id})})));
+        return;
       }
       if (data?.type !== 'canvas_relay') super.send(message);
     }

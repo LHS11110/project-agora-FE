@@ -147,7 +147,7 @@ export function useCanvasConnection(options) {
         || joinedCanvasConnectionId === canvasConnectionId) return;
       rtcSocket.send(JSON.stringify({
         type: 'rtc_join',
-        host_protocol: 1,
+        canvas_protocol: 2,
         canvas_transport: 'broker-v1',
         request_id: createId(),
         canvas_connection_id: canvasConnectionId,
@@ -156,7 +156,6 @@ export function useCanvasConnection(options) {
       joinedCanvasConnectionId = canvasConnectionId;
     };
     const resetPeerMesh = () => {
-      hostSessionRef.current.pause();
       if (peerMeshRef.current) peerMeshRef.current.close();
       peerMeshRef.current = null;
       syncedPeersRef.current.clear();
@@ -235,14 +234,14 @@ export function useCanvasConnection(options) {
           }
         }
         if (cancelled) return;
-        socket = new WebSocket(canvasSocketUrl(canvasId, access.ws_port, access.canvas_access_token));
+        socket = new WebSocket(`${canvasSocketUrl(canvasId, access.ws_port, access.canvas_access_token)}&client_id=${encodeURIComponent(hostSessionRef.current.clientId)}`);
         wsRef.current = socket;
         rtcSocket = new WebSocket(rtcSocketUrl(canvasId, access.ws_port, access.canvas_access_token));
         rtcWsRef.current = rtcSocket;
         const handleRtcMessage = (event) => {
           let data;
           try { data = JSON.parse(event.data); } catch { return; }
-          receiveServerEvent(data);
+          if (receiveServerEvent(data)) return;
           if (data.type === 'server_reconnect') {
             requestServerReconnect(data);
             return;
@@ -263,12 +262,6 @@ export function useCanvasConnection(options) {
                 onPeersChanged: (peers) => {
                   setPeerList(peers);
                   const activeIds = new Set(peers.map((peer) => peer.peer_id));
-                  const session = hostSessionRef.current;
-                  const connectedIds = new Set(peers.filter(peer => peer.connected).map(peer => peer.peer_id));
-                  const needed = session.isHost ? session.members.filter(peer => peer.peer_id !== session.selfId).map(peer => peer.peer_id) : [session.hostId].filter(Boolean);
-                  if (needed.some(id => !connectedIds.has(id))) session.pause();
-                  // Reconcile membership with the authenticated broker room.
-                  if (!cancelled && !mesh?.closed && needed.some(id => !activeIds.has(id))) sendRtcRaw({ type: 'rtc_list' });
                   setRemoteEditors((current) => Object.fromEntries(Object.entries(current).filter(([peerId]) => activeIds.has(peerId))));
                   setLaserStrokes((current) => current.filter((stroke) => !stroke.peerId || activeIds.has(stroke.peerId)));
                 },
@@ -276,12 +269,7 @@ export function useCanvasConnection(options) {
               peerMeshRef.current = mesh;
             }
             mesh.setInitialPeers(data.self_peer_id, data.peers);
-            hostSessionRef.current.configure(data.self_peer_id, data.host);
-            return;
-          }
-          if (data.type === 'rtc_host_changed') {
-            const mesh = peerMeshRef.current;
-            if (mesh) hostSessionRef.current.configure(mesh.selfPeerId, data.host);
+
             return;
           }
           if (data.type === 'rtc_peer_joined') {
@@ -315,7 +303,6 @@ export function useCanvasConnection(options) {
         };
         rtcSocket.onclose = () => {
           if (rtcWsRef.current === rtcSocket) rtcWsRef.current = null;
-          hostSessionRef.current.pause();
           if (!cancelled && canvasSnapshotLoadedRef.current && wsRef.current?.readyState === WebSocket.OPEN) requestServerReconnect({ retry_after_ms: 500 });
           if (!autoReconnectRef.current || !canvasSnapshotLoadedRef.current) resetPeerMesh();
           if (!cancelled && !autoReconnectRef.current && wsRef.current?.readyState === WebSocket.OPEN) setToast('캔버스 브로커 연결이 종료되었습니다.');
@@ -328,7 +315,7 @@ export function useCanvasConnection(options) {
         socket.onmessage = (event) => {
           let data;
           try { data = JSON.parse(event.data); } catch { return; }
-          receiveServerEvent(data);
+          if (receiveServerEvent(data)) return;
           if (data.type === 'server_reconnect') {
             requestServerReconnect(data);
             return;
@@ -344,9 +331,8 @@ export function useCanvasConnection(options) {
             collaborativeBaseDocsRef.current.clear();
             dirtyItemsRef.current = new Set();
             setDirtyItems(new Set());
-            // Only stored baseline enters the coordinator; reconnect drafts never
-            // masquerade as approved state. Its prior approved records are retained.
-            setItems(initialItems);
+            // Durable server receipt prevents replaying already saved drafts.
+            setItems(initialItems, data);
             canvasSnapshotLoadedRef.current = true;
             serverReconnectRequestedRef.current = false;
             autoReconnectRef.current = false;

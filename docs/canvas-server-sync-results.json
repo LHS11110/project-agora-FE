@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-15",
+  "protocol": 2,
+  "frontendTests": {
+    "passed": 179
+  },
+  "cppTestTargets": {
+    "passed": 8
+  },
+  "brokerTests": {
+    "passed": 21,
+    "excludedTlsFixtures": 9
+  },
+  "browser": {
+    "contexts": 4,
+    "javascriptErrors": [],
+    "checks": [
+      "editing_and_save_without_rtc",
+      "editing_after_first_author_leaves",
+      "missing_commit_repaired_without_reconnect",
+      "vector_retry_applied_once",
+      "invalid_batch_has_no_partial_writes",
+      "concurrent_automerge_edits_converge",
+      "join_during_1025_object_batch",
+      "batched_delete",
+      "drawing_updates_and_eraser_delete",
+      "reload_restores_crdt_state"
+    ],
+    "received": {
+      "init_items": 5,
+      "canvas_settings_snapshot": 5,
+      "chat_history": 5,
+      "canvas_result": 18,
+      "canvas_commit": 44,
+      "canvas_watermark": 29,
+      "rtc_ready": 4,
+      "rtc_peers": 3,
+      "dropped_commit": 1,
+      "canvas_snapshot": 1,
+      "rtc_peer_joined": 5,
+      "error": 1,
+      "rtc_peer_left": 2
+    },
+    "sentTypes": [
+      "canvas_ops",
+      "canvas_settings_get",
+      "canvas_sync",
+      "chat_history",
+      "rtc_join"
+    ],
+    "intentionalRejection": "ITEM_NOT_FOUND"
+  },
+  "redis": [
+    "empty_arrays_preserved",
+    "numeric_precision_preserved",
+    "duplicate_deduplicated",
+    "mismatched_request_rejected",
+    "stale_write_rejected"
+  ],
+  "deployment": "Project Orchestra: frontend, Phoenix broker, C++ canvas server",
+  "cleanup": "temporary canvases and private session removed"
+}

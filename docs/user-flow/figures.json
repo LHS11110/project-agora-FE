@@ -1,0 +1,622 @@
+[
+  {
+    "id": "01-user-journey",
+    "w": 1600,
+    "h": 1210,
+    "elements": [
+      {
+        "type": "text",
+        "id": "title",
+        "value": "사용자 관점 핵심 흐름도",
+        "x": 40,
+        "y": 25,
+        "w": 1520,
+        "size": 32,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "subtitle",
+        "value": "로그인 → 캔버스 검색·생성 → 접속 → 공동 편집 → 다른 캔버스 탐색",
+        "x": 40,
+        "y": 78,
+        "w": 1520,
+        "size": 21,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "login",
+        "x": 610,
+        "y": 140,
+        "w": 380,
+        "h": 105,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "login-title",
+        "value": "1. 로그인",
+        "x": 624,
+        "y": 152,
+        "w": 352,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "login-body",
+        "value": "이메일·비밀번호 입력\n계정이 없으면 회원가입",
+        "x": 624,
+        "y": 188,
+        "w": 352,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "explore",
+        "x": 610,
+        "y": 295,
+        "w": 380,
+        "h": 90,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "explore-title",
+        "value": "2. 캔버스 탐색",
+        "x": 624,
+        "y": 307,
+        "w": 352,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "explore-body",
+        "value": "검색 또는 새 캔버스 만들기",
+        "x": 624,
+        "y": 343,
+        "w": 352,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "search",
+        "x": 150,
+        "y": 440,
+        "w": 460,
+        "h": 100,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "search-title",
+        "value": "기존 캔버스 검색",
+        "x": 164,
+        "y": 452,
+        "w": 432,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "search-body",
+        "value": "캔버스 이름으로 검색\n목록에서 원하는 캔버스 선택",
+        "x": 164,
+        "y": 488,
+        "w": 432,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "create",
+        "x": 990,
+        "y": 440,
+        "w": 460,
+        "h": 100,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "create-title",
+        "value": "새 캔버스 생성",
+        "x": 1004,
+        "y": 452,
+        "w": 432,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "create-body",
+        "value": "캔버스 이름 입력\n설명·대표 이미지·비밀번호는 선택",
+        "x": 1004,
+        "y": 488,
+        "w": 432,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "enter",
+        "x": 590,
+        "y": 610,
+        "w": 420,
+        "h": 100,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "enter-title",
+        "value": "3. 캔버스 접속",
+        "x": 604,
+        "y": 622,
+        "w": 392,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "enter-body",
+        "value": "접근 권한 확인\n필요 시 캔버스 비밀번호 입력",
+        "x": 604,
+        "y": 658,
+        "w": 392,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "sync",
+        "x": 590,
+        "y": 770,
+        "w": 420,
+        "h": 100,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "sync-title",
+        "value": "4. 최신 상태 동기화",
+        "x": 604,
+        "y": 782,
+        "w": 392,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "sync-body",
+        "value": "기존 작업 내용 불러오기\n동기화가 끝나면 편집 가능",
+        "x": 604,
+        "y": 818,
+        "w": 392,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "edit",
+        "x": 590,
+        "y": 930,
+        "w": 420,
+        "h": 110,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "edit-title",
+        "value": "5. 편집 및 공동 작업",
+        "x": 604,
+        "y": 942,
+        "w": 392,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "edit-body",
+        "value": "도형·텍스트·드로잉·이미지 편집\n참여자의 변경·포인터 실시간 공유",
+        "x": 604,
+        "y": 978,
+        "w": 392,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "talk",
+        "x": 1190,
+        "y": 930,
+        "w": 320,
+        "h": 110,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "talk-title",
+        "value": "함께 소통하기 (선택)",
+        "x": 1204,
+        "y": 942,
+        "w": 292,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "talk-body",
+        "value": "채팅 / 음성 통화\n참여자와 같은 캔버스에서 작업",
+        "x": 1204,
+        "y": 978,
+        "w": 292,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "leave",
+        "x": 150,
+        "y": 930,
+        "w": 350,
+        "h": 110,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "leave-title",
+        "value": "6. 캔버스 나가기",
+        "x": 164,
+        "y": 942,
+        "w": 322,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "leave-body",
+        "value": "캔버스 목록으로 돌아가기\n다른 캔버스 검색·생성",
+        "x": 164,
+        "y": 978,
+        "w": 322,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "recover",
+        "x": 150,
+        "y": 770,
+        "w": 350,
+        "h": 100,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "recover-title",
+        "value": "작업 중 연결이 끊기면",
+        "x": 164,
+        "y": 782,
+        "w": 322,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "recover-body",
+        "value": "연결 복구·재동기화\n준비 완료 후 작업 계속",
+        "x": 164,
+        "y": 818,
+        "w": 322,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "route",
+        "id": "login-explore",
+        "points": [
+          [
+            800,
+            245
+          ],
+          [
+            800,
+            295
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "route",
+        "id": "search-branch",
+        "points": [
+          [
+            800,
+            385
+          ],
+          [
+            800,
+            410
+          ],
+          [
+            380,
+            410
+          ],
+          [
+            380,
+            440
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "route",
+        "id": "create-branch",
+        "points": [
+          [
+            800,
+            385
+          ],
+          [
+            800,
+            410
+          ],
+          [
+            1220,
+            410
+          ],
+          [
+            1220,
+            440
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "text",
+        "id": "choose-search",
+        "value": "기존 작업에 참여",
+        "x": 480,
+        "y": 382,
+        "w": 220,
+        "size": 17,
+        "bold": false
+      },
+      {
+        "type": "text",
+        "id": "choose-create",
+        "value": "새 작업 시작",
+        "x": 1015,
+        "y": 382,
+        "w": 220,
+        "size": 17,
+        "bold": false
+      },
+      {
+        "type": "route",
+        "id": "search-enter",
+        "points": [
+          [
+            380,
+            540
+          ],
+          [
+            380,
+            575
+          ],
+          [
+            800,
+            575
+          ],
+          [
+            800,
+            610
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "route",
+        "id": "create-enter",
+        "points": [
+          [
+            1220,
+            540
+          ],
+          [
+            1220,
+            575
+          ],
+          [
+            800,
+            575
+          ]
+        ],
+        "color": "#345b7a",
+        "head": false,
+        "both": false
+      },
+      {
+        "type": "text",
+        "id": "auto-enter",
+        "value": "생성 후 자동 이동",
+        "x": 1025,
+        "y": 548,
+        "w": 220,
+        "size": 17,
+        "bold": false
+      },
+      {
+        "type": "route",
+        "id": "enter-sync",
+        "points": [
+          [
+            800,
+            710
+          ],
+          [
+            800,
+            770
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "route",
+        "id": "sync-edit",
+        "points": [
+          [
+            800,
+            870
+          ],
+          [
+            800,
+            930
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "route",
+        "id": "edit-talk",
+        "points": [
+          [
+            1010,
+            985
+          ],
+          [
+            1190,
+            985
+          ]
+        ],
+        "color": "#56616b",
+        "head": true,
+        "both": true
+      },
+      {
+        "type": "text",
+        "id": "edit-talk-label",
+        "value": "필요할 때",
+        "x": 1040,
+        "y": 950,
+        "w": 140,
+        "size": 16,
+        "bold": false
+      },
+      {
+        "type": "route",
+        "id": "edit-leave",
+        "points": [
+          [
+            590,
+            985
+          ],
+          [
+            500,
+            985
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "route",
+        "id": "recover-sync",
+        "points": [
+          [
+            500,
+            820
+          ],
+          [
+            590,
+            820
+          ]
+        ],
+        "color": "#56616b",
+        "head": true,
+        "both": true
+      },
+      {
+        "type": "route",
+        "id": "leave-explore",
+        "points": [
+          [
+            150,
+            985
+          ],
+          [
+            90,
+            985
+          ],
+          [
+            90,
+            340
+          ],
+          [
+            610,
+            340
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "text",
+        "id": "repeat",
+        "value": "다른 캔버스 선택",
+        "x": 100,
+        "y": 1090,
+        "w": 300,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "text",
+        "id": "note-main",
+        "value": "검색과 생성은 두 가지 진입 경로입니다. 어느 경로로 시작해도 같은 캔버스 접속·편집 흐름으로 이어집니다.",
+        "x": 40,
+        "y": 1140,
+        "w": 1520,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "text",
+        "id": "note-error",
+        "value": "로그인·권한·비밀번호 오류가 표시되면 안내에 따라 계정과 접근 정보를 확인합니다. | 실제 화면 흐름 기준: 2026.10.15",
+        "x": 40,
+        "y": 1175,
+        "w": 1520,
+        "size": 17,
+        "bold": false
+      }
+    ]
+  }
+]

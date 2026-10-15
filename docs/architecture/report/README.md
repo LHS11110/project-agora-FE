@@ -7,14 +7,14 @@
 
 - `01-system-architecture.svg`: 클라이언트, 외부 진입 계층, 애플리케이션,
   저장소, Project Orchestra 제어 계층을 나타낸 구성도입니다.
-- `02-replication-protocol.svg`: 편집 제안부터 브라우저 호스트 승인과 저장까지의
-  논리적 메시지 흐름입니다. 브라우저의 수용 확인과 Redis 반영을 구분합니다.
+- `02-replication-protocol.svg`: 브라우저 변경을 서버에 저장하고 브로커가 각 사용자에게 전달하는
+  논리적 메시지 흐름입니다. 브라우저 호스트나 사용자 승인은 필요하지 않습니다.
 - `project-agora-architecture.pdf`: 한글 글꼴을 포함한 A4 가로형 2페이지 PDF입니다.
   글자와 도형은 확대 가능한 벡터 형식입니다.
 - `architecture.canvas.json`: 네이티브 객체 125개로 구성된 편집용 데이터입니다.
 
 실행 중인 Nginx 설정, HAProxy 구성, Docker 서비스 목록, `CanvasBrokerPeers`,
-`HostCanvasSession`, 백엔드·DB의 Compose 구성을 확인했습니다.
+`ServerCanvasSession`, 백엔드·DB의 Compose 구성을 확인했습니다.
 임베딩 워커 호출은 내부 게이트웨이를 경유합니다. 전체 구성도에서는 이 중간
 단계를 논리적으로 묶어 표시하고, 응답 경로는 생략했습니다.
 현재 서비스는 하나의 Docker 호스트에 있으며, Redis는 주 노드 1대·복제본 2대·

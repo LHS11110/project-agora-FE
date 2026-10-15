@@ -1,3 +1,5 @@
+> 이전 브라우저 호스트 방식의 검증 기록입니다. 현재 동기화는 [호스트 없는 서버 동기화](canvas-server-sync.md)를 사용합니다.
+
 # Recovering live synchronization without reconnecting
 
 The reported canvas could remain in its synchronization overlay for more than

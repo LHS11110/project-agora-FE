@@ -1,3 +1,5 @@
+> 이 캔버스는 이전 호스트 방식의 구성 기록입니다. 현재 구조는 [보고서용 아키텍처](report/README.md)와 [서버 동기화](../canvas-server-sync.md)를 참고하세요.
+
 # Project Agora 아키텍처 캔버스
 
 현재 다이어그램: [캔버스 #2037](https://112.168.71.147/canvases/2037)

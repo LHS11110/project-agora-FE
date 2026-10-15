@@ -44,7 +44,7 @@ export default class CanvasBrokerPeers {
   }
 
   sendData(payload, canSend = () => true) {
-    // HostCanvasSession replicates persistent edits with ordered commits.
+    // ServerCanvasSession persists edits and receives ordered server commits.
     if (payload.type !== 'editor_presence') return true;
     return this.relay(payload, [...this.peers.values()].filter(canSend).map(peer => peer.peer_id));
   }

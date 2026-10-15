@@ -60,7 +60,7 @@ WebSocket URL에는 접근 토큰이 `token` 쿼리 파라미터로 포함됩니
 
 `CanvasPage`는 캔버스 초기화와 연결 상태를 조정합니다. PixiJS `VectorLayer`가 스트로크·도형·커넥터를 그리고, 텍스트·코드·이미지·링크·메모·테이블·수식은 React DOM 오브젝트로 표시됩니다. 오브젝트 위치와 크기는 정규화된 캔버스 좌표를 사용합니다.
 
-캔버스 데이터 소켓은 아이템 변경과 스냅샷 동기화에 쓰입니다. Automerge는 텍스트 기반 공동 편집에 쓰이고, RTC WebSocket은 WebRTC 연결의 offer·answer·ICE candidate 시그널링을 전달합니다. WebRTC 데이터 채널은 피어 간 동기화 데이터와 커서를 전달합니다.
+캔버스 데이터 소켓은 아이템 변경과 스냅샷 동기화에 쓰입니다. Automerge는 텍스트 기반 공동 편집에 쓰이고, RTC WebSocket은 WebRTC 연결의 offer·answer·ICE candidate 시그널링을 전달합니다. 객체 변경은 Phoenix → C++ → Redis로 저장한 뒤 순서대로 브로드캐스트하며, 각 브라우저가 렌더링합니다. 커서·레이저·선택 영역도 Phoenix로 전달합니다. WebRTC P2P는 통화 미디어 전용입니다. 브라우저 호스트 선출이나 승인 단계는 없습니다. 자세한 내용은 [서버 동기화](canvas-server-sync.md)를 참조합니다.
 
 `TutorialPage`는 `demoItems`를 초기값으로 사용하며 편집 내용은 React 상태에만 유지합니다. 현재 API나 WebSocket에 저장되지 않고 페이지를 다시 열면 기본 예제로 초기화됩니다.
 

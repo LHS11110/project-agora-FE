@@ -79,7 +79,7 @@ import {
 import { LASER_FADE_MS, MAX_STROKE_WIDTH, MIN_STROKE_WIDTH, stickyNoteColors, MIN_ZOOM_SENSITIVITY, MAX_ZOOM_SENSITIVITY } from '../canvas/canvasConstants.js';
 import { textSpliceBetween } from '../canvas/collaborativeText.js';
 import { isCanvasSyncItem, useCanvasPeerGeometry } from '../canvas/useCanvasPeerGeometry.js';
-import { useHostCanvas } from '../canvas/host/useHostCanvas.js';
+import { useServerCanvas } from '../canvas/sync/useServerCanvas.js';
 import { applyStrokeFrame } from '../canvas/strokeFrameChanges.js';
 import { useCanvasStageInteractions } from '../canvas/useCanvasStageInteractions.js';
 import { useCanvasPeerEvents } from '../canvas/useCanvasPeerEvents.js';
@@ -256,7 +256,7 @@ function CanvasWorkspace() {
   const [showParticipants, setShowParticipants] = useState(false);
   const [settingsPending, setSettingsPending] = useState(false);
   const [toast, setToast] = useState('');
-  const { items, setItems, patchItems, moveItems, flushMoves, committedItemsRef, status: hostStatus, lastReceipt, retryRejected, sessionRef: hostSessionRef, receiveServerItems, receiveServerEvent } = useHostCanvas({
+  const { items, setItems, patchItems, moveItems, flushMoves, committedItemsRef, status: hostStatus, lastReceipt, retryRejected, sessionRef: hostSessionRef, receiveServerItems, receiveServerEvent } = useServerCanvas({
     itemsRef, peerMeshRef, wsRef, rtcWsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems, reconnectRequestRef,
   });
   const hostReadyRef = useRef(false);
@@ -723,7 +723,7 @@ function CanvasWorkspace() {
   }, [refreshSpatialIndex, sendItemChange]);
   const saveCollaborativeItem = useCallback((id, { silent = false } = {}) => {
     if (!hostSessionRef.current.editable || !isCollaborativeItem(itemsRef.current[String(id)])) return false;
-    if (!silent) setToast('호스트 승인 후 자동 저장됩니다.');
+    if (!silent) setToast('변경 사항을 서버에 자동 저장합니다.');
     return true;
   }, []);
   saveCollaborativeItemRef.current = saveCollaborativeItem;
@@ -751,9 +751,7 @@ function CanvasWorkspace() {
     syncClockRef,
   });
   const receivePeerData = useCallback((peer, data, channelName) => {
-    if (typeof data?.type === 'string' && data.type.startsWith('host_')) {
-      if (channelName === 'broker') hostSessionRef.current.receive(peer.peer_id, data);
-    } else if (data?.type === 'editor_presence') receiveLegacyPeerData(peer, data, channelName);
+    if (data?.type === 'editor_presence') receiveLegacyPeerData(peer, data, channelName);
   }, [receiveLegacyPeerData]);
   const permission = groups.includes('default') ? 'default' : groups[0] || 'admin-group';
 

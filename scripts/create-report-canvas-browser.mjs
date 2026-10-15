@@ -13,7 +13,7 @@ try {
  await context.addInitScript(({token,user})=>{localStorage.setItem('agora_token',token);localStorage.setItem('agora_user',JSON.stringify(user));}, {token,user});
  const page=await context.newPage(),errors=[],frames=[],saved=[];
  page.on('pageerror',e=>errors.push(e.message));
- page.on('websocket',socket=>socket.on('framereceived',({payload})=>{try{const frame=JSON.parse(payload.toString()); if(['host_batch_result','error'].includes(frame.type))console.log('Server result:',JSON.stringify({type:frame.type,ok:frame.ok,code:frame.code,count:frame.applied,results:frame.results?.map(r=>({ok:r.ok,code:r.code}))}));if(frame.type==='host_batch_result')saved.push(frame);if(['init','init_items','host_state'].includes(frame.type))frames.push(frame.type);}catch{}}));
+ page.on('websocket',socket=>socket.on('framereceived',({payload})=>{try{const frame=JSON.parse(payload.toString()); if(['canvas_result','error'].includes(frame.type))console.log('Server result:',JSON.stringify({type:frame.type,ok:frame.ok,code:frame.code,count:frame.applied,results:frame.results?.map(r=>({ok:r.ok,code:r.code}))}));if(frame.type==='canvas_result')saved.push(frame);if(['init_items','canvas_snapshot'].includes(frame.type))frames.push(frame.type);}catch{}}));
  await page.goto(`https://112.168.71.147/canvases/${canvas_id}`);
  await page.waitForTimeout(3000);
  await page.screenshot({path:'/tmp/agora-report-debug.png'});
