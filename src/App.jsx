@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Navigate, Route, Routes, useLocation } from './routing.jsx';
+import { Navigate, Route, Routes, useLocation, useParams } from './routing.jsx';
 import { useAuth } from './state/AuthContext.jsx';
 import AppShell from './components/AppShell.jsx';
 import HomePage from './pages/HomePage.jsx';
@@ -16,6 +16,11 @@ function Protected({ children }) {
   return isAuthenticated ? <AppShell>{children}</AppShell> : <Navigate to="/login" replace state={{ from: location.pathname }} />;
 }
 
+function CanvasRoute() {
+  const { canvasId } = useParams();
+  return <CanvasPage key={canvasId} />;
+}
+
 export default function App() {
   return <Routes>
     <Route path="/" element={<HomePage />} />
@@ -24,7 +29,7 @@ export default function App() {
     <Route path="/login" element={<LoginPage />} />
     <Route path="/profile" element={<Protected><ProfilePage /></Protected>} />
     <Route path="/search" element={<Protected><SearchPage /></Protected>} />
-    <Route path="/canvases/:canvasId" element={<Protected><Suspense fallback={<div className="canvas-app-page canvas-loading-state"><span className="loader" /> 캔버스 화면을 불러오고 있어요.</div>}><CanvasPage /></Suspense></Protected>} />
+    <Route path="/canvases/:canvasId" element={<Protected><Suspense fallback={<div className="canvas-app-page canvas-loading-state"><span className="loader" /> 캔버스 화면을 불러오고 있어요.</div>}><CanvasRoute /></Suspense></Protected>} />
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes>;
 }

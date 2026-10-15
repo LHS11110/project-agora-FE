@@ -32,7 +32,7 @@ async function open({blockRtc=false,dropCommit=false}={}){
    });
  }
  page.on('websocket',ws=>{
-   ws.on('framereceived',({payload})=>{try{const d=JSON.parse(payload.toString());frames.push({type:d.type,ok:d.ok,code:d.code,revision:d.revision});if(d.type==='error'||d.type==='canvas_result')console.log('Result',d.type,d.code,d.ok);}catch{}});
+   ws.on('framereceived',({payload})=>{try{const d=JSON.parse(payload.toString());frames.push({type:d.type,ok:d.ok,code:d.code,revision:d.revision});if(d.type==='init_items'&&d.client_id!==new URL(ws.url()).searchParams.get('client_id'))errors.push('Initial snapshot client ID does not match the editing session');if(d.type==='error'||d.type==='canvas_result')console.log('Result',d.type,d.code,d.ok);}catch{}});
    ws.on('framesent',({payload})=>{try{const d=JSON.parse(payload.toString());sends.push({type:d.type,...(d.type==='canvas_ops'?{operations:d.operations.map(o=>({action:o.action,ids:o.ids}))}:{})});}catch{}});
  });
  await page.goto(`https://112.168.71.147/canvases/${canvasId}`);
@@ -80,6 +80,7 @@ try{
  const many=Object.fromEntries(Array.from({length:1025},(_,i)=>['sync-load-'+i,{kind:'shape',shapeType:'rectangle',x:2000+(i%50)*100,y:2000+Math.floor(i/50)*100,width:70,height:50,fill:'#ddeeff',permission:'default'}]));
  const [,late]=await Promise.all([apply(b,many),open()]);
  await late.waitForFunction(()=>Object.keys(window.frelogCanvas.read().items).filter(id=>id.startsWith('sync-load-')).length===1025,null,{timeout:20000});
+ await waitItems(late,many);
  await apply(b,{},Object.keys(many));
  await late.waitForFunction(()=>Object.keys(window.frelogCanvas.read().items).every(id=>!id.startsWith('sync-load-')),null,{timeout:20000});
  console.log('Joining during 1,025-object edit and batched deletion converges.');

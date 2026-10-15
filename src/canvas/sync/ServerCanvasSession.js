@@ -21,13 +21,21 @@ export class ServerCanvasSession {
   redraw(touched = []) { this.publish(this.items, touched); this.notify(); }
   seed(items, data = {}) {
     if (data.sync_protocol !== 2) { this.blocked = '서버와 클라이언트의 동기화 버전이 다릅니다. 배포 상태를 확인해주세요.'; this.notify(); return; }
+    if (data.client_id && data.client_id !== this.clientId) return;
+    const revision = data.revision;
+    const accepted = data.accepted_count;
+    if (!items || typeof items !== 'object' || Array.isArray(items)
+      || !Number.isSafeInteger(revision) || revision < 0
+      || !Number.isSafeInteger(accepted) || accepted < 0) {
+      this.ready = false; this.needsSync = true; this.notify(); return;
+    }
+    if (this.seeded && (revision < this.revision || accepted < this.count)) return;
     this.userId = data.sync_user_id;
-    const accepted = Number(data.accepted_count) || 0;
     if (this.flight && accepted >= this.flight.request_count) this.accept();
     this.count = accepted;
     const previousIds = Object.keys(this.items);
     this.items = itemSnapshot(Object.fromEntries(Object.entries(items).filter(([, item]) => item?.kind !== 'host-tombstone')));
-    this.revision = Number(data.revision) || 0; this.ready = true; this.seeded = true; this.syncAt = 0;
+    this.needsSync = false; this.revision = revision; this.ready = true; this.seeded = true; this.syncAt = 0;
     this.redraw([...new Set([...previousIds, ...Object.keys(this.items)])]);
     // An unconfirmed request retains its exact count, ID and payload.
     if (this.flight) this.sentAt = 0;
@@ -83,7 +91,7 @@ export class ServerCanvasSession {
   receiveServer(data) {
     if (data.type === 'canvas_snapshot') { this.seed(data.items || {}, data); return true; }
     if (data.type === 'canvas_watermark') {
-      if (this.seeded && data.revision > this.revision) { this.ready = false; this.requestSync(Date.now()); this.notify(); }
+      if (this.seeded && (data.force_sync === true || data.revision > this.revision)) { this.ready = false; this.requestSync(Date.now()); this.notify(); }
       return true;
     }
     if (data.type === 'canvas_commit') {
@@ -123,7 +131,7 @@ export class ServerCanvasSession {
   tick() {
     if (!this.available()) { if (this.ready) this.pause(); return; }
     const now = Date.now();
-    if (!this.ready) { if (this.seeded) this.requestSync(now); return; }
+    if (!this.ready) { if (this.seeded || this.needsSync) this.requestSync(now); return; }
     if (!this.flight && this.queue.length && now >= this.nextAt) {
       const operations = []; let bytes = 0;
       while (this.queue.length && operations.length < 512) {

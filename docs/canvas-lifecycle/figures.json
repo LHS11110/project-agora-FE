@@ -1,0 +1,889 @@
+[
+  {
+    "id": "01-canvas-lifecycle",
+    "w": 1600,
+    "h": 1135,
+    "elements": [
+      {
+        "type": "text",
+        "id": "title",
+        "value": "그림 1. Canvas 데이터의 생명 주기",
+        "x": 40,
+        "y": 25,
+        "w": 1520,
+        "size": 32,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "subtitle",
+        "value": "생성 → 비활성 보관 → 활성화·공동 편집 → 안전한 회수 → 재접속 또는 삭제",
+        "x": 40,
+        "y": 78,
+        "w": 1520,
+        "size": 21,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "create",
+        "x": 60,
+        "y": 170,
+        "w": 440,
+        "h": 130,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "create-title",
+        "value": "1. 캔버스 생성",
+        "x": 74,
+        "y": 182,
+        "w": 412,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "create-body",
+        "value": "Spring: 이름·소유자·접근 정보 생성\nMS SQL ID 발급 / 초기 ES 문서 저장",
+        "x": 74,
+        "y": 218,
+        "w": 412,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "inactive",
+        "x": 580,
+        "y": 170,
+        "w": 440,
+        "h": 130,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "inactive-title",
+        "value": "2. 비활성 상태로 보관",
+        "x": 594,
+        "y": 182,
+        "w": 412,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "inactive-body",
+        "value": "MS SQL: 등록·할당 정보\nElasticsearch: 캔버스 문서",
+        "x": 594,
+        "y": 218,
+        "w": 412,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "access",
+        "x": 1100,
+        "y": 170,
+        "w": 440,
+        "h": 130,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "access-title",
+        "value": "3. 접근 요청·권한 확인",
+        "x": 1114,
+        "y": 182,
+        "w": 412,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "access-body",
+        "value": "Spring: 권한·비밀번호 확인\nC++ 서버 할당 / 접근 JWT 발급",
+        "x": 1114,
+        "y": 218,
+        "w": 412,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "load",
+        "x": 1100,
+        "y": 425,
+        "w": 440,
+        "h": 160,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "load-title",
+        "value": "4. 활성 데이터 준비",
+        "x": 1114,
+        "y": 437,
+        "w": 412,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "load-body",
+        "value": "캐시 존재: 기존 Redis 문서 재사용\n캐시 없음: ES → Redis 복원\nC++ 인스턴스 / cached=true",
+        "x": 1114,
+        "y": 473,
+        "w": 412,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "active",
+        "x": 580,
+        "y": 425,
+        "w": 440,
+        "h": 160,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "active-title",
+        "value": "5. 최신 상태 제공",
+        "x": 594,
+        "y": 437,
+        "w": 412,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "active-body",
+        "value": "브로커 등록 후 서버 스냅샷 조회\n객체·전역 순번·처리 카운터 전달\n브라우저별 로컬 렌더링",
+        "x": 594,
+        "y": 473,
+        "w": 412,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "edit",
+        "x": 60,
+        "y": 425,
+        "w": 440,
+        "h": 160,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "edit-title",
+        "value": "6. 공동 편집·즉시 저장",
+        "x": 74,
+        "y": 437,
+        "w": 412,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "edit-body",
+        "value": "브라우저 → Phoenix → C++ → Redis\n변경·순번·처리 기록을 원자 반영\n확정 변경을 참여자에게 전달",
+        "x": 74,
+        "y": 473,
+        "w": 412,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "idle",
+        "x": 60,
+        "y": 735,
+        "w": 440,
+        "h": 150,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "idle-title",
+        "value": "7. 유휴 상태 판정",
+        "x": 74,
+        "y": 747,
+        "w": 412,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "idle-body",
+        "value": "데이터 소켓의 lease가 활성 유지\n최근 질의 없음: 기본 TTL 90초\n회수 조건 확인 후 언로드 시도",
+        "x": 74,
+        "y": 783,
+        "w": 412,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "snapshot",
+        "x": 580,
+        "y": 735,
+        "w": 440,
+        "h": 150,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "snapshot-title",
+        "value": "8. 안전한 스냅샷 저장",
+        "x": 594,
+        "y": 747,
+        "w": 412,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "snapshot-body",
+        "value": "대기 쓰기 완료 / LRU flush 확인\nRedis 최신 문서 → Elasticsearch\n저장 실패 시 Redis·할당 유지",
+        "x": 594,
+        "y": 783,
+        "w": 412,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "unload",
+        "x": 1100,
+        "y": 735,
+        "w": 440,
+        "h": 150,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "unload-title",
+        "value": "9. 활성 자원 회수",
+        "x": 1114,
+        "y": 747,
+        "w": 412,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "unload-body",
+        "value": "MS SQL: cached=false 먼저 반영\n세대가 일치하는 Redis 캐시만 제거\nC++ 메모리 풀에서 해제",
+        "x": 1114,
+        "y": 783,
+        "w": 412,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "route",
+        "id": "create-inactive",
+        "points": [
+          [
+            500,
+            235
+          ],
+          [
+            580,
+            235
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "route",
+        "id": "inactive-access",
+        "points": [
+          [
+            1020,
+            235
+          ],
+          [
+            1100,
+            235
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "route",
+        "id": "access-load",
+        "points": [
+          [
+            1320,
+            300
+          ],
+          [
+            1320,
+            425
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "text",
+        "id": "access-load-label",
+        "value": "접속 준비",
+        "x": 1335,
+        "y": 346,
+        "w": 180,
+        "size": 16,
+        "bold": false
+      },
+      {
+        "type": "route",
+        "id": "load-active",
+        "points": [
+          [
+            1100,
+            505
+          ],
+          [
+            1020,
+            505
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "route",
+        "id": "active-edit",
+        "points": [
+          [
+            580,
+            505
+          ],
+          [
+            500,
+            505
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "route",
+        "id": "edit-idle",
+        "points": [
+          [
+            280,
+            585
+          ],
+          [
+            280,
+            735
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "text",
+        "id": "edit-idle-label",
+        "value": "모든 연결 종료 후",
+        "x": 300,
+        "y": 650,
+        "w": 250,
+        "size": 16,
+        "bold": false
+      },
+      {
+        "type": "route",
+        "id": "idle-snapshot",
+        "points": [
+          [
+            500,
+            810
+          ],
+          [
+            580,
+            810
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "route",
+        "id": "snapshot-unload",
+        "points": [
+          [
+            1020,
+            810
+          ],
+          [
+            1100,
+            810
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "route",
+        "id": "reuse",
+        "points": [
+          [
+            1540,
+            810
+          ],
+          [
+            1570,
+            810
+          ],
+          [
+            1570,
+            350
+          ],
+          [
+            1450,
+            350
+          ],
+          [
+            1450,
+            300
+          ]
+        ],
+        "color": "#56616b",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "text",
+        "id": "reuse-label",
+        "value": "재접속하면 다시 활성화",
+        "x": 1110,
+        "y": 363,
+        "w": 420,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "notes",
+        "x": 40,
+        "y": 965,
+        "w": 1520,
+        "h": 125,
+        "fill": "#f6f7f8",
+        "stroke": "#8b949d"
+      },
+      {
+        "type": "text",
+        "id": "notes-title",
+        "value": "회수는 데이터 삭제가 아닙니다.",
+        "x": 60,
+        "y": 980,
+        "w": 1480,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "notes-body",
+        "value": "비활성 캔버스는 ES에 보관됩니다. 다시 접속하면 복원합니다. 서버 재기동 시 기존 활성 Redis를 우선 사용합니다.\n활성 Redis를 읽지 못했을 때 오래된 ES 스냅샷으로 조용히 되돌리지 않습니다. 브라우저 호스트는 필요하지 않습니다.",
+        "x": 60,
+        "y": 1020,
+        "w": 1480,
+        "size": 18,
+        "bold": false
+      }
+    ]
+  },
+  {
+    "id": "02-persistence-and-deletion",
+    "w": 1600,
+    "h": 1135,
+    "elements": [
+      {
+        "type": "text",
+        "id": "title",
+        "value": "그림 2. 데이터 보존과 영구 삭제의 경계",
+        "x": 40,
+        "y": 25,
+        "w": 1520,
+        "size": 32,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "subtitle",
+        "value": "저장 확인, 캐시 회수, 영구 삭제는 서로 다른 단계입니다. | 현재 코드 기준: 2026.10.15",
+        "x": 40,
+        "y": 78,
+        "w": 1520,
+        "size": 20,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "save-region",
+        "x": 40,
+        "y": 145,
+        "w": 1520,
+        "h": 410,
+        "fill": "#f6f7f8",
+        "stroke": "#8b949d"
+      },
+      {
+        "type": "text",
+        "id": "save-title",
+        "value": "A. 활성 데이터의 보존",
+        "x": 60,
+        "y": 160,
+        "w": 1480,
+        "size": 24,
+        "bold": true
+      },
+      {
+        "type": "box",
+        "id": "redis",
+        "x": 70,
+        "y": 240,
+        "w": 430,
+        "h": 130,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "redis-title",
+        "value": "활성 원본: Redis",
+        "x": 84,
+        "y": 252,
+        "w": 402,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "redis-body",
+        "value": "객체 / 채팅 / 캔버스 설정\nCRDT 이력 / 순번 / 중복 처리 기록",
+        "x": 84,
+        "y": 288,
+        "w": 402,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "guard",
+        "x": 585,
+        "y": 240,
+        "w": 430,
+        "h": 130,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "guard-title",
+        "value": "회수 전 저장 검증",
+        "x": 599,
+        "y": 252,
+        "w": 402,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "guard-body",
+        "value": "대기 쓰기 완료 + LRU flush\n최신 문서 읽기 / 캐시 세대 확인",
+        "x": 599,
+        "y": 288,
+        "w": 402,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "es",
+        "x": 1100,
+        "y": 240,
+        "w": 430,
+        "h": 130,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "es-title",
+        "value": "비활성 원본: Elasticsearch",
+        "x": 1114,
+        "y": 252,
+        "w": 402,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "es-body",
+        "value": "전체 문서 스냅샷\n객체·처리 기록은 인코딩해 보관",
+        "x": 1114,
+        "y": 288,
+        "w": 402,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "route",
+        "id": "redis-guard",
+        "points": [
+          [
+            500,
+            305
+          ],
+          [
+            585,
+            305
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "route",
+        "id": "guard-es",
+        "points": [
+          [
+            1015,
+            305
+          ],
+          [
+            1100,
+            305
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "text",
+        "id": "failure",
+        "value": "실패 → Redis와 서버 할당 유지. 저장에 성공하기 전에는 활성 데이터를 버리지 않습니다.",
+        "x": 75,
+        "y": 425,
+        "w": 1440,
+        "size": 20,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "ack",
+        "value": "canvas_result는 Redis 주 노드 반영 확인입니다. 복제본 동기화·디스크 fsync·ES 스냅샷 완료와는 구분됩니다.",
+        "x": 75,
+        "y": 485,
+        "w": 1440,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "delete-region",
+        "x": 40,
+        "y": 600,
+        "w": 1520,
+        "h": 365,
+        "fill": "#f6f7f8",
+        "stroke": "#8b949d"
+      },
+      {
+        "type": "text",
+        "id": "delete-title",
+        "value": "B. 소유자 또는 시스템 관리자의 영구 삭제 요청",
+        "x": 60,
+        "y": 615,
+        "w": 1480,
+        "size": 24,
+        "bold": true
+      },
+      {
+        "type": "box",
+        "id": "check",
+        "x": 70,
+        "y": 695,
+        "w": 430,
+        "h": 125,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "check-title",
+        "value": "삭제 조건 확인",
+        "x": 84,
+        "y": 707,
+        "w": 402,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "check-body",
+        "value": "소유자·시스템 관리자 권한\n활성 cached=true이면 삭제 거절",
+        "x": 84,
+        "y": 743,
+        "w": 402,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "delete",
+        "x": 585,
+        "y": 695,
+        "w": 430,
+        "h": 160,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "delete-title",
+        "value": "비활성 캔버스 삭제",
+        "x": 599,
+        "y": 707,
+        "w": 402,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "delete-body",
+        "value": "MS SQL 등록 제거 요청\nElasticsearch 문서 삭제\n대표 이미지·리소스 디렉터리 정리",
+        "x": 599,
+        "y": 743,
+        "w": 402,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "box",
+        "id": "deleted",
+        "x": 1100,
+        "y": 695,
+        "w": 430,
+        "h": 125,
+        "fill": "#ffffff",
+        "stroke": "#202a34"
+      },
+      {
+        "type": "text",
+        "id": "deleted-title",
+        "value": "삭제 완료",
+        "x": 1114,
+        "y": 707,
+        "w": 402,
+        "size": 22,
+        "bold": true
+      },
+      {
+        "type": "text",
+        "id": "deleted-body",
+        "value": "캔버스 목록·저장 문서·리소스 제거\n같은 캔버스에 다시 접속할 수 없음",
+        "x": 1114,
+        "y": 743,
+        "w": 402,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "route",
+        "id": "check-delete",
+        "points": [
+          [
+            500,
+            755
+          ],
+          [
+            585,
+            755
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "route",
+        "id": "delete-done",
+        "points": [
+          [
+            1015,
+            755
+          ],
+          [
+            1100,
+            755
+          ]
+        ],
+        "color": "#345b7a",
+        "head": true,
+        "both": false
+      },
+      {
+        "type": "text",
+        "id": "delete-note",
+        "value": "접속 종료 직후에는 유휴 회수까지 기다려야 할 수 있습니다. 여러 저장소 전체를 묶는 단일 원자 트랜잭션은 아닙니다.",
+        "x": 75,
+        "y": 895,
+        "w": 1440,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "text",
+        "id": "scope",
+        "value": "범위: 캔버스 문서의 논리적 수명 주기입니다. 서버 정상 종료 시에도 저장 절차를 수행하며, 전원·복제 장애의 무손실을 뜻하지 않습니다.",
+        "x": 40,
+        "y": 1020,
+        "w": 1520,
+        "size": 18,
+        "bold": false
+      },
+      {
+        "type": "text",
+        "id": "source",
+        "value": "근거: Spring CanvasService / C++ CanvasLifecycleMemory·CanvasServiceMemory·CanvasSnapshotMemory / Phoenix Room",
+        "x": 40,
+        "y": 1070,
+        "w": 1520,
+        "size": 17,
+        "bold": false
+      }
+    ]
+  }
+]

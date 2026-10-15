@@ -80,3 +80,35 @@ test('oversized object is rejected locally before it can break the backend socke
   assert.equal(session.submit([{action:'patch',id:'box',patch:{src:'x'.repeat(8*1024*1024)}}]),false);
   session.tick();assert.equal(sent.length,0);assert.equal(errors.length,1);
 });
+
+
+test('older snapshots cannot rewind committed state or the accepted request counter', () => {
+  const { session } = client({box: {...box,x:5}}, 5);
+  session.count = 3;
+  session.seed({box}, {sync_protocol:2, revision:4, accepted_count:2});
+  assert.equal(session.revision,5); assert.equal(session.items.box.x,5); assert.equal(session.count,3);
+  session.pause();
+  session.seed({box}, {sync_protocol:2, revision:4, accepted_count:3});
+  assert.equal(session.ready,false);
+});
+
+test('a snapshot for another client cannot acknowledge local pending edits', () => {
+  const {session} = client();
+  session.submit([{action:'delete',id:'box'}]); session.tick();
+  session.seed({}, {sync_protocol:2,client_id:'other',revision:1,accepted_count:1});
+  assert.equal(session.pendingOperations.length,1); assert.equal(session.revision,0);
+});
+
+test('malformed first snapshot is retried and cannot enable editing', () => {
+  const {session,sent} = client(); session.seeded=false; session.ready=false;
+  session.seed({}, {sync_protocol:2,revision:-1,accepted_count:0}); session.tick();
+  assert.equal(session.editable,false); assert.equal(sent.at(-1).type,'canvas_sync');
+  session.seed({box}, {sync_protocol:2,revision:0,accepted_count:0});
+  assert.equal(session.ready,true);
+});
+
+test('uncertain server outcome forces reconciliation even at the same watermark', () => {
+  const {session,sent} = client();
+  session.receiveServer({type:'canvas_watermark',revision:0,force_sync:true});
+  assert.equal(session.ready,false); assert.equal(sent.at(-1).type,'canvas_sync');
+});
