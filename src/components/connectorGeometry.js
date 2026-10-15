@@ -1,3 +1,5 @@
+import { isLogicGate } from '../canvas/logicGates.js';
+import { logicConnectorGeometry } from '../canvas/connectors/logicConnectorGeometry.js';
 import { connectorControlHandles, connectorPointCount, sampleControlCurve } from '../canvas/connectors/controlPoints.js';
 import { strokePaintSize } from '../canvas/inkStroke.js';
 import { obstacleRoute } from '../canvas/connectors/obstacleRoute.js';
@@ -46,7 +48,7 @@ function objectRect(item, width, height) {
     rotation: (Number(item?.rotation) || 0) * Math.PI / 180,
     isEllipse: item?.kind === 'shape' && item.shapeType === 'ellipse',
     shapePaths: item?.kind === 'shape' && item.shapeType !== 'arrow'
-      ? shapeOutlinePaths(item.shapeType, objectWidth, objectHeight) : null,
+      ? shapeOutlinePaths(item.shapeType, objectWidth, objectHeight, item) : null,
   };
 }
 
@@ -97,6 +99,11 @@ function calculateConnectorGeometry(item, items, width, height) {
   if (!fromItem || !toItem) return null;
 
   if (String(item.from) === String(item.to)) return null;
+  // Pin routing needs only its endpoints. It must not depend on unrelated
+  // background frames, labels, or enumeration of a structurally shared view.
+  if (isLogicGate(fromItem.shapeType) || isLogicGate(toItem.shapeType)) {
+    return logicConnectorGeometry(item, fromItem, toItem, objectRect(fromItem, width, height), objectRect(toItem, width, height), { width, height }, distanceToEdge);
+  }
   const rectangles = Object.entries(items).filter(([, candidate]) => candidate && candidate.kind !== 'connector').map(([id, candidate]) => ({ id, ...objectRect(candidate, width, height) }));
   const from = rectangles.find(rect => rect.id === String(item.from));
   const to = rectangles.find(rect => rect.id === String(item.to));
@@ -116,7 +123,7 @@ function calculateConnectorGeometry(item, items, width, height) {
   const sourceReach = distanceToEdge(from, directionX, directionY);
   const targetReach = distanceToEdge(to, -directionX, -directionY);
   const strokeWidth = Number(item.strokeWidth) || 1.5;
-  const headSize = Math.max(8, Math.min(15, 6 + strokeWidth * 2.5));
+  const headSize = Number.isFinite(item.headSize) ? Math.max(2, Math.min(128, item.headSize)) : Math.max(8, Math.min(15, 6 + strokeWidth * 2.5));
   const edgePadding = Math.min(headSize + strokeWidth / 2 + 4,
     Math.max(0, (length - sourceReach - targetReach) / 3));
   const start = {

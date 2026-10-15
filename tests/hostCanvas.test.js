@@ -680,7 +680,7 @@ test('large snapshot credit waits for receiver ACKs, retries blocked ACKs and re
 test('ready heartbeats remain low rate and recover a missing final commit',()=>{
  const net=network(),host=net.sessions.get('z'),follower=net.sessions.get('a');net.sent.length=0;
  for(let i=0;i<60;i++)net.advance();
- assert.ok(net.sent.filter(e=>e.message.type==='host_ready').length<=1);
+ assert.ok(net.sent.filter(e=>e.message.type==='host_ready').length<=3, 'one heartbeat per second, not per render frame');
  follower.receive('z',host.frame('host_ready',{sequence:follower.sequence+1,translateV1:true}));
  assert.equal(follower.ready,false);assert.ok(net.queue.some(e=>e.message.type==='host_resync'));
  net.deliver();net.advance();assert.equal(follower.ready,true);
@@ -691,4 +691,148 @@ test('definite persistence overload retries the current record without replacing
  const old={id:'box',record:host.records.box,previous:shape};host.serverDirty.clear();host.restorePersistence([old]);assert.equal(host.serverDirty.get('box'),old);
  host.submit([{id:'box',action:'patch',patch:{x:2}}]);net.advance(110);host.serverDirty.clear();
  host.restorePersistence([old]);assert.equal(host.serverDirty.size,0,'stale rejected saves never overwrite newer records');
+});
+
+test('straightening a three-handle arrow validates the final state without resurrecting unset handles', () => {
+  const arrow = { ...shape, shapeType: 'arrow', bendPointCount: 3, bendPoints: [{ x: .2, y: 1 }, { x: .5, y: -.4 }, { x: .8, y: .2 }], bend: .5 };
+  const straight = { ...arrow, bend: 0, bendPointCount: 1 };
+  delete straight.bendPoints;
+  const operations = itemOperations({ arrow }, { arrow: straight }, new Map());
+  assert.ok(operations[0].unset.includes('bendPoints'));
+  const reduced = reduceHostOperations({ arrow }, operations, peer('a')).items;
+  assert.equal(Object.hasOwn(reduced.arrow, 'bendPoints'), false);
+  assert.equal(reduced.arrow.bendPointCount, 1);
+  const curved = { ...reduced.arrow, bendPointCount: 3, bendPoints: arrow.bendPoints };
+  const again = reduceHostOperations(reduced, itemOperations(reduced, { arrow: curved }, new Map()), peer('a')).items;
+  assert.equal(again.arrow.bendPoints.length, 3);
+});
+
+test('three-handle straightening, recurve and persistence converge on every host session', async () => {
+  const { shapeArrowBendPatch, shapeArrowControlFromPointer } = await import('../src/components/shapeArrowGeometry.js');
+  const arrow = { ...shape, shapeType: 'arrow', bendPointCount: 3, bendPoints: [{ x: .2, y: 1 }, { x: .5, y: -.4 }, { x: .8, y: .2 }] };
+  const net = network(['a', 'z'], { arrow });
+  const author = net.sessions.get('a');
+  for (const patch of [shapeArrowBendPatch(arrow, 0), null]) {
+    const current = author.items.arrow;
+    const change = patch || shapeArrowControlFromPointer(current, { x: .3, y: .4 }, { width: 1600, height: 1000 }, 1);
+    assert.equal(author.submit(itemOperations({ arrow: current }, { arrow: { ...current, ...change } }, new Map())), true);
+    for (let i = 0; i < 6; i++) net.advance();
+    assert.deepEqual(net.errors, []);
+    assert.equal(author.items.arrow.bendPoints.length, 3);
+    assert.deepEqual(author.items.arrow.bendPoints, net.sessions.get('z').items.arrow.bendPoints);
+  }
+  net.advance(150);
+  const saved = net.saved.flatMap(entry => entry.changes).filter(change => change.id === 'arrow').at(-1);
+  assert.equal(saved.record.item.bendPoints.length, saved.record.item.bendPointCount);
+});
+
+test('image frame visibility synchronizes and persists without changing image dimensions or source', () => {
+  const image = { kind: 'image', x: .1, y: .2, width: .3, height: .2, src: 'data:image/png;base64,AA==', filename: 'fixture.png', permission: 'default' };
+  const net = network(['a', 'z'], { image });
+  const author = net.sessions.get('a');
+  for (const enabled of [false, true]) {
+    const current = author.items.image;
+    assert.equal(author.submit(itemOperations({ image: current }, { image: { ...current, imageFrameEnabled: enabled } }, new Map())), true);
+    for (let i = 0; i < 6; i++) net.advance();
+    assert.deepEqual(net.errors, []);
+    for (const session of net.sessions.values()) {
+      assert.equal(session.items.image.imageFrameEnabled, enabled);
+      assert.equal(session.items.image.src, image.src);
+      assert.equal(session.items.image.width, image.width);
+      assert.equal(session.items.image.height, image.height);
+    }
+    const saved = net.saved.flatMap(entry => entry.changes).filter(change => change.id === 'image').at(-1);
+    assert.equal(saved.record.item.imageFrameEnabled, enabled);
+  }
+});
+
+test('polygon vertices, rounded corners and fill density synchronize and persist through host sessions', () => {
+  const net = network(), author = net.sessions.get('a');
+  const patch = { shapeType: 'polygon', vertexCount: 9, cornerStyle: 'rounded', fill: '#223344', fillOpacity: .35, sketchFillOpacity: .95, visualStyle: 'sketch' };
+  assert.equal(author.submit([{ id: 'box', action: 'patch', patch }]), true);
+  for (let i = 0; i < 6; i++) net.advance();
+  assert.deepEqual(net.errors, []);
+  for (const session of net.sessions.values()) for (const [field, value] of Object.entries(patch)) assert.equal(session.items.box[field], value);
+  net.advance(150);
+  const saved = net.saved.flatMap(entry => entry.changes).filter(change => change.id === 'box').at(-1);
+  for (const [field, value] of Object.entries(patch)) assert.equal(saved.record.item[field], value);
+});
+
+test('pixel nudges on mixed selections use compact vectors, preserve stroke data and converge with saved border width', () => {
+  const box = { ...shape, strokeWidth: 24 };
+  const stroke = { kind: 'stroke', points: [{ x: .2, y: .3, pressure: .5 }, { x: .4, y: .5, pressure: .8 }], permission: 'default', rotation: 20 };
+  const net = network(['a', 'z'], { box, ink: stroke }), author = net.sessions.get('a');
+  for (let i = 0; i < 20; i++) assert.equal(author.submit([{ action: 'translate', ids: ['box', 'ink'], dx: 1 / 1600, dy: -1 / 1000 }]), true);
+  author.flushMoves();
+  for (let i = 0; i < 8; i++) net.advance();
+  assert.deepEqual(net.errors, []);
+  for (const session of net.sessions.values()) {
+    assert.ok(Math.abs(session.items.box.x - 20 / 1600) < 1e-12);
+    assert.ok(Math.abs(session.items.ink.points[0].y - (.3 - 20 / 1000)) < 1e-12);
+    assert.equal(session.items.ink.points[0].pressure, .5); assert.equal(session.items.ink.rotation, 20);
+    assert.equal(session.items.box.strokeWidth, 24);
+  }
+  net.advance(150);
+  const saved = net.saved.flatMap(entry => entry.changes).filter(change => change.id === 'box').at(-1);
+  assert.equal(saved.record.item.strokeWidth, 24);
+  assert.ok(Math.abs(saved.record.item.x - 20 / 1600) < 1e-12);
+});
+
+test('logic gate pin changes survive broker host synchronization and stored records',()=>{
+ const a={...shape,shapeType:'logic-xor'},b={...shape,shapeType:'logic-and',x:.4};
+ const wire={kind:'connector',from:'a',to:'b',fromPort:'out',toPort:'a',startHead:'none',endHead:'none',permission:'default'};
+ const net=network(['a','z'],{a,b,wire}),author=net.sessions.get('a');
+ assert.equal(author.submit([{id:'wire',action:'patch',patch:{toPort:'b'}}]),true);
+ for(let i=0;i<6;i++)net.advance();assert.deepEqual(net.errors,[]);
+ for(const session of net.sessions.values())assert.equal(session.items.wire.toPort,'b');
+ net.advance(150);const saved=net.saved.flatMap(e=>e.changes).filter(change=>change.id==='wire').at(-1);assert.equal(saved.record.item.toPort,'b');
+});
+
+for (const lostType of ['host_state','host_snapshot','host_snapshot_ack']) test(`sync recovers without reconnect after one lost ${lostType}`,()=>{
+ const net=network();let lost=false;
+ for(const session of net.sessions.values()){
+  const send=session.send;session.send=(target,message)=>{
+   if(!lost && message.type===lostType){lost=true;return message.type!=='host_snapshot_ack';}
+   return send(target,message);
+  };
+ }
+ net.configure();for(let i=0;i<120;i++)net.advance(34);
+ assert.ok(lost);for(const session of net.sessions.values())assert.equal(session.ready,true,'handshake must recover in the same term and connection');
+});
+
+for(const lostType of ['host_state_part','host_part_ack'])test(`multipart synchronization retries ${lostType} without reconnect or duplicate application`,()=>{
+ const big={...shape,label:'x'.repeat(150000)};
+ const net=network(['z'],Object.fromEntries(Array.from({length:12},(_,i)=>['part-'+i,big])));
+ const follower=net.add('a');let lost=false;
+ for(const session of net.sessions.values()){
+  const send=session.send;session.send=(target,message)=>{
+   if(!lost && message.type===lostType && (message.index===0)){lost=true;return true;}
+   return send(target,message);
+  };
+ }
+ net.configure();for(let i=0;i<150;i++)net.advance(34);
+ assert.ok(lost);for(const s of net.sessions.values())assert.equal(s.ready,true);
+ assert.equal(Object.keys(follower.items).length,12);assert.equal(follower.items['part-11'].label.length,150000);
+ assert.ok(net.sent.filter(e=>e.message.type==='host_state_part').length<65,'retry only a bounded window');
+});
+test('a follower already waiting for resync requests another snapshot when a newer ready marker arrives',()=>{
+ const net=network(),follower=net.sessions.get('a');follower.setReady(false);
+ follower.receive('z',follower.frame('host_ready',{sequence:3}));
+ assert.ok(net.queue.some(e=>e.message.type==='host_resync'));
+});
+test('a lost last commit is healed by a ready marker without replaying a pending delta twice',()=>{
+ const net=network(),host=net.sessions.get('z'),follower=net.sessions.get('a');let lost=false;
+ const send=host.send;host.send=(target,message)=>{
+  if(!lost && message.type==='host_commit'){lost=true;return true;}return send(target,message);
+ };
+ follower.submit([{action:'translate',ids:['box'],dx:.02,dy:.01}]);
+ for(let i=0;i<120;i++)net.advance(34);
+ assert.ok(lost);assert.equal(follower.ready,true);assert.equal(follower.pending.size,0);
+ assert.equal(host.items.box.x,.02);assert.equal(follower.items.box.x,.02);assert.equal(follower.items.box.y,.01);
+});
+
+test('delayed duplicate snapshot acknowledgments never rewind peer replication progress',()=>{
+ const net=network(),host=net.sessions.get('z');host.peerSequence.set('a',8);
+ host.receive('a',host.frame('host_snapshot_ack',{sequence:0}));
+ assert.equal(host.peerSequence.get('a'),8);
 });

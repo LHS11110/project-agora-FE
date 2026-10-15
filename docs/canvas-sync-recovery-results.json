@@ -1,0 +1,95 @@
+{
+  "dropped": [
+    {
+      "name": "handshake-loss",
+      "type": "host_state"
+    },
+    {
+      "name": "steady",
+      "type": "host_snapshot"
+    },
+    {
+      "name": "handshake-loss",
+      "type": "host_snapshot_ack"
+    },
+    {
+      "name": "multipart-loss",
+      "type": "host_state_part",
+      "index": 0
+    },
+    {
+      "name": "steady",
+      "type": "host_part_ack",
+      "index": 1
+    },
+    {
+      "name": "steady",
+      "type": "host_commit"
+    }
+  ],
+  "exceptions": [],
+  "sockets": {
+    "steady": 2,
+    "handshake-loss": 2,
+    "multipart-loss": 2,
+    "cycle-0": 2,
+    "cycle-1": 2,
+    "cycle-2": 2,
+    "cycle-3": 2
+  },
+  "joinMs": [
+    {
+      "name": "steady",
+      "ms": 1121
+    },
+    {
+      "name": "handshake-loss",
+      "ms": 4171
+    },
+    {
+      "name": "multipart-loss",
+      "ms": 4569
+    },
+    {
+      "name": "cycle-0",
+      "ms": 3189
+    },
+    {
+      "name": "cycle-1",
+      "ms": 3213
+    },
+    {
+      "name": "cycle-2",
+      "ms": 2984
+    },
+    {
+      "name": "cycle-3",
+      "ms": 3242
+    }
+  ],
+  "codes": [
+    {
+      "name": "steady",
+      "type": "host_batch_result",
+      "code": "HOST_FENCED"
+    },
+    {
+      "name": "steady",
+      "type": "host_batch_result",
+      "code": "HOST_FENCED"
+    },
+    {
+      "name": "steady",
+      "type": "host_batch_result",
+      "code": "HOST_FENCED"
+    },
+    {
+      "name": "steady",
+      "type": "host_batch_result",
+      "code": "HOST_FENCED"
+    }
+  ],
+  "persisted": true,
+  "sameConnections": true,
+  "objects": 41
+}

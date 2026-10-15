@@ -3,15 +3,15 @@ import { CANVAS_SPACE } from './canvasSpace.js';
 import { objectFontSize, MIN_OBJECT_FONT_SIZE, MAX_OBJECT_FONT_SIZE } from './objectSize.js';
 import './object-size-controls.css';
 
-function SizeInput({ label, value, min, max, onCommit }) {
+export function SizeInput({ label, value, min, max, onCommit, unit = 'px', step = 1 }) {
   const [draft, setDraft] = useState(String(value));
   useEffect(() => setDraft(String(value)), [value]);
   const commit = () => {
     const number = Number(draft);
     if (!draft.trim() || !Number.isFinite(number) || number < min || number > max) { setDraft(String(value)); return; }
-    onCommit(number);
+    if (number !== Number(value)) onCommit(number);
   };
-  return <label>{label}<span><input type="number" min={min} max={max} step="1" placeholder="자동" value={draft} onChange={event => setDraft(event.target.value)} onBlur={commit} onKeyDown={event => { event.stopPropagation(); if (event.key === 'Enter') event.currentTarget.blur(); }} />px</span></label>;
+  return <label>{label}<span><input type="number" min={min} max={max} step={step} aria-label={label} placeholder="자동" value={draft} onChange={event => setDraft(event.target.value)} onBlur={commit} onKeyDown={event => { event.stopPropagation(); if (event.key === 'Enter') event.currentTarget.blur(); }} />{unit}</span></label>;
 }
 
 export default function ObjectSizeControls({ item, onFontSizeChange, onDimensionChange }) {

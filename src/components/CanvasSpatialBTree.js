@@ -1,3 +1,4 @@
+import { shapeStrokeWidth } from '../canvas/shapeAppearance.js';
 import { changedItemIds } from '../canvas/itemSnapshots.js';
 import RBush from 'rbush';
 import { objectShadow } from '../canvas/objectShadow.js';
@@ -103,7 +104,7 @@ function objectBounds(item, items, viewportWidth = 1, viewportHeight = 1) {
   const objectWidth = measured ? measured.width / CANVAS_SPACE.width : Number(item?.width) || defaultWidth;
   const objectHeight = measured ? measured.height / CANVAS_SPACE.height : Number(item?.height) || defaultHeight;
   if (item?.kind === 'shape' && item.shapeType === 'arrow') {
-    const geometry = shapeArrowGeometry(objectWidth * width, objectHeight * height, item.bend, item.startHead, item.endHead);
+    const geometry = shapeArrowGeometry(objectWidth * width, objectHeight * height, item.bend, item.startHead, item.endHead, item);
     const centerX = (x + objectWidth / 2) * width;
     const centerY = (y + objectHeight / 2) * height;
     const angle = (Number(item.rotation) || 0) * Math.PI / 180;
@@ -116,7 +117,7 @@ function objectBounds(item, items, viewportWidth = 1, viewportHeight = 1) {
       const dy = py - centerY;
       return { x: centerX + dx * cosine - dy * sine, y: centerY + dx * sine + dy * cosine };
     });
-    const padding = 2.5;
+    const padding = shapeStrokeWidth(item) / 2 + 2;
     const bounds = points.reduce((current, point) => ({
       minX: Math.min(current.minX, point.x),
       minY: Math.min(current.minY, point.y),
@@ -134,7 +135,7 @@ function objectBounds(item, items, viewportWidth = 1, viewportHeight = 1) {
 }
 
 // Keep the public query API while RBush incrementally updates changed rectangles.
-const geometryFields = ['kind','type','x','y','width','height','rotation','shapeType','bend','bendPoints','startHead','endHead','strokeWidth','brush','simulatePressure','points','from','to'];
+const geometryFields = ['kind','type','x','y','width','height','rotation','shapeType','vertexCount','cornerStyle','bend','bendPoints','startHead','endHead','headSize','strokeWidth','brush','simulatePressure','points','from','to','fromPort','toPort'];
 function geometryKey(item) {
   return geometryFields.map(field => item[field]);
 }
@@ -143,7 +144,7 @@ function paintedBounds(bounds,item,width,height) {
   const shadow = objectShadow(item);
   const blur = shadow.enabled && shadow.opacity > 0 ? shadow.blur * 3 : 0;
   // Include only the actual painted fringe, so edge shadows don't disappear.
-  const fringe = item.kind === 'shape' ? Math.max(2,(Number(item.strokeWidth)||1.5)/2+2) : 2;
+  const fringe = item.kind === 'shape' ? Math.max(2,shapeStrokeWidth(item)/2+2) : 2;
   return { minX: bounds.minX-(blur+fringe+Math.max(0,-shadow.x))/width,
     minY: bounds.minY-(blur+fringe+Math.max(0,-shadow.y))/height,
     maxX: bounds.maxX+(blur+fringe+Math.max(0,shadow.x))/width,

@@ -1,3 +1,4 @@
+import { hasPolygonVertices } from './shapeAppearance.js';
 import { groupMember } from './userGroups/userGroupModel.js';
 import { shapeCreationSize } from './shapeCatalog.js';
 import { useEffect, useRef } from 'react';
@@ -26,8 +27,8 @@ export function useCanvasStageInteractions(options) {
     zoomSensitivity, stageWheelHandlerRef, laserDrawingRef, setLaserStrokes,
     selectionRef, selectedItemIds, setSelectionBox, selectItems,
     canvasSnapshotLoadedRef, finishEditing, setConnectionStartId, spacePressedRef,
-    user, tableConfig, permission, setSharePosition, shapeType, shapeArrowStartHead,
-    shapeArrowEndHead, shapeFillColor, shapeVisualStyle, shapeStrokeEnabled, color, noteColor, setActiveTool, startEditing, strokeWidth, penBrush, penOpacity,
+    user, tableConfig, permission, setSharePosition, shapeType, shapeArrowStartHead, shapeArrowHeadSize,
+    shapeArrowEndHead, shapeFillColor, shapeFillOpacity, shapeSketchFillOpacity, shapeVertexCount, shapeCornerStyle, shapeVisualStyle, shapeStrokeEnabled, shapeBorderWidth, color, noteColor, setActiveTool, startEditing, strokeWidth, penBrush, penOpacity,
     drawingRef, drawingSessionRef, draftRef, vectorDraftRef,
   } = options;
 
@@ -393,7 +394,7 @@ export function useCanvasStageInteractions(options) {
       const x = point.x - itemWidth / 2;
       const y = point.y - (activeTool === 'shape' ? shapeSize.height / 2 : activeTool === 'code' ? 0.1 : activeTool === 'note' ? 0.08 : 0.06);
       let item;
-      if (activeTool === 'shape') item = { kind: 'shape', shapeType, visualStyle: shapeVisualStyle, strokeEnabled: shapeStrokeEnabled, fill: shapeType === 'arrow' ? '' : shapeFillColor, ...(shapeType === 'arrow' ? { bend: DEFAULT_SHAPE_ARROW_BEND, startHead: shapeArrowStartHead, endHead: shapeArrowEndHead } : {}), x, y, width: itemWidth, height: shapeSize.height, color, permission };
+      if (activeTool === 'shape') item = { kind: 'shape', strokeWidth: shapeBorderWidth, shapeType, fillOpacity: shapeFillOpacity, sketchFillOpacity: shapeSketchFillOpacity, cornerStyle: shapeCornerStyle, ...(hasPolygonVertices(shapeType) ? { vertexCount: shapeVertexCount } : {}), visualStyle: shapeVisualStyle, strokeEnabled: shapeStrokeEnabled, fill: shapeType === 'arrow' ? '' : shapeFillColor, ...(shapeType === 'arrow' ? { bend: DEFAULT_SHAPE_ARROW_BEND, headSize: shapeArrowHeadSize, startHead: shapeArrowStartHead, shapeArrowHeadSize, endHead: shapeArrowEndHead } : {}), x, y, width: itemWidth, height: shapeSize.height, color, permission };
       else if (activeTool === 'text' || activeTool === 'markdown') item = { kind: 'text', text: '', renderMode: 'markdown', ...(activeTool === 'markdown' ? { format: 'markdown' } : {}), x, y, width: itemWidth, permission };
       else if (activeTool === 'note') item = { kind: 'note', text: '', x, y, width: itemWidth, color: noteColor, rotation: Math.random() * 3 - 1.5, permission };
       else if (activeTool === 'code') item = { kind: 'text', text: '', renderMode: 'code', filename: 'idea.js', language: 'javascript', x, y, width: itemWidth, permission };

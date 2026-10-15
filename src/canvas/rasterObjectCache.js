@@ -1,3 +1,5 @@
+import { shapeStrokeWidth } from './shapeAppearance.js';
+import { drawImagePreview } from './ImagePreviewCache.js';
 import { objectBounds } from '../components/CanvasSpatialBTree.js';
 import { drawVectorItems } from './drawVectorItems.js';
 import { drawStroke } from './inkStrokeRenderer.js';
@@ -6,7 +8,7 @@ import { objectShadow } from './objectShadow.js';
 import { drawPlainText } from './plainTextRaster.js';
 import { objectFontSize } from './objectSize.js';
 
-const fields = ['kind','shapeType','width','height','color','fill','strokeEnabled','visualStyle','strokeWidth','startHead','endHead','bend','bendPoints','bendPointCount','from','to','brush','opacity','simulatePressure','complete','text','fontSize','contentScale','contentScaleX','contentScaleY'];
+const fields = ['__imagePreview','imageFrameEnabled','kind','shapeType','vertexCount','cornerStyle','fillOpacity','sketchFillOpacity','width','height','color','fill','strokeEnabled','visualStyle','strokeWidth','startHead','endHead','headSize','bend','bendPoints','bendPointCount','from','to','fromPort','toPort','brush','opacity','simulatePressure','complete','text','fontSize','contentScale','contentScaleX','contentScaleY'];
 const renderFields = [...fields,'x','y','rotation','points','shadowEnabled','shadowBlur','shadowOpacity','shadowOffsetX','shadowOffsetY','__selectionOutline'];
 export const sameRasterInput = (a,b) => a === b || (a && b && renderFields.every(field => a[field] === b[field]));
 export function rasterDescriptor(id, item, world, referenceItems, routeKey = '') {
@@ -35,14 +37,18 @@ export function rasterDescriptor(id, item, world, referenceItems, routeKey = '')
   // Standard shapes have no per-object randomness. Share their pixels regardless
   // of position/rotation; sketch strokes keep their object-specific seed.
   const seed = item.visualStyle === 'sketch' || item.kind === 'connector' ? id : '';
-  const key = JSON.stringify([seed, local, shadow, world.width, world.height, ['connector','text'].includes(item.kind) ? routeKey : '']);
+  // Inline uploads can contain megabytes of base64. The layer's scoped image
+  // version identifies decoded pixels without copying source bytes into keys.
+  const appearance = local.__imagePreview ? { ...local, __imagePreview: true } : local;
+  const key = JSON.stringify([seed, appearance, shadow, world.width, world.height, ['connector','text'].includes(item.kind) || item.__imagePreview ? routeKey : '']);
   return { key, local, shadow, x, y, centerX, centerY, rotation };
 }
 
 export function rasterizeObject(id, descriptor, world, referenceItems, preferredRatio = 1, pixelBudget = 2_000_000, textAppearance = {}) {
   const bounds = objectBounds(descriptor.local, referenceItems, world.width, world.height);
   const { shadow } = descriptor;
-  const pad = Math.max(descriptor.local.__selectionOutline?4:2,shadow.enabled ? Math.ceil(shadow.blur * 3 + Math.max(Math.abs(shadow.x), Math.abs(shadow.y)) + 2) : 2);
+  const borderPad = descriptor.local.kind === 'shape' && descriptor.local.strokeEnabled !== false ? Math.ceil(shapeStrokeWidth(descriptor.local) / 2) + 2 : 2;
+  const pad = Math.max(descriptor.local.__selectionOutline ? 4 : 2, borderPad + (shadow.enabled ? Math.ceil(shadow.blur * 3 + Math.max(Math.abs(shadow.x), Math.abs(shadow.y))) : 0));
   const left = bounds.minX * world.width - pad, top = bounds.minY * world.height - pad;
   const width = Math.max(1, (bounds.maxX-bounds.minX)*world.width+pad*2);
   const height = Math.max(1, (bounds.maxY-bounds.minY)*world.height+pad*2);
@@ -51,7 +57,8 @@ export function rasterizeObject(id, descriptor, world, referenceItems, preferred
   raw.width = Math.max(1,Math.ceil(width*ratio)); raw.height = Math.max(1,Math.ceil(height*ratio));
   const context = raw.getContext('2d');
   context.setTransform(ratio,0,0,ratio,-left*ratio,-top*ratio);
-  if (descriptor.local.kind === 'text') drawPlainText(context,descriptor.local,world,textAppearance.font || 'serif',textAppearance.color || '#3c5144');
+  if (descriptor.local.__imagePreview) drawImagePreview(context, descriptor.local, world, textAppearance.imagePreview);
+  else if (descriptor.local.kind === 'text') drawPlainText(context,descriptor.local,world,textAppearance.font || 'serif',textAppearance.color || '#3c5144');
   else if (descriptor.local.kind === 'stroke') drawStroke(context,descriptor.local,world.width,world.height);
   else drawVectorItems(canvasGraphics(context),{[id]:descriptor.local},world.width,world.height,null,referenceItems);
   if(descriptor.local.__selectionOutline){

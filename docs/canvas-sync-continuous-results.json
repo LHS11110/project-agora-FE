@@ -1,0 +1,58 @@
+{
+  "codes": [
+    {
+      "name": "steady",
+      "type": "host_batch_result",
+      "code": "HOST_FENCED"
+    },
+    {
+      "name": "steady",
+      "type": "error",
+      "code": "HOST_FENCED"
+    },
+    {
+      "name": "steady",
+      "type": "host_batch_result",
+      "code": "HOST_FENCED"
+    },
+    {
+      "name": "steady",
+      "type": "error",
+      "code": "HOST_FENCED"
+    },
+    {
+      "name": "steady",
+      "type": "host_batch_result",
+      "code": "HOST_FENCED"
+    },
+    {
+      "name": "steady",
+      "type": "host_batch_result",
+      "code": "HOST_FENCED"
+    },
+    {
+      "name": "steady",
+      "type": "host_batch_result",
+      "code": "HOST_FENCED"
+    }
+  ],
+  "exceptions": [],
+  "hostChanges": 24,
+  "created": 100,
+  "changes": 535,
+  "toasts": [],
+  "sockets": {
+    "steady": 2,
+    "editor-0": 2,
+    "editor-1": 2,
+    "editor-2": 2,
+    "editor-3": 2,
+    "editor-4": 2,
+    "editor-5": 2,
+    "editor-6": 2,
+    "reconnect-check": 2
+  },
+  "finalStatus": "호스트 · 호스트 승인: 생성 0 · 수정 1 · 삭제 0",
+  "persisted": true,
+  "reconnectVerified": true
+}

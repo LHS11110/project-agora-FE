@@ -5,6 +5,7 @@ import { loadItemDoc, HOST_TOMBSTONE_KIND, HOST_VERSION_FIELD } from './hostOper
 import { electHost, HOST_PEER_FPS, HOST_PROTOCOL, HOST_SAVE_FPS, HOST_MOVE_INTERVAL_MS, reduceHostOperations, operationIds, validateTranslation } from './hostOperations.js';
 
 const encoder = new TextEncoder();
+const SYNC_RETRY_MS = 1000;
 const clone = value => JSON.parse(JSON.stringify(value));
 const hasId = id => typeof id === 'string' && id.length > 0 && id.length <= 128 && !['__proto__', 'constructor', 'prototype'].includes(id);
 const validCount = count => Number.isSafeInteger(count) && count >= 0;
@@ -30,6 +31,8 @@ export class HostCanvasSession {
     this.partAckPeers=new Set();this.partAcks=new Map();
     this.completedTransfers=new Set();this.ackQueue=new Map();
     this.transferFields=new Map();this.stateRequestSent=new Map();
+    this.snapshotAttempts=new Map();this.lastStateReply=-Infinity;this.lastResync=-Infinity;
+    this.partProgressAt=new Map();this.receivedTransfers=new Map();
     this.lastCounts = new Map(); this.peerClients = new Map(); this.everReady = false;
     this.clientRegistered = false; this.lastHelloTick = -Infinity;
     this.clientId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -112,6 +115,8 @@ export class HostCanvasSession {
     this.partAckPeers.clear();this.partAcks.clear();
     this.completedTransfers.clear();this.ackQueue.clear();
     this.transferFields.clear();this.stateRequestSent.clear();
+    this.snapshotAttempts.clear();this.lastStateReply=-Infinity;this.lastResync=-Infinity;
+    this.partProgressAt.clear();this.receivedTransfers.clear();
     this.setReady(false, this.hostId ? '호스트와 최신 상태를 동기화하고 있습니다.' : '모든 참여자의 권한을 동기화할 호스트를 기다리고 있습니다.');
     this.publish(this.items, []);
   }
@@ -144,7 +149,12 @@ export class HostCanvasSession {
   }
   snapshot(peerId) {
     const peer = this.member(peerId);
-    return peer && this.sendRecords(peerId, 'host_snapshot', this.filteredRecords(peer), { sequence: this.sequence, counters: [...this.lastCounts] });
+    if(!peer)return false;
+    const attempt=this.snapshotAttempts.get(peerId);
+    if(attempt && this.transferFields.has(`${peerId}:host_snapshot:${attempt.sequence}`))return false;
+    this.snapshotAttempts.set(peerId,{sequence:this.sequence,at:this.now()});
+    const sent=this.sendRecords(peerId, 'host_snapshot', this.filteredRecords(peer), { sequence: this.sequence, counters: [...this.lastCounts] });
+    return sent;
   }
   mergeCounters(counters = []) {
     if (!Array.isArray(counters)) return;
@@ -243,8 +253,13 @@ export class HostCanvasSession {
     const key = `${peerId}:${type}:${fields.sequence ?? 0}`;
     this.transferFields.set(key,{peerId,type,fields});
     const credit=this.partAckPeers.has(peerId);
-    if(credit && !this.partAcks.has(key))this.partAcks.set(key,new Set());
+    if(credit && !this.partAcks.has(key)){this.partAcks.set(key,new Set());this.partProgressAt.set(key,this.now());}
+    if(credit && this.now()-(this.partProgressAt.get(key)??this.now())>=SYNC_RETRY_MS){
+      let missing=0;while(this.partAcks.get(key).has(missing))missing++;
+      this.outgoingStates.set(key,missing);this.partProgressAt.set(key,this.now());
+    }
     for (let index = this.outgoingStates.get(key) || 0; index < partitions.length; index++) {
+      if(credit && this.partAcks.get(key).has(index))continue;
       if(credit && index-this.partAcks.get(key).size>=4){this.outgoingStates.set(key,index);return false;}
       if (!this.send(peerId, this.frame('host_state_part', {
         snapshotType: type, ...payloadFields, part_ack:credit, index, count: partitions.length, records: partitions[index],
@@ -254,7 +269,7 @@ export class HostCanvasSession {
     if(credit && this.partAcks.get(key).size<partitions.length)return false;
     this.outgoingStates.delete(key);
     this.transferFields.delete(key);
-    this.partAcks.delete(key);
+    this.partAcks.delete(key);this.partProgressAt.delete(key);
     this.recordTransfers.delete(transferKey);
     this.outgoingStates.delete(`${key}:counters`);
     return true;
@@ -290,12 +305,12 @@ export class HostCanvasSession {
     if(data.type==='host_part_ack'){
       const key=`${peerId}:${data.snapshotType}:${data.sequence ?? 0}`,acks=this.partAcks.get(key);
       if(acks && Number.isSafeInteger(data.index) && data.index>=0 && data.index<(this.outgoingStates.get(key)||0)){
-        acks.add(data.index);
+        if(!acks.has(data.index)){acks.add(data.index);this.partProgressAt.set(key,this.now());}
         if(acks.size===this.recordTransfers.get(key)?.length){
           this.partAcks.delete(key);this.recordTransfers.delete(key);this.outgoingStates.delete(key);this.outgoingStates.delete(key+':counters');
-          this.transferFields.delete(key);
-          if(data.snapshotType==='host_state')this.stateReplySent=true;
-          else if(data.snapshotType==='host_snapshot')this.snapshotSent.add(peerId);
+          this.transferFields.delete(key);this.partProgressAt.delete(key);
+          if(data.snapshotType==='host_state'){this.stateReplySent=true;this.lastStateReply=this.now();}
+          else if(data.snapshotType==='host_snapshot'){this.snapshotSent.add(peerId);this.snapshotAttempts.set(peerId,{sequence:data.sequence ?? 0,at:this.now()});}
           else this.completedTransfers.add(key);
         }
       }
@@ -308,6 +323,16 @@ export class HostCanvasSession {
         || (data.snapshotType === 'host_state' && !this.isHost)) return;
       this.incomingStates ||= new Map();
       const key = `${peerId}:${data.snapshotType}:${data.sequence ?? 0}`;
+      if(this.receivedTransfers.has(key)){
+        if(this.receivedTransfers.get(key)!==data.count)return;
+        if(data.part_ack){const ack=this.frame('host_part_ack',{snapshotType:data.snapshotType,sequence:data.sequence,index:data.index});
+          if(!this.send(peerId,ack))this.ackQueue.set(`${key}:${data.index}`,{peerId,ack});}
+        if(data.snapshotType==='host_snapshot'){
+          const ack=this.frame('host_snapshot_ack',{sequence:data.sequence});
+          if(!this.send(peerId,ack))this.ackQueue.set(`${peerId}:snapshot`,{peerId,ack});
+        }
+        return;
+      }
       let transfer = this.incomingStates.get(key);
       if (!transfer) { transfer = { count: data.count, parts: new Map() }; this.incomingStates.set(key, transfer); }
       if (transfer.count !== data.count) return;
@@ -322,12 +347,19 @@ export class HostCanvasSession {
         const records = Object.assign({}, ...[...transfer.parts.entries()].sort(([a], [b]) => a - b).map(([, part]) => part));
         this.receive(peerId, this.frame(data.snapshotType, { sequence: data.sequence, origin: data.origin, requestId: data.requestId,
           evict: data.evict, counter: data.counter, counters: data.counters, part_ack:data.part_ack, records }));
+        const applied=data.snapshotType==='host_state'?this.states.has(peerId):this.sequence>=data.sequence;
+        if(applied){this.receivedTransfers.set(key,data.count);
+          if(this.receivedTransfers.size>1024)this.receivedTransfers.delete(this.receivedTransfers.keys().next().value);}
+
       }
       return;
     }
     if (data.type === 'host_state_request' && peerId === this.hostId && this.seeded) {
       if(data.part_ack)this.partAckPeers.add(peerId);
-      if (!this.stateReplySent) this.stateReplySent = this.sendRecords(peerId, 'host_state', this.records, { counters: [...this.lastCounts],part_ack:true });
+      if (!this.stateReplySent || this.now()-this.lastStateReply>=SYNC_RETRY_MS) {
+        this.stateReplySent = this.sendRecords(peerId, 'host_state', this.records, { counters: [...this.lastCounts],part_ack:true });
+        if(this.stateReplySent)this.lastStateReply=this.now();
+      }
       return;
     }
     if (data.type === 'host_state' && this.isHost && !this.stateAssembled && this.seeded) {
@@ -344,16 +376,20 @@ export class HostCanvasSession {
         this.mergeCounters(data.counters);
         this.finishConfirmedRequests();
         this.publish(this.items, Object.keys({ ...old, ...this.records }));
-        this.send(peerId, this.frame('host_snapshot_ack', { sequence: this.sequence }));
+        const ack=this.frame('host_snapshot_ack', { sequence: this.sequence });
+        if(!this.send(peerId,ack))this.ackQueue.set(`${peerId}:snapshot`,{peerId,ack});
       } catch (error) { this.setReady(false, error.message); }
       return;
     }
-    if (data.type === 'host_snapshot_ack' && this.isHost && data.sequence === this.sequence) {
-      this.snapshotAcks.add(peerId); this.peerSequence.set(peerId, this.sequence);this.readySent.delete(peerId); return;
+    if (data.type === 'host_snapshot_ack' && this.isHost && data.sequence === this.snapshotAttempts.get(peerId)?.sequence) {
+      this.snapshotAcks.add(peerId); this.peerSequence.set(peerId, Math.max(this.peerSequence.get(peerId)||0,data.sequence));this.readySent.delete(peerId); return;
     }
     if (data.type === 'host_ready' && peerId === this.hostId) {
       if(data.sequence===this.sequence){this.hostSupportsTranslations=data.translateV1===true;this.setReady(true);}
-      else if(this.ready && Number.isSafeInteger(data.sequence) && data.sequence>this.sequence){this.setReady(false);this.send(peerId,this.frame('host_resync'));}
+      else if(Number.isSafeInteger(data.sequence) && data.sequence>this.sequence){
+        this.setReady(false);
+        if(this.now()-this.lastResync>=SYNC_RETRY_MS && this.send(peerId,this.frame('host_resync')))this.lastResync=this.now();
+      }
       return;
     }
     if (data.type === 'host_resync' && this.isHost && this.ready) {
@@ -484,7 +520,7 @@ export class HostCanvasSession {
     if (!this.available()) {
       if (this.wasAvailable) {
         this.stateReplySent = false; this.snapshotSent.clear(); this.snapshotAcks.clear();
-        this.outgoingStates.clear(); this.incomingStates?.clear();this.recordTransfers.clear();this.partAcks.clear();this.completedTransfers.clear();this.ackQueue.clear();this.transferFields.clear();this.stateRequestSent.clear();this.readySent.clear();
+        this.outgoingStates.clear(); this.incomingStates?.clear();this.recordTransfers.clear();this.partAcks.clear();this.completedTransfers.clear();this.ackQueue.clear();this.transferFields.clear();this.stateRequestSent.clear();this.readySent.clear();this.snapshotAttempts.clear();this.partProgressAt.clear();this.receivedTransfers.clear();
         if (this.isHost) this.snapshotAcks.add(this.selfId);
       }
       this.wasAvailable = false;
@@ -494,8 +530,8 @@ export class HostCanvasSession {
     this.wasAvailable = true;
     for(const [key,{peerId,ack}] of this.ackQueue){if(!this.send(peerId,ack))break;this.ackQueue.delete(key);}
     for(const [key,{peerId,type,fields}] of this.transferFields)if(this.sendRecords(peerId,type,{},fields)){
-      if(type==='host_state')this.stateReplySent=true;
-      else if(type==='host_snapshot')this.snapshotSent.add(peerId);
+      if(type==='host_state'){this.stateReplySent=true;this.lastStateReply=now;}
+      else if(type==='host_snapshot'){this.snapshotSent.add(peerId);this.snapshotAttempts.set(peerId,{sequence:fields.sequence ?? 0,at:now});}
       else this.completedTransfers.add(key);
     }
     if (!this.term || !this.hostId || !this.seeded) return;
@@ -516,11 +552,14 @@ export class HostCanvasSession {
       if (this.isHost && this.stateAssembled) {
         for (const peer of this.members) {
           if (peer.peer_id === this.selfId) continue;
-          if (!this.snapshotAcks.has(peer.peer_id) && !this.snapshotSent.has(peer.peer_id) && this.snapshot(peer.peer_id)) this.snapshotSent.add(peer.peer_id);
+          if (!this.snapshotAcks.has(peer.peer_id)) {
+            if(this.snapshotSent.has(peer.peer_id) && now-(this.snapshotAttempts.get(peer.peer_id)?.at ?? -Infinity)>=SYNC_RETRY_MS)this.snapshotSent.delete(peer.peer_id);
+            if(!this.snapshotSent.has(peer.peer_id) && this.snapshot(peer.peer_id))this.snapshotSent.add(peer.peer_id);
+          }
         }
         if (this.snapshotAcks.size === this.members.length && !this.ready) this.setReady(true);
         if (this.ready) for (const peer of this.members) {
-          if (peer.peer_id !== this.selfId && now-(this.readySent.get(peer.peer_id) ?? -Infinity)>=(this.peerClients.has(peer.peer_id)?5000:1000)
+          if (peer.peer_id !== this.selfId && now-(this.readySent.get(peer.peer_id) ?? -Infinity)>=SYNC_RETRY_MS
             && this.send(peer.peer_id, this.frame('host_ready', { sequence: this.peerSequence.get(peer.peer_id) ?? this.sequence, translateV1:true })))this.readySent.set(peer.peer_id,now);
         }
       }

@@ -11,3 +11,5 @@
 .canvas-stage .code-content-viewport .code-object>pre,
 .tutorial-scene .code-content-viewport .tutorial-code-item>pre{font:13px/20px var(--mono)}
 .object-content-viewport:is(.text-content-viewport,.note-content-viewport,.table-content-viewport,.math-content-viewport,.code-content-viewport)>.scalable-object-content{min-width:0!important;min-height:0!important}
+
+.arrow-head-size{grid-column:1/-1}.arrow-head-size>label{margin-top:2px}

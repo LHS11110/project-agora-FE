@@ -1,3 +1,4 @@
+import { shapeFillOpacity, shapeStrokeWidth, sketchFillOpacity } from './shapeAppearance.js';
 import { vectorStrokePaths, arrowheadStrokeParts, sketchHatchPaths } from './vectorStyle.js';
 import { shapeOutlinePaths, shapeFillPaths } from './shapeGeometry.js';
 import { connectorGeometry } from '../components/connectorGeometry.js';
@@ -33,14 +34,14 @@ function drawHatches(graphics, hatches, color, width = 1.2) {
   }
 }
 
-function drawShapeArrow(graphics, x, y, width, height, angle, color, bend, startHead, endHead, visualStyle, seed) {
-  const geometry = shapeArrowGeometry(width, height, bend, startHead, endHead);
+function drawShapeArrow(graphics, x, y, width, height, angle, color, bend, startHead, endHead, visualStyle, seed, item) {
+  const geometry = shapeArrowGeometry(width, height, bend, startHead, endHead, item);
   const centerX = x + width / 2;
   const centerY = y + height / 2;
   const rotate = (point) => rotatePoint(x + point.x, y + point.y, centerX, centerY, angle);
   const curve = geometry.points.map(rotate);
-  drawPolyline(graphics, curve, color, 2.5, visualStyle, seed);
-  geometry.heads.forEach((head, index) => drawArrowHead(graphics, head, color, 2.5, rotate, visualStyle, `${seed}:${index}`));
+  drawPolyline(graphics, curve, color, shapeStrokeWidth(item), visualStyle, seed);
+  geometry.heads.forEach((head, index) => drawArrowHead(graphics, head, color, shapeStrokeWidth(item), rotate, visualStyle, `${seed}:${index}`));
 }
 
 function rotatePoint(x, y, centerX, centerY, angle) {
@@ -83,22 +84,22 @@ export function drawVectorItems(graphics, items, width, height, visibleItemIds =
     const centerY = y + h / 2;
     const angle = (Number(item.rotation) || 0) * Math.PI / 180;
     if (item.shapeType === 'arrow') {
-      if (item.strokeEnabled !== false) drawShapeArrow(graphics, x, y, w, h, angle, ink, item.bend, item.startHead, item.endHead, item.visualStyle, id);
+      if (item.strokeEnabled !== false) drawShapeArrow(graphics, x, y, w, h, angle, ink, item.bend, item.startHead, item.endHead, item.visualStyle, id, item);
     } else {
-      if (/^#[0-9a-f]{6}$/i.test(item.fill || '')) {
-        for (const path of shapeFillPaths(item.shapeType, w, h)) {
+      if (shapeFillOpacity(item) > 0 && /^#[0-9a-f]{6}$/i.test(item.fill || '')) {
+        for (const path of shapeFillPaths(item.shapeType, w, h, item)) {
           if (item.visualStyle === 'sketch') {
-            const hatches = sketchHatchPaths(path, `${id}:fill`).map(stroke => ({ ...stroke,
+            const hatches = sketchHatchPaths(path, `${id}:fill`, undefined, shapeFillOpacity(item), sketchFillOpacity(item)).map(stroke => ({ ...stroke,
               points: stroke.points.map(point => rotatePoint(x + point.x, y + point.y, centerX, centerY, angle)) }));
             drawHatches(graphics, hatches, colorNumber(item.fill));
             continue;
           }
           const points = path.map(point => rotatePoint(x + point.x, y + point.y, centerX, centerY, angle));
-          graphics.poly(points.flatMap(point => [point.x, point.y])).fill(colorNumber(item.fill));
+          graphics.poly(points.flatMap(point => [point.x, point.y])).fill({ color: colorNumber(item.fill), alpha: shapeFillOpacity(item) });
         }
       }
-      for (const path of item.strokeEnabled === false ? [] : shapeOutlinePaths(item.shapeType, w, h)) {
-        drawPolyline(graphics, path.map(point => rotatePoint(x + point.x, y + point.y, centerX, centerY, angle)), ink, 2.5, item.visualStyle, id);
+      for (const path of item.strokeEnabled === false ? [] : shapeOutlinePaths(item.shapeType, w, h, item)) {
+        drawPolyline(graphics, path.map(point => rotatePoint(x + point.x, y + point.y, centerX, centerY, angle)), ink, shapeStrokeWidth(item), item.visualStyle, id);
       }
     }
   }

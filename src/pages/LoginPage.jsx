@@ -9,7 +9,7 @@ import { useAuth } from '../state/AuthContext.jsx';
 import '../frelog-auth.css';
 
 export default function LoginPage() {
-  const { isAuthenticated, login, signup } = useAuth();
+  const { isAuthenticated, authError, login, signup } = useAuth();
   const [mode, setMode] = useState('login');
   const [form, setForm] = useState({ email: '', password: '', nickname: '' });
   const [showPassword, setShowPassword] = useState(false);
@@ -17,7 +17,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
-  if (isAuthenticated) return <Navigate to="/search" replace />;
+  if (isAuthenticated) return <Navigate to={location.state?.from || '/search'} replace />;
   const change = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
   const submit = async (event) => {
     event.preventDefault(); setBusy(true); setError('');
@@ -40,7 +40,7 @@ export default function LoginPage() {
       <div className="auth-mobile-brand"><FreLogBrand /></div>
       <div className="auth-form-wrap"><div className="auth-inline-scene"><FreLogMotionScene compact variant="login" /></div><div className="auth-heading"><span className="section-kicker">WELCOME TO FRELOG</span><h2>{mode === 'login' ? '다시 만났네요.' : '함께 시작해요.'}</h2><p>{mode === 'login' ? '로그인하고 이어서 아이디어를 나눠보세요.' : '계정을 만들고 팀의 첫 캔버스를 열어보세요.'}</p></div>
         <form className="auth-form" onSubmit={submit}>
-          {location.state?.sessionExpired && <div className="form-error" role="status">로그인 세션이 만료되었거나 유효하지 않습니다. 다시 로그인해주세요.</div>}
+          {(authError || location.state?.sessionExpired) && <div className="form-error" role="status">{authError || '로그인 세션이 만료되었거나 유효하지 않습니다. 다시 로그인해주세요.'}</div>}
           {mode === 'signup' && <label className="form-field"><span>닉네임</span><div className="input-wrap"><Icon name="user" size={18} /><input name="nickname" value={form.nickname} onChange={change} placeholder="어떻게 불러드릴까요?" autoComplete="nickname" maxLength={100} required /></div></label>}
           <label className="form-field"><span>이메일</span><div className="input-wrap"><Icon name="mail" size={18} /><input type="email" name="email" value={form.email} onChange={change} placeholder="you@example.com" autoComplete="email" required /></div></label>
           <label className="form-field"><span>비밀번호</span><div className="input-wrap"><Icon name="lock" size={18} /><input type={showPassword ? 'text' : 'password'} name="password" value={form.password} onChange={change} placeholder="비밀번호를 입력해주세요" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={mode === 'signup' ? 6 : undefined} required /><button type="button" className="input-trailing" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? '비밀번호 숨기기' : '비밀번호 표시'}><Icon name={showPassword ? 'eyeOff' : 'eye'} size={18} /></button></div></label>

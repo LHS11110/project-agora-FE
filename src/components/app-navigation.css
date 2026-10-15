@@ -1,0 +1,18 @@
+.app-shell.is-canvas-shell { position:relative; }
+.app-shell .app-navigation-toggle {
+  position:absolute; z-index:60; top:50dvh; left:224px; transform:translateY(-50%);
+  display:grid; place-items:center; width:26px; height:34px; padding:0;
+  border:1px solid #dfe6dc; border-radius:7px; background:#fcfdfa; color:#718075;
+  cursor:pointer; box-shadow:0 2px 6px #263b3010;
+}
+.app-shell .app-navigation-toggle:hover { background:#edf2e9; color:#3c5144; }
+.app-shell .app-navigation-toggle:focus-visible { outline:2px solid #718075; outline-offset:2px; }
+.app-shell.is-navigation-collapsed .app-sidebar { display:none; }
+.app-shell.is-navigation-collapsed .app-navigation-toggle { left:0; border-radius:0 7px 7px 0; }
+@media(max-width:1100px) { .app-shell .app-navigation-toggle { left:193px; } }
+@media(max-width:650px) {
+  .app-shell.is-canvas-shell .app-navigation-toggle { left:0; border-radius:0 7px 7px 0; }
+  .app-shell.is-navigation-collapsed .mobile-app-header { display:none; }
+  .app-shell.is-navigation-collapsed .canvas-app-page { height:100dvh; }
+}
+@media(max-width:650px) { .app-shell.is-navigation-collapsed .app-main { padding-top:0; } }

@@ -6,3 +6,5 @@
 .shape-picker svg{width:32px;height:25px;overflow:visible;fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
 .shape-picker span{font-size:9px;white-space:nowrap}
 .tutorial-board-actions>.shape-select{width:110px;flex:0 0 110px;height:28px;padding:0 7px;border:1px solid #dce5da;border-radius:7px;background:#fff;color:#526b59;font-size:10px}
+
+.shape-picker .shape-picker-section{grid-column:1/-1;justify-self:start;margin:8px 0 2px;font-size:10px;font-weight:600;color:var(--ink-muted)}

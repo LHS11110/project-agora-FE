@@ -1,3 +1,4 @@
+import { isLogicGate, nearestLogicPort } from './logicGates.js';
 import { connectorControlFromPointer, connectorPointCount } from './connectors/controlPoints.js';
 import { activateObjectPointer, captureObjectPointer, releaseObjectPointer } from './pointerCapture.js';
 import { captureResize, resizeItemAtPointer } from '../components/objectResize.js';
@@ -6,7 +7,7 @@ import { connectorBendFromPointer, connectorGeometry } from '../components/conne
 import { createId } from './canvasIds.js';
 import { hasItemGeometryChanged } from './useCanvasPeerGeometry.js';
 import { isCollaborativeItem } from './collaborativeSync.js';
-import { shapeArrowBendFromPointer } from '../components/shapeArrowGeometry.js';
+import { shapeArrowControlFromPointer } from '../components/shapeArrowGeometry.js';
 import { rotateGroup } from './groupGeometry.js';
 import { inheritConnectorObjectSize } from './connectors/objectMetrics.js';
 
@@ -21,7 +22,7 @@ export function useCanvasObjectInteractions(options) {
     connectorColor,
     connectorVisualStyle = 'standard',
     connectorEndHead,
-    connectorStartHead,
+    connectorStartHead, connectorHeadSize,
     connectorWidth,
     dragRef,
     itemsRef,
@@ -70,7 +71,11 @@ export function useCanvasObjectInteractions(options) {
       if (connectionStartId === id) { setConnectionStartId(null); return; }
       const from = itemsRef.current[connectionStartId];
       const to = itemsRef.current[id];
-      if (from && to) addItem(createId(), { kind: 'connector', visualStyle: connectorVisualStyle, bend: 0, from: connectionStartId, to: id, color: connectorColor, strokeWidth: connectorWidth, startHead: connectorStartHead, endHead: connectorEndHead, permission });
+      const logicWire = isLogicGate(from?.shapeType) || isLogicGate(to?.shapeType);
+      const center = item => ({ x: ((Number(item?.x)||0)+(Number(item?.width)||.14)/2)*boardSize.width, y: ((Number(item?.y)||0)+(Number(item?.height)||.12)/2)*boardSize.height });
+      const fromPort = nearestLogicPort(from, 'output', center(to), boardSize)?.id;
+      const toPort = nearestLogicPort(to, 'input', center(from), boardSize)?.id;
+      if (from && to) addItem(createId(), { ...(fromPort ? { fromPort } : {}), ...(toPort ? { toPort } : {}), kind: 'connector', visualStyle: connectorVisualStyle, bend: 0, from: connectionStartId, to: id, color: connectorColor, strokeWidth: connectorWidth, headSize: connectorHeadSize, startHead: logicWire ? 'none' : connectorStartHead, endHead: logicWire ? 'none' : connectorEndHead, permission });
       setConnectionStartId(null); setActiveTool('select'); return;
     }
     const key = String(id);
@@ -217,7 +222,7 @@ export function useCanvasObjectInteractions(options) {
       const point = pointerPosition(event);
       const next = initial.kind === 'connector'
         ? { ...initial, ...(connectorPointCount(initial) > 1 || Array.isArray(initial.bendPoints) ? connectorControlFromPointer(initial, connectorGeometry(initial, itemsRef.current, viewport.width, viewport.height), point, viewport, dragRef.current.bendPointIndex) : connectorBendFromPointer(connectorGeometry(initial, itemsRef.current, viewport.width, viewport.height), point, viewport)) }
-        : { ...initial, bend: shapeArrowBendFromPointer(initial, point, viewport) };
+        : { ...initial, ...shapeArrowControlFromPointer(initial, point, viewport, dragRef.current.bendPointIndex) };
       commitGeometry({ ...itemsRef.current, [id]: next },[id]);
       return;
     }

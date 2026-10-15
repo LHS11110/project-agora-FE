@@ -15,7 +15,7 @@ const MINIMAP_ITEM_COLORS = {
   shape: '#6d9a91', text: '#809084', math: '#9a7ea1', stroke: '#526d5f', connector: '#a0a59b',
 };
 
-export function useCanvasMinimap({ boardRef, boardSize, viewportSize = boardSize, camera, setCamera, items, spatialIndex, spatialRevision, cancelCameraMotion }) {
+export function useCanvasMinimap({ collapsed=false, boardRef, boardSize, viewportSize = boardSize, camera, setCamera, items, spatialIndex, spatialRevision, cancelCameraMotion }) {
   const minimapWidgetRef = useRef(null);
   const minimapPointerRef = useRef(null);
   const minimapMoveRef = useRef(null);
@@ -54,10 +54,11 @@ export function useCanvasMinimap({ boardRef, boardSize, viewportSize = boardSize
   const worldWidth = Math.max(1, boardSize.width), worldHeight = Math.max(1, boardSize.height);
   const overviewWindow = renderWindow({minX:overviewBounds.minX/worldWidth,minY:overviewBounds.minY/worldHeight,maxX:overviewBounds.maxX/worldWidth,maxY:overviewBounds.maxY/worldHeight},boardSize,camera.scale);
   const minimapItems = useMemo(() => {
+    if(collapsed)return [];
     const entries = spatialIndex ? queryRef.current.query(spatialIndex,overviewWindow.bounds)
       : Object.entries(items).map(([id,item])=>({id,item,bounds:objectBounds(item,items,worldWidth,worldHeight)}));
     return minimapEntriesRef.current.update(entries,items,worldWidth,worldHeight,spatialIndex);
-  },[worldWidth,worldHeight,items,spatialIndex,spatialRevision,overviewWindow.key]);
+  },[collapsed,worldWidth,worldHeight,items,spatialIndex,spatialRevision,overviewWindow.key]);
   const minimap = useMemo(() => ({bounds:overviewBounds,viewport:visibleWorldBounds,items:minimapItems}),[overviewBounds,visibleWorldBounds,minimapItems]);
 
   useEffect(() => {
@@ -73,7 +74,7 @@ export function useCanvasMinimap({ boardRef, boardSize, viewportSize = boardSize
       setMinimapPosition(next);
       try { localStorage.setItem(MINIMAP_POSITION_KEY, JSON.stringify(next)); } catch { /* Ignore unavailable local storage. */ }
     }
-  }, [viewportSize, minimapPosition]);
+  }, [viewportSize, minimapPosition, collapsed]);
 
   const moveCameraFromMinimap = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();

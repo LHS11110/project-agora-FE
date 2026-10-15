@@ -1,0 +1,54 @@
+{
+  "before": {
+    "codes": [
+      {
+        "name": "steady",
+        "type": "error",
+        "code": "CANVAS_RELAY_TARGET_INVALID"
+      },
+      {
+        "name": "steady",
+        "type": "host_batch_result",
+        "code": "HOST_FENCED"
+      }
+    ],
+    "exceptions": [],
+    "hostChanges": 23,
+    "created": 100,
+    "changes": 462,
+    "finalStatus": "호스트 · 호스트 승인: 생성 0 · 수정 1 · 삭제 0"
+  },
+  "after": {
+    "codes": [
+      {
+        "name": "steady",
+        "type": "error",
+        "code": "HOST_FENCED"
+      }
+    ],
+    "exceptions": [],
+    "hostChanges": 24,
+    "created": 0,
+    "changes": 477,
+    "toasts": [],
+    "sockets": {
+      "steady": 2,
+      "editor-0": 2,
+      "editor-1": 2,
+      "editor-2": 2,
+      "editor-3": 2,
+      "editor-4": 2,
+      "editor-5": 2,
+      "editor-6": 2,
+      "reconnect-check": 2
+    },
+    "finalStatus": "호스트 · 호스트 승인: 생성 0 · 수정 1 · 삭제 0",
+    "persisted": true,
+    "reconnectVerified": true
+  },
+  "tests": {
+    "frontend": 150,
+    "broker_transport": 25
+  },
+  "note": "An obsolete-term HOST_FENCED rejection remains an intentional safety check. It causes no toast or reconnect and is not applied."
+}

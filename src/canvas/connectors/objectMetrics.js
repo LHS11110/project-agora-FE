@@ -7,7 +7,7 @@ export const connectorMetricsRevision = () => revision;
 export const connectorObjectSize = item => item && metrics.get(item);
 export function inheritConnectorObjectSize(previous,next){
   const measured=previous && metrics.get(previous);
-  if(measured && next && ['kind','width','height','fontSize','contentScale','contentScaleX','contentScaleY','text','code','formula'].every(key=>previous[key]===next[key]))metrics.set(next,measured);
+  if(measured && next && ['kind','imageFrameEnabled','width','height','fontSize','contentScale','contentScaleX','contentScaleY','text','code','formula'].every(key=>previous[key]===next[key]))metrics.set(next,measured);
 }
 export function measureConnectorObject(item, element) {
   if (!element || ['stroke', 'connector'].includes(item.kind)) return;

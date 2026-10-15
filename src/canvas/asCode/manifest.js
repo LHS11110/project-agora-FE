@@ -1,11 +1,13 @@
+import { logicPorts } from '../logicGates.js';
+import { validShapeAppearance } from '../shapeAppearance.js';
 import { normalizeArrowHead } from '../../components/arrowheadGeometry.js';
 import { MAX_BEND_POINTS } from '../connectors/controlPoints.js';
 import { CANVAS_SPACE } from '../canvasSpace.js';
 
 const KINDS = new Set(['text', 'note', 'code', 'math', 'shape', 'table', 'image', 'link', 'connector', 'stroke', 'pdf', 'user-group']);
-const NUMBERS = new Set(['shadowBlur', 'shadowOpacity', 'shadowOffsetX', 'shadowOffsetY', 'depth', 'x', 'y', 'width', 'height', 'rotation', 'fontSize', 'strokeWidth', 'bend', 'opacity', 'contentScale', 'contentScaleX', 'contentScaleY', 'bendPointCount']);
-const STRINGS = new Set(['kind', 'text', 'code', 'formula', 'format', 'filename', 'language', 'shapeType', 'visualStyle', 'color', 'fill', 'permission', 'groupId', 'src', 'url', 'title', 'mediaType', 'from', 'to', 'startHead', 'endHead', 'brush', 'embedUrl', 'videoId', 'renderMode', 'label', 'labelMode', 'groupTitle', 'thumbnail']);
-const FIELDS = new Set([...NUMBERS, ...STRINGS, 'points', 'rows', 'columns', 'simulatePressure', 'complete', 'strokeEnabled', 'shadowEnabled', 'bendPoints', 'members']);
+const NUMBERS = new Set(['shadowBlur', 'shadowOpacity', 'shadowOffsetX', 'shadowOffsetY', 'depth', 'x', 'y', 'width', 'height', 'rotation', 'fontSize', 'strokeWidth', 'bend', 'opacity', 'contentScale', 'contentScaleX', 'contentScaleY', 'bendPointCount', 'headSize', 'vertexCount', 'fillOpacity', 'sketchFillOpacity']);
+const STRINGS = new Set(['kind', 'text', 'code', 'formula', 'format', 'filename', 'language', 'shapeType', 'visualStyle', 'color', 'fill', 'permission', 'groupId', 'src', 'url', 'title', 'mediaType', 'from', 'to', 'fromPort', 'toPort', 'startHead', 'endHead', 'brush', 'embedUrl', 'videoId', 'renderMode', 'label', 'labelMode', 'groupTitle', 'thumbnail', 'cornerStyle']);
+const FIELDS = new Set([...NUMBERS, ...STRINGS, 'points', 'rows', 'columns', 'simulatePressure', 'complete', 'strokeEnabled', 'shadowEnabled', 'imageFrameEnabled', 'bendPoints', 'members']);
 export const CANVAS_ITEM_FIELDS = FIELDS;
 const unsafeId = id => !id || ['__proto__', 'constructor', 'prototype'].includes(id);
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -43,13 +45,17 @@ function validateItem(id, item) {
   }
   if (item.groupTitle != null && item.groupTitle.length > 80) fail(`${id}.groupTitle: 최대 80자입니다.`);
   if (item.members != null && (!Array.isArray(item.members) || item.members.length > 50 || item.members.some(member => !plain(member) || !Number.isInteger(member.user_id) || member.user_id < 1 || typeof member.nickname !== 'string' || member.nickname.length > 100 || !Number.isInteger(member.tag_number) || member.tag_number < 0 || (member.profile_image && !/^\/api\/users\/profile-images\/\d+$/.test(member.profile_image)) || ['borderColor', 'nameColor'].some(field => member[field] != null && !/^#[0-9a-f]{6}$/i.test(member[field]))))) fail(`${id}.members: 올바른 사용자 프로필 배열이 필요합니다(최대 50명).`);
+  if (item.imageFrameEnabled != null && typeof item.imageFrameEnabled !== 'boolean') fail(`${id}.imageFrameEnabled: 불리언이 필요합니다.`);
   if (item.shadowEnabled != null && typeof item.shadowEnabled !== 'boolean') fail(`${id}.shadowEnabled: 불리언이 필요합니다.`);
   for (const [field, min, max] of [['shadowBlur',0,24],['shadowOpacity',0,1],['shadowOffsetX',-24,24],['shadowOffsetY',-24,24]]) if (item[field] != null && (item[field] < min || item[field] > max)) fail(`${id}.${field}: ${min}~${max} 범위가 필요합니다.`);
+  for (const field of ['vertexCount', 'cornerStyle', 'fillOpacity', 'sketchFillOpacity']) if (item[field] != null && !validShapeAppearance(field, item[field])) fail(`${id}.${field}: 꼭짓점은 3~64 정수, 모서리는 sharp/rounded, 채우기는 0~1 범위가 필요합니다.`);
+  if (item.kind === 'shape' && item.strokeWidth != null && !validShapeAppearance('strokeWidth', item.strokeWidth)) fail(`${id}.strokeWidth: 도형 테두리는 0.5~64px 범위가 필요합니다.`);
   if (item.depth != null && !Number.isSafeInteger(item.depth)) fail(`${id}.depth: 정수가 필요합니다.`);
   if (item.visualStyle != null && !['standard', 'sketch'].includes(item.visualStyle)) fail(`${id}.visualStyle: standard 또는 sketch가 필요합니다.`);
   if (item.strokeEnabled != null && typeof item.strokeEnabled !== 'boolean') fail(`${id}.strokeEnabled: 불리언이 필요합니다.`);
   if (item.fill != null && item.fill !== '' && !/^#[0-9a-f]{6}$/i.test(item.fill)) fail(`${id}.fill: #RRGGBB 색상 또는 빈 문자열이 필요합니다.`);
   for (const key of ['startHead', 'endHead']) if (item[key] != null && normalizeArrowHead(item[key], null) === null) fail(`${id}.${key}: 지원하는 화살표 머리 모양을 선택해주세요.`);
+  if (item.headSize != null && (item.headSize < 2 || item.headSize > 128)) fail(`${id}.headSize: 2~128px 사이의 값이 필요합니다.`);
   if (item.bendPointCount != null && (!Number.isInteger(item.bendPointCount) || item.bendPointCount < 1 || item.bendPointCount > MAX_BEND_POINTS)) fail(`${id}.bendPointCount: 1~${MAX_BEND_POINTS} 사이의 정수가 필요합니다.`);
   if (item.bendPoints != null && (!Array.isArray(item.bendPoints) || item.bendPoints.length < 1 || item.bendPoints.length > MAX_BEND_POINTS || (item.bendPointCount != null && item.bendPoints.length !== item.bendPointCount) || item.bendPoints.some(point => !plain(point) || !Number.isFinite(point.x) || !Number.isFinite(point.y)))) fail(`${id}.bendPoints: 조절점 개수와 같은 길이의 {x, y} 배열이 필요합니다.`);
   if (item.renderMode != null && !['plain', 'markdown', 'latex', 'code'].includes(item.renderMode)) fail(`${id}.renderMode: plain, markdown, latex, code 중 선택해주세요.`);
@@ -95,6 +101,11 @@ export function planManifest(source, currentItems, permission) {
     else if (stable(convert(previous, 'export')) !== stable(merged)) updates.push({ id, item });
   }
   for (const [id, item] of Object.entries(desired)) if (item.kind === 'connector' && (!Object.hasOwn(desired, item.from) || !Object.hasOwn(desired, item.to) || ['connector', 'stroke'].includes(desired[item.from]?.kind) || ['connector', 'stroke'].includes(desired[item.to]?.kind))) fail(`${id}: 연결의 from/to는 남아 있는 일반 객체 ID여야 합니다. 연결도 함께 삭제해주세요.`);
+  for (const [id, item] of Object.entries(desired)) if (item.kind === 'connector') {
+    for (const [field, endpoint, direction] of [['fromPort', 'from', 'output'], ['toPort', 'to', 'input']]) {
+      if (item[field] != null && !logicPorts(desired[item[endpoint]]?.shapeType).some(port => port.id === item[field] && port.direction === direction)) fail(`${id}.${field}: 해당 게이트의 ${direction === 'output' ? '출력' : '입력'} 핀을 선택해주세요.`);
+    }
+  }
   const touched = [...creates, ...updates].map(entry => entry.id).concat([...deletes]);
   return { creates, updates, deletes: [...deletes], baseline: Object.fromEntries([...new Set([...Object.keys(currentItems), ...touched])].map(id => [id, stable(currentItems[id] ? convert(currentItems[id], 'export') : null)])), existingIds: Object.keys(currentItems).sort(), mode };
 }

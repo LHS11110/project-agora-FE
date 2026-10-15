@@ -69,14 +69,14 @@ test('plain text preserves newlines, wraps oversized words and switches back to 
   assert.equal(needsVectorDom('t',item,new Set(),null,null),false);
   assert.equal(needsVectorDom('t',item,new Set(), 't',null),true);
 });
-test('rich content uses overview boxes only at unreadable sizes and always restores when selected',()=>{
+test('rich content uses lightweight previews only at unreadable sizes and always restores when selected',()=>{
   const item={kind:'code',code:'const answer = 42;',x:.1,y:.1,width:.2,height:.2};
   assert.equal(isOverviewProxy(item,world,1),false);
   assert.equal(isOverviewProxy(item,world,.05),true);
   assert.equal(needsVectorDom('c',item,new Set(),null,null,world,.05),false);
   assert.equal(needsVectorDom('c',item,new Set(['c']),null,null,world,.05),true);
   const proxy=buildDepthLayers([['c',item]],new Set(),world,.05)[0].vectors.c;
-  assert.equal(proxy.kind,'shape');assert.equal(item.code,'const answer = 42;');
+  assert.equal(proxy.kind,'text');assert.equal(proxy.text,item.code);assert.equal(item.code,'const answer = 42;');
 });
 test('known drag changes update the index without enumerating the 12000-object dictionary',()=>{
   const items=Object.fromEntries(Array.from({length:12000},(_,i)=>['s'+i,{kind:'shape',x:i,y:0,width:.1,height:.1}]));

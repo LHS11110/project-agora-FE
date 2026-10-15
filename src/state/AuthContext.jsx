@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { tokenExpired, isCurrentAccountFailure } from './authSession.js';
 import { api } from '../api/client.js';
 
 const AuthContext = createContext(null);
@@ -13,10 +14,12 @@ function readUser() {
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY));
   const [user, setUser] = useState(readUser);
+  const [authError, setAuthError] = useState('');
   const login = useCallback(async (email, password) => {
     const result = await api('/api/auth/login', { method: 'POST', body: { email, password } });
     localStorage.setItem(TOKEN_KEY, result.accessToken);
     localStorage.setItem(USER_KEY, JSON.stringify(result.user));
+    setAuthError('');
     setToken(result.accessToken); setUser(result.user);
     return result.user;
   }, []);
@@ -35,7 +38,11 @@ export function AuthProvider({ children }) {
     localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); setToken(null); setUser(null);
   }, []);
   useEffect(() => {
-    const handleUnauthorized = () => logout();
+    const handleUnauthorized = event => {
+      if (!isCurrentAccountFailure(localStorage.getItem(TOKEN_KEY), event.detail?.token)) return;
+      setAuthError(event.detail?.message || '로그인 세션이 만료되었거나 유효하지 않습니다. 다시 로그인해주세요.');
+      logout();
+    };
     const syncStoredAccount = (event) => {
       if (event.storageArea !== localStorage || (event.key !== null && ![TOKEN_KEY, USER_KEY].includes(event.key))) return;
       setToken(localStorage.getItem(TOKEN_KEY));
@@ -50,6 +57,13 @@ export function AuthProvider({ children }) {
   }, [logout]);
   useEffect(() => {
     if (!token) return undefined;
+    if (tokenExpired(token)) {
+      if (localStorage.getItem(TOKEN_KEY) === token) {
+        setAuthError('로그인 세션이 만료되었습니다. 다시 로그인해주세요.');
+        logout();
+      }
+      return undefined;
+    }
     let cancelled = false;
     api('/api/auth/me', { method: 'POST', token, body: { token } }).then(next => {
       if (cancelled) return;
@@ -61,9 +75,9 @@ export function AuthProvider({ children }) {
       });
     }).catch(() => {});
     return () => { cancelled = true; };
-  }, [token]);
-  const value = useMemo(() => ({ token, user, isAuthenticated: Boolean(token && user), login, signup, updateUser, logout }),
-    [token, user, login, signup, updateUser, logout]);
+  }, [token, logout]);
+  const value = useMemo(() => ({ token, user, authError, isAuthenticated: Boolean(token && user && !tokenExpired(token)), login, signup, updateUser, logout }),
+    [token, user, authError, login, signup, updateUser, logout]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

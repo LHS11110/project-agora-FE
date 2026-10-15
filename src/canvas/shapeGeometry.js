@@ -1,3 +1,6 @@
+import { logicGateGeometry } from './logicGates.js';
+import { hasPolygonVertices, hasShapeCorners, polygonVertexCount } from './shapeAppearance.js';
+
 const close = points => [...points, { ...points[0] }];
 function arc(cx, cy, rx, ry, start = 0, end = Math.PI * 2, count = 64) {
   return Array.from({ length: count + 1 }, (_, index) => {
@@ -29,9 +32,10 @@ function polygon(sides, star = false) {
 }
 
 /** Shared contours for vector rendering, picker previews and connector anchors. */
-function createShapeOutlinePaths(type, width, height) {
+function createShapeOutlinePaths(type, width, height, options) {
   const points = values => close(values.map(([x, y]) => ({ x: x * width, y: y * height })));
   const scale = path => path.map(p => ({ x: p.x * width, y: p.y * height }));
+  if (hasPolygonVertices(type) && (type === 'polygon' || options.vertexCount != null)) return [scale(polygon(polygonVertexCount({ ...options, shapeType: type }), type === 'star'))];
   if (type === 'circle') return [arc(width / 2, height / 2, width / 2, height / 2)];
   if (type === 'ellipse') return [arc(width / 2, height / 2, width / 2, height / 2)];
   if (type === 'square') {
@@ -67,8 +71,11 @@ function createShapeOutlinePaths(type, width, height) {
 }
 
 // Every filled shape stretches to its selection frame on both axes.
-export function shapeOutlinePaths(type, width, height) {
-  const paths = createShapeOutlinePaths(type, width, height);
+export function shapeOutlinePaths(type, width, height, options = {}) {
+  const logic = logicGateGeometry(type, width, height);
+  if (logic) return logic.paths;
+  let paths = createShapeOutlinePaths(type, width, height, options);
+  if (options.cornerStyle === 'rounded' && hasShapeCorners(type)) paths = paths.map(roundPolygonCorners);
   if (type === 'arrow') return paths;
   const vertices = paths.flat();
   const minX = Math.min(...vertices.map(point => point.x)), maxX = Math.max(...vertices.map(point => point.x));
@@ -80,9 +87,30 @@ export function shapeOutlinePaths(type, width, height) {
 }
 
 /** Fill the cylinder silhouette without closing its open body across the lid. */
-export function shapeFillPaths(type, width, height) {
+export function shapeFillPaths(type, width, height, options = {}) {
+  const logic = logicGateGeometry(type, width, height);
+  if (logic) return logic.fills;
   if (type === 'arrow') return [];
-  const paths = shapeOutlinePaths(type, width, height);
+  const paths = shapeOutlinePaths(type, width, height, options);
   if (type === 'cylinder') return [[...paths[0], ...paths[1].slice(32).reverse()]];
   return paths;
+}
+
+// Cut each corner by a fixed fraction of its shorter adjacent edge. Quadratic
+// curves stay inside the polygon; bounded samples are shared by all renderers.
+function roundPolygonCorners(path) {
+  const vertices = path.slice(0, -1);
+  const result = [];
+  for (let i = 0; i < vertices.length; i++) {
+    const p = vertices[(i + vertices.length - 1) % vertices.length], v = vertices[i], n = vertices[(i + 1) % vertices.length];
+    const before = Math.hypot(p.x - v.x, p.y - v.y), after = Math.hypot(n.x - v.x, n.y - v.y);
+    const cut = Math.min(before, after) * .18;
+    const a = { x: v.x + (p.x - v.x) * cut / (before || 1), y: v.y + (p.y - v.y) * cut / (before || 1) };
+    const b = { x: v.x + (n.x - v.x) * cut / (after || 1), y: v.y + (n.y - v.y) * cut / (after || 1) };
+    for (let step = 0; step <= 8; step++) {
+      const t = step / 8, u = 1 - t;
+      result.push({ x: u*u*a.x + 2*u*t*v.x + t*t*b.x, y: u*u*a.y + 2*u*t*v.y + t*t*b.y });
+    }
+  }
+  return close(result);
 }

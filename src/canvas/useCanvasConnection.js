@@ -1,3 +1,4 @@
+import { RtcMembershipRecovery } from './RtcMembershipRecovery.js';
 import { useEffect } from 'react';
 import { retryableConnectionError } from './connectionRetry.js';
 import CanvasBrokerPeers from '../components/CanvasBrokerPeers.js';
@@ -99,6 +100,7 @@ export function useCanvasConnection(options) {
 
   useEffect(() => {
     let cancelled = false;
+    const rtcMembershipRecovery = new RtcMembershipRecovery(sendRtcRaw);
     let socket;
     let rtcSocket;
     let reconnectTimer = null;
@@ -300,6 +302,7 @@ export function useCanvasConnection(options) {
             if (!autoReconnectRef.current || !canvasSnapshotLoadedRef.current) resetPeerMesh();
             return;
           }
+          if (rtcMembershipRecovery.handle(data, hostSessionRef.current.term)) return;
           if (data.type === 'error' && (data.code?.startsWith('RTC_') || data.code?.startsWith('CANVAS_RELAY_') || ['HOST_FENCED', 'ITEM_ACCESS_DENIED', 'RATE_LIMITED'].includes(data.code))) {
             if (!autoReconnectRef.current) setToast(`브로커 연결 오류: ${data.code}`);
             if (data.code === 'RATE_LIMITED' || data.code?.startsWith('CANVAS_RELAY_')) requestServerReconnect({ retry_after_ms: 500 });
@@ -533,6 +536,7 @@ export function useCanvasConnection(options) {
     return () => {
       strokeSaveFlushRef.current?.({ force: true });
       cancelled = true;
+      rtcMembershipRecovery.dispose();
       const preservePeerMesh = autoReconnectRef.current && canvasSnapshotLoadedRef.current && reconnectTimer === null;
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       rtcReady = false;

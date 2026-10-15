@@ -1,6 +1,7 @@
+import ChromeToggle from '../../canvas/panels/ChromeToggle.jsx';
 import './host-canvas-status.css';
 
-export default function HostCanvasStatus({ status, receipt, onRetry }) {
+export default function HostCanvasStatus({ status, receipt, onRetry, collapsed=false, onToggle }) {
   const reconnecting = !status.ready && status.editable;
   const summary = receipt?.summary;
   const result = receipt?.status === 'accepted'
@@ -8,7 +9,9 @@ export default function HostCanvasStatus({ status, receipt, onRetry }) {
     : receipt?.status === 'rejected' ? `호스트 거절: ${receipt.message || '요청을 반영하지 못했습니다.'}`
       : receipt?.status === 'received' ? '호스트가 요청을 수신했습니다.'
         : receipt?.status === 'waiting' ? '호스트 동기화 후 다시 전송합니다.' : '';
-  return <div className={`host-canvas-status${reconnecting ? ' is-reconnecting' : ''}`} role="status" aria-live="polite" title="요청 수신과 승인 결과를 확인합니다. 승인은 서버 저장 완료와 구분됩니다.">
+  return <div className={`host-canvas-status${reconnecting ? ' is-reconnecting' : ''}${collapsed ? ' is-collapsed' : ''}`} role="status" aria-live="polite" title="요청 수신과 승인 결과를 확인합니다. 승인은 서버 저장 완료와 구분됩니다.">
+    {collapsed && <span className="canvas-chrome-label">호스트{status.blocked?' · 승인 확인 필요':!status.ready?' · 동기화 중':' 상태'}</span>}
+    <div id="canvas-host-status-content" hidden={collapsed}>
     {reconnecting
       ? '호스트 연결이 잠시 중단됐습니다. 작업은 계속할 수 있고, 변경 사항은 연결 후 전송됩니다.'
       : status.ready ? (status.isHost ? '호스트' : '호스트 연결됨') : '호스트와 동기화 중'}
@@ -18,5 +21,6 @@ export default function HostCanvasStatus({ status, receipt, onRetry }) {
       <span> · 후속 요청 전송 중단</span>
       <button type="button" onClick={onRetry}>같은 요청 재시도</button>
     </>}
+    </div>{onToggle && <ChromeToggle label="호스트바" collapsed={collapsed} onToggle={onToggle} controls="canvas-host-status-content" />}
   </div>;
 }

@@ -141,7 +141,10 @@ export function reduceHostOperations(items, operations, peer, connectorDependenc
   for(const id of [...contextIds]){
     const item=next[id];if(item?.kind==='connector'){contextIds.add(item.from);contextIds.add(item.to);}
   }
-  const context=Object.fromEntries([...contextIds].filter(id=>items[id]).map(id=>[id,items[id]]));
+  // Manifest merge semantics must not restore fields explicitly removed by an
+  // operation. Validate touched objects against their finalized state, keeping
+  // original entries only for deletion/dependency checks.
+  const context=Object.fromEntries([...contextIds].filter(id=>items[id]).map(id=>[id,touched.has(id) && next[id] ? next[id] : items[id]]));
   planManifest(manifest, context, 'host-validation');
   return { items: next, touched: [...touched] };
 }

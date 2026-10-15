@@ -60,12 +60,12 @@ export function vectorStrokePaths(points, visualStyle, seed = '', roughness = 1)
     : [{ points, widthScale: 1, alpha: 1 }];
 }
 
-/** Two light, parallel pen passes, clipped to a possibly concave polygon. */
-export function sketchHatchPaths(polygon, seed = '', spacing) {
-  if (polygon.length < 3) return [];
+/** Two parallel pen passes with adjustable ink strength, clipped to the polygon. */
+export function sketchHatchPaths(polygon, seed = '', spacing, density = 1, inkOpacity = .3) {
+  if (density <= 0 || inkOpacity <= 0 || polygon.length < 3) return [];
   const xs = polygon.map(p => p.x), ys = polygon.map(p => p.y);
   const size = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-  const gap = spacing || Math.max(5, Math.min(12, size / 10));
+  const gap = (spacing || Math.max(5, Math.min(12, size / 10))) / Math.max(.01, Math.min(1, density));
   const hash = seedHash(`${seed}:hatch`);
   const result = [];
   for (let pass = 0; pass < 2; pass++) {
@@ -89,7 +89,7 @@ export function sketchHatchPaths(polygon, seed = '', spacing) {
         if (hits[i + 1] - hits[i] < .4) continue;
         const point = x => ({ x: x * cosine - level * sine, y: x * sine + level * cosine });
         result.push({ points: [point(hits[i]), point(hits[i + 1])],
-          widthScale: pass ? .7 : 1, alpha: (pass ? .10 : .30) + noise(line, hash) * .025 });
+          widthScale: pass ? .7 : 1, alpha: !pass && inkOpacity >= 1 ? 1 : Math.max(0, Math.min(1, inkOpacity * (pass ? 1 / 3 : 1) + noise(line, hash) * .025)) });
       }
     }
   }

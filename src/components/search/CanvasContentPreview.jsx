@@ -1,3 +1,4 @@
+import { shapeFillOpacity, shapeStrokeWidth, sketchFillOpacity } from '../../canvas/shapeAppearance.js';
 import { itemDepth } from '../../canvas/itemDepth.js';
 import UserGroupContent from '../../canvas/userGroups/UserGroupContent.jsx';
 import RenderedContent from '../../canvas/content/RenderedContent.jsx';
@@ -26,10 +27,10 @@ function PreviewContent({ item, token }) {
   return item.format === 'markdown' || item.kind === 'note' ? <MarkdownText source={item.text || ''} /> : <p>{item.text || ''}</p>;
 }
 
-function PreviewLines({ paths, visualStyle, seed }) {
+function PreviewLines({ paths, visualStyle, seed, width = 2 }) {
   return paths.flatMap((path, index) => vectorStrokePaths(path, visualStyle, `${seed}:${index}`).map((stroke, pass) =>
     <polyline key={`${index}:${pass}`} points={stroke.points.map(p => `${p.x},${p.y}`).join(' ')}
-      fill="none" strokeOpacity={stroke.alpha} strokeWidth={2 * stroke.widthScale} strokeLinejoin="round" />));
+      fill="none" strokeOpacity={stroke.alpha} strokeWidth={width * stroke.widthScale} strokeLinejoin="round" />));
 }
 
 function PreviewObject({ id, item, token }) {
@@ -45,14 +46,14 @@ function PreviewObject({ id, item, token }) {
   }
   if (item.kind === 'shape') {
     const color = item.color || '#617d68';
-    const arrow = item.shapeType === 'arrow' ? shapeArrowGeometry(width, height, item.bend, item.startHead, item.endHead) : null;
-    return <g transform={`translate(${x} ${y}) rotate(${rotation} ${width / 2} ${height / 2})`} style={{ color }} fill="none" stroke={color} strokeWidth={item.strokeWidth || 2}>
-      {!arrow && /^#[0-9a-f]{6}$/i.test(item.fill || '') && shapeFillPaths(item.shapeType, width, height).map((path, index) => item.visualStyle === 'sketch'
-        ? <g key={`fill-${index}`}>{sketchHatchPaths(path, `${id}:fill`).map((hatch, line) => <polyline key={line} points={hatch.points.map(p => `${p.x},${p.y}`).join(' ')}
+    const arrow = item.shapeType === 'arrow' ? shapeArrowGeometry(width, height, item.bend, item.startHead, item.endHead, item) : null;
+    return <g transform={`translate(${x} ${y}) rotate(${rotation} ${width / 2} ${height / 2})`} style={{ color }} fill="none" stroke={color} strokeWidth={shapeStrokeWidth(item)}>
+      {!arrow && shapeFillOpacity(item) > 0 && /^#[0-9a-f]{6}$/i.test(item.fill || '') && shapeFillPaths(item.shapeType, width, height, item).map((path, index) => item.visualStyle === 'sketch'
+        ? <g key={`fill-${index}`}>{sketchHatchPaths(path, `${id}:fill`, undefined, shapeFillOpacity(item), sketchFillOpacity(item)).map((hatch, line) => <polyline key={line} points={hatch.points.map(p => `${p.x},${p.y}`).join(' ')}
           fill="none" stroke={item.fill} strokeWidth={1.2 * hatch.widthScale} strokeOpacity={hatch.alpha} strokeLinecap="round" />)}</g>
-        : <polygon key={`fill-${index}`} points={path.map(p => `${p.x},${p.y}`).join(' ')} fill={item.fill} stroke="none" />)}
-      {item.strokeEnabled !== false && (arrow ? <><PreviewLines paths={[arrow.points]} visualStyle={item.visualStyle} seed={id} /><ConnectorArrowheads geometry={arrow} visualStyle={item.visualStyle} seed={id} /></>
-        : <PreviewLines paths={shapeOutlinePaths(item.shapeType, width, height)} visualStyle={item.visualStyle} seed={id} />)}
+        : <polygon key={`fill-${index}`} points={path.map(p => `${p.x},${p.y}`).join(' ')} fill={item.fill} fillOpacity={shapeFillOpacity(item)} stroke="none" />)}
+      {item.strokeEnabled !== false && (arrow ? <><PreviewLines paths={[arrow.points]} width={shapeStrokeWidth(item)} visualStyle={item.visualStyle} seed={id} /><ConnectorArrowheads geometry={arrow} visualStyle={item.visualStyle} seed={id} /></>
+        : <PreviewLines paths={shapeOutlinePaths(item.shapeType, width, height, item)} width={shapeStrokeWidth(item)} visualStyle={item.visualStyle} seed={id} />)}
     </g>;
   }
   return <foreignObject x={x} y={y} width={width} height={height} transform={`rotate(${rotation} ${x + width / 2} ${y + height / 2})`}><div xmlns="http://www.w3.org/1999/xhtml" className={`preview-object preview-object-${item.kind}`} style={{ background: item.kind === 'note' ? item.color || '#f6edcf' : undefined }}><PreviewContent item={item} token={token} /></div></foreignObject>;

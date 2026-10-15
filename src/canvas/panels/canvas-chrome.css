@@ -1,0 +1,37 @@
+.canvas-app-page .canvas-chrome-toggle {
+  flex:0 0 26px; width:26px; height:26px; margin:0; padding:0;
+  display:inline-grid; place-items:center; border:1px solid var(--line);
+  border-radius:6px; background:var(--surface); color:var(--ink-muted);
+  font:16px/1 sans-serif; cursor:pointer; touch-action:manipulation;
+}
+.canvas-app-page .canvas-chrome-toggle:hover { background:var(--panel-soft); color:var(--ink-strong); }
+.canvas-app-page .canvas-chrome-toggle:focus-visible { outline:2px solid var(--ink-muted); outline-offset:2px; }
+.canvas-app-page .canvas-chrome-label { font-size:11px; color:var(--ink-muted); white-space:nowrap; }
+.canvas-app-page .canvas-info-content { display:flex; align-items:center; justify-content:space-between; gap:20px; flex:1; min-width:0; }
+.canvas-app-page .canvas-info-content[hidden],
+.canvas-app-page .canvas-minimap-map[hidden],
+.canvas-app-page #canvas-host-status-content[hidden] { display:none; }
+.canvas-app-page .canvas-topbar { gap:12px; }
+.canvas-app-page .canvas-topbar.is-collapsed { height:36px; width:154px; right:auto; padding:4px 8px 4px 12px; }
+.canvas-app-page[data-info-collapsed="true"] { --canvas-panel-top:60px; }
+.canvas-app-page .host-canvas-status { display:flex; align-items:center; gap:8px; padding-right:6px; }
+.canvas-app-page #canvas-host-status-content { flex:1; min-width:0; }
+.canvas-app-page .host-canvas-status.is-collapsed { right:auto; min-height:34px; height:34px; padding:3px 6px 3px 9px; overflow:visible; }
+.canvas-app-page .canvas-minimap-heading { gap:6px; margin-bottom:6px; }
+.canvas-app-page .canvas-minimap-heading strong { min-width:0; }
+.canvas-app-page .canvas-minimap.is-collapsed .canvas-minimap-heading { margin-bottom:0; }
+@media(max-width:650px) {
+  .canvas-app-page .canvas-info-content { gap:6px; }
+  .canvas-app-page .canvas-topbar { gap:6px; }
+  .canvas-app-page .canvas-minimap-heading { flex-wrap:wrap; }
+  .canvas-app-page .canvas-minimap-heading .canvas-chrome-toggle { margin-left:auto; }
+  .canvas-app-page .canvas-topbar.is-collapsed { top:8px; height:36px; }
+  .canvas-app-page[data-info-collapsed="true"] { --canvas-panel-top:56px; }
+}
+.canvas-app-page .canvas-topbar.is-collapsed { min-height:0; flex-wrap:nowrap; }
+@media(max-width:820px) {
+  .canvas-app-page .canvas-info-content { flex-wrap:wrap; gap:5px; }
+  .canvas-app-page .canvas-topbar>.canvas-chrome-toggle { align-self:flex-start; margin-top:3px; }
+  .canvas-app-page .canvas-topbar.is-collapsed>.canvas-chrome-toggle { align-self:center; margin-top:0; }
+}
+.canvas-app-page .canvas-chrome-toggle>span { font:inherit; color:inherit; }

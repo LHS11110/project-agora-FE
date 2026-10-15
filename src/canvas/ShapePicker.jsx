@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { shapeCatalog } from './shapeCatalog.js';
 import { shapeOutlinePaths } from './shapeGeometry.js';
 import './shape-picker.css';
@@ -13,8 +14,8 @@ function previewPaths(shape) {
 export default function ShapePicker({ value, onChange, compact = false }) {
   if (compact) return <select className="shape-select" aria-label="도형 종류" value={value} onChange={event => onChange(event.target.value)}>{shapeCatalog.map(shape => <option key={shape.id} value={shape.id}>{shape.label}</option>)}</select>;
   return <div className="shape-picker" role="group" aria-label="도형 종류">
-    {shapeCatalog.map(shape => <button type="button" key={shape.id} className={value === shape.id ? 'selected' : ''} aria-pressed={value === shape.id} title={shape.dimensions ? `${shape.label} · ${shape.dimensions} · 세로 비율` : shape.label} onClick={() => onChange(shape.id)}>
+    {shapeCatalog.map((shape, index) => <Fragment key={shape.id}>{shape.category === 'logic' && shapeCatalog[index-1]?.category !== 'logic' && <span className="shape-picker-section">논리 회로</span>}<button type="button" key={shape.id} className={value === shape.id ? 'selected' : ''} aria-pressed={value === shape.id} title={shape.dimensions ? `${shape.label} · ${shape.dimensions} · 세로 비율` : shape.label} onClick={() => onChange(shape.id)}>
       <svg viewBox="-3 -3 46 38" aria-hidden="true">{previewPaths(shape).map((path, index) => <polyline key={index} points={path.map(p => `${p.x},${p.y}`).join(' ')} />)}</svg><span>{shape.label}</span>
-    </button>)}
+    </button></Fragment>)}
   </div>;
 }

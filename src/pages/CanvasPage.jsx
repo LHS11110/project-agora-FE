@@ -1,3 +1,11 @@
+import useCanvasChrome from '../canvas/panels/useCanvasChrome.js';
+import ChromeToggle from '../canvas/panels/ChromeToggle.jsx';
+import '../canvas/panels/canvas-chrome.css';
+import { logicPorts } from '../canvas/logicGates.js';
+import useCanvasKeyboardNudge from '../canvas/useCanvasKeyboardNudge.js';
+import { validShapeAppearance } from '../canvas/shapeAppearance.js';
+import { overviewScale } from '../canvas/sceneRepresentation.js';
+import { numericObjectPatch } from '../canvas/objectNumericGeometry.js';
 import SceneViewModel from '../canvas/SceneViewModel.js';
 import { itemCount } from '../canvas/itemSnapshots.js';
 import { useCanvasCamera } from '../canvas/useCanvasCamera.js';
@@ -83,7 +91,7 @@ import { useCanvasMinimap } from '../canvas/useCanvasMinimap.js';
 import { useCanvasServerChangeQueue } from '../canvas/useCanvasServerChangeQueue.js';
 import { connectorGeometry } from '../components/connectorGeometry.js';
 import { DEFAULT_ARROW_END_HEAD, DEFAULT_ARROW_START_HEAD, normalizeArrowHead } from '../components/arrowheadGeometry.js';
-import { DEFAULT_SHAPE_ARROW_BEND, shapeArrowGeometry } from '../components/shapeArrowGeometry.js';
+import { DEFAULT_SHAPE_ARROW_BEND, shapeArrowGeometry, resizeShapeArrowControls, shapeArrowBendPatch } from '../components/shapeArrowGeometry.js';
 import { normalizeTableCount, resizeTableData, MAX_TABLE_COLUMNS, MAX_TABLE_ROWS } from '../components/tableModel.js';
 import { useAuth } from '../state/AuthContext.jsx';
 
@@ -168,6 +176,7 @@ function CanvasWorkspace() {
   const eraserCursorRef = useRef(null);
   const draftRef = useRef([]);
   const vectorDraftRef = useRef(null);
+  const chrome = useCanvasChrome();
   const [canvas, setCanvas] = useState(null);
   const [spatialRevision, setSpatialRevision] = useState(0);
   const [groups, setGroups] = useState([]);
@@ -192,8 +201,10 @@ function CanvasWorkspace() {
   const { color, setColor, favoriteColors, saveFavoriteColor } = useCanvasPalette();
   const [connectorColor, setConnectorColor] = useState('#8b8f8c');
   const [connectorWidth, setConnectorWidth] = useState(1.5);
+  const [connectorHeadSize, setConnectorHeadSize] = useState(14);
   const [connectorStartHead, setConnectorStartHead] = useState(DEFAULT_ARROW_START_HEAD);
   const [connectorEndHead, setConnectorEndHead] = useState(DEFAULT_ARROW_END_HEAD);
+  const [shapeArrowHeadSize, setShapeArrowHeadSize] = useState(14);
   const [shapeArrowStartHead, setShapeArrowStartHead] = useState(DEFAULT_ARROW_START_HEAD);
   const [shapeArrowEndHead, setShapeArrowEndHead] = useState(DEFAULT_ARROW_END_HEAD);
   const [noteColor, setNoteColor] = useState(stickyNoteColors[0]);
@@ -215,8 +226,22 @@ function CanvasWorkspace() {
   const [showYAxis, setShowYAxis] = useState(() => localStorage.getItem('agora_canvas_y_axis') !== 'false');
   const [shapeType, setShapeType] = useState('rectangle');
   const [shapeFillColor, setShapeFillColor] = useState('');
+  const [shapeFillOpacity, setShapeFillOpacity] = useState(1);
+  const [shapeSketchFillOpacity, setShapeSketchFillOpacity] = useState(.8);
+  const [shapeVertexCount, setShapeVertexCount] = useState(6);
+  const [shapeCornerStyle, setShapeCornerStyle] = useState('sharp');
+  const updateNewShapeGeometry = (field, value) => {
+    if (!validShapeAppearance(field, value)) return;
+    if (field === 'vertexCount') setShapeVertexCount(value);
+    if (field === 'cornerStyle') setShapeCornerStyle(value);
+  };
+  const changeShapeType = type => {
+    setShapeType(type);
+    setShapeVertexCount(({ triangle: 3, pentagon: 5, hexagon: 6, star: 5 })[type] || 6);
+  };
   const [shapeVisualStyle, setShapeVisualStyle] = useState('standard');
   const [shapeStrokeEnabled, setShapeStrokeEnabled] = useState(true);
+  const [shapeBorderWidth, setShapeBorderWidth] = useState(2.5);
   const [connectorVisualStyle, setConnectorVisualStyle] = useState('standard');
   const [connectionStartId, setConnectionStartId] = useState(null);
   const [selectedItemId, setSelectedItemId] = useState(null);
@@ -461,9 +486,10 @@ function CanvasWorkspace() {
   const updateObjectSize = (id, field, value) => {
     const key = String(id);
     const previous = itemsRef.current[key];
-    if (!hasIndependentContentSize(previous) || !['fontSize', 'width', 'height'].includes(field)
-      || !Number.isFinite(value) || value <= 0 || (field === 'fontSize' && !isObjectFontSize(value))) return;
-    const nextItem = { ...previous, [field]: field === 'fontSize' ? value : value / boardSize[field] };
+    if (!previous || !hostSessionRef.current.editable) return;
+    const patch = field === 'fontSize' ? (hasIndependentContentSize(previous) && isObjectFontSize(value) ? { fontSize: value } : null) : numericObjectPatch(previous, field, value);
+    if (!patch) return;
+    const nextItem = { ...previous, ...patch };
     itemsRef.current = { ...itemsRef.current, [key]: nextItem };
     setItems(current => ({ ...current, [key]: nextItem }));
     refreshSpatialIndex();
@@ -490,6 +516,14 @@ function CanvasWorkspace() {
     }
     itemsRef.current = { ...itemsRef.current, ...changes };
     setItems(current => ({ ...current, ...changes }));
+  };
+  const updateImageFrame = (id, enabled) => {
+    const key = String(id), previous = itemsRef.current[key];
+    if (previous?.kind !== 'image' || typeof enabled !== 'boolean' || !hostSessionRef.current.editable) return;
+    const next = { ...previous, imageFrameEnabled: enabled };
+    itemsRef.current = { ...itemsRef.current, [key]: next };
+    setItems(current => ({ ...current, [key]: next }));
+    refreshSpatialIndex();
   };
   const updateItemDepth = (id, value) => {
     const key = String(id), previous = itemsRef.current[key];
@@ -542,13 +576,16 @@ function CanvasWorkspace() {
     if (previous?.kind !== 'shape') return;
     if (!(field === 'visualStyle' && ['standard', 'sketch'].includes(value)
       || field === 'strokeEnabled' && typeof value === 'boolean'
-      || field === 'color' && /^#[0-9a-f]{6}$/i.test(value))) return;
+      || field === 'color' && /^#[0-9a-f]{6}$/i.test(value)
+      || validShapeAppearance(field, value))) return;
     const nextItem = { ...previous, [field]: value };
     itemsRef.current = { ...itemsRef.current, [key]: nextItem };
     setItems(current => ({ ...current, [key]: nextItem }));
+    refreshSpatialIndex();
     if (!sendItemChange({ type: 'item_update', item_id: key, item: nextItem }, previous)) {
       itemsRef.current = { ...itemsRef.current, [key]: previous };
       setItems(current => ({ ...current, [key]: previous }));
+      refreshSpatialIndex();
       setToast('연결이 복구되면 도형 스타일을 다시 변경해주세요.');
     }
   };
@@ -565,13 +602,13 @@ function CanvasWorkspace() {
       setToast('연결이 복구되면 내부 색상을 다시 변경해주세요.');
     }
   };
-  const updateShapeArrowBend = (id, value) => {
+  const updateShapeArrowBend = (id, value, field = 'bend') => {
     const key = String(id);
     const previous = itemsRef.current[key];
     if (previous?.kind !== 'shape' || previous.shapeType !== 'arrow') return;
     const bend = Math.max(-1.5, Math.min(1.5, Number(value) || 0));
-    if ((Number(previous.bend) || DEFAULT_SHAPE_ARROW_BEND) === bend) return;
-    const nextItem = { ...previous, bend };
+    const patch = field === 'bendPointCount' ? resizeShapeArrowControls(previous, previous.width * boardSize.width, previous.height * boardSize.height, value) : shapeArrowBendPatch(previous, bend);
+    const nextItem = { ...previous, ...patch };
     itemsRef.current = { ...itemsRef.current, [key]: nextItem };
     setItems((current) => ({ ...current, [key]: nextItem }));
     refreshSpatialIndex();
@@ -585,9 +622,9 @@ function CanvasWorkspace() {
   const updateArrowHead = (id, field, value) => {
     const key = String(id);
     const previous = itemsRef.current[key];
-    if (!['startHead', 'endHead'].includes(field)
+    if (!['startHead', 'endHead', 'headSize'].includes(field)
       || !(previous?.kind === 'connector' || (previous?.kind === 'shape' && previous.shapeType === 'arrow'))) return;
-    const head = normalizeArrowHead(value, null);
+    const head = field === 'headSize' ? Math.max(2, Math.min(128, Number(value))) : normalizeArrowHead(value, null);
     if (!head || previous[field] === head) return;
     const nextItem = { ...previous, [field]: head };
     itemsRef.current = { ...itemsRef.current, [key]: nextItem };
@@ -601,26 +638,31 @@ function CanvasWorkspace() {
     }
   };
   const updateNewConnectorHead = (field, value) => {
-    if (field === 'startHead') setConnectorStartHead(value);
+    if (field === 'headSize') setConnectorHeadSize(value);
+    else if (field === 'startHead') setConnectorStartHead(value);
     else setConnectorEndHead(value);
   };
   const updateNewShapeArrowHead = (field, value) => {
-    if (field === 'startHead') setShapeArrowStartHead(value);
+    if (field === 'headSize') setShapeArrowHeadSize(value);
+    else if (field === 'startHead') setShapeArrowStartHead(value);
     else setShapeArrowEndHead(value);
   };
   const updateConnectorAppearance = (id, field, value) => {
     const key = String(id);
     const previous = itemsRef.current[key];
-    if (previous?.kind !== 'connector' || !['color', 'strokeWidth', 'bend', 'label', 'labelMode', 'bendPointCount', 'visualStyle'].includes(field)) return;
+    if (previous?.kind !== 'connector' || !['color', 'strokeWidth', 'bend', 'label', 'labelMode', 'bendPointCount', 'visualStyle', 'fromPort', 'toPort'].includes(field)) return;
+    const portField = field === 'fromPort' || field === 'toPort';
+    if (portField && value !== '' && !logicPorts(itemsRef.current[previous[field === 'fromPort' ? 'from' : 'to']]?.shapeType).some(port => port.id === value && port.direction === (field === 'fromPort' ? 'output' : 'input'))) return;
     if (field === 'visualStyle' && !['standard', 'sketch'].includes(value)) return;
     if (field === 'labelMode' && !['plain', 'markdown', 'latex'].includes(value)) return;
     if (field === 'label' && (typeof value !== 'string' || value.length > 2000)) return;
-    const nextValue = field === 'visualStyle' ? value : field === 'bendPointCount' ? Math.max(1, Math.min(MAX_BEND_POINTS, Math.trunc(Number(value) || 1))) : ['label', 'labelMode'].includes(field) ? String(value) : field === 'bend' ? Math.max(0, Math.min(1.5, Number(value) || 0)) : field === 'strokeWidth'
+    const nextValue = portField || field === 'visualStyle' ? value : field === 'bendPointCount' ? Math.max(1, Math.min(MAX_BEND_POINTS, Math.trunc(Number(value) || 1))) : ['label', 'labelMode'].includes(field) ? String(value) : field === 'bend' ? Math.max(0, Math.min(1.5, Number(value) || 0)) : field === 'strokeWidth'
       ? Math.max(0.8, Math.min(4, Number(value) || 1.5))
       : /^#[0-9a-f]{6}$/i.test(String(value)) ? String(value) : previous.color || '#8b8f8c';
     if (previous[field] === nextValue && !(field === 'bend' && previous.bendPoints?.length)) return;
     const patch = field === 'bendPointCount' ? resizeConnectorControls(previous, connectorGeometry(previous, itemsRef.current, boardSize.width, boardSize.height), nextValue) : field === 'bend' ? connectorBendPatch(previous, nextValue) : { [field]: nextValue };
     const nextItem = { ...previous, ...patch };
+    if (portField && value === '') delete nextItem[field];
     itemsRef.current = { ...itemsRef.current, [key]: nextItem };
     setItems((current) => ({ ...current, [key]: nextItem }));
     refreshSpatialIndex();
@@ -854,7 +896,7 @@ function CanvasWorkspace() {
     startMinimapPan,
     moveMinimapPan,
     stopMinimapPan,
-  } = useCanvasMinimap({ boardRef, boardSize, viewportSize, camera, setCamera, items, spatialIndex, spatialRevision, cancelCameraMotion: () => cancelCameraMotionRef.current() });
+  } = useCanvasMinimap({ collapsed:chrome.collapsed.minimap, boardRef, boardSize, viewportSize, camera, setCamera, items, spatialIndex, spatialRevision, cancelCameraMotion: () => cancelCameraMotionRef.current() });
   const activePeerIds = useMemo(() => peerList.filter((peer) => peer.connected).map((peer) => peer.peer_id).sort().join('\n'), [peerList]);
   const axisOriginX = boardSize.width * camera.scale / 2 + camera.x;
   const axisOriginY = boardSize.height * camera.scale / 2 + camera.y;
@@ -884,7 +926,7 @@ function CanvasWorkspace() {
   }, [boardSize.height, boardSize.width, editingId, items, spatialIndex, spatialRevision, sceneWindow.key]);
   const visibleItemCount = useMemo(()=>visibleEntries.reduce((count,{bounds}) => count + Number(bounds.maxX>=visibleBounds.minX && bounds.minX<=visibleBounds.maxX && bounds.maxY>=visibleBounds.minY && bounds.minY<=visibleBounds.maxY),0),[visibleEntries,visibleBounds,spatialIndex.stats.boundsCalculated]);
   const usesOverview=useMemo(()=>visibleEntries.some(({item})=>!['shape','stroke','connector'].includes(item.kind) && !isRasterText(item)),[visibleEntries,items[selectedItemId]?.renderMode]);
-  const representationScale=usesOverview?camera.scale:1;
+  const representationScale=usesOverview?overviewScale(camera.scale):1;
   const selectedObjectIdsKey=selectedItemIds.filter(id=>Boolean(items[id])).join('|');
   const selectedObjectIds=useMemo(()=>selectedItemIds.filter(id=>Boolean(items[id])),[selectedObjectIdsKey]);
   const selectedObjectIdSet = useMemo(() => new Set(selectedObjectIds), [selectedObjectIds]);
@@ -994,8 +1036,8 @@ function CanvasWorkspace() {
     lastCursorSentAtRef, peerMeshRef, panRef, zoomHoldRef, zoomPointerPressRef, zoomSensitivity,
     stageWheelHandlerRef, laserDrawingRef, setLaserStrokes, selectionRef, selectedItemIds,
     setSelectionBox, selectItems, canvasSnapshotLoadedRef: hostReadyRef, finishEditing, setConnectionStartId,
-    spacePressedRef, user, tableConfig, permission, setSharePosition, shapeType, shapeArrowStartHead,
-    shapeArrowEndHead, shapeFillColor, shapeVisualStyle, shapeStrokeEnabled, color, noteColor, setActiveTool, startEditing, strokeWidth, penBrush, penOpacity,
+    spacePressedRef, user, tableConfig, permission, setSharePosition, shapeType, shapeArrowStartHead, shapeArrowHeadSize,
+    shapeArrowEndHead, shapeFillColor, shapeFillOpacity, shapeSketchFillOpacity, shapeVertexCount, shapeCornerStyle, shapeVisualStyle, shapeStrokeEnabled, shapeBorderWidth, color, noteColor, setActiveTool, startEditing, strokeWidth, penBrush, penOpacity,
     drawingRef, drawingSessionRef, draftRef, vectorDraftRef,
   });
   cancelCameraMotionRef.current = cancelPanInertia;
@@ -1062,7 +1104,7 @@ function CanvasWorkspace() {
     connectorColor,
     connectorVisualStyle,
     connectorEndHead,
-    connectorStartHead,
+    connectorStartHead, connectorHeadSize,
     connectorWidth,
     dragRef,
     itemsRef,
@@ -1123,6 +1165,7 @@ function CanvasWorkspace() {
     }
     if (selectedTable) updateTableItem(primarySelectedItemId, { [field]: nextSize / 100 });
   };
+  useCanvasKeyboardNudge({ activeTool, editingId, selectedIds: selectedObjectIds, itemsRef, sessionRef: hostSessionRef, dragRef, moveItems, flushMoves });
   useEffect(() => {
     const isEditableTarget = (target) => target instanceof HTMLElement
       && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
@@ -1225,11 +1268,14 @@ function CanvasWorkspace() {
     .map(key=>[key,(...args)=>objectActionsRef.current[key](...args)])),[]);
 
 
-  return <div className="canvas-app-page" data-theme={theme}>
+  return <div className="canvas-app-page" data-theme={theme} data-info-collapsed={chrome.collapsed.info}>
     <div style={{ display: 'contents' }} inert={!hostStatus.editable && !error ? '' : undefined}>
-    <header className="canvas-topbar">
+    <header className={`canvas-topbar${chrome.collapsed.info?' is-collapsed':''}`}>
+      {chrome.collapsed.info && <span className="canvas-chrome-label">캔버스 정보</span>}
+      <div id="canvas-info-content" className="canvas-info-content" hidden={chrome.collapsed.info}>
       <div className="canvas-title-group"><Link to="/search" className="canvas-back" aria-label="캔버스 목록"><Icon name="back" size={19} /></Link><div className="canvas-cover-image"><AuthenticatedImage src={canvas?.image} token={token} alt="캔버스 대표 이미지" fallback={<div className="canvas-cover-art"><i /><i /><i /><span>FR</span></div>} loadingFallback={<div className="canvas-cover-art"><i /><i /><i /><span>FR</span></div>} /></div><div className="canvas-title-copy"><span>FRELOG CANVAS · #{canvasId}</span><h1>{canvas?.canvas_name || `캔버스 ${canvasId}`}</h1></div></div>
       <div className="canvas-header-right"><div className="canvas-description-card"><span>캔버스 설명</span><p>{canvas?.description || '함께 아이디어를 모으고 실시간으로 만들어가는 공간입니다.'}</p></div><div className="canvas-top-right"><span className={`connection-pill ${connection}`} role="status" aria-live="polite" title={connection === 'connecting' ? '다시 연결하는 중입니다. 캔버스 편집은 계속할 수 있고 변경 사항은 연결 후 저장됩니다.' : connection === 'connected' ? '서버에 연결되어 변경 사항을 동기화하고 있습니다.' : '서버 연결이 해제되었습니다.'}><i />{connection === 'connected' ? '연결됨' : connection === 'connecting' ? '연결 중' : '연결 해제'}</span><div className="collaborator-avatars"><UserAvatar user={user} token={token} className="avatar-small" />{otherParticipants.slice(0, 2).map((person) => <UserAvatar key={`${person.nickname}-${person.tag_number}`} user={person} token={token} className="avatar-small" />)}</div><button className="button button-outline canvas-settings-button" title="참여자 관리" aria-label="참여자 관리" onClick={() => { setShowSettings(false); setShowParticipants(true); }}><Icon name="user" size={17} /><span>참여자</span></button><button className="button button-outline canvas-settings-button" onClick={() => { setShowParticipants(false); setShowSettings(true); }}><Icon name="settings" size={17} /><span>설정</span></button></div></div>
+      </div><ChromeToggle label="캔버스 정보" collapsed={chrome.collapsed.info} onToggle={()=>chrome.toggle('info')} controls="canvas-info-content" />
     </header>
     {error ? <div className="canvas-error-state"><div className="error-art"><Icon name="grid" size={30} /></div><span className="section-kicker">CANVAS CONNECTION</span><h1>캔버스를 열 수 없어요.</h1><p>{error}</p><div><button className="button button-dark" onClick={() => window.location.reload()}>다시 연결하기</button><Link className="button button-outline" to="/search">캔버스 목록</Link></div></div> : <div className="canvas-workspace resizable-workspace" ref={panelLayout.ref} style={panelLayout.style}>
       <ResizablePanel {...panelLayout.handle('tools')}><CanvasToolPanel activeTool={activeTool} onSelectTool={(tool) => {
@@ -1238,12 +1284,12 @@ function CanvasWorkspace() {
         setActiveTool(tool);
       }} color={color} onColorChange={setColor} onUploadPdf={uploadPdf} onUploadImage={uploadImage} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} /></ResizablePanel>
       <main className="board-region"><div className="board-topline"><span className="board-section-label"><i /> 2차 좌표 캔버스</span><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(true); }}><Icon name="code" size={15} />캔버스 코드</button><button className="zoom-button" aria-label="확대" title="클릭: 한 단계 확대 · 길게 누르기: 계속 확대" onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label="축소" title="클릭: 한 단계 축소 · 길게 누르기: 계속 축소" onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>맞춤</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />격자 {showGrid ? '켜짐' : '꺼짐'}</button></div></div>
-      <HostCanvasStatus status={hostStatus} receipt={lastReceipt} onRetry={retryRejected} />
+      <HostCanvasStatus status={hostStatus} receipt={lastReceipt} onRetry={retryRejected} collapsed={chrome.collapsed.host} onToggle={()=>chrome.toggle('host')} />
         <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ ...canvasGridStyle(camera), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion: cancelPanInertia, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, pickVector: (event,doubleClick = false,capture = false) => {
             if (!['select', 'connect'].includes(activeTool) || event.button !== 0 || event.target.closest?.('.canvas-minimap, .stage-label, button, input, textarea')) return false;
             const target=event.target.closest?.('.canvas-object');
             if(capture !== Boolean(target))return false;
-            const hit = hitTestVector(spatialIndex, pointerPosition(event), boardSize, camera.scale, vectorHitOrder);
+            const hit = hitTestVector(spatialIndex, pointerPosition(event), boardSize, camera.scale, vectorHitOrder, representationScale);
             if (!hit) return false;
             if(target){
               const targetId=target.dataset.itemId,below=items[targetId];
@@ -1260,7 +1306,7 @@ function CanvasWorkspace() {
           <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true">{showXAxis && <><span className="coordinate-x" /><b className="coordinate-x-label">X</b></>}{showYAxis && <><span className="coordinate-y" /><b className="coordinate-y-label">Y</b></>}{(showXAxis || showYAxis) && <i className="coordinate-origin">0</i>}</div>
           <div className="canvas-scene" ref={sceneRef} style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }}>
             {depthLayers.map((layer, index) => <div className="canvas-depth-layer" key={layer.depth} data-depth={layer.depth} style={{ position: 'absolute', inset: 0, zIndex: index + 1, pointerEvents: 'none' }}>
-              <VectorLayer graphicsQuality={graphicsQuality} style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }} worldSize={boardSize} items={layer.vectors} referenceItems={items} routingRevision={spatialIndex.stats.boundsCalculated} inkItems={layer.inkItems} previewStrokes={layer.depth === 0 ? remoteDrawingStrokes : undefined} camera={camera} onReady={layer.depth === 0 ? (setDraft) => { vectorDraftRef.current = setDraft; } : undefined} />
+              <VectorLayer token={token} graphicsQuality={graphicsQuality} style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }} worldSize={boardSize} items={layer.vectors} referenceItems={items} routingRevision={spatialIndex.stats.boundsCalculated} inkItems={layer.inkItems} previewStrokes={layer.depth === 0 ? remoteDrawingStrokes : undefined} camera={camera} onReady={layer.depth === 0 ? (setDraft) => { vectorDraftRef.current = setDraft; } : undefined} />
             <div className="canvas-world-layer" style={{position:'absolute',width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`}}><CanvasLayerObjects objects={layer.domObjects} domSelection={domSelection} editingId={editingId} connectionStartId={connectionStartId} world={boardSize} scale={representationScale} token={token} selected={selectedObjectIdSet} singleSelection={hasSingleSelection} activeTool={activeTool} dirtyItems={dirtyItems} editorsByItem={editorsByItem} actions={objectActions} /></div>
             </div>)}
             <div className="canvas-world-layer" style={{ position: 'absolute', width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`, zIndex: depthLayers.length + 1, pointerEvents: 'none' }}>
@@ -1271,10 +1317,10 @@ function CanvasWorkspace() {
           </div>
           <LaserLayer strokes={laserStrokes} width={viewportSize.width} height={viewportSize.height} worldSize={boardSize} camera={camera} />
           {selectionBox && <div className="canvas-selection-marquee" style={{ left: selectionBox.left, top: selectionBox.top, width: selectionBox.width, height: selectionBox.height }} aria-hidden="true" />}
-          <div className="canvas-minimap" ref={minimapWidgetRef} style={minimapPosition ? { left: `${minimapPosition.left}px`, top: `${minimapPosition.top}px`, right: 'auto', bottom: 'auto' } : undefined} role="group" aria-label="캔버스 미니맵">
-            <div className="canvas-minimap-heading" onPointerDown={startMinimapWidgetMove} onPointerMove={moveMinimapWidget} onPointerUp={stopMinimapWidgetMove} onPointerCancel={stopMinimapWidgetMove} onLostPointerCapture={stopMinimapWidgetMove}><strong>미니맵 · 현재 화면</strong><span>잡고 이동</span></div>
-            <div className="canvas-minimap-map" title="클릭해 해당 위치로 이동 · 안쪽을 드래그해도 캔버스는 움직이지 않습니다" onPointerDown={startMinimapPan} onPointerMove={moveMinimapPan} onPointerUp={stopMinimapPan} onPointerCancel={stopMinimapPan} onLostPointerCapture={stopMinimapPan}>
-              <CanvasMinimapObjects minimap={minimap} colors={minimapItemColors} selected={selectedObjectIdSet} />
+          <div className={`canvas-minimap${chrome.collapsed.minimap?' is-collapsed':''}`} ref={minimapWidgetRef} style={minimapPosition ? { left: `${minimapPosition.left}px`, top: `${minimapPosition.top}px`, right: 'auto', bottom: 'auto' } : undefined} role="group" aria-label="캔버스 미니맵">
+            <div className="canvas-minimap-heading" onPointerDown={startMinimapWidgetMove} onPointerMove={moveMinimapWidget} onPointerUp={stopMinimapWidgetMove} onPointerCancel={stopMinimapWidgetMove} onLostPointerCapture={stopMinimapWidgetMove}><strong>미니맵{!chrome.collapsed.minimap && ' · 현재 화면'}</strong><ChromeToggle label="미니맵" collapsed={chrome.collapsed.minimap} onToggle={()=>chrome.toggle('minimap')} controls="canvas-minimap-content" /></div>
+            <div id="canvas-minimap-content" className="canvas-minimap-map" hidden={chrome.collapsed.minimap} title="클릭해 해당 위치로 이동 · 안쪽을 드래그해도 캔버스는 움직이지 않습니다" onPointerDown={startMinimapPan} onPointerMove={moveMinimapPan} onPointerUp={stopMinimapPan} onPointerCancel={stopMinimapPan} onLostPointerCapture={stopMinimapPan}>
+              {!chrome.collapsed.minimap && <CanvasMinimapObjects minimap={minimap} colors={minimapItemColors} selected={selectedObjectIdSet} />}
               <svg className="canvas-minimap-svg" viewBox={`${minimap.bounds.minX} ${minimap.bounds.minY} ${minimap.bounds.width} ${minimap.bounds.height}`} preserveAspectRatio="none" aria-label="현재 화면을 중심으로 한 주변 객체">
                 {showYAxis && <line className="canvas-minimap-axis" x1={boardSize.width / 2} y1={minimap.bounds.minY} x2={boardSize.width / 2} y2={minimap.bounds.maxY} />}
                 {showXAxis && <line className="canvas-minimap-axis" x1={minimap.bounds.minX} y1={boardSize.height / 2} x2={minimap.bounds.maxX} y2={boardSize.height / 2} />}
@@ -1305,7 +1351,7 @@ function CanvasWorkspace() {
         connection,
         connectorColor,
         connectorEndHead,
-        connectorStartHead,
+        connectorStartHead, connectorHeadSize,
         connectorToEdit,
         connectorWidth,
         items,
@@ -1327,14 +1373,15 @@ function CanvasWorkspace() {
         setConnectorColor,
         setConnectorWidth,
         setNoteColor,
-        setShapeType,
+        setShapeType: changeShapeType,
         setShowSettings,
         settings,
         shapeArrowEndHead,
-        shapeArrowStartHead,
+        shapeArrowStartHead, shapeArrowHeadSize,
         shapeType,
         shapeFillColor,
-        shapeVisualStyle, setShapeVisualStyle, shapeStrokeEnabled, setShapeStrokeEnabled, updateShapeAppearance,
+        shapeFillOpacity, setShapeFillOpacity, shapeSketchFillOpacity, setShapeSketchFillOpacity, shapeVertexCount, shapeCornerStyle, updateNewShapeGeometry,
+        shapeVisualStyle, setShapeVisualStyle, shapeStrokeEnabled, setShapeStrokeEnabled, shapeBorderWidth, setShapeBorderWidth, updateShapeAppearance,
         connectorVisualStyle, setConnectorVisualStyle,
         setShapeFillColor,
         updateShapeFill,
@@ -1346,7 +1393,7 @@ function CanvasWorkspace() {
         toggleGrid,
         updateArrowHead,
         updateConnectorAppearance,
-        updateItemRotation, updateItemDepth, updateItemShadow,
+        updateItemRotation, updateItemDepth, updateItemShadow, updateImageFrame,
         updateObjectDimensions,
         updateObjectFontSize,
         updateNewConnectorHead,

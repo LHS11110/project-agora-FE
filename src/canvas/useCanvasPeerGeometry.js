@@ -12,9 +12,9 @@ export function isCanvasSyncItem(item) {
 
 export function hasItemGeometryChanged(previous, next) {
   if (!previous || !next) return true;
-  const fields = ['x', 'y', 'width', 'height', 'rotation', 'bend', 'contentScale', 'contentScaleX', 'contentScaleY', 'fontSize', 'bendPointCount'];
+  const fields = ['x', 'y', 'width', 'height', 'rotation', 'bend', 'contentScale', 'contentScaleX', 'contentScaleY', 'fontSize', 'bendPointCount', 'headSize'];
   return fields.some((field) => (Number(previous[field]) || 0) !== (Number(next[field]) || 0))
-    || (previous.kind === 'connector' && previous.bendPoints !== next.bendPoints)
+    || (previous.bendPoints !== next.bendPoints)
     || (previous.kind === 'stroke' && previous.points !== next.points);
 }
 

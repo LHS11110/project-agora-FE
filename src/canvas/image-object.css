@@ -26,3 +26,12 @@
   min-height: 0;
   box-sizing: border-box;
 }
+
+/* Keep image content and selection handles while hiding the decorative frame. */
+.canvas-stage .image-object.image-frame-hidden > img,
+.canvas-stage .image-object.image-frame-hidden > .image-object-fallback {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+}

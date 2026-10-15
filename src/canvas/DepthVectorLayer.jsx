@@ -1,3 +1,7 @@
+import { shapeFillOpacity } from './shapeAppearance.js';
+import ImagePreviewCache, { loadImagePreview } from './ImagePreviewCache.js';
+import { apiUrl } from '../api/client.js';
+import { observeGpuContextLoss } from './gpuLayerLifecycle.js';
 import { GRAPHICS_PROFILES, graphicsResolution, graphicsRasterRatio, normalizeGraphicsQuality } from './graphicsQuality.js';
 import { changedItemIds } from './itemSnapshots.js';
 import ScenePreparationQueue from './ScenePreparationQueue.js';
@@ -36,12 +40,22 @@ export default function DepthVectorLayer(props) {
     const records = new Map();
     const preparationQueue = new ScenePreparationQueue();
     let preparation = null;
+    const readyImageIds = new Set();
+    const createImagePreviews = () => new ImagePreviewCache(
+      (source, signal) => loadImagePreview(source, latest.current.token, apiUrl, signal),
+      (source, ids) => {
+        for (const id of ids) if (latest.current.items[id]?.__imagePreview === source) readyImageIds.add(id);
+        schedule();
+      });
+    let previewToken = props.token, previewEpoch = 0, imagePreviews = createImagePreviews();
     const atlas = new RasterTextureAtlas();
     const resources = new SharedRasterCache(resource => {
       if(resource.textureHandle) atlas.release(resource.textureHandle);
       if(resource.raster.canvas)resource.raster.canvas.width=resource.raster.canvas.height=1;
     });
     const stats = element.__agoraRenderStats = { frames: 0, rasterizations: 0, cacheHits: 0, descriptorsUpdated: 0, drawnObjects: 0, texturePages: 0 };
+    let stopGpuEvents = () => {};
+    let gpuCanvas;
     let app, pendingApp, releaseGpu, gpuFailed = false, disposed = false, frame = null, draft;
     let types={items:null,kinds:new Map(),texts:0,connectors:0};
     let metricsRevision = 0, inkKey = '', previousPreviews,previousDraft,previousInkItems, previousPaintKey = '', previousOrder = '';
@@ -50,6 +64,18 @@ export default function DepthVectorLayer(props) {
       resources.release(record.resource);
     };
     const ensureWorker=()=>{if(!compositor)compositor=new WorkerFrameCompositor(element,canvas,()=>{surfaceChanged=true;schedule();},stats);};
+    const fallBackToCanvas = () => {
+      if (disposed || gpuFailed) return;
+      gpuFailed = true;
+      if (gpuCanvas) gpuCanvas.style.display = 'none';
+      stopGpuEvents();
+      releaseGpu?.(); releaseGpu = null;
+      canvas.style.display = 'none'; buffer.style.display = '';
+      element.dataset.renderer = 'canvas2d';
+      // Repaint all retained records, even if no object or camera has changed.
+      sceneInputs = null; previousPaintKey = ''; bufferCamera = null;
+      ensureWorker(); schedule();
+    };
     const ensureGpu = () => {
       if (app || pendingApp || gpuFailed || disposed || !records.size) return;
       if(!hasHardwareWebGL()){gpuFailed=true;element.dataset.renderer='canvas2d';ensureWorker();return;}
@@ -78,7 +104,11 @@ export default function DepthVectorLayer(props) {
         app.stage.sortableChildren = true;
         element.insertBefore(app.canvas, canvas);
         compositor?.destroy();compositor=null;canvas.style.display = 'none';buffer.style.display='none'; element.dataset.renderer = gl ? 'webgl' : 'webgpu';
-        app.canvas.addEventListener('webglcontextlost', () => { app.canvas.style.display='none';gpuFailed = true; canvas.style.display = 'none';buffer.style.display=''; element.dataset.renderer = 'canvas2d';ensureWorker(); schedule(); });
+        gpuCanvas = app.canvas;
+        stopGpuEvents = observeGpuContextLoss(gpuCanvas, () => disposed, () => {
+          gpuCanvas.style.display = 'none';
+          fallBackToCanvas();
+        });
         schedule();
       }).catch(() => {
         try { if (candidate.renderer) candidate.destroy(true,{children:true}); } catch { /* A partial GPU init still falls back to 2D. */ }
@@ -90,6 +120,13 @@ export default function DepthVectorLayer(props) {
       frame = null;
       if (disposed) return;
       const { items, referenceItems, worldSize: world, camera, routingRevision = 0, previewStrokes = EMPTY_PREVIEWS, inkItems = EMPTY_ITEMS } = latest.current;
+      if (previewToken !== latest.current.token) {
+        // Authenticated images belong to the current account/capability scope.
+        imagePreviews.destroy(); imagePreviews = createImagePreviews();
+        previewToken = latest.current.token; previewEpoch++; readyImageIds.clear();
+        for (const [id, record] of records) if (record.item?.__imagePreview) { destroyRecord(record); records.delete(id); }
+        sceneInputs = null; previousPaintKey = ''; bufferCamera = null;
+      }
       const moved=lastCamera && (lastCamera.x!==camera.x || lastCamera.y!==camera.y || lastCamera.scale!==camera.scale);
       if(moved){cameraActive=true;clearTimeout(cameraIdleTimer);cameraIdleTimer=setTimeout(()=>{cameraActive=false;refreshCamera=true;schedule();},120);}
       lastCamera={...camera};
@@ -142,10 +179,11 @@ export default function DepthVectorLayer(props) {
       if(sceneInputs && !unchanged){const names=['items','references','worldWidth','worldHeight','routing','metrics','previews','draft','ratio','width','height','font','color','gpu','graphicsQuality'];for(let i=0;i<inputs.length;i++)if(inputs[i]!==sceneInputs[i]){stats.refreshReasons ||= {};stats.refreshReasons[names[i]]=(stats.refreshReasons[names[i]]||0)+1;}}
       const qualityRefresh = sceneInputs && !cameraActive && desiredRatio > sceneInputs.quality * 1.25;
       const pending = preparationQueue.pending;
-      if(unchanged && !pending && !qualityRefresh && !surfaceChanged && !moved && !settling && (gpu || bufferFits))return;
+      const imagesChanged = readyImageIds.size > 0;
+      if(unchanged && !pending && !imagesChanged && !qualityRefresh && !surfaceChanged && !moved && !settling && (gpu || bufferFits))return;
       surfaceChanged=false;
-      if(unchanged && !pending && !qualityRefresh && (gpu || bufferFits)){
-        if(gpu){app.stage.position.set(camera.x,camera.y);app.stage.scale.set(camera.scale);app.renderer.render(app.stage);}
+      if(unchanged && !pending && !imagesChanged && !qualityRefresh && (gpu || bufferFits)){
+        if(gpu){app.stage.position.set(camera.x,camera.y);app.stage.scale.set(camera.scale);try { app.renderer.render(app.stage); } catch { fallBackToCanvas(); return; }}
         else blitBuffer();
         stats.frames++;stats.cachedPanFrames=(stats.cachedPanFrames||0)+1;stats.lastDrawnObjects=gpu?preparation.count:0;
         return;
@@ -162,11 +200,11 @@ export default function DepthVectorLayer(props) {
         }
       };
       let partial=false;
-      if (!unchanged || qualityRefresh) {
+      if (!unchanged || qualityRefresh || imagesChanged) {
         const compatible=sceneInputs && !qualityRefresh && inputs.every((value,i)=>i===0 || value===sceneInputs[i]);
         preparationQueue.setItems(items);
-        partial=compatible && preparation && preparationQueue.changedIds!==null;
-        if(partial){preparationQueue.invalidate(preparationQueue.changedIds);sceneInputs=inputs;sceneInputs.quality=preparation.lowestQuality;}
+        partial=compatible && preparation && (unchanged || preparationQueue.changedIds!==null);
+        if(partial){preparationQueue.invalidate([...new Set([...(unchanged ? [] : preparationQueue.changedIds), ...[...readyImageIds].filter(id=>preparationQueue.positions.has(id))])]);sceneInputs=inputs;sceneInputs.quality=preparation.lowestQuality;}
         else {
         preparationQueue.restart();
         stats.sceneEnumerations=preparationQueue.enumerations;
@@ -201,12 +239,19 @@ export default function DepthVectorLayer(props) {
         stats.preparationPasses=(stats.preparationPasses||0)+1;
         }
       }
+      readyImageIds.clear();
       const { slots:ordered, hidden, targetRatio, pixelBudget } = preparation;
       const worldKey = `${world.width}:${world.height}`;
       const preparedThisFrame=preparationQueue.run((id,item,index)=>{
         if ((!['shape','connector','stroke'].includes(item?.kind) && !isRasterText(item)) || hidden.has(id)) return;
         let record=records.get(id);
-        const routeVersion = item.kind === 'connector' ? `${routingRevision}:${metricsRevision}`
+        const sameImage = record?.item.__imagePreview === item.__imagePreview;
+        let preview = item.__imagePreview ? imagePreviews.peek(item.__imagePreview) : null;
+        if (item.__imagePreview && (!sameImage || !record?.previewVersion || !sameRasterInput(record.item, item) || record.worldKey !== worldKey || record.graphicsQuality !== quality || (!cameraActive && targetRatio > record.quality * 1.25) || record.pixelBudget > pixelBudget * 1.1)) {
+          preview = imagePreviews.request(item.__imagePreview, id);
+        }
+        const previewVersion = preview?.version || (sameImage ? record?.previewVersion : 0) || 0;
+        const routeVersion = item.__imagePreview ? `image:${previewEpoch}:${previewVersion}` : item.kind === 'connector'  ? `${routingRevision}:${metricsRevision}`
           : item.kind==='text' ? `${textAppearance.font}:${textAppearance.color}:${metricsRevision}` : '';
         const changed = !record || !sameRasterInput(record.item,item) || record.worldKey !== worldKey || record.routeVersion !== routeVersion;
         const tint=flatRectangleTint(item);
@@ -215,15 +260,16 @@ export default function DepthVectorLayer(props) {
         if(!descriptor)return;
         const key=descriptor.key;
         const qualityNeeded=record && !cameraActive && targetRatio>record.quality*1.25;
-        const rebuild = !record || record.key !== key || record.graphicsQuality !== quality || qualityNeeded
-          || (record.pixelBudget > pixelBudget*1.1 && record.raster.pixelWidth*record.raster.pixelHeight > pixelBudget*1.1);
+        const deferPreview = item.__imagePreview && preview?.state !== 'ready' && sameImage && record?.previewVersion;
+        const rebuild = !deferPreview && (!record || record.key !== key || record.graphicsQuality !== quality || qualityNeeded
+          || (record.pixelBudget > pixelBudget*1.1 && record.raster.pixelWidth*record.raster.pixelHeight > pixelBudget*1.1));
         if (rebuild) {
           const sprite=gpu?record?.sprite:null;
           if (record) {damage.push(record.paintedBounds);if(sprite)resources.release(record.resource);else destroyRecord(record);}
           const resourceKey=key+':'+targetRatio+':'+Math.round(pixelBudget);
           const resource=resources.acquire(resourceKey,()=>{
             stats.rasterizations++;
-            const raster=rasterizeObject(id,descriptor,world,referenceItems,targetRatio,pixelBudget,textAppearance);
+            const raster=rasterizeObject(id,descriptor,world,referenceItems,targetRatio,pixelBudget,{...textAppearance,imagePreview:preview?.canvas});
             raster.pixelWidth=raster.canvas.width;raster.pixelHeight=raster.canvas.height;
             return raster;
           });
@@ -243,7 +289,7 @@ export default function DepthVectorLayer(props) {
           record.paintedBounds=paintBounds(descriptor,record.raster);damage.push(record.paintedBounds);
           expandBounds(record.paintedBounds);
         }
-        record.item=item;record.worldKey=worldKey;record.routeVersion=routeVersion;
+        record.previewVersion=previewVersion;record.item=item;record.worldKey=worldKey;record.routeVersion=routeVersion;
         record.descriptor=descriptor;record.tint=tint;record.hidden=false;
         preparation.lowestQuality=Math.min(preparation.lowestQuality,record.quality);
         const raster=record.raster;
@@ -278,7 +324,7 @@ export default function DepthVectorLayer(props) {
       if (gpu) {
         atlas.flush(); stats.texturePages = atlas.pages.length;
         app.stage.position.set(camera.x,camera.y); app.stage.scale.set(camera.scale);
-        app.renderer.render(app.stage); drawn = preparation.count;
+        try { app.renderer.render(app.stage); } catch { fallBackToCanvas(); return; } drawn = preparation.count;
         previousPaintKey = '';
       } else {
         const bufferWidth=Math.round((width+margin*2)*ratio),bufferHeight=Math.round((height+margin*2)*ratio);
@@ -314,7 +360,7 @@ export default function DepthVectorLayer(props) {
             bufferContext.save(); bufferContext.translate(descriptor.x+descriptor.centerX,descriptor.y+descriptor.centerY);
             bufferContext.rotate(descriptor.rotation*Math.PI/180);
             const handle=record.resource.textureHandle;
-            if(record.tint!==null){bufferContext.fillStyle=record.item.fill;bufferContext.fillRect(-descriptor.centerX,-descriptor.centerY,Number(record.item.width)*world.width,Number(record.item.height)*world.height);}
+            if(record.tint!==null){bufferContext.globalAlpha=shapeFillOpacity(record.item);bufferContext.fillStyle=record.item.fill;bufferContext.fillRect(-descriptor.centerX,-descriptor.centerY,Number(record.item.width)*world.width,Number(record.item.height)*world.height);}
             else if(handle?.page)bufferContext.drawImage(handle.page.canvas,handle.slot.x+2,handle.slot.y+2,raster.pixelWidth,raster.pixelHeight,raster.left-descriptor.centerX,raster.top-descriptor.centerY,raster.width,raster.height);
             else bufferContext.drawImage(raster.canvas,raster.left-descriptor.centerX,raster.top-descriptor.centerY,raster.width,raster.height);
             bufferContext.restore(); drawn++;
@@ -324,6 +370,7 @@ export default function DepthVectorLayer(props) {
         previousPaintKey = bufferKey; element.dataset.renderer = 'canvas2d';blitBuffer();
       }
       stats.drawnObjects += drawn; stats.lastDrawnObjects = drawn; stats.visibleObjects = preparation.count;
+      stats.imagePreviews={scope:previewEpoch,active:imagePreviews.active,queued:imagePreviews.queued,entries:imagePreviews.entries.size,pixels:imagePreviews.pixels};
       stats.sharedRasters=resources.live.size;stats.retainedRasters=resources.idle.size;
       stats.texturePages=atlas.pages.length;
       stats.frames++;
@@ -348,7 +395,9 @@ export default function DepthVectorLayer(props) {
       observer.disconnect();themeObserver.disconnect();stage?.removeEventListener('agora-camera',cameraChanged); window.removeEventListener(CONNECTOR_METRICS_EVENT,metricsChanged);
       document.fonts?.removeEventListener('loadingdone',metricsChanged);
       latest.current.onReady?.(null); renderer.current = null;
+      stopGpuEvents();
       for (const record of records.values()) destroyRecord(record);
+      imagePreviews.destroy();
       records.clear(); resources.destroy(); atlas.destroy(); app?.destroy(true,{children:true});
       // A pending init releases its slot after completion.
       if (!pendingApp) releaseGpu?.();

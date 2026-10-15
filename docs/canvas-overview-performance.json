@@ -1,0 +1,146 @@
+{
+  "workload": {
+    "objects": 10000,
+    "images": 5000,
+    "richText": 5000,
+    "distinctImages": 200,
+    "viewport": [
+      1200,
+      800
+    ],
+    "zoomRange": [
+      0.04,
+      0.06
+    ],
+    "framesPerScenario": 180,
+    "scope": "isolated renderer fixture; warm caches; synthetic inline SVG images"
+  },
+  "hardwareWebGL": {
+    "baseline": {
+      "fps": 60.00268168409767,
+      "p95Ms": 16.700000000000728,
+      "rasterizationsDuringPan": 0,
+      "renderer": "webgl",
+      "previews": {
+        "scope": 0,
+        "active": 0,
+        "queued": 0,
+        "entries": 0,
+        "pixels": 0
+      }
+    },
+    "baselineZoom": {
+      "fps": 57.74566101038776,
+      "p95Ms": 16.799999999999272,
+      "rasterizationsDuringPan": 0,
+      "renderer": "webgl",
+      "previews": {
+        "scope": 0,
+        "active": 0,
+        "queued": 0,
+        "entries": 0,
+        "pixels": 0
+      }
+    },
+    "content": {
+      "fps": 60.0026816840976,
+      "p95Ms": 16.700000000000728,
+      "rasterizationsDuringPan": 0,
+      "renderer": "webgl",
+      "previews": {
+        "scope": 0,
+        "active": 0,
+        "queued": 0,
+        "entries": 200,
+        "pixels": 1113600
+      }
+    },
+    "contentZoom": {
+      "fps": 56.82720086351949,
+      "p95Ms": 16.799999999999272,
+      "rasterizationsDuringPan": 0,
+      "renderer": "webgl",
+      "previews": {
+        "scope": 0,
+        "active": 0,
+        "queued": 0,
+        "entries": 200,
+        "pixels": 1113600
+      }
+    },
+    "pixels": {
+      "imagePixel": [
+        36,
+        89,
+        220,
+        255
+      ],
+      "textInk": 4,
+      "textWhite": 56
+    }
+  },
+  "canvas2d": {
+    "baseline": {
+      "fps": 60.002681684097695,
+      "p95Ms": 16.799999999999955,
+      "rasterizationsDuringPan": 0,
+      "renderer": "canvas2d",
+      "previews": {
+        "scope": 0,
+        "active": 0,
+        "queued": 0,
+        "entries": 0,
+        "pixels": 0
+      }
+    },
+    "baselineZoom": {
+      "fps": 52.392799648763365,
+      "p95Ms": 16.800000000000182,
+      "rasterizationsDuringPan": 0,
+      "renderer": "canvas2d",
+      "previews": {
+        "scope": 0,
+        "active": 0,
+        "queued": 0,
+        "entries": 0,
+        "pixels": 0
+      }
+    },
+    "content": {
+      "fps": 60.00067039855192,
+      "p95Ms": 16.700000000000728,
+      "rasterizationsDuringPan": 0,
+      "renderer": "canvas2d",
+      "previews": {
+        "scope": 0,
+        "active": 0,
+        "queued": 0,
+        "entries": 200,
+        "pixels": 1113600
+      }
+    },
+    "contentZoom": {
+      "fps": 51.14577975884337,
+      "p95Ms": 16.80000000000109,
+      "rasterizationsDuringPan": 0,
+      "renderer": "canvas2d",
+      "previews": {
+        "scope": 0,
+        "active": 0,
+        "queued": 0,
+        "entries": 200,
+        "pixels": 1113600
+      }
+    },
+    "pixels": {
+      "imagePixel": [
+        36,
+        89,
+        220,
+        255
+      ],
+      "textInk": 5,
+      "textWhite": 55
+    }
+  }
+}

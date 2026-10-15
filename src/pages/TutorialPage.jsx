@@ -582,8 +582,8 @@ export default function TutorialPage() {
       : current);
   };
   const updateArrowHead = (field, value) => {
-    const head = normalizeArrowHead(value, null);
-    if (!head || !['startHead', 'endHead'].includes(field)) return;
+    const head = field === 'headSize' ? Math.max(2, Math.min(128, Number(value))) : normalizeArrowHead(value, null);
+    if (!head || !['startHead', 'endHead', 'headSize'].includes(field)) return;
     setItems((current) => {
       const item = current[selectedItemId];
       if (!(item?.kind === 'connector' || (item?.kind === 'shape' && item.shapeType === 'arrow'))) return current;
@@ -673,7 +673,7 @@ export default function TutorialPage() {
                 const itemWidth = Number(item.width) || ({ shape: 0.14, table: 0.42, link: 0.3 }[item.kind] || 0.22);
                 const itemHeight = Number(item.height) || ({ shape: 0.12, table: 0.32, link: 0.15 }[item.kind] || 0.12);
                 const arrowGeometry = item.kind === 'shape' && item.shapeType === 'arrow'
-                  ? shapeArrowGeometry(itemWidth * boardSize.width, itemHeight * boardSize.height, item.bend, item.startHead, item.endHead)
+                  ? shapeArrowGeometry(itemWidth * boardSize.width, itemHeight * boardSize.height, item.bend, item.startHead, item.endHead, item)
                   : null;
                 const bendHandle = arrowGeometry && selectedItemId === id && activeTool === 'select' && editingId !== id
                   ? <button type="button" className="shape-arrow-bend-handle" style={{ left: `${arrowGeometry.curveMidpoint.x / arrowGeometry.width * 100}%`, top: `${arrowGeometry.curveMidpoint.y / arrowGeometry.height * 100}%` }} title="몸통을 드래그해 곡률 조절" aria-label="화살표 몸통 곡률 조절" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); startArrowBend(event, id, item); }} />

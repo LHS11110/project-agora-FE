@@ -163,3 +163,11 @@ GPU 렌더링은 PixiJS 8의 스프라이트를 1,024px 텍스처 아틀라스(�
 다중 객체 이동은 선택한 ID 목록과 이동 벡터를 100ms 간격으로 묶어 브로커를 통해 승인·전달합니다. 드래그 종료 시 마지막 이동량을 즉시 반영합니다. 프로토콜과 검증은 [다중 객체 이동 전송](docs/canvas-group-movement.md)을 참고하세요.
 
 대용량 캔버스는 분할 전송·수신 ACK·전송량 제한으로 동기화합니다. 초기 접속 재시도, 인증 메타데이터 조회와 실제 20MB 연결 검증은 [연결 안정성 개선](docs/canvas-connection-stability.md)을 참고하세요.
+
+참여자 접속·퇴장 중 이전 호스트/대상을 가리키는 전송은 기존 소켓에서 목록을 재조회해 복구합니다. 처리 범위와 재현은 [브로커 참여자 전환 복구](docs/canvas-broker-membership-recovery.md)를 참고하세요.
+
+깊이 변경 시 GPU 레이어 종료와 2D 복구는 [깊이 렌더링 회귀 검증](docs/canvas-depth-rendering.md)에 기록합니다. 실제 데이터를 사용하지 않는 브라우저 픽셀 검사는 `scripts/check-depth-rendering-browser.mjs`로 재현할 수 있습니다.
+
+축소 화면에서는 텍스트 획과 실제 이미지 썸네일을 캐시해 단색 박스 표시를 완화합니다. 메모리·디코딩 제한과 GPU/2D 비교 결과는 [축소 미리보기 렌더링](docs/canvas-overview-rendering.md)에 기록합니다.
+
+다각형 꼭짓점 수·둥근 모서리·테두리 굵기·채우기 투명도·손그림 빗금 밀도와 방향키 픽셀 이동은 [도형 설정](docs/canvas-shape-appearance.md)에 설명합니다.

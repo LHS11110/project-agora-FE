@@ -1,3 +1,6 @@
+import { shapeStrokeWidth } from './shapeAppearance.js';
+import { shapeOutlinePaths } from './shapeGeometry.js';
+import { shapeArrowGeometry } from '../components/shapeArrowGeometry.js';
 import { itemDepth } from './itemDepth.js';
 import { connectorGeometry } from '../components/connectorGeometry.js';
 import { strokeSelectionGeometry } from './strokeSelection.js';
@@ -20,13 +23,13 @@ function unrotate(point, cx, cy, degrees) {
 }
 
 // Query only nearby bounds, then test the actual hit area. Shadows are not clickable.
-export function hitTestVector(index, point, world, scale = 1, order = new Map()) {
+export function hitTestVector(index, point, world, scale = 1, order = new Map(), representationScale = scale) {
   const pad = 10 / Math.max(.01, scale);
   const candidates = index.query({minX:point.x-pad/world.width, minY:point.y-pad/world.height,
     maxX:point.x+pad/world.width, maxY:point.y+pad/world.height});
   const pixel = {x:point.x*world.width, y:point.y*world.height};
   const hits = candidates.filter(({id, item}) => {
-    if (!isVectorItem(item) && !isOverviewProxy(item,world,scale)) return false;
+    if (!isVectorItem(item) && !isOverviewProxy(item,world,representationScale)) return false;
     if (item.kind === 'connector') {
       const geometry = connectorGeometry(item,index.items,world.width,world.height);
       return geometry?.points.some((p,i,points) => i && distance(pixel,points[i-1],p) <= pad)
@@ -42,7 +45,18 @@ export function hitTestVector(index, point, world, scale = 1, order = new Map())
     const x=(Number(item.x)||0)*world.width,y=(Number(item.y)||0)*world.height;
     const w=(Number(item.width)||.14)*world.width,h=(Number(item.height)||.12)*world.height;
     const local=unrotate(pixel,x+w/2,y+h/2,item.rotation);
-    return local.x>=x && local.x<=x+w && local.y>=y && local.y<=y+h;
+    if (item.kind === 'shape' && item.shapeType === 'arrow') {
+      const geometry = shapeArrowGeometry(w, h, item.bend, item.startHead, item.endHead, item);
+      const relative = { x: local.x - x, y: local.y - y };
+      if (geometry.curvePoints.some((p, i, points) => i && distance(relative, points[i - 1], p) <= Math.max(pad, shapeStrokeWidth(item) / 2))
+        || geometry.heads.some(head => head.points.some(p => Math.hypot(relative.x - p.x, relative.y - p.y) <= pad))) return true;
+    }
+    if (local.x>=x && local.x<=x+w && local.y>=y && local.y<=y+h) return true;
+    if (item.kind === 'shape' && item.shapeType !== 'arrow' && item.strokeEnabled !== false) {
+      const relative = { x: local.x - x, y: local.y - y };
+      return shapeOutlinePaths(item.shapeType, w, h, item).some(path => path.some((p, i) => i && distance(relative, path[i - 1], p) <= shapeStrokeWidth(item) / 2));
+    }
+    return false;
   });
   hits.sort((a,b)=>itemDepth(b.item)-itemDepth(a.item)
     || (order.get(b.id) ?? b.bounds.minY)-(order.get(a.id) ?? a.bounds.minY));
