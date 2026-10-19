@@ -1,3 +1,5 @@
+import { useUiLocale } from '../i18n/useUiLocale.js';
+import { ui } from '../i18n/locale.js';
 import './resize-handles.css';
 
 const directions = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
@@ -7,12 +9,15 @@ const labels = {
 };
 
 export default function ResizeHandles({ onPointerDown }) {
+  useUiLocale();
   return <span className="object-resize-handles">
     {directions.map((direction) => <button
       key={direction}
       type="button"
       className={`object-resize-handle resize-${direction}`}
-      aria-label={`${labels[direction]}에서 크기 조절`}
+      aria-label={ui("{v0}에서 크기 조절", {
+  v0: ui(labels[direction])
+})}
       tabIndex={-1}
       onPointerDown={(event) => {
         event.preventDefault();

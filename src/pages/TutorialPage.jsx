@@ -1,3 +1,6 @@
+import LanguageSwitcher from '../i18n/LanguageSwitcher.jsx';
+import { ui } from '../i18n/locale.js';
+import { useUiLocale } from '../i18n/useUiLocale.js';
 import ConnectorBendHandles from '../components/canvas/ConnectorBendHandles.jsx';
 import ConnectorPointControls from '../components/canvas/ConnectorPointControls.jsx';
 import { resizeConnectorControls } from '../canvas/connectors/controlPoints.js';
@@ -72,6 +75,7 @@ const isEditableTarget = (target) => target instanceof HTMLElement
   && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
 
 export default function TutorialPage() {
+  useUiLocale();
   const boardRef = useRef(null);
   const sceneRef = useRef(null);
   const stageWheelHandlerRef = useRef(null);
@@ -611,49 +615,49 @@ export default function TutorialPage() {
   };
 
   return <div className="tutorial-page">
-    <header className="tutorial-header">
+    <header className="tutorial-header"><LanguageSwitcher />
       <FreLogBrand />
-      <div><span className="tutorial-breadcrumb">튜토리얼 <Icon name="chevron" size={14} /> 캔버스 체험</span><span className="tutorial-local-badge"><i /> 브라우저에서만 작동</span></div>
-      <Link className="button button-outline" to="/login">계정 만들기 <Icon name="arrow" size={15} /></Link>
+      <div><span className="tutorial-breadcrumb">{"" + ui("튜토리얼") + " "}<Icon name="chevron" size={14} />{" " + ui("캔버스 체험") + ""}</span><span className="tutorial-local-badge"><i />{" " + ui("브라우저에서만 작동") + ""}</span></div>
+      <Link className="button button-outline" to="/login">{"" + ui("계정 만들기") + " "}<Icon name="arrow" size={15} /></Link>
     </header>
     <main className="tutorial-main">
       <section className="tutorial-intro">
-        <div><span className="section-kicker">A SMALL SPACE TO TRY</span><h1>FreLog 캔버스, 직접 만져보세요.</h1><p>실제 캔버스처럼 아이템을 놓고, 편집하고, 이동해보세요. 체험 데이터는 서버에 저장되지 않습니다.</p></div>
-        <div className="tutorial-steps"><span><b>01</b> 도구 선택</span><Icon name="chevron" size={14} /><span><b>02</b> 캔버스 클릭</span><Icon name="chevron" size={14} /><span><b>03</b> 자유롭게 조합</span></div>
+        <div><span className="section-kicker">A SMALL SPACE TO TRY</span><h1>{ui("FreLog 캔버스, 직접 만져보세요.")}</h1><p>{ui("실제 캔버스처럼 아이템을 놓고, 편집하고, 이동해보세요. 체험 데이터는 서버에 저장되지 않습니다.")}</p></div>
+        <div className="tutorial-steps"><span><b>01</b>{" " + ui("도구 선택") + ""}</span><Icon name="chevron" size={14} /><span><b>02</b>{" " + ui("캔버스 클릭") + ""}</span><Icon name="chevron" size={14} /><span><b>03</b>{" " + ui("자유롭게 조합") + ""}</span></div>
       </section>
-      <section className="tutorial-workspace" aria-label="인터랙티브 캔버스 체험">
-        <aside className="tutorial-tools" aria-label="캔버스 도구">
-          {tools.map((tool) => <button key={tool.id} type="button" className={activeTool === tool.id ? 'active' : ''} aria-label={tool.label} title={tool.label} aria-pressed={activeTool === tool.id} onClick={() => { setActiveTool(tool.id); setComposer(null); }}><Icon name={tool.icon} size={18} /></button>)}
+      <section className="tutorial-workspace" aria-label={ui("인터랙티브 캔버스 체험")}>
+        <aside className="tutorial-tools" aria-label={ui("캔버스 도구")}>
+          {tools.map((tool) => <button key={tool.id} type="button" className={activeTool === tool.id ? 'active' : ''} aria-label={ui(tool.label)} title={ui(tool.label)} aria-pressed={activeTool === tool.id} onClick={() => { setActiveTool(tool.id); setComposer(null); }}><Icon name={tool.icon} size={18} /></button>)}
           <div className="tutorial-tool-divider" />
-          <label className="tutorial-tool-upload" title="사진 올리기" aria-label="사진 올리기"><Icon name="image" size={18} /><input type="file" accept="image/*" onChange={uploadImage} /></label>
-          <label className="tutorial-color" title={activeTool === 'note' ? '포스트잇 색상' : activeTool === 'connect' ? '연결 화살표 색상' : '선 색상'}><input type="color" aria-label={activeTool === 'note' ? '포스트잇 색상' : activeTool === 'connect' ? '연결 화살표 색상' : '선 색상'} value={activeTool === 'note' ? noteColor : activeTool === 'connect' ? connectorColor : color} onChange={(event) => activeTool === 'note' ? setNoteColor(event.target.value) : activeTool === 'connect' ? setConnectorColor(event.target.value) : setColor(event.target.value)} /><span style={{ background: activeTool === 'note' ? noteColor : activeTool === 'connect' ? connectorColor : color }} /></label>
+          <label className="tutorial-tool-upload" title={ui("사진 올리기")} aria-label={ui("사진 올리기")}><Icon name="image" size={18} /><input type="file" accept="image/*" onChange={uploadImage} /></label>
+          <label className="tutorial-color" title={activeTool === 'note' ? ui("포스트잇 색상") : activeTool === 'connect' ? ui("연결 화살표 색상") : ui("선 색상")}><input type="color" aria-label={activeTool === 'note' ? ui("포스트잇 색상") : activeTool === 'connect' ? ui("연결 화살표 색상") : ui("선 색상")} value={activeTool === 'note' ? noteColor : activeTool === 'connect' ? connectorColor : color} onChange={(event) => activeTool === 'note' ? setNoteColor(event.target.value) : activeTool === 'connect' ? setConnectorColor(event.target.value) : setColor(event.target.value)} /><span style={{ background: activeTool === 'note' ? noteColor : activeTool === 'connect' ? connectorColor : color }} /></label>
         </aside>
         <div className="tutorial-board-column">
           <div className="tutorial-board-top">
-            <span><i /> 로컬 캔버스 · 서버 연결 없음</span>
+            <span><i />{" " + ui("로컬 캔버스 · 서버 연결 없음") + ""}</span>
             <div className="tutorial-board-actions">
-              {selectedItem && <label className="tutorial-range-control">{selectedConnector ? '곡선 방향' : '회전'} <input type="range" min="-180" max="180" step="1" value={Math.round(Number(selectedItem.rotation) || 0)} onChange={(event) => changeRotation(event.target.value)} aria-label={selectedConnector ? '선택한 화살표 곡선 방향' : '선택한 객체 회전'} /><b>{Math.round(Number(selectedItem.rotation) || 0)}°</b></label>}
-              {(activeTool === 'connect' || selectedConnector) && <><label className="tutorial-connector-color-control">색상<input type="color" value={connectorToEdit?.color || connectorColor} onChange={(event) => updateConnectorAppearance('color', event.target.value)} aria-label="연결 화살표 색상" /></label><label className="tutorial-range-control">굵기 <input type="range" min="0.8" max="4" step="0.2" value={Number(connectorToEdit?.strokeWidth) || connectorWidth} onChange={(event) => updateConnectorAppearance('strokeWidth', event.target.value)} aria-label="연결 화살표 굵기" /><b>{Number(connectorToEdit?.strokeWidth) || connectorWidth}px</b></label><ArrowHeadControls className="tutorial-arrow-head-controls" item={connectorToEdit || { startHead: connectorStartHead, endHead: connectorEndHead }} onChange={(field, value) => connectorToEdit ? updateArrowHead(field, value) : updateNewConnectorHead(field, value)} /></>}
+              {selectedItem && <label className="tutorial-range-control">{selectedConnector ? ui("곡선 방향") : ui("회전")} <input type="range" min="-180" max="180" step="1" value={Math.round(Number(selectedItem.rotation) || 0)} onChange={(event) => changeRotation(event.target.value)} aria-label={selectedConnector ? ui("선택한 화살표 곡선 방향") : ui("선택한 객체 회전")} /><b>{Math.round(Number(selectedItem.rotation) || 0)}°</b></label>}
+              {(activeTool === 'connect' || selectedConnector) && <><label className="tutorial-connector-color-control">{ui("색상")}<input type="color" value={connectorToEdit?.color || connectorColor} onChange={(event) => updateConnectorAppearance('color', event.target.value)} aria-label={ui("연결 화살표 색상")} /></label><label className="tutorial-range-control">{"" + ui("굵기") + " "}<input type="range" min="0.8" max="4" step="0.2" value={Number(connectorToEdit?.strokeWidth) || connectorWidth} onChange={(event) => updateConnectorAppearance('strokeWidth', event.target.value)} aria-label={ui("연결 화살표 굵기")} /><b>{Number(connectorToEdit?.strokeWidth) || connectorWidth}px</b></label><ArrowHeadControls className="tutorial-arrow-head-controls" item={connectorToEdit || { startHead: connectorStartHead, endHead: connectorEndHead }} onChange={(field, value) => connectorToEdit ? updateArrowHead(field, value) : updateNewConnectorHead(field, value)} /></>}
               {activeTool === 'shape' && <ShapePicker value={shapeType} onChange={setShapeType} compact />}
               {(activeTool === 'arrow' || activeTool === 'shape' && shapeType === 'arrow') && <ArrowHeadControls className="tutorial-arrow-head-controls" item={{ startHead: shapeArrowStartHead, endHead: shapeArrowEndHead }} onChange={updateNewShapeArrowHead} />}
               {activeTool === 'select' && selectedArrow && <ArrowHeadControls className="tutorial-arrow-head-controls" item={selectedArrow} onChange={updateArrowHead} />}
               {activeTool === 'eraser' && <EraserSizeControl value={eraserWidth} onChange={changeEraserWidth} compact />}
               {activeTool === 'pen' && <PenStyleControls compact brush={penBrush} opacity={penOpacity} onBrushChange={changePenBrush} onOpacityChange={changePenOpacity} />}
-              {activeTool === 'pen' && <label className="tutorial-range-control">굵기 <input type="range" min="1" max="20" step="1" value={strokeWidth} onChange={(event) => setStrokeWidth(Number(event.target.value))} aria-label="드로잉 선 굵기" /><b>{strokeWidth}px</b></label>}
-              <label className="tutorial-range-control">줌 감도 <input type="range" min="0.5" max="2" step="0.1" value={zoomSensitivity} onChange={(event) => setZoomSensitivity(Number(event.target.value))} aria-label="줌 감도" /><b>{Math.round(zoomSensitivity * 100)}%</b></label>
-              <button className="tutorial-zoom-button" type="button" aria-label="축소" title="클릭: 한 단계 축소 · 길게 누르기: 계속 축소" onPointerDown={(event) => startZoomHold(event, 1 / zoomStep)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / zoomStep)}>−</button>
+              {activeTool === 'pen' && <label className="tutorial-range-control">{"" + ui("굵기") + " "}<input type="range" min="1" max="20" step="1" value={strokeWidth} onChange={(event) => setStrokeWidth(Number(event.target.value))} aria-label={ui("드로잉 선 굵기")} /><b>{strokeWidth}px</b></label>}
+              <label className="tutorial-range-control">{"" + ui("줌 감도") + " "}<input type="range" min="0.5" max="2" step="0.1" value={zoomSensitivity} onChange={(event) => setZoomSensitivity(Number(event.target.value))} aria-label={ui("줌 감도")} /><b>{Math.round(zoomSensitivity * 100)}%</b></label>
+              <button className="tutorial-zoom-button" type="button" aria-label={ui("축소")} title={ui("클릭: 한 단계 축소 · 길게 누르기: 계속 축소")} onPointerDown={(event) => startZoomHold(event, 1 / zoomStep)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / zoomStep)}>−</button>
               <span className="tutorial-zoom-value">{Math.round(camera.scale * 100)}%</span>
-              <button className="tutorial-zoom-button" type="button" aria-label="확대" title="클릭: 한 단계 확대 · 길게 누르기: 계속 확대" onPointerDown={(event) => startZoomHold(event, zoomStep)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(zoomStep)}>+</button>
-              <button type="button" onClick={() => setCamera({ x: 0, y: 0, scale: 1 })}>맞춤</button>
-              <button type="button" onClick={() => setShowGrid((current) => !current)} aria-pressed={showGrid}><Icon name="grid" size={15} />격자 {showGrid ? '켜짐' : '꺼짐'}</button>
-              <button type="button" onClick={clear}>비우기</button>
-              <button type="button" onClick={reset}>예시 복원</button>
+              <button className="tutorial-zoom-button" type="button" aria-label={ui("확대")} title={ui("클릭: 한 단계 확대 · 길게 누르기: 계속 확대")} onPointerDown={(event) => startZoomHold(event, zoomStep)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(zoomStep)}>+</button>
+              <button type="button" onClick={() => setCamera({ x: 0, y: 0, scale: 1 })}>{ui("맞춤")}</button>
+              <button type="button" onClick={() => setShowGrid((current) => !current)} aria-pressed={showGrid}><Icon name="grid" size={15} />{"" + ui("격자") + " "}{showGrid ? ui("켜짐") : ui("꺼짐")}</button>
+              <button type="button" onClick={clear}>{ui("비우기")}</button>
+              <button type="button" onClick={reset}>{ui("예시 복원")}</button>
             </div>
           </div>
           {selectedConnector && <ConnectorPointControls item={selectedConnector} onChange={count => setItems(current => ({ ...current, [selectedItemId]: { ...current[selectedItemId], ...resizeConnectorControls(current[selectedItemId], connectorGeometry(current[selectedItemId], current, boardSize.width, boardSize.height), count) } }))} />}
           {selectedConnector && <ConnectorLabelControls item={selectedConnector} onChange={(field, value) => changeMetadata(selectedItemId, field, value)} />}
           {isTextContent(selectedItem) && <ContentRenderControls item={selectedItem} onChange={(field, value) => changeMetadata(selectedItemId, field, value)} />}
-          {(activeTool === 'table' || selectedTable) && <div className="tutorial-table-settings" onPointerDown={(event) => event.stopPropagation()}><strong>{activeTool === 'table' ? '새 테이블 설정' : '테이블 설정'}</strong><label>행<input type="number" min="1" max={MAX_TABLE_ROWS} value={activeTool === 'table' ? tableConfig.rows : selectedTable.rows?.length || 1} onChange={(event) => changeTableCount('rows', event)} /></label><label>열<input type="number" min="1" max={MAX_TABLE_COLUMNS} value={activeTool === 'table' ? tableConfig.columns : selectedTable.columns?.length || 1} onChange={(event) => changeTableCount('columns', event)} /></label><label>너비 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.width : Math.round((selectedTable.width || 0.42) * 100)} onChange={(event) => changeTableSize('width', event)} /></label><label>높이 %<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.height : Math.round((selectedTable.height || 0.32) * 100)} onChange={(event) => changeTableSize('height', event)} /></label><small>{activeTool === 'table' ? '캔버스를 클릭해 놓으세요.' : '컬럼 이름과 셀을 두 번 클릭해 Markdown으로 편집하세요.'}</small></div>}
+          {(activeTool === 'table' || selectedTable) && <div className="tutorial-table-settings" onPointerDown={(event) => event.stopPropagation()}><strong>{activeTool === 'table' ? ui("새 테이블 설정") : ui("테이블 설정")}</strong><label>{ui("행")}<input type="number" min="1" max={MAX_TABLE_ROWS} value={activeTool === 'table' ? tableConfig.rows : selectedTable.rows?.length || 1} onChange={(event) => changeTableCount('rows', event)} /></label><label>{ui("열")}<input type="number" min="1" max={MAX_TABLE_COLUMNS} value={activeTool === 'table' ? tableConfig.columns : selectedTable.columns?.length || 1} onChange={(event) => changeTableCount('columns', event)} /></label><label>{ui("너비 %")}<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.width : Math.round((selectedTable.width || 0.42) * 100)} onChange={(event) => changeTableSize('width', event)} /></label><label>{ui("높이 %")}<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.height : Math.round((selectedTable.height || 0.32) * 100)} onChange={(event) => changeTableSize('height', event)} /></label><small>{activeTool === 'table' ? ui("캔버스를 클릭해 놓으세요.") : ui("컬럼 이름과 셀을 두 번 클릭해 Markdown으로 편집하세요.")}</small></div>}
           <div
             className={`tutorial-stage${showGrid ? '' : ' no-grid'}${activeTool === 'pen' ? ' pen-active' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}`}
             ref={boardRef}
@@ -676,7 +680,7 @@ export default function TutorialPage() {
                   ? shapeArrowGeometry(itemWidth * boardSize.width, itemHeight * boardSize.height, item.bend, item.startHead, item.endHead, item)
                   : null;
                 const bendHandle = arrowGeometry && selectedItemId === id && activeTool === 'select' && editingId !== id
-                  ? <button type="button" className="shape-arrow-bend-handle" style={{ left: `${arrowGeometry.curveMidpoint.x / arrowGeometry.width * 100}%`, top: `${arrowGeometry.curveMidpoint.y / arrowGeometry.height * 100}%` }} title="몸통을 드래그해 곡률 조절" aria-label="화살표 몸통 곡률 조절" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); startArrowBend(event, id, item); }} />
+                  ? <button type="button" className="shape-arrow-bend-handle" style={{ left: `${arrowGeometry.curveMidpoint.x / arrowGeometry.width * 100}%`, top: `${arrowGeometry.curveMidpoint.y / arrowGeometry.height * 100}%` }} title={ui("몸통을 드래그해 곡률 조절")} aria-label={ui("화살표 몸통 곡률 조절")} onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); startArrowBend(event, id, item); }} />
                   : null;
                 const itemClass = `${selectedClass}${canResize ? ' resizeable' : ''}${item.height ? ' has-custom-height' : ''}`;
                 const resizeHandles = canResize ? <ResizeHandles onPointerDown={(event, handle) => startItemResize(event, id, handle)} /> : null;
@@ -716,11 +720,13 @@ export default function TutorialPage() {
                   const bendHandle = selectedItemId === id && activeTool === 'select'
                     ? <ConnectorBendHandles geometry={curve} offsetX={offsetX} offsetY={offsetY} width={geometryWidth} height={geometryHeight} onStart={(event, index) => startArrowBend(event, id, item, index)} />
                     : null;
-                  return <div key={id} className={`tutorial-item tutorial-vector-hit${itemClass}`} style={{ ...style, left: `${bounds.minX * 100}%`, top: `${bounds.minY * 100}%`, width: `${Math.max(0.01, bounds.maxX - bounds.minX) * 100}%`, height: `${Math.max(0.01, bounds.maxY - bounds.minY) * 100}%` }} {...commonHandlers} title="한 번 클릭해 선택 · 두 번 클릭해 연결된 객체로 이동">{curvePath && <svg className="tutorial-connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} />{connectorEnds.map((point, index) => <circle key={index} cx={point.x - offsetX} cy={point.y - offsetY} r="9" />)}</svg>}<ConnectorLabel item={item} geometry={curve} offsetX={offsetX} offsetY={offsetY} />{bendHandle}{resizeHandles}</div>;
+                  return <div key={id} className={`tutorial-item tutorial-vector-hit${itemClass}`} style={{ ...style, left: `${bounds.minX * 100}%`, top: `${bounds.minY * 100}%`, width: `${Math.max(0.01, bounds.maxX - bounds.minX) * 100}%`, height: `${Math.max(0.01, bounds.maxY - bounds.minY) * 100}%` }} {...commonHandlers} title={ui("한 번 클릭해 선택 · 두 번 클릭해 연결된 객체로 이동")}>{curvePath && <svg className="tutorial-connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} />{connectorEnds.map((point, index) => <circle key={index} cx={point.x - offsetX} cy={point.y - offsetY} r="9" />)}</svg>}<ConnectorLabel item={item} geometry={curve} offsetX={offsetX} offsetY={offsetY} />{bendHandle}{resizeHandles}</div>;
                 }
                 if (item.kind === 'link') {
                   return <div key={id} className={`tutorial-item tutorial-media-link-item ${item.mediaType === 'link' ? 'external-link-object' : 'video-link-object'}${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.3) * 100}%`, height: `${(Number(item.height) || 0.15) * 100}%` }} {...commonHandlers}>
-                    <div className="shared-media-header"><span className="shared-media-drag-handle" title="여기를 끌어 자료를 이동하세요"><Icon name={item.mediaType === 'link' ? 'link' : 'image'} size={13} />{item.mediaType === 'youtube' ? `YouTube · ${item.title || '동영상'}` : item.mediaType === 'video' ? `동영상 · ${item.title || '재생'}` : '링크'}</span></div>
+                    <div className="shared-media-header"><span className="shared-media-drag-handle" title={ui("여기를 끌어 자료를 이동하세요")}><Icon name={item.mediaType === 'link' ? 'link' : 'image'} size={13} />{item.mediaType === 'youtube' ? `YouTube · ${item.title || ui("동영상")}` : item.mediaType === 'video' ? ui("동영상 · {v0}", {
+  v0: item.title || ui("재생")
+}) : ui("링크")}</span></div>
                     <SharedMediaContent item={item} />
                     {resizeHandles}
                   </div>;
@@ -732,13 +738,13 @@ export default function TutorialPage() {
                   return <div key={id} className={`tutorial-item tutorial-shape-hit tutorial-shape-${item.shapeType || 'rectangle'}${itemClass}`} style={{ ...style, width: `${itemWidth * 100}%`, height: `${itemHeight * 100}%` }} {...commonHandlers}>{bendHandle}{resizeHandles}</div>;
                 }
                 if (item.kind === 'image') {
-                  return <div key={id} className={`tutorial-item tutorial-image-item${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.3) * 100}%` }} {...commonHandlers}><img src={item.src} alt={item.filename || '튜토리얼 이미지'} /><div>{item.filename || '이미지'}</div>{resizeHandles}</div>;
+                  return <div key={id} className={`tutorial-item tutorial-image-item${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.3) * 100}%` }} {...commonHandlers}><img src={item.src} alt={item.filename || ui("튜토리얼 이미지")} /><div>{item.filename || ui("이미지")}</div>{resizeHandles}</div>;
                 }
                 if (item.kind === 'note') {
                   return <div key={id} className={`tutorial-item tutorial-sticky-note${itemClass}`} style={{ ...style, width: `${(Number(item.width) || 0.24) * 100}%` }} {...commonHandlers}>
-                    <div className="tutorial-sticky-head"><span title="끌어서 포스트잇 이동"><Icon name="sticky" size={13} /> 포스트잇</span><input type="color" aria-label="포스트잇 색상" title="포스트잇 색상 변경" value={item.color || stickyNoteColors[0]} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'color', event.target.value)} /></div>
-                    {editingId === id ? <textarea autoFocus aria-label="포스트잇 Markdown 편집" value={item.text || ''} placeholder={'# 메모 제목\n- 할 일\n**중요한 내용**'} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeText(id, event.target.value)} /> : <div className="tutorial-sticky-content" onDoubleClick={() => { setSelectedItemId(id); setEditingId(id); }} title="두 번 클릭해 Markdown 편집">{item.text ? <MarkdownText source={item.text} /> : <p className="tutorial-sticky-empty">두 번 클릭해 메모를 작성하세요.</p>}</div>}
-                    <small>간단한 Markdown · 로컬 체험</small>
+                    <div className="tutorial-sticky-head"><span title={ui("끌어서 포스트잇 이동")}><Icon name="sticky" size={13} />{" " + ui("포스트잇") + ""}</span><input type="color" aria-label={ui("포스트잇 색상")} title={ui("포스트잇 색상 변경")} value={item.color || stickyNoteColors[0]} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeMetadata(id, 'color', event.target.value)} /></div>
+                    {editingId === id ? <textarea autoFocus aria-label={ui("포스트잇 Markdown 편집")} value={item.text || ''} placeholder={ui("# 메모 제목\n- 할 일\n**중요한 내용**")} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeText(id, event.target.value)} /> : <div className="tutorial-sticky-content" onDoubleClick={() => { setSelectedItemId(id); setEditingId(id); }} title={ui("두 번 클릭해 Markdown 편집")}>{item.text ? <MarkdownText source={item.text} /> : <p className="tutorial-sticky-empty">{ui("두 번 클릭해 메모를 작성하세요.")}</p>}</div>}
+                    <small>{ui("간단한 Markdown · 로컬 체험")}</small>
                     {resizeHandles}
                   </div>;
                 }
@@ -755,13 +761,15 @@ export default function TutorialPage() {
             <LaserLayer strokes={laserStrokes} width={boardSize.width} height={boardSize.height} camera={camera} />
             {activeTool === 'eraser' && <div className="eraser-cursor" ref={eraserCursorRef} style={{ width: `${eraserWidth}px`, height: `${eraserWidth}px` }} aria-hidden="true" />}
             {sharePosition && <ShareComposer onCancel={() => { setSharePosition(null); setActiveTool('select'); }} onSubmit={placeSharedLink} />}
-            {composer && <form className="tutorial-editor" onPointerDown={(event) => event.stopPropagation()} onSubmit={(event) => { event.preventDefault(); placeComposer(); }}><div className="tutorial-editor-heading"><span>수식 작성</span><button type="button" onClick={() => setComposer(null)} aria-label="닫기"><Icon name="close" size={15} /></button></div><textarea autoFocus value={composer.value} onChange={(event) => setComposer((current) => ({ ...current, value: event.target.value }))} aria-label="수식 입력" /><button className="tutorial-place-button" type="submit">캔버스에 놓기 <Icon name="arrow" size={14} /></button></form>}
-            <span className="tutorial-stage-hint">{activeTool === 'select' && (selectedArrow || selectedConnector) ? '가운데 조절점을 드래그해 화살표 몸통을 휘어보세요.' : activeTool === 'select' ? '오브젝트 드래그 이동 · 빈 곳 드래그 또는 Space + 드래그 이동' : activeTool === 'eraser' ? '지우개 도구 · 드래그한 곳의 선 부분만 지우기' : activeTool === 'laser' ? '드래그해 가리키면 흔적이 1.6초 동안 서서히 사라져요.' : `${tools.find((tool) => tool.id === activeTool)?.label} 도구 · 캔버스를 클릭`}</span>
+            {composer && <form className="tutorial-editor" onPointerDown={(event) => event.stopPropagation()} onSubmit={(event) => { event.preventDefault(); placeComposer(); }}><div className="tutorial-editor-heading"><span>{ui("수식 작성")}</span><button type="button" onClick={() => setComposer(null)} aria-label={ui("닫기")}><Icon name="close" size={15} /></button></div><textarea autoFocus value={composer.value} onChange={(event) => setComposer((current) => ({ ...current, value: event.target.value }))} aria-label={ui("수식 입력")} /><button className="tutorial-place-button" type="submit">{"" + ui("캔버스에 놓기") + " "}<Icon name="arrow" size={14} /></button></form>}
+            <span className="tutorial-stage-hint">{activeTool === 'select' && (selectedArrow || selectedConnector) ? ui("가운데 조절점을 드래그해 화살표 몸통을 휘어보세요.") : activeTool === 'select' ? ui("오브젝트 드래그 이동 · 빈 곳 드래그 또는 Space + 드래그 이동") : activeTool === 'eraser' ? ui("지우개 도구 · 드래그한 곳의 선 부분만 지우기") : activeTool === 'laser' ? ui("드래그해 가리키면 흔적이 1.6초 동안 서서히 사라져요.") : ui("{v0} 도구 · 캔버스를 클릭", {
+  v0: ui(tools.find(tool => tool.id === activeTool)?.label)
+})}</span>
           </div>
-          <div className="tutorial-board-footer"><span>{Object.keys(items).length}개 오브젝트</span><span><i /> 이 탭에서만 유지 · 저장되지 않음</span></div>
+          <div className="tutorial-board-footer"><span>{Object.keys(items).length}{ui("개 오브젝트")}</span><span><i />{" " + ui("이 탭에서만 유지 · 저장되지 않음") + ""}</span></div>
         </div>
       </section>
-      <aside className="tutorial-footnote"><Icon name="sparkle" size={17} /><p><strong>다음은 실제 캔버스에서.</strong> 이 화면은 서버 저장이나 공동 편집 없이 실제 캔버스의 배치, 편집, 이동 동작을 체험합니다.</p><Link to="/login">시작하기 <Icon name="arrow" size={14} /></Link></aside>
+      <aside className="tutorial-footnote"><Icon name="sparkle" size={17} /><p><strong>{ui("다음은 실제 캔버스에서.")}</strong>{" " + ui("이 화면은 서버 저장이나 공동 편집 없이 실제 캔버스의 배치, 편집, 이동 동작을 체험합니다.") + ""}</p><Link to="/login">{"" + ui("시작하기") + " "}<Icon name="arrow" size={14} /></Link></aside>
     </main>
   </div>;
 }

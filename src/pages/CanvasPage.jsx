@@ -1,4 +1,5 @@
-import {researchTemplates,researchTemplateManifest,findResearchTemplatePosition} from '../canvas/researchTemplates.js';
+import { ui } from '../i18n/locale.js';
+import { useUiLocale } from '../i18n/useUiLocale.js';
 import useCanvasChrome from '../canvas/panels/useCanvasChrome.js';
 import ChromeToggle from '../canvas/panels/ChromeToggle.jsx';
 import '../canvas/panels/canvas-chrome.css';
@@ -101,6 +102,7 @@ const STROKE_WIDTH_KEY = 'agora_canvas_stroke_width';
 const automergeReady = Automerge.initializeWasm(automergeWasmUrl);
 
 function CanvasWorkspace() {
+  useUiLocale();
   const [showCanvasCode, setShowCanvasCode] = useState(false);
   const { canvasId } = useParams();
   const { token, user } = useAuth();
@@ -967,7 +969,9 @@ function CanvasWorkspace() {
     setItems(nextItems);
     ids.filter(id => nextItems[id]?.kind === 'note').forEach(id => saveCollaborativeItemRef.current?.(id, { silent: true }));
     if (shouldGroup) selectItems(ids, ids[ids.length - 1]);
-    setToast(shouldGroup ? `${ids.length}개 오브젝트를 그룹화했습니다.` : '그룹을 해제했습니다.');
+    setToast(shouldGroup ? ui("{v0}개 오브젝트를 그룹화했습니다.", {
+  v0: ids.length
+}) : '그룹을 해제했습니다.');
   };
   useGroupShortcuts({ editing: !hostStatus.editable || editingId != null, onGroup: changeSelectionGroup });
   const startEditing = (id) => {
@@ -1242,21 +1246,6 @@ function CanvasWorkspace() {
   }, [editingId, finishEditing]);
   const updateContentSetting = useContentSettings({ itemsRef, setItems, updateCollaborativeMetadata, sendItemChange, refreshSpatialIndex });
   const canvasCodeApi = useCanvasAsCode({ canvasId, itemsRef, committedItemsRef, canvasSnapshotLoadedRef: hostReadyRef, permission, addItem, deleteItem, updateCollaborativeText, saveCollaborativeItem, sendItemChange, setItems, markItemDirty, refreshSpatialIndex, selectItems, peerMeshRef, syncClockRef, syncActorRef, itemSyncVersionsRef, getCollaborativeDoc });
-  const insertResearchTemplate = (type) => {
-    if (!hostStatus.editable) { setToast('캔버스 연결을 확인해주세요.'); return; }
-    const preset=researchTemplates.find(t=>t.id===type);if(!preset)return;
-    try {
-      const center={x:(viewportSize.width/2-camera.x)/camera.scale,y:(viewportSize.height/2-camera.y)/camera.scale};
-      const position=findResearchTemplatePosition(preset,center,rect=>spatialIndex.query({
-        minX:rect.x/boardSize.width,minY:rect.y/boardSize.height,
-        maxX:(rect.x+rect.width)/boardSize.width,maxY:(rect.y+rect.height)/boardSize.height}).length>0);
-      const manifest=researchTemplateManifest(type,{prefix:createId(),permission,...position});
-      canvasCodeApi.apply(canvasCodeApi.plan(manifest));setActiveTool('select');
-      const scale=Math.max(.01,Math.min(camera.scale,(viewportSize.width-100)/preset.width,(viewportSize.height-100)/preset.height));
-      setCamera({scale,x:viewportSize.width/2-(position.x+preset.width/2)*scale,y:viewportSize.height/2-(position.y+preset.height/2)*scale});
-      setToast('예시 구조를 삽입했습니다. 각 객체를 선택해 편집할 수 있습니다.');
-    } catch(error) { setToast(error.message); }
-  };
   const clipboardBlocked = !hostStatus.editable || editingId != null || showSettings || showParticipants || showCanvasCode || sharePosition != null;
   const objectClipboard = useObjectClipboard({ canvasId, boardRef, itemsRef, selectedIds: selectedObjectIds,
     permission, pointerPosition, canvasSnapshotLoadedRef: hostReadyRef, addItem, deleteItem, saveCollaborativeItem,
@@ -1285,19 +1274,19 @@ function CanvasWorkspace() {
   return <div className="canvas-app-page" data-theme={theme} data-info-collapsed={chrome.collapsed.info}>
     <div style={{ display: 'contents' }} inert={!hostStatus.editable && !error ? '' : undefined}>
     <header className={`canvas-topbar${chrome.collapsed.info?' is-collapsed':''}`}>
-      {chrome.collapsed.info && <span className="canvas-chrome-label">캔버스 정보</span>}
+      {chrome.collapsed.info && <span className="canvas-chrome-label">{ui("캔버스 정보")}</span>}
       <div id="canvas-info-content" className="canvas-info-content" hidden={chrome.collapsed.info}>
-      <div className="canvas-title-group"><Link to="/search" className="canvas-back" aria-label="캔버스 목록"><Icon name="back" size={19} /></Link><div className="canvas-cover-image"><AuthenticatedImage src={canvas?.image} token={token} alt="캔버스 대표 이미지" fallback={<div className="canvas-cover-art"><i /><i /><i /><span>FR</span></div>} loadingFallback={<div className="canvas-cover-art"><i /><i /><i /><span>FR</span></div>} /></div><div className="canvas-title-copy"><span>FRELOG CANVAS · #{canvasId}</span><h1>{canvas?.canvas_name || `캔버스 ${canvasId}`}</h1></div></div>
-      <div className="canvas-header-right"><div className="canvas-description-card"><span>캔버스 설명</span><p>{canvas?.description || '함께 아이디어를 모으고 실시간으로 만들어가는 공간입니다.'}</p></div><div className="canvas-top-right"><span className={`connection-pill ${connection}`} role="status" aria-live="polite" title={connection === 'connecting' ? '다시 연결하는 중입니다. 캔버스 편집은 계속할 수 있고 변경 사항은 연결 후 저장됩니다.' : connection === 'connected' ? '서버에 연결되어 변경 사항을 동기화하고 있습니다.' : '서버 연결이 해제되었습니다.'}><i />{connection === 'connected' ? '연결됨' : connection === 'connecting' ? '연결 중' : '연결 해제'}</span><div className="collaborator-avatars"><UserAvatar user={user} token={token} className="avatar-small" />{otherParticipants.slice(0, 2).map((person) => <UserAvatar key={`${person.nickname}-${person.tag_number}`} user={person} token={token} className="avatar-small" />)}</div><button className="button button-outline canvas-settings-button" title="참여자 관리" aria-label="참여자 관리" onClick={() => { setShowSettings(false); setShowParticipants(true); }}><Icon name="user" size={17} /><span>참여자</span></button><button className="button button-outline canvas-settings-button" onClick={() => { setShowParticipants(false); setShowSettings(true); }}><Icon name="settings" size={17} /><span>설정</span></button></div></div>
-      </div><ChromeToggle label="캔버스 정보" collapsed={chrome.collapsed.info} onToggle={()=>chrome.toggle('info')} controls="canvas-info-content" />
+      <div className="canvas-title-group"><Link to="/search" className="canvas-back" aria-label={ui("캔버스 목록")}><Icon name="back" size={19} /></Link><div className="canvas-cover-image"><AuthenticatedImage src={canvas?.image} token={token} alt={ui("캔버스 대표 이미지")} fallback={<div className="canvas-cover-art"><i /><i /><i /><span>FR</span></div>} loadingFallback={<div className="canvas-cover-art"><i /><i /><i /><span>FR</span></div>} /></div><div className="canvas-title-copy"><span>FRELOG CANVAS · #{canvasId}</span><h1>{canvas?.canvas_name || ui('캔버스 {id}',{id:canvasId})}</h1></div></div>
+      <div className="canvas-header-right"><div className="canvas-description-card"><span>{ui("캔버스 설명")}</span><p>{canvas?.description || ui("함께 아이디어를 모으고 실시간으로 만들어가는 공간입니다.")}</p></div><div className="canvas-top-right"><span className={`connection-pill ${connection}`} role="status" aria-live="polite" title={connection === 'connecting' ? ui("다시 연결하는 중입니다. 캔버스 편집은 계속할 수 있고 변경 사항은 연결 후 저장됩니다.") : connection === 'connected' ? ui("서버에 연결되어 변경 사항을 동기화하고 있습니다.") : ui("서버 연결이 해제되었습니다.")}><i />{connection === 'connected' ? ui("연결됨") : connection === 'connecting' ? ui("연결 중") : ui("연결 해제")}</span><div className="collaborator-avatars"><UserAvatar user={user} token={token} className="avatar-small" />{otherParticipants.slice(0, 2).map((person) => <UserAvatar key={`${person.nickname}-${person.tag_number}`} user={person} token={token} className="avatar-small" />)}</div><button className="button button-outline canvas-settings-button" title={ui("참여자 관리")} aria-label={ui("참여자 관리")} onClick={() => { setShowSettings(false); setShowParticipants(true); }}><Icon name="user" size={17} /><span>{ui("참여자")}</span></button><button className="button button-outline canvas-settings-button" onClick={() => { setShowParticipants(false); setShowSettings(true); }}><Icon name="settings" size={17} /><span>{ui("설정")}</span></button></div></div>
+      </div><ChromeToggle label={ui("캔버스 정보")} collapsed={chrome.collapsed.info} onToggle={()=>chrome.toggle('info')} controls="canvas-info-content" />
     </header>
-    {error ? <div className="canvas-error-state"><div className="error-art"><Icon name="grid" size={30} /></div><span className="section-kicker">CANVAS CONNECTION</span><h1>캔버스를 열 수 없어요.</h1><p>{error}</p><div><button className="button button-dark" onClick={() => window.location.reload()}>다시 연결하기</button><Link className="button button-outline" to="/search">캔버스 목록</Link></div></div> : <div className="canvas-workspace resizable-workspace" ref={panelLayout.ref} style={panelLayout.style}>
+    {error ? <div className="canvas-error-state"><div className="error-art"><Icon name="grid" size={30} /></div><span className="section-kicker">CANVAS CONNECTION</span><h1>{ui("캔버스를 열 수 없어요.")}</h1><p>{error}</p><div><button className="button button-dark" onClick={() => window.location.reload()}>{ui("다시 연결하기")}</button><Link className="button button-outline" to="/search">{ui("캔버스 목록")}</Link></div></div> : <div className="canvas-workspace resizable-workspace" ref={panelLayout.ref} style={panelLayout.style}>
       <ResizablePanel {...panelLayout.handle('tools')}><CanvasToolPanel activeTool={activeTool} onSelectTool={(tool) => {
         if (tool === 'hand') finishEditing();
         if (tool === 'connect') setConnectionStartId(null);
         setActiveTool(tool);
       }} color={color} onColorChange={setColor} onUploadPdf={uploadPdf} onUploadImage={uploadImage} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} /></ResizablePanel>
-      <main className="board-region"><div className="board-topline"><span className="board-section-label"><i /> 2차 좌표 캔버스</span><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(true); }}><Icon name="code" size={15} />캔버스 코드</button><button className="zoom-button" aria-label="확대" title="클릭: 한 단계 확대 · 길게 누르기: 계속 확대" onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label="축소" title="클릭: 한 단계 축소 · 길게 누르기: 계속 축소" onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>맞춤</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />격자 {showGrid ? '켜짐' : '꺼짐'}</button></div></div>
+      <main className="board-region"><div className="board-topline"><span className="board-section-label"><i />{" " + ui("2차 좌표 캔버스") + ""}</span><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(true); }}><Icon name="code" size={15} />{ui("캔버스 코드")}</button><button className="zoom-button" aria-label={ui("확대")} title={ui("클릭: 한 단계 확대 · 길게 누르기: 계속 확대")} onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label={ui("축소")} title={ui("클릭: 한 단계 축소 · 길게 누르기: 계속 축소")} onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>{ui("맞춤")}</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />{"" + ui("격자") + " "}{showGrid ? ui("켜짐") : ui("꺼짐")}</button></div></div>
       <HostCanvasStatus status={hostStatus} receipt={lastReceipt} onRetry={retryRejected} collapsed={chrome.collapsed.host} onToggle={()=>chrome.toggle('host')} />
         <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ ...canvasGridStyle(camera), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion: cancelPanInertia, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, pickVector: (event,doubleClick = false,capture = false) => {
             if (!['select', 'connect'].includes(activeTool) || event.button !== 0 || event.target.closest?.('.canvas-minimap, .stage-label, button, input, textarea')) return false;
@@ -1315,7 +1304,7 @@ function CanvasWorkspace() {
             return true;
           } })}>
           <InteractiveAtmosphere variant="canvas" />
-          <div className="stage-label"><span>FRELOG / {String(canvasId).padStart(2, '0')}</span><b>{canvas?.canvas_name || '공유 캔버스'}</b></div>
+          <div className="stage-label"><span>FRELOG / {String(canvasId).padStart(2, '0')}</span><b>{canvas?.canvas_name || ui("공유 캔버스")}</b></div>
           <div className="canvas-grid-surface" aria-hidden="true" />
           <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true">{showXAxis && <><span className="coordinate-x" /><b className="coordinate-x-label">X</b></>}{showYAxis && <><span className="coordinate-y" /><b className="coordinate-y-label">Y</b></>}{(showXAxis || showYAxis) && <i className="coordinate-origin">0</i>}</div>
           <div className="canvas-scene" ref={sceneRef} style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }}>
@@ -1331,11 +1320,11 @@ function CanvasWorkspace() {
           </div>
           <LaserLayer strokes={laserStrokes} width={viewportSize.width} height={viewportSize.height} worldSize={boardSize} camera={camera} />
           {selectionBox && <div className="canvas-selection-marquee" style={{ left: selectionBox.left, top: selectionBox.top, width: selectionBox.width, height: selectionBox.height }} aria-hidden="true" />}
-          <div className={`canvas-minimap${chrome.collapsed.minimap?' is-collapsed':''}`} ref={minimapWidgetRef} style={minimapPosition ? { left: `${minimapPosition.left}px`, top: `${minimapPosition.top}px`, right: 'auto', bottom: 'auto' } : undefined} role="group" aria-label="캔버스 미니맵">
-            <div className="canvas-minimap-heading" onPointerDown={startMinimapWidgetMove} onPointerMove={moveMinimapWidget} onPointerUp={stopMinimapWidgetMove} onPointerCancel={stopMinimapWidgetMove} onLostPointerCapture={stopMinimapWidgetMove}><strong>미니맵{!chrome.collapsed.minimap && ' · 현재 화면'}</strong><ChromeToggle label="미니맵" collapsed={chrome.collapsed.minimap} onToggle={()=>chrome.toggle('minimap')} controls="canvas-minimap-content" /></div>
-            <div id="canvas-minimap-content" className="canvas-minimap-map" hidden={chrome.collapsed.minimap} title="클릭해 해당 위치로 이동 · 안쪽을 드래그해도 캔버스는 움직이지 않습니다" onPointerDown={startMinimapPan} onPointerMove={moveMinimapPan} onPointerUp={stopMinimapPan} onPointerCancel={stopMinimapPan} onLostPointerCapture={stopMinimapPan}>
+          <div className={`canvas-minimap${chrome.collapsed.minimap?' is-collapsed':''}`} ref={minimapWidgetRef} style={minimapPosition ? { left: `${minimapPosition.left}px`, top: `${minimapPosition.top}px`, right: 'auto', bottom: 'auto' } : undefined} role="group" aria-label={ui("캔버스 미니맵")}>
+            <div className="canvas-minimap-heading" onPointerDown={startMinimapWidgetMove} onPointerMove={moveMinimapWidget} onPointerUp={stopMinimapWidgetMove} onPointerCancel={stopMinimapWidgetMove} onLostPointerCapture={stopMinimapWidgetMove}><strong>{ui("미니맵")}{!chrome.collapsed.minimap && ui(" · 현재 화면")}</strong><ChromeToggle label={ui("미니맵")} collapsed={chrome.collapsed.minimap} onToggle={()=>chrome.toggle('minimap')} controls="canvas-minimap-content" /></div>
+            <div id="canvas-minimap-content" className="canvas-minimap-map" hidden={chrome.collapsed.minimap} title={ui("클릭해 해당 위치로 이동 · 안쪽을 드래그해도 캔버스는 움직이지 않습니다")} onPointerDown={startMinimapPan} onPointerMove={moveMinimapPan} onPointerUp={stopMinimapPan} onPointerCancel={stopMinimapPan} onLostPointerCapture={stopMinimapPan}>
               {!chrome.collapsed.minimap && <CanvasMinimapObjects minimap={minimap} colors={minimapItemColors} selected={selectedObjectIdSet} />}
-              <svg className="canvas-minimap-svg" viewBox={`${minimap.bounds.minX} ${minimap.bounds.minY} ${minimap.bounds.width} ${minimap.bounds.height}`} preserveAspectRatio="none" aria-label="현재 화면을 중심으로 한 주변 객체">
+              <svg className="canvas-minimap-svg" viewBox={`${minimap.bounds.minX} ${minimap.bounds.minY} ${minimap.bounds.width} ${minimap.bounds.height}`} preserveAspectRatio="none" aria-label={ui("현재 화면을 중심으로 한 주변 객체")}>
                 {showYAxis && <line className="canvas-minimap-axis" x1={boardSize.width / 2} y1={minimap.bounds.minY} x2={boardSize.width / 2} y2={minimap.bounds.maxY} />}
                 {showXAxis && <line className="canvas-minimap-axis" x1={minimap.bounds.minX} y1={boardSize.height / 2} x2={minimap.bounds.maxX} y2={boardSize.height / 2} />}
                 <rect className="canvas-minimap-viewport" x={minimap.viewport.minX} y={minimap.viewport.minY} width={minimap.viewport.maxX - minimap.viewport.minX} height={minimap.viewport.maxY - minimap.viewport.minY} rx="2" />
@@ -1344,10 +1333,10 @@ function CanvasWorkspace() {
           </div>
           {activeTool === 'eraser' && <div className="eraser-cursor" ref={eraserCursorRef} style={{ width: `${eraserWidth}px`, height: `${eraserWidth}px` }} aria-hidden="true" />}
           {sharePosition && <ShareComposer onCancel={() => { setSharePosition(null); setActiveTool('select'); }} onSubmit={placeSharedLink} />}
-          {activeTool === 'laser' && <div className="draw-cursor-label laser-cursor-label"><Icon name="laser" size={13} /> 가리키는 중 · 1.6초 후 사라짐</div>}{activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} /> 그리는 중</div>}{activeTool === 'eraser' && <div className="draw-cursor-label"><Icon name="eraser" size={13} /> 드로잉을 드래그해 지우기</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? '도착 오브젝트 선택' : '시작 오브젝트 선택'}</div>}{activeTool === 'link' && !sharePosition && <div className="draw-cursor-label"><Icon name="link" size={13} /> 공유 자료를 놓을 위치 선택</div>}
-        </div><div className="board-footer"><span>무한 좌표 평면{showXAxis && showYAxis ? ' · X/Y축' : showXAxis ? ' · X축' : showYAxis ? ' · Y축' : ''}</span><span className="board-footer-center">빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동</span><span>{visibleItemCount}/{drawableItemCount}개 표시</span></div>
+          {activeTool === 'laser' && <div className="draw-cursor-label laser-cursor-label"><Icon name="laser" size={13} />{" " + ui("가리키는 중 · 1.6초 후 사라짐") + ""}</div>}{activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} />{" " + ui("그리는 중") + ""}</div>}{activeTool === 'eraser' && <div className="draw-cursor-label"><Icon name="eraser" size={13} />{" " + ui("드로잉을 드래그해 지우기") + ""}</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? ui("도착 오브젝트 선택") : ui("시작 오브젝트 선택")}</div>}{activeTool === 'link' && !sharePosition && <div className="draw-cursor-label"><Icon name="link" size={13} />{" " + ui("공유 자료를 놓을 위치 선택") + ""}</div>}
+        </div><div className="board-footer"><span>{ui("무한 좌표 평면")}{showXAxis && showYAxis ? ui(" · X/Y축") : showXAxis ? ui(" · X축") : showYAxis ? ui(" · Y축") : ''}</span><span className="board-footer-center">{ui("빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동")}</span><span>{visibleItemCount}/{drawableItemCount}{ui("개 표시")}</span></div>
       </main>
-<ResizablePanel {...panelLayout.handle('inspector')}><CanvasInspectorPanel onInsertResearchTemplate={insertResearchTemplate} graphicsQuality={graphicsQuality} changeGraphicsQuality={changeGraphicsQuality} spatialIndex={spatialIndex} updateContentSetting={updateContentSetting} onNavigateObject={focusCanvasObject} {...{
+<ResizablePanel {...panelLayout.handle('inspector')}><CanvasInspectorPanel graphicsQuality={graphicsQuality} changeGraphicsQuality={changeGraphicsQuality} spatialIndex={spatialIndex} updateContentSetting={updateContentSetting} onNavigateObject={focusCanvasObject} {...{
         activeTool,
         canvasId,
         canvasParticipants,
@@ -1417,7 +1406,7 @@ function CanvasWorkspace() {
       }} /></ResizablePanel>
 <ResizablePanel {...panelLayout.handle('chat')}><CanvasChatPanel {...{ chatHistoryLoading, connection, hasOlderMessages, loadOlderMessages, message, messages, setMessage, submitMessage }} /></ResizablePanel>
     </div>}
-    {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{toast}</div>}
+    {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{ui(toast)}</div>}
     {showCanvasCode && <CanvasAsCodeDialog api={canvasCodeApi} canvasId={canvasId} onClose={() => setShowCanvasCode(false)} />}
     {showSettings && <SettingsDialog backgroundColor={backgroundColor} setBackgroundColor={setBackgroundColor} favoriteColors={favoriteColors} saveFavoriteColor={saveFavoriteColor} theme={theme} canvasId={canvasId} image={canvas?.image} token={token} onImageSaved={(image) => setCanvas(current => ({ ...current, image }))} settings={settings} pending={settingsPending} onClose={() => setShowSettings(false)} onUpdate={sendSettings} />}
     {showParticipants && <CanvasParticipantsDialog participants={canvasParticipants} token={token} settings={settings} pending={settingsPending} onClose={() => setShowParticipants(false)} onAddParticipant={(nickname, tag) => sendSettings('participant_add', null, { nickname, tag_number: tag })} onRemoveParticipant={(person) => sendSettings('participant_remove', null, { nickname: person.nickname, tag_number: person.tag_number })} />}
@@ -1427,6 +1416,8 @@ function CanvasWorkspace() {
 }
 
 export default function CanvasPage() {
+
+
   const { canvasId } = useParams();
   const [ready, setReady] = useState(false);
   useEffect(() => {

@@ -1,3 +1,5 @@
+import { ui } from '../../i18n/locale.js';
+import { useUiLocale } from '../../i18n/useUiLocale.js';
 import { isTextContent, contentMode, contentSource } from '../../canvas/content/contentPresentation.js';
 import Icon from '../Icon.jsx';
 import { CANVAS_SPACE } from '../../canvas/canvasSpace.js';
@@ -9,32 +11,40 @@ import './connector-endpoint-info.css';
 
 const labels = { 'user-group': '사용자 그룹', text: '텍스트', note: '포스트잇', code: '코드', math: '수식', shape: '도형', table: '테이블', image: '이미지', link: '링크', stroke: '드로잉' };
 function summary(item) {
-  if (item.kind === 'user-group') return `${item.groupTitle || '사용자 그룹'} · ${(item.members || []).map(member => member.nickname).join(', ')}`;
+  if (item.kind === 'user-group') return `${item.groupTitle || ui('사용자 그룹')} · ${(item.members || []).map(member => member.nickname).join(', ')}`;
   if (isTextContent(item) && contentMode(item) === 'code') return `${item.filename || 'snippet.js'} · ${codeLanguageLabel(item.language || 'text')}`;
-  if (item.kind === 'shape') return shapeCatalog.find(shape => shape.id === item.shapeType)?.label || '도형';
-  if (item.kind === 'table') return `${item.rows?.length || 0}행 × ${item.columns?.length || 0}열 · ${(item.columns || []).join(', ')}`;
+  if (item.kind === 'shape') return ui(shapeCatalog.find(shape => shape.id === item.shapeType)?.label || '도형');
+  if (item.kind === 'table') return ui("{v0}행 × {v1}열 · {v2}", {
+  v0: item.rows?.length || 0,
+  v1: item.columns?.length || 0,
+  v2: (item.columns || []).join(', ')
+});
   if (isTextContent(item)) return contentSource(item);
-  return String(item.text || item.formula || item.title || item.filename || item.url || '내용 없음');
+  return String(item.text || item.formula || item.title || item.filename || item.url || ui('내용 없음'));
 }
 function EndpointCard({ label, id, item, onNavigate }) {
+  useUiLocale();
   const measured = connectorObjectSize(item);
   const [defaultWidth, defaultHeight] = OBJECT_SIZES[item?.kind] || [.2, .12];
   const width = measured?.width ?? (Number(item?.width) || defaultWidth) * CANVAS_SPACE.width;
   const height = measured?.height ?? (Number(item?.height) || defaultHeight) * CANVAS_SPACE.height;
   const content = item ? summary(item) : '';
   return <article className="connector-endpoint-card">
-    <div className="connector-endpoint-heading"><strong>{label}</strong><span>{item ? labels[item.kind] || item.kind : '연결 대상 없음'}</span></div>
+    <div className="connector-endpoint-heading"><strong>{label}</strong><span>{item ? ui(labels[item.kind]) || item.kind : ui("연결 대상 없음")}</span></div>
     <code className="connector-endpoint-id" title={String(id || '')}>{id || '—'}</code>
     {item ? <><p className="connector-endpoint-summary" title={content}>{content.slice(0, 240)}</p>
-      <dl className="connector-endpoint-details"><div><dt>위치</dt><dd>{Math.round((Number(item.x) || 0) * CANVAS_SPACE.width)}, {Math.round((Number(item.y) || 0) * CANVAS_SPACE.height)}</dd></div><div><dt>크기</dt><dd>{Math.round(width)} × {Math.round(height)} px</dd></div><div><dt>회전</dt><dd>{Math.round(Number(item.rotation) || 0)}°</dd></div></dl>
-      <button type="button" onClick={() => onNavigate(id)} aria-label={`${label}로 이동`}>객체로 이동 <Icon name="arrow" size={13} /></button></> : <p className="connector-endpoint-summary">삭제되었거나 현재 접근할 수 없는 객체입니다.</p>}
+      <dl className="connector-endpoint-details"><div><dt>{ui("위치")}</dt><dd>{Math.round((Number(item.x) || 0) * CANVAS_SPACE.width)}, {Math.round((Number(item.y) || 0) * CANVAS_SPACE.height)}</dd></div><div><dt>{ui("크기")}</dt><dd>{Math.round(width)} × {Math.round(height)} px</dd></div><div><dt>{ui("회전")}</dt><dd>{Math.round(Number(item.rotation) || 0)}°</dd></div></dl>
+      <button type="button" onClick={() => onNavigate(id)} aria-label={ui("{v0}로 이동", {
+  v0: label
+})}>{"" + ui("객체로 이동") + " "}<Icon name="arrow" size={13} /></button></> : <p className="connector-endpoint-summary">{ui("삭제되었거나 현재 접근할 수 없는 객체입니다.")}</p>}
   </article>;
 }
 export default function ConnectorEndpointInfo({ connector, items, onNavigate }) {
-  return <section className="inspector-section connector-endpoint-section" aria-label="연결된 객체 정보">
-    <strong className="inspector-label">연결된 객체</strong>
-    <EndpointCard label="시작 객체" id={connector.from} item={items[connector.from]} onNavigate={onNavigate} />
+  useUiLocale();
+  return <section className="inspector-section connector-endpoint-section" aria-label={ui("연결된 객체 정보")}>
+    <strong className="inspector-label">{ui("연결된 객체")}</strong>
+    <EndpointCard label={ui("시작 객체")} id={connector.from} item={items[connector.from]} onNavigate={onNavigate} />
     <span className="connector-endpoint-direction" aria-hidden="true">↓</span>
-    <EndpointCard label="끝 객체" id={connector.to} item={items[connector.to]} onNavigate={onNavigate} />
+    <EndpointCard label={ui("끝 객체")} id={connector.to} item={items[connector.to]} onNavigate={onNavigate} />
   </section>;
 }

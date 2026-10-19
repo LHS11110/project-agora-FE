@@ -1,8 +1,11 @@
+import { ui } from '../../i18n/locale.js';
+import { useUiLocale } from '../../i18n/useUiLocale.js';
 import { useEffect, useRef, useState } from 'react';
 import { apiUrl } from '../../api/client.js';
 import './pdf-object.css';
 
 export default function PdfDocumentContent({ item, token, interactive }) {
+  useUiLocale();
   const [pdf, setPdf] = useState(null), [pageNumber, setPageNumber] = useState(1);
   const [error, setError] = useState(''), [rendering, setRendering] = useState(false), [reload, setReload] = useState(0);
   const [size, setSize] = useState({ width: 1, height: 1 });
@@ -63,16 +66,18 @@ export default function PdfDocumentContent({ item, token, interactive }) {
     finally { downloadPending.current = false; }
   };
   return <div className="pdf-document">
-    <div className="pdf-document-heading"><strong title={item.filename}>PDF · {item.filename || '문서'}</strong></div>
+    <div className="pdf-document-heading"><strong title={item.filename}>PDF · {item.filename || ui("문서")}</strong></div>
     <div className="pdf-page-view" ref={host} aria-busy={!pdf || rendering}>
-      <canvas ref={canvas} aria-label={`PDF ${pageNumber}페이지`} />
-      {error ? <div className="pdf-status" role="alert">{error}<button data-object-action disabled={!interactive} onClick={() => setReload(value => value + 1)}>다시 불러오기</button></div> : (!pdf || rendering) && <div className="pdf-status" role="status">PDF를 불러오는 중…</div>}
+      <canvas ref={canvas} aria-label={ui("PDF {v0}페이지", {
+  v0: pageNumber
+})} />
+      {error ? <div className="pdf-status" role="alert">{error}<button data-object-action disabled={!interactive} onClick={() => setReload(value => value + 1)}>{ui("다시 불러오기")}</button></div> : (!pdf || rendering) && <div className="pdf-status" role="status">{ui("PDF를 불러오는 중…")}</div>}
     </div>
     <div className="pdf-document-actions" data-object-action onPointerDown={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}>
-      <button disabled={!interactive || !pdf || pageNumber <= 1} onClick={() => setPageNumber(value => value - 1)} aria-label="PDF 이전 페이지">‹</button>
+      <button disabled={!interactive || !pdf || pageNumber <= 1} onClick={() => setPageNumber(value => value - 1)} aria-label={ui("PDF 이전 페이지")}>‹</button>
       <span>{pageNumber} / {pdf?.numPages || '—'}</span>
-      <button disabled={!interactive || !pdf || pageNumber >= pdf.numPages} onClick={() => setPageNumber(value => value + 1)} aria-label="PDF 다음 페이지">›</button>
-      <button className="pdf-download" disabled={!interactive || !pdf} onClick={download}>원본 저장</button>
+      <button disabled={!interactive || !pdf || pageNumber >= pdf.numPages} onClick={() => setPageNumber(value => value + 1)} aria-label={ui("PDF 다음 페이지")}>›</button>
+      <button className="pdf-download" disabled={!interactive || !pdf} onClick={download}>{ui("원본 저장")}</button>
     </div>
   </div>;
 }

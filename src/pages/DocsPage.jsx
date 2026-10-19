@@ -1,3 +1,6 @@
+import LanguageSwitcher from '../i18n/LanguageSwitcher.jsx';
+import { ui } from '../i18n/locale.js';
+import { useUiLocale } from '../i18n/useUiLocale.js';
 import { useEffect, useState } from 'react';
 import { Link } from '../routing.jsx';
 import Icon from '../components/Icon.jsx';
@@ -135,7 +138,9 @@ const projectTree = [
 ];
 
 function EndpointTable({ rows, internal = false }) {
-  return <div className="docs-table-scroll"><table className="docs-api-table"><thead><tr><th>메서드</th><th>경로</th><th>{internal ? '접근' : '인증'}</th><th>동작 / 데이터</th></tr></thead><tbody>{rows.map(([method, path, auth, description]) => <tr id={endpointAnchorId(method, path)} key={`${method}-${path}`}><td><span className={`http-method method-${method.split(' ')[0].toLowerCase()}`}>{method}</span></td><td><code>{path}</code></td><td><span className="api-auth-badge">{auth}</span></td><td>{description}</td></tr>)}</tbody></table></div>;
+  useUiLocale();
+
+  return <div className="docs-table-scroll"><table className="docs-api-table"><thead><tr><th>{ui("메서드")}</th><th>{ui("경로")}</th><th>{internal ? ui("접근") : ui("인증")}</th><th>{ui("동작 / 데이터")}</th></tr></thead><tbody>{rows.map(([method, path, auth, description]) => <tr id={endpointAnchorId(method, path)} key={`${method}-${path}`}><td><span className={`http-method method-${method.split(' ')[0].toLowerCase()}`}>{method}</span></td><td><code>{path}</code></td><td><span className="api-auth-badge">{ui(auth)}</span></td><td>{ui(description)}</td></tr>)}</tbody></table></div>;
 }
 
 function endpointAnchorId(method, path) {
@@ -157,16 +162,25 @@ function schemaRowId(prefix, value) {
 }
 
 function SectionTitle({ id, eyebrow, title, children }) {
+  useUiLocale();
+
+
   return <div className="docs-section-title" id={id}><span className="section-kicker">{eyebrow}</span><h2>{title}</h2>{children && <p>{children}</p>}</div>;
 }
 
 function DocsNavLink({ id, children, kind, activeSection, onSelect }) {
+  useUiLocale();
+
+
   return <a className={`docs-nav-link${activeSection === id ? ' active' : ''}`} href={`#${id}`} aria-current={activeSection === id ? 'location' : undefined} onClick={() => onSelect(id)}>
     <span>{children}</span>{kind && <small>{kind}</small>}
   </a>;
 }
 
 function DocsNavFolder({ title, children, nested = false }) {
+  useUiLocale();
+
+
   return <details className={`docs-nav-folder${nested ? ' nested' : ''}`} open>
     <summary>{title}</summary>
     <div className="docs-nav-folder-content">{children}</div>
@@ -174,6 +188,7 @@ function DocsNavFolder({ title, children, nested = false }) {
 }
 
 export default function DocsPage() {
+  useUiLocale();
   const [activeSection, setActiveSection] = useState('overview');
 
   useEffect(() => {
@@ -196,39 +211,39 @@ export default function DocsPage() {
   }, []);
 
   return <main className="docs-page">
-    <header className="docs-header page-container"><FreLogBrand /><nav><a href="#structure">프로젝트 구조</a><a href="#public-api">외부 API</a><a href="#internal-api">내부 API</a><a href="#database">DB 명세</a></nav><Link className="button button-outline docs-workspace-link" to="/search">워크스페이스 <Icon name="arrow" size={15} /></Link></header>
+    <header className="docs-header page-container"><FreLogBrand /><LanguageSwitcher /><nav><a href="#structure">{ui("프로젝트 구조")}</a><a href="#public-api">{ui("외부 API")}</a><a href="#internal-api">{ui("내부 API")}</a><a href="#database">{ui("DB 명세")}</a></nav><Link className="button button-outline docs-workspace-link" to="/search">{"" + ui("워크스페이스") + " "}<Icon name="arrow" size={15} /></Link></header>
     <div className="docs-layout page-container">
-      <aside className="docs-toc" aria-label="문서 목차">
+      <aside className="docs-toc" aria-label={ui("문서 목차")}>
         <div className="docs-toc-heading"><span>FRELOG DOCS</span><small>REFERENCE / DIRECTORY</small></div>
-        <DocsNavLink id="overview" activeSection={activeSection} onSelect={setActiveSection}>개요</DocsNavLink>
-        <DocsNavFolder title="프로젝트">
-          <DocsNavLink id="structure" activeSection={activeSection} onSelect={setActiveSection}>구조와 역할</DocsNavLink>
+        <DocsNavLink id="overview" activeSection={activeSection} onSelect={setActiveSection}>{ui("개요")}</DocsNavLink>
+        <DocsNavFolder title={ui("프로젝트")}>
+          <DocsNavLink id="structure" activeSection={activeSection} onSelect={setActiveSection}>{ui("구조와 역할")}</DocsNavLink>
         </DocsNavFolder>
-        <DocsNavFolder title="API 레퍼런스">
-          <DocsNavFolder title="외부 공개 REST" nested>
-            <DocsNavLink id="public-api" kind="REST" activeSection={activeSection} onSelect={setActiveSection}>API 개요·인증</DocsNavLink>
-            {publicApiGroups.map((group) => <DocsNavFolder key={group.id} title={group.title} nested>
+        <DocsNavFolder title={ui("API 레퍼런스")}>
+          <DocsNavFolder title={ui("외부 공개 REST")} nested>
+            <DocsNavLink id="public-api" kind="REST" activeSection={activeSection} onSelect={setActiveSection}>{ui("API 개요·인증")}</DocsNavLink>
+            {publicApiGroups.map((group) => <DocsNavFolder key={group.id} title={ui(group.title)} nested>
               {group.rows.map(([method, path]) => <DocsNavLink key={`${method}-${path}`} id={endpointAnchorId(method, path)} kind={method.split(' ')[0]} activeSection={activeSection} onSelect={setActiveSection}>{endpointNavLabel(path)}</DocsNavLink>)}
             </DocsNavFolder>)}
           </DocsNavFolder>
-          <DocsNavFolder title="내부·운영 API" nested>
-            <DocsNavLink id="internal-api" kind="PRIVATE" activeSection={activeSection} onSelect={setActiveSection}>내부 API 경계</DocsNavLink>
-            {internalApiGroups.map((group) => <DocsNavFolder key={group.id} title={group.title} nested>
+          <DocsNavFolder title={ui("내부·운영 API")} nested>
+            <DocsNavLink id="internal-api" kind="PRIVATE" activeSection={activeSection} onSelect={setActiveSection}>{ui("내부 API 경계")}</DocsNavLink>
+            {internalApiGroups.map((group) => <DocsNavFolder key={group.id} title={ui(group.title)} nested>
               {group.rows.map(([method, path]) => <DocsNavLink key={`${method}-${path}`} id={endpointAnchorId(method, path)} kind={method.split(' ')[0]} activeSection={activeSection} onSelect={setActiveSection}>{endpointNavLabel(path)}</DocsNavLink>)}
             </DocsNavFolder>)}
           </DocsNavFolder>
-          <DocsNavFolder title="실시간 통신" nested>
+          <DocsNavFolder title={ui("실시간 통신")} nested>
             <DocsNavFolder title="Canvas WebSocket" nested>
-              <DocsNavLink id="websocket" kind="WS" activeSection={activeSection} onSelect={setActiveSection}>연결·프로토콜 개요</DocsNavLink>
-              {socketEvents.map(([name], index) => <DocsNavLink key={name} id={socketEventId(index)} kind="EVENT" activeSection={activeSection} onSelect={setActiveSection}>{name}</DocsNavLink>)}
+              <DocsNavLink id="websocket" kind="WS" activeSection={activeSection} onSelect={setActiveSection}>{ui("연결·프로토콜 개요")}</DocsNavLink>
+              {socketEvents.map(([name], index) => <DocsNavLink key={name} id={socketEventId(index)} kind="EVENT" activeSection={activeSection} onSelect={setActiveSection}>{ui(name)}</DocsNavLink>)}
             </DocsNavFolder>
             <DocsNavLink id="webrtc-signaling" kind="P2P" activeSection={activeSection} onSelect={setActiveSection}>WebRTC · P2P</DocsNavLink>
           </DocsNavFolder>
         </DocsNavFolder>
-        <DocsNavFolder title="데이터 레퍼런스">
-          <DocsNavLink id="database" activeSection={activeSection} onSelect={setActiveSection}>저장소 구성</DocsNavLink>
+        <DocsNavFolder title={ui("데이터 레퍼런스")}>
+          <DocsNavLink id="database" activeSection={activeSection} onSelect={setActiveSection}>{ui("저장소 구성")}</DocsNavLink>
           <DocsNavFolder title="SQL Server" nested>
-            <DocsNavLink id="db-sql" kind="SQL" activeSection={activeSection} onSelect={setActiveSection}>테이블 개요</DocsNavLink>
+            <DocsNavLink id="db-sql" kind="SQL" activeSection={activeSection} onSelect={setActiveSection}>{ui("테이블 개요")}</DocsNavLink>
             {sqlTables.map(([table]) => <DocsNavLink key={table} id={schemaRowId('sql', table)} kind="TABLE" activeSection={activeSection} onSelect={setActiveSection}>{table}</DocsNavLink>)}
           </DocsNavFolder>
           <DocsNavFolder title="Elasticsearch" nested>
@@ -240,54 +255,54 @@ export default function DocsPage() {
             {redisDocumentFields.map(([path]) => <DocsNavLink key={path} id={schemaRowId('redis', path)} kind="PATH" activeSection={activeSection} onSelect={setActiveSection}>{path}</DocsNavLink>)}
           </DocsNavFolder>
         </DocsNavFolder>
-        <DocsNavLink id="rules" activeSection={activeSection} onSelect={setActiveSection}>보안·공통 규칙</DocsNavLink>
+        <DocsNavLink id="rules" activeSection={activeSection} onSelect={setActiveSection}>{ui("보안·공통 규칙")}</DocsNavLink>
       </aside>
       <article className="docs-content">
-        <section className="docs-hero" id="overview"><span className="docs-hero-icon"><Icon name="book" size={22} /></span><span className="section-kicker">FRELOG / TECHNICAL DOCS</span><h1>구조와 API를<br /><em>한눈에 살펴보세요.</em></h1><p>FreLog는 캔버스 위에서 그림, 이미지, 코드와 대화를 실시간으로 나누는 협업 서비스입니다. 이 문서는 현재 저장소 구현을 기준으로 정리했습니다.</p><div className="docs-hero-meta"><span><i /> React · Vite</span><span><i /> Spring Boot</span><span><i /> C++ · uWebSockets</span></div></section>
-        <section className="docs-section"><SectionTitle id="structure" eyebrow="01 / PROJECT MAP" title="프로젝트 구조와 역할" />
-          <div className="docs-architecture"><div><span>Browser</span><strong>React · Vite</strong><small>화면 · 인증 UI · 캔버스 이벤트</small></div><b>HTTPS / WSS</b><div><span>Nginx</span><strong>Reverse proxy</strong><small>정적 파일 · API · WebSocket 라우팅</small></div><b>internal</b><div><span>Backend</span><strong>Spring + C++</strong><small>권한·데이터 관리 · 실시간 세션</small></div></div>
-          <pre className="docs-tree"><code>{projectTree.join('\n')}</code></pre>
-          <div className="docs-role-grid"><div><span>FRONTEND</span><h3>한 화면에서 함께 만들기</h3><p>PixiJS가 보이는 벡터만 그리고, 공간 B-tree로 화면 밖 객체를 제외합니다. 커서·레이저와 Automerge 편집은 인증된 브로커로 동기화하며 텍스트·코드는 Ctrl + S, 포스트잇은 변경 후 자동 저장합니다.</p></div><div><span>SPRING BOOT</span><h3>인증과 권한의 기준점</h3><p>사용자 JWT, 캔버스 메타데이터, 접속 토큰 발급, C++ 서버 할당을 관리합니다.</p></div><div><span>C++ REALTIME</span><h3>신호와 영속 저장</h3><p>브로커가 위임한 저장 요청을 검증하고 객체·채팅을 저장합니다. 브로커는 커서·레이저·문서 변경을 인증된 사용자에게 전달하고 통화 신호를 지정 사용자에게 라우팅합니다.</p></div></div>
+        <section className="docs-hero" id="overview"><span className="docs-hero-icon"><Icon name="book" size={22} /></span><span className="section-kicker">FRELOG / TECHNICAL DOCS</span><h1>{ui("구조와 API를")}<br /><em>{ui("한눈에 살펴보세요.")}</em></h1><p>{ui("FreLog는 캔버스 위에서 그림, 이미지, 코드와 대화를 실시간으로 나누는 협업 서비스입니다. 이 문서는 현재 저장소 구현을 기준으로 정리했습니다.")}</p><div className="docs-hero-meta"><span><i /> React · Vite</span><span><i /> Spring Boot</span><span><i /> C++ · uWebSockets</span></div></section>
+        <section className="docs-section"><SectionTitle id="structure" eyebrow="01 / PROJECT MAP" title={ui("프로젝트 구조와 역할")} />
+          <div className="docs-architecture"><div><span>Browser</span><strong>React · Vite</strong><small>{ui("화면 · 인증 UI · 캔버스 이벤트")}</small></div><b>HTTPS / WSS</b><div><span>Nginx</span><strong>Reverse proxy</strong><small>{ui("정적 파일 · API · WebSocket 라우팅")}</small></div><b>internal</b><div><span>Backend</span><strong>Spring + C++</strong><small>{ui("권한·데이터 관리 · 실시간 세션")}</small></div></div>
+          <pre className="docs-tree"><code>{projectTree.map(line=>ui(line)).join('\n')}</code></pre>
+          <div className="docs-role-grid"><div><span>FRONTEND</span><h3>{ui("한 화면에서 함께 만들기")}</h3><p>{ui("PixiJS가 보이는 벡터만 그리고, 공간 B-tree로 화면 밖 객체를 제외합니다. 커서·레이저와 Automerge 편집은 인증된 브로커로 동기화하며 텍스트·코드는 Ctrl + S, 포스트잇은 변경 후 자동 저장합니다.")}</p></div><div><span>SPRING BOOT</span><h3>{ui("인증과 권한의 기준점")}</h3><p>{ui("사용자 JWT, 캔버스 메타데이터, 접속 토큰 발급, C++ 서버 할당을 관리합니다.")}</p></div><div><span>C++ REALTIME</span><h3>{ui("신호와 영속 저장")}</h3><p>{ui("브로커가 위임한 저장 요청을 검증하고 객체·채팅을 저장합니다. 브로커는 커서·레이저·문서 변경을 인증된 사용자에게 전달하고 통화 신호를 지정 사용자에게 라우팅합니다.")}</p></div></div>
         </section>
-        <section className="docs-section" id="public-api"><SectionTitle eyebrow="02 / CLIENT API" title="외부에 공개된 API">브라우저에서 사용하는 HTTPS API입니다. 보호된 API에는 access token을 Bearer 헤더로 전달합니다.</SectionTitle><div className="docs-callout"><Icon name="lock" size={18} /><p><strong>인증 헤더</strong><code>Authorization: Bearer &lt;accessToken&gt;</code> · <code>POST /api/auth/me</code>는 본문에 <code>{'{ token }'}</code>을 받습니다. 사용자 목록 조회는 비인증 경로입니다. 캔버스 접속 토큰은 로그인 JWT와 별개이며 WebSocket에만 사용합니다.</p></div><div className="docs-api-groups">{publicApiGroups.map((group, index) => <section className="docs-api-group" id={group.id} key={group.id}><div className="docs-subsection-heading"><span>REST / {String(index + 1).padStart(2, '0')}</span><h3>{group.title}</h3></div><EndpointTable rows={group.rows} /></section>)}</div><div className="docs-note"><strong>UserResponse 참고</strong><p><code>last_login_at</code>은 로그인 시각이 <code>user_sessions</code>로 이동해 현재 응답에서 <code>null</code>입니다. 비밀번호 변경 시각은 호환성을 위해 <code>password_chaged_at</code> 표기와 <code>password_changed_at</code> 필드를 함께 반환합니다.</p></div><div className="docs-note"><strong>이미지 응답 참고</strong><p>요약 DTO의 <code>image</code>는 <code>/api/canvases/:canvasId/image</code> URL을 반환합니다. 이 경로는 이미지 바이너리를 제공하며 다른 캔버스 API와 같이 Bearer 인증이 필요합니다. 브라우저의 일반 <code>&lt;img&gt;</code> 요청에는 인증 헤더를 넣을 수 없으므로 앱에서 토큰을 포함해 가져와 표시합니다.</p></div><div className="docs-payload-card"><div><span className="section-kicker">CANVAS ACCESS FLOW</span><h3>캔버스 접속 순서</h3><p>REST에서 로그인·비밀번호를 확인한 다음, 전용 접속 토큰으로 두 WebSocket을 엽니다. 참여 여부는 WebSocket에서 다시 확인합니다.</p></div><pre><code>{'POST /api/canvases/42/access\nAuthorization: Bearer <accessToken>\n\n{ "password": "optional" }\n→ { "server_id": 5, "ws_port": "8002",\n    "canvas_access_token": "<canvas-jwt>" }\n\nWSS /wss/port/8002/canvas/42?token=<canvas_access_token>\nWSS /wss/port/8002/rtc/canvas/42?token=<canvas_access_token>'}</code></pre></div><div className="docs-note"><strong>캔버스 설정 변경</strong><p>비활성 캔버스는 REST PATCH로 변경합니다. 활성 캔버스의 REST 변경은 409 CANVAS_006으로 거절되므로 WebSocket 설정 이벤트를 사용합니다. 다른 캔버스에 활성 접속 중이면 /access가 409 CANVAS_003을 반환합니다.</p></div></section>
-        <section className="docs-section" id="internal-api"><SectionTitle eyebrow="03 / PRIVATE OPERATIONS" title="내부·운영 전용 API">운영 상태와 서버 제어용 경로입니다. 관리자 전용 Spring API와 내부 C++ REST 경로를 지정된 인증 범위에 맞춰 사용하세요.</SectionTitle><div className="docs-callout warning"><Icon name="lock" size={18} /><p><strong>접근 범위</strong> 서버·저장소 할당과 DB 주소, <code>/api/test/cpp-canvas-count</code>는 ROLE_ADMIN이 필요합니다. <code>/api/test/cpp-active-canvases</code>만 로그인 사용자에게 허용됩니다. 이전 <code>/api/test/cpp-access</code>·<code>cpp-disconnect</code> 프록시와 C++ <code>/api/access</code> 경로는 제거됐습니다. C++ REST는 내부 포트(기본 8000)에 두고 Nginx에서 외부 공개하지 않습니다.</p></div><div className="docs-api-groups">{internalApiGroups.map((group, index) => <section className="docs-api-group" id={group.id} key={group.id}><div className="docs-subsection-heading"><span>PRIVATE / {String(index + 1).padStart(2, '0')}</span><h3>{group.title}</h3></div><EndpointTable rows={group.rows} internal /></section>)}</div><div className="docs-note"><strong>네트워크 경계</strong><p>브라우저용 WebSocket은 Nginx의 <code>/wss/port/:wsPort/canvas/:canvasId</code> 및 <code>/wss/port/:wsPort/rtc/canvas/:canvasId</code> 경로를 사용합니다. 내부 REST 제어 API, DB·Redis 포트는 외부에 직접 열지 않습니다. 테스트베드의 활성 캔버스 목록은 C++ 프록시가 아니라 DB <code>user_sessions</code>에서 계산합니다.</p></div></section>
+        <section className="docs-section" id="public-api"><SectionTitle eyebrow="02 / CLIENT API" title={ui("외부에 공개된 API")}>{ui("브라우저에서 사용하는 HTTPS API입니다. 보호된 API에는 access token을 Bearer 헤더로 전달합니다.")}</SectionTitle><div className="docs-callout"><Icon name="lock" size={18} /><p><strong>{ui("인증 헤더")}</strong><code>Authorization: Bearer &lt;accessToken&gt;</code> · <code>POST /api/auth/me</code>{"" + ui("는 본문에") + " "}<code>{'{ token }'}</code>{ui("을 받습니다. 사용자 목록 조회는 비인증 경로입니다. 캔버스 접속 토큰은 로그인 JWT와 별개이며 WebSocket에만 사용합니다.")}</p></div><div className="docs-api-groups">{publicApiGroups.map((group, index) => <section className="docs-api-group" id={group.id} key={group.id}><div className="docs-subsection-heading"><span>REST / {String(index + 1).padStart(2, '0')}</span><h3>{ui(group.title)}</h3></div><EndpointTable rows={group.rows} /></section>)}</div><div className="docs-note"><strong>{ui("UserResponse 참고")}</strong><p><code>last_login_at</code>{"" + ui("은 로그인 시각이") + " "}<code>user_sessions</code>{"" + ui("로 이동해 현재 응답에서") + " "}<code>null</code>{"" + ui("입니다. 비밀번호 변경 시각은 호환성을 위해") + " "}<code>password_chaged_at</code>{" " + ui("표기와") + " "}<code>password_changed_at</code>{" " + ui("필드를 함께 반환합니다.") + ""}</p></div><div className="docs-note"><strong>{ui("이미지 응답 참고")}</strong><p>{"" + ui("요약 DTO의") + " "}<code>image</code>{"" + ui("는") + " "}<code>/api/canvases/:canvasId/image</code>{" " + ui("URL을 반환합니다. 이 경로는 이미지 바이너리를 제공하며 다른 캔버스 API와 같이 Bearer 인증이 필요합니다. 브라우저의 일반") + " "}<code>&lt;img&gt;</code>{" " + ui("요청에는 인증 헤더를 넣을 수 없으므로 앱에서 토큰을 포함해 가져와 표시합니다.") + ""}</p></div><div className="docs-payload-card"><div><span className="section-kicker">CANVAS ACCESS FLOW</span><h3>{ui("캔버스 접속 순서")}</h3><p>{ui("REST에서 로그인·비밀번호를 확인한 다음, 전용 접속 토큰으로 두 WebSocket을 엽니다. 참여 여부는 WebSocket에서 다시 확인합니다.")}</p></div><pre><code>{'POST /api/canvases/42/access\nAuthorization: Bearer <accessToken>\n\n{ "password": "optional" }\n→ { "server_id": 5, "ws_port": "8002",\n    "canvas_access_token": "<canvas-jwt>" }\n\nWSS /wss/port/8002/canvas/42?token=<canvas_access_token>\nWSS /wss/port/8002/rtc/canvas/42?token=<canvas_access_token>'}</code></pre></div><div className="docs-note"><strong>{ui("캔버스 설정 변경")}</strong><p>{ui("비활성 캔버스는 REST PATCH로 변경합니다. 활성 캔버스의 REST 변경은 409 CANVAS_006으로 거절되므로 WebSocket 설정 이벤트를 사용합니다. 다른 캔버스에 활성 접속 중이면 /access가 409 CANVAS_003을 반환합니다.")}</p></div></section>
+        <section className="docs-section" id="internal-api"><SectionTitle eyebrow="03 / PRIVATE OPERATIONS" title={ui("내부·운영 전용 API")}>{ui("운영 상태와 서버 제어용 경로입니다. 관리자 전용 Spring API와 내부 C++ REST 경로를 지정된 인증 범위에 맞춰 사용하세요.")}</SectionTitle><div className="docs-callout warning"><Icon name="lock" size={18} /><p><strong>{ui("접근 범위")}</strong>{" " + ui("서버·저장소 할당과 DB 주소,") + " "}<code>/api/test/cpp-canvas-count</code>{"" + ui("는 ROLE_ADMIN이 필요합니다.") + " "}<code>/api/test/cpp-active-canvases</code>{"" + ui("만 로그인 사용자에게 허용됩니다. 이전") + " "}<code>/api/test/cpp-access</code>·<code>cpp-disconnect</code>{" " + ui("프록시와 C++") + " "}<code>/api/access</code>{" " + ui("경로는 제거됐습니다. C++ REST는 내부 포트(기본 8000)에 두고 Nginx에서 외부 공개하지 않습니다.") + ""}</p></div><div className="docs-api-groups">{internalApiGroups.map((group, index) => <section className="docs-api-group" id={group.id} key={group.id}><div className="docs-subsection-heading"><span>PRIVATE / {String(index + 1).padStart(2, '0')}</span><h3>{ui(group.title)}</h3></div><EndpointTable rows={group.rows} internal /></section>)}</div><div className="docs-note"><strong>{ui("네트워크 경계")}</strong><p>{"" + ui("브라우저용 WebSocket은 Nginx의") + " "}<code>/wss/port/:wsPort/canvas/:canvasId</code>{" " + ui("및") + " "}<code>/wss/port/:wsPort/rtc/canvas/:canvasId</code>{" " + ui("경로를 사용합니다. 내부 REST 제어 API, DB·Redis 포트는 외부에 직접 열지 않습니다. 테스트베드의 활성 캔버스 목록은 C++ 프록시가 아니라 DB") + " "}<code>user_sessions</code>{ui("에서 계산합니다.")}</p></div></section>
         <section className="docs-section" id="websocket">
-          <SectionTitle eyebrow="04 / REALTIME PROTOCOL" title="캔버스·RTC WebSocket 명세">Spring 접속 API가 발급한 캔버스 전용 토큰으로 캔버스 이벤트와 RTC 신호용 소켓을 각각 엽니다.</SectionTitle>
-          <div className="docs-endpoint-line"><span>WSS</span><code>/wss/port/:wsPort/canvas/:canvasId?token=:canvasAccessToken</code><small>캔버스 이벤트 · Nginx 경유</small></div>
-          <div className="docs-endpoint-line"><span>WSS</span><code>/wss/port/:wsPort/rtc/canvas/:canvasId?token=:canvasAccessToken</code><small>별도 RTC 신호 연결 · Nginx 경유</small></div>
-          <div className="docs-table-scroll"><table className="docs-api-table socket-table"><thead><tr><th>이벤트</th><th>방향</th><th>페이로드 / 동작</th></tr></thead><tbody>{socketEvents.map(([name, direction, payload, description], index) => <tr id={socketEventId(index)} key={name}><td><strong>{name}</strong></td><td>{direction}</td><td><code>{payload}</code><br />{description}</td></tr>)}</tbody></table></div>
-          <div className="docs-note"><strong>아이템 권한과 채팅 ACL</strong><p>초기 아이템과 실시간 이벤트는 아이템의 <code>permission</code> 그룹으로 필터링합니다. ACL이 없거나 비어 있으면 관리자만 접근할 수 있고, 일반 사용자는 기존 ACL이 허용할 때만 수정·삭제할 수 있습니다. 채팅방도 <code>chat_room</code> 아이템이며 메시지 내역은 별도 <code>chat_history</code> 요청으로 읽습니다. 전체 <code>items</code> 교체는 관리자 전용입니다.</p></div>
-          <div className="docs-note" id="webrtc-signaling"><strong>브로커 연결과 통화 신호</strong><p>협업 소켓은 <code>rtc_join</code>으로 Canvas 소켓의 연결 ID와 해시를 증명해야 합니다. 브로커가 인증한 같은 캔버스의 사용자만 <code>canvas_relay</code>를 수신하며, 호스트 변경 시 이전 세대의 변경을 거절합니다. 커서·레이저는 일시적인 이벤트로 브로드캐스트하고 저장 요청은 백엔드로 전달합니다. 협업 WebSocket은 프레임 최대 16 MiB, 연결당 초당 최대 240개를 허용합니다. <code>rtc_signal</code>의 SDP/ICE는 최대 256 KiB이며 통화용 오디오·영상 P2P 협상에만 예약됩니다.</p></div>
-          <div className="docs-role-grid docs-safety-grid"><div><span>IDENTITY</span><h3>공개 식별자는 닉네임 + 태그</h3><p>채팅 이벤트에는 <code>sender</code>와 <code>tag_number</code>만 포함하며 user_id와 sender_id는 전달하지 않습니다. WebRTC 식별자는 연결 중에만 쓰는 임의 peer 토큰입니다.</p></div><div><span>CONCURRENCY</span><h3>저장 시점 명시</h3><p>Automerge 변경은 브로커를 통해 실시간 동기화하며, 포스트잇은 변경 후 자동 저장합니다. 텍스트·코드는 <code>Ctrl + S</code>에서 공통 스냅샷과 변경 이력으로 저장하고, 서버는 오프라인 동시 편집 이력도 합칩니다.</p></div></div>
+          <SectionTitle eyebrow="04 / REALTIME PROTOCOL" title={ui("캔버스·RTC WebSocket 명세")}>{ui("Spring 접속 API가 발급한 캔버스 전용 토큰으로 캔버스 이벤트와 RTC 신호용 소켓을 각각 엽니다.")}</SectionTitle>
+          <div className="docs-endpoint-line"><span>WSS</span><code>/wss/port/:wsPort/canvas/:canvasId?token=:canvasAccessToken</code><small>{ui("캔버스 이벤트 · Nginx 경유")}</small></div>
+          <div className="docs-endpoint-line"><span>WSS</span><code>/wss/port/:wsPort/rtc/canvas/:canvasId?token=:canvasAccessToken</code><small>{ui("별도 RTC 신호 연결 · Nginx 경유")}</small></div>
+          <div className="docs-table-scroll"><table className="docs-api-table socket-table"><thead><tr><th>{ui("이벤트")}</th><th>{ui("방향")}</th><th>{ui("페이로드 / 동작")}</th></tr></thead><tbody>{socketEvents.map(([name, direction, payload, description], index) => <tr id={socketEventId(index)} key={name}><td><strong>{ui(name)}</strong></td><td>{ui(direction)}</td><td><code>{payload}</code><br />{ui(description)}</td></tr>)}</tbody></table></div>
+          <div className="docs-note"><strong>{ui("아이템 권한과 채팅 ACL")}</strong><p>{"" + ui("초기 아이템과 실시간 이벤트는 아이템의") + " "}<code>permission</code>{" " + ui("그룹으로 필터링합니다. ACL이 없거나 비어 있으면 관리자만 접근할 수 있고, 일반 사용자는 기존 ACL이 허용할 때만 수정·삭제할 수 있습니다. 채팅방도") + " "}<code>chat_room</code>{" " + ui("아이템이며 메시지 내역은 별도") + " "}<code>chat_history</code>{" " + ui("요청으로 읽습니다. 전체") + " "}<code>items</code>{" " + ui("교체는 관리자 전용입니다.") + ""}</p></div>
+          <div className="docs-note" id="webrtc-signaling"><strong>{ui("브로커 연결과 통화 신호")}</strong><p>{"" + ui("협업 소켓은") + " "}<code>rtc_join</code>{"" + ui("으로 Canvas 소켓의 연결 ID와 해시를 증명해야 합니다. 브로커가 인증한 같은 캔버스의 사용자만") + " "}<code>canvas_relay</code>{"" + ui("를 수신하며, 호스트 변경 시 이전 세대의 변경을 거절합니다. 커서·레이저는 일시적인 이벤트로 브로드캐스트하고 저장 요청은 백엔드로 전달합니다. 협업 WebSocket은 프레임 최대 16 MiB, 연결당 초당 최대 240개를 허용합니다.") + " "}<code>rtc_signal</code>{ui("의 SDP/ICE는 최대 256 KiB이며 통화용 오디오·영상 P2P 협상에만 예약됩니다.")}</p></div>
+          <div className="docs-role-grid docs-safety-grid"><div><span>IDENTITY</span><h3>{ui("공개 식별자는 닉네임 + 태그")}</h3><p>{"" + ui("채팅 이벤트에는") + " "}<code>sender</code>{"" + ui("와") + " "}<code>tag_number</code>{ui("만 포함하며 user_id와 sender_id는 전달하지 않습니다. WebRTC 식별자는 연결 중에만 쓰는 임의 peer 토큰입니다.")}</p></div><div><span>CONCURRENCY</span><h3>{ui("저장 시점 명시")}</h3><p>{"" + ui("Automerge 변경은 브로커를 통해 실시간 동기화하며, 포스트잇은 변경 후 자동 저장합니다. 텍스트·코드는") + " "}<code>Ctrl + S</code>{ui("에서 공통 스냅샷과 변경 이력으로 저장하고, 서버는 오프라인 동시 편집 이력도 합칩니다.")}</p></div></div>
         </section>
         <section className="docs-section" id="database">
-          <SectionTitle eyebrow="05 / DATA REFERENCE" title="데이터베이스 명세">계정·접속 배정은 SQL Server, 영구 캔버스 문서는 Elasticsearch, 활성 캔버스 작업본은 RedisJSON에 나눠 저장합니다. SQL 항목은 DB 저장소의 실제 DDL과 이관 스크립트를 기준으로 정리했습니다.</SectionTitle>
-          <div className="docs-callout"><Icon name="database" size={18} /><p><strong>스키마 출처와 적용</strong> 실제 DDL은 <code>project-agora-DB/mssql/init-mssql.sql</code>입니다. 테이블 이름은 sqlcmd의 <code>TABLE_USERS</code> 등 설정으로 지정하며, 반복 실행 시 누락 컬럼·제약·인덱스를 보완하고 이전 세션·서버 참조 스키마를 이관합니다. 백엔드 런타임 계정은 dbo/DDL 권한 없이 <code>agora_runtime</code> 역할로 데이터 읽기·쓰기만 수행합니다. Spring Hibernate는 <code>ddl-auto=validate</code>로 기존 스키마를 검증합니다.</p></div>
+          <SectionTitle eyebrow="05 / DATA REFERENCE" title={ui("데이터베이스 명세")}>{ui("계정·접속 배정은 SQL Server, 영구 캔버스 문서는 Elasticsearch, 활성 캔버스 작업본은 RedisJSON에 나눠 저장합니다. SQL 항목은 DB 저장소의 실제 DDL과 이관 스크립트를 기준으로 정리했습니다.")}</SectionTitle>
+          <div className="docs-callout"><Icon name="database" size={18} /><p><strong>{ui("스키마 출처와 적용")}</strong>{" " + ui("실제 DDL은") + " "}<code>project-agora-DB/mssql/init-mssql.sql</code>{"" + ui("입니다. 테이블 이름은 sqlcmd의") + " "}<code>TABLE_USERS</code>{" " + ui("등 설정으로 지정하며, 반복 실행 시 누락 컬럼·제약·인덱스를 보완하고 이전 세션·서버 참조 스키마를 이관합니다. 백엔드 런타임 계정은 dbo/DDL 권한 없이") + " "}<code>agora_runtime</code>{" " + ui("역할로 데이터 읽기·쓰기만 수행합니다. Spring Hibernate는") + " "}<code>ddl-auto=validate</code>{ui("로 기존 스키마를 검증합니다.")}</p></div>
           <div className="docs-storage-roles">
-            <a href="#db-sql"><span>01 · RELATIONAL</span><strong>SQL Server 2022</strong><small>계정 · 세션 · 서버 할당</small></a>
-            <a href="#db-es"><span>02 · DOCUMENT</span><strong>Elasticsearch 8.19</strong><small>캔버스 검색 · 영속 문서</small></a>
-            <a href="#db-redis"><span>03 · ACTIVE CACHE</span><strong>Redis Stack 8</strong><small>활성 캔버스 · 실시간 데이터</small></a>
+            <a href="#db-sql"><span>01 · RELATIONAL</span><strong>SQL Server 2022</strong><small>{ui("계정 · 세션 · 서버 할당")}</small></a>
+            <a href="#db-es"><span>02 · DOCUMENT</span><strong>Elasticsearch 8.19</strong><small>{ui("캔버스 검색 · 영속 문서")}</small></a>
+            <a href="#db-redis"><span>03 · ACTIVE CACHE</span><strong>Redis Stack 8</strong><small>{ui("활성 캔버스 · 실시간 데이터")}</small></a>
           </div>
           <section className="docs-db-subsection" id="db-sql">
-            <div className="docs-subsection-heading"><span>SQL SERVER / DDL</span><h3>관계형 테이블과 제약</h3></div>
-            <div className="docs-table-scroll"><table className="docs-api-table docs-schema-table"><thead><tr><th>테이블</th><th>키</th><th>주요 컬럼·관계</th><th>역할</th></tr></thead><tbody>{sqlTables.map(([table, key, columns, purpose]) => <tr id={schemaRowId('sql', table)} key={table}><td><code>{table}</code></td><td><code>{key}</code></td><td>{columns}</td><td>{purpose}</td></tr>)}</tbody></table></div>
-            <p className="docs-db-caption">관계 요약: <code>users 1—1 user_sessions</code> · <code>canvas_info N—1 redis_server/cpp_server</code> · <code>user_sessions N—1 canvas_info/cpp_server</code>. FK는 삭제·갱신 시 NO ACTION입니다. users의 OAuth 부분 인덱스·nickname 인덱스와 세션 정리·서버 할당 인덱스도 생성합니다. user_id는 외부 공개 식별자가 아닙니다.</p><div className="docs-note"><strong>마이그레이션 동작</strong><p>초기화 SQL은 과거 users 접속 컬럼을 <code>user_sessions</code>로 옮긴 뒤 제거하고, <code>canvas_cache</code>와 서버 IP·포트 자연키 참조를 현재 ID FK로 정규화합니다. 중복 C++ 서버 행은 연결된 캔버스·세션 참조를 유지할 서버 ID로 합칩니다. 이 SQL은 관리자 초기화 경로에서 적용합니다.</p></div>
+            <div className="docs-subsection-heading"><span>SQL SERVER / DDL</span><h3>{ui("관계형 테이블과 제약")}</h3></div>
+            <div className="docs-table-scroll"><table className="docs-api-table docs-schema-table"><thead><tr><th>{ui("테이블")}</th><th>{ui("키")}</th><th>{ui("주요 컬럼·관계")}</th><th>{ui("역할")}</th></tr></thead><tbody>{sqlTables.map(([table, key, columns, purpose]) => <tr id={schemaRowId('sql', table)} key={table}><td><code>{table}</code></td><td><code>{key}</code></td><td>{columns}</td><td>{ui(purpose)}</td></tr>)}</tbody></table></div>
+            <p className="docs-db-caption">{"" + ui("관계 요약:") + " "}<code>users 1—1 user_sessions</code> · <code>canvas_info N—1 redis_server/cpp_server</code> · <code>user_sessions N—1 canvas_info/cpp_server</code>{ui(". FK는 삭제·갱신 시 NO ACTION입니다. users의 OAuth 부분 인덱스·nickname 인덱스와 세션 정리·서버 할당 인덱스도 생성합니다. user_id는 외부 공개 식별자가 아닙니다.")}</p><div className="docs-note"><strong>{ui("마이그레이션 동작")}</strong><p>{"" + ui("초기화 SQL은 과거 users 접속 컬럼을") + " "}<code>user_sessions</code>{"" + ui("로 옮긴 뒤 제거하고,") + " "}<code>canvas_cache</code>{ui("와 서버 IP·포트 자연키 참조를 현재 ID FK로 정규화합니다. 중복 C++ 서버 행은 연결된 캔버스·세션 참조를 유지할 서버 ID로 합칩니다. 이 SQL은 관리자 초기화 경로에서 적용합니다.")}</p></div>
           </section>
           <section className="docs-db-subsection" id="db-es">
-            <div className="docs-subsection-heading"><span>ELASTICSEARCH / DOCUMENT</span><h3>캔버스 문서 인덱스</h3></div>
-            <p className="docs-db-intro">인덱스 이름은 <code>ES_INDEX</code> 설정을 사용하며 기본값은 <code>canvas</code>입니다. 문서 <code>_id</code>는 canvas ID입니다. 캔버스 목록·이름 검색에 사용하고, C++ unload 시 최종 문서가 저장됩니다. 임의 형식 아이템의 동적 매핑 충돌을 막기 위해 저장 시 <code>items</code> JSON을 <code>items-b64</code>로 분할 인코딩하고 읽을 때 복원합니다. 기존 <code>items</code> 문서도 계속 읽습니다.</p>
-            <div className="docs-table-scroll"><table className="docs-api-table docs-schema-table"><thead><tr><th>필드</th><th>의미</th></tr></thead><tbody>{canvasDocumentFields.map(([field, meaning]) => <tr id={schemaRowId('es', field)} key={field}><td><code>{field}</code></td><td>{meaning}</td></tr>)}</tbody></table></div>
-            <div className="docs-note"><strong>중요</strong><p><code>people</code>, <code>admin-user-id</code>, <code>inner-group</code>에는 내부 사용자 ID가 저장됩니다. 검색/공개 API 응답은 표시 가능한 닉네임·태그만 내려주고, 저장 문서 전체를 클라이언트에 반환하면 안 됩니다.</p></div>
+            <div className="docs-subsection-heading"><span>ELASTICSEARCH / DOCUMENT</span><h3>{ui("캔버스 문서 인덱스")}</h3></div>
+            <p className="docs-db-intro">{"" + ui("인덱스 이름은") + " "}<code>ES_INDEX</code>{" " + ui("설정을 사용하며 기본값은") + " "}<code>canvas</code>{"" + ui("입니다. 문서") + " "}<code>_id</code>{"" + ui("는 canvas ID입니다. 캔버스 목록·이름 검색에 사용하고, C++ unload 시 최종 문서가 저장됩니다. 임의 형식 아이템의 동적 매핑 충돌을 막기 위해 저장 시") + " "}<code>items</code>{" " + ui("JSON을") + " "}<code>items-b64</code>{"" + ui("로 분할 인코딩하고 읽을 때 복원합니다. 기존") + " "}<code>items</code>{" " + ui("문서도 계속 읽습니다.") + ""}</p>
+            <div className="docs-table-scroll"><table className="docs-api-table docs-schema-table"><thead><tr><th>{ui("필드")}</th><th>{ui("의미")}</th></tr></thead><tbody>{canvasDocumentFields.map(([field, meaning]) => <tr id={schemaRowId('es', field)} key={field}><td><code>{field}</code></td><td>{ui(meaning)}</td></tr>)}</tbody></table></div>
+            <div className="docs-note"><strong>{ui("중요")}</strong><p><code>people</code>, <code>admin-user-id</code>, <code>inner-group</code>{ui("에는 내부 사용자 ID가 저장됩니다. 검색/공개 API 응답은 표시 가능한 닉네임·태그만 내려주고, 저장 문서 전체를 클라이언트에 반환하면 안 됩니다.")}</p></div>
           </section>
           <section className="docs-db-subsection" id="db-redis">
-            <div className="docs-subsection-heading"><span>REDIS STACK / REDISJSON</span><h3>활성 캔버스 문서</h3></div>
-            <p className="docs-db-intro">Redis Stack은 기본 <code>idx:canvas</code> 검색 인덱스와 캔버스별 <code>canvas:{'{canvasId}'}</code> RedisJSON key를 사용합니다. 활성 C++ 서버가 작업 문서를 읽고 아이템·채팅 변경은 Canvas별 FIFO 저장 큐, 설정은 Redis revision CAS를 사용합니다. 마지막 Canvas WebSocket 연결이 닫히면 최종 문서를 Elasticsearch에 반영하고 캐시 할당을 해제합니다. RTC 신호 연결만으로 Canvas를 활성 상태로 유지하지 않습니다.</p>
-            <div className="docs-table-scroll"><table className="docs-api-table docs-schema-table"><thead><tr><th>RedisJSON path</th><th>논리 타입</th><th>설명</th></tr></thead><tbody>{redisDocumentFields.map(([path, type, meaning]) => <tr id={schemaRowId('redis', path)} key={path}><td><code>{path}</code></td><td>{type}</td><td>{meaning}</td></tr>)}</tbody></table></div>
-            <div className="docs-note"><strong>데이터 수명 주기와 오류 처리</strong><p>Redis는 활성 Canvas의 작업 사본입니다. C++ unload/save와 Spring 설정 변경이 Elasticsearch 문서를 동기화합니다. 활성 Redis 문서를 읽을 수 없거나 저장 큐에서 오류가 나면 오래된 ES 문서로 조용히 대체하지 않고 fail-closed 처리합니다. 저장 실패가 난 Canvas는 후속 저장·unload를 멈춰 캐시를 보존하므로 운영 확인이 필요합니다.</p></div>
+            <div className="docs-subsection-heading"><span>REDIS STACK / REDISJSON</span><h3>{ui("활성 캔버스 문서")}</h3></div>
+            <p className="docs-db-intro">{"" + ui("Redis Stack은 기본") + " "}<code>idx:canvas</code>{" " + ui("검색 인덱스와 캔버스별") + " "}<code>canvas:{'{canvasId}'}</code>{" " + ui("RedisJSON key를 사용합니다. 활성 C++ 서버가 작업 문서를 읽고 아이템·채팅 변경은 Canvas별 FIFO 저장 큐, 설정은 Redis revision CAS를 사용합니다. 마지막 Canvas WebSocket 연결이 닫히면 최종 문서를 Elasticsearch에 반영하고 캐시 할당을 해제합니다. RTC 신호 연결만으로 Canvas를 활성 상태로 유지하지 않습니다.") + ""}</p>
+            <div className="docs-table-scroll"><table className="docs-api-table docs-schema-table"><thead><tr><th>RedisJSON path</th><th>{ui("논리 타입")}</th><th>{ui("설명")}</th></tr></thead><tbody>{redisDocumentFields.map(([path, type, meaning]) => <tr id={schemaRowId('redis', path)} key={path}><td><code>{path}</code></td><td>{type}</td><td>{ui(meaning)}</td></tr>)}</tbody></table></div>
+            <div className="docs-note"><strong>{ui("데이터 수명 주기와 오류 처리")}</strong><p>{ui("Redis는 활성 Canvas의 작업 사본입니다. C++ unload/save와 Spring 설정 변경이 Elasticsearch 문서를 동기화합니다. 활성 Redis 문서를 읽을 수 없거나 저장 큐에서 오류가 나면 오래된 ES 문서로 조용히 대체하지 않고 fail-closed 처리합니다. 저장 실패가 난 Canvas는 후속 저장·unload를 멈춰 캐시를 보존하므로 운영 확인이 필요합니다.")}</p></div>
           </section>
         </section>
-        <section className="docs-section docs-rules" id="rules"><SectionTitle eyebrow="06 / IMPLEMENTATION NOTES" title="보안·공통 규칙" /><ul><li>일반 API는 로그인 JWT, 실시간 접속은 캔버스 전용 토큰을 사용합니다.</li><li>캔버스 비밀번호는 서버에서 해시 저장되며 평문이나 해시를 응답에 포함하지 않습니다.</li><li>브라우저 공개 응답과 WebSocket 이벤트에 내부 사용자 ID를 넣지 않습니다. 참여자 관리 키는 nickname + tag_number입니다.</li><li>포스트잇은 변경 후 item_save로 자동 저장하며, 텍스트·코드는 Ctrl + S로 저장합니다. 입력 중 Automerge 변경과 객체 좌표는 브로커 WebSocket으로 권한이 있는 사용자에게 전달합니다.</li><li>기본 주소: Spring <code>127.0.0.1:8080</code>, 내부 C++ REST <code>127.0.0.1:8000</code>, 첫 WebSocket 포트 <code>8002</code>.</li><li>별도 프런트엔드 도메인에서 API를 호출할 때만 Spring <code>CORS_ALLOWED_ORIGINS</code>를 지정합니다. 같은 도메인 배포는 Nginx 경유를 권장합니다.</li></ul></section>
-        <footer className="docs-footer"><Link to="/">← FreLog 홈으로</Link><span>API는 project-agora-BE/API_SPEC.md, DB는 project-agora-DB의 현재 초기화 스키마를 기준으로 갱신했습니다.</span></footer>
+        <section className="docs-section docs-rules" id="rules"><SectionTitle eyebrow="06 / IMPLEMENTATION NOTES" title={ui("보안·공통 규칙")} /><ul><li>{ui("일반 API는 로그인 JWT, 실시간 접속은 캔버스 전용 토큰을 사용합니다.")}</li><li>{ui("캔버스 비밀번호는 서버에서 해시 저장되며 평문이나 해시를 응답에 포함하지 않습니다.")}</li><li>{ui("브라우저 공개 응답과 WebSocket 이벤트에 내부 사용자 ID를 넣지 않습니다. 참여자 관리 키는 nickname + tag_number입니다.")}</li><li>{ui("포스트잇은 변경 후 item_save로 자동 저장하며, 텍스트·코드는 Ctrl + S로 저장합니다. 입력 중 Automerge 변경과 객체 좌표는 브로커 WebSocket으로 권한이 있는 사용자에게 전달합니다.")}</li><li>{"" + ui("기본 주소: Spring") + " "}<code>127.0.0.1:8080</code>{"" + ui(", 내부 C++ REST") + " "}<code>127.0.0.1:8000</code>{"" + ui(", 첫 WebSocket 포트") + " "}<code>8002</code>.</li><li>{"" + ui("별도 프런트엔드 도메인에서 API를 호출할 때만 Spring") + " "}<code>CORS_ALLOWED_ORIGINS</code>{ui("를 지정합니다. 같은 도메인 배포는 Nginx 경유를 권장합니다.")}</li></ul></section>
+        <footer className="docs-footer"><Link to="/">{ui("← FreLog 홈으로")}</Link><span>{ui("API는 project-agora-BE/API_SPEC.md, DB는 project-agora-DB의 현재 초기화 스키마를 기준으로 갱신했습니다.")}</span></footer>
       </article>
     </div>
   </main>;

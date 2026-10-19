@@ -1,9 +1,12 @@
+import { ui } from '../../i18n/locale.js';
+import { useUiLocale } from '../../i18n/useUiLocale.js';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api/client.js';
 import Icon from '../Icon.jsx';
 import './canvas-delete.css';
 
 export default function CanvasDeleteDialog({ canvas, token, onClose, onDeleted }) {
+  useUiLocale();
   const [confirmation, setConfirmation] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -38,12 +41,12 @@ export default function CanvasDeleteDialog({ canvas, token, onClose, onDeleted }
       }
     }}>
       <span className="canvas-delete-symbol"><Icon name="trash" size={23} /></span>
-      <h2 id="canvas-delete-title">캔버스를 삭제할까요?</h2>
-      <p id="canvas-delete-description"><strong>{name}</strong>의 객체와 자료가 영구 삭제됩니다. 삭제 후에는 복구할 수 없습니다.</p>
-      <p className="canvas-delete-permission">소유자 또는 시스템 관리자만 삭제할 수 있습니다. 접속 중인 사용자가 모두 나간 후 진행해주세요.</p>
-      <form onSubmit={remove}><label className="form-field"><span>확인을 위해 캔버스 이름을 입력하세요</span><input className="plain-input" autoFocus autoComplete="off" value={confirmation} disabled={busy} onChange={event => setConfirmation(event.target.value)} placeholder={name} aria-label="삭제할 캔버스 이름 확인" /></label>
+      <h2 id="canvas-delete-title">{ui("캔버스를 삭제할까요?")}</h2>
+      <p id="canvas-delete-description"><strong>{name}</strong>{ui("의 객체와 자료가 영구 삭제됩니다. 삭제 후에는 복구할 수 없습니다.")}</p>
+      <p className="canvas-delete-permission">{ui("소유자 또는 시스템 관리자만 삭제할 수 있습니다. 접속 중인 사용자가 모두 나간 후 진행해주세요.")}</p>
+      <form onSubmit={remove}><label className="form-field"><span>{ui("확인을 위해 캔버스 이름을 입력하세요")}</span><input className="plain-input" autoFocus autoComplete="off" value={confirmation} disabled={busy} onChange={event => setConfirmation(event.target.value)} placeholder={name} aria-label={ui("삭제할 캔버스 이름 확인")} /></label>
         {error && <p className="canvas-delete-error" role="alert">{error}</p>}
-        <div className="canvas-delete-actions"><button type="button" className="button button-outline" disabled={busy} onClick={onClose}>취소</button><button type="submit" className="button canvas-delete-confirm" disabled={busy || confirmation !== name}><Icon name="trash" size={15} />{busy ? '삭제 중…' : '캔버스 삭제'}</button></div>
+        <div className="canvas-delete-actions"><button type="button" className="button button-outline" disabled={busy} onClick={onClose}>{ui("취소")}</button><button type="submit" className="button canvas-delete-confirm" disabled={busy || confirmation !== name}><Icon name="trash" size={15} />{busy ? ui("삭제 중…") : ui("캔버스 삭제")}</button></div>
       </form>
     </section>
   </div>;

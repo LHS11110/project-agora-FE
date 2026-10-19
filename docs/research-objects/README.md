@@ -14,21 +14,7 @@
 
 [기호 모음 PNG](symbol-catalog.png) / [벡터 SVG](symbol-catalog.svg).
 
-## 편집 가능한 예시 구조
-
-도형 목록 아래 **다이어그램·자료 구조 예시**에서 선택 후 **예시 구조 삽입**을 누릅니다.
-주변 빈 공간에 배치하고 해당 구조로 화면을 이동합니다. 노드와 텍스트는 각각 편집할 수 있고,
-본문과 이름은 그룹으로 이동하며 연결선은 노드의 위치를 따라갑니다. 여러 번 삽입해도 ID를 공유하지 않습니다.
-
-- [클라이언트 / API / DB](examples/service-flow.canvas.json)
-- [배열](examples/array.canvas.json), [스택](examples/stack.canvas.json), [큐](examples/queue.canvas.json)
-- [연결 리스트](examples/linked-list.canvas.json), [이진 탐색 트리](examples/binary-tree.canvas.json), [최소 힙](examples/min-heap.canvas.json)
-- [좌표와 벡터](examples/vectors.canvas.json)
-- [실험 절차 흐름도](examples/experiment.canvas.json)
-- [피드백 제어 블록도](examples/feedback.canvas.json)
-
-JSON 파일은 캔버스 코드에서도 가져올 수 있습니다. 파일의 예시 ID는 고정되어 있으므로 같은 파일을
-같은 캔버스에 다시 적용하면 기존 예시를 갱신합니다. UI의 삽입 버튼은 매번 새 ID를 생성합니다.
+도형 패널의 예시 구조 생성 기능과 예시 파일은 제거했습니다. 기존 캔버스에 삽입된 객체는 유지합니다.
 
 ## 렌더링과 저장
 
@@ -36,19 +22,10 @@ JSON 파일은 캔버스 코드에서도 가져올 수 있습니다. 파일의 �
 회로와 좌표축 등 열린 기호는 선으로 그리고, 채우기는 닫힌 몸체에만 적용합니다.
 회로 기호의 연결선은 내부 판이나 눈금이 아니라 외부 단자 쪽 경계에서 시작합니다.
 정규화된 기하 데이터를 캐시하고 SVG 미리보기와 GPU 렌더링에서 공유합니다.
-기호와 예시는 도식으로 구성되며, 값과 이름은 기존 텍스트·수식·연결선 도구로 작성할 수 있습니다.
+기호는 도식으로 구성되며, 값과 이름은 기존 텍스트·수식·연결선 도구로 작성할 수 있습니다.
 
 ## 검증
 
-- Node 테스트 192개와 배포 빌드 통과.
-- 40종의 크기·경계·채우기 영역·비율, 일반/손그림 GPU 경로 검사.
-- 예시 10종의 참조 무결성·연결 경로·가져오기·ID 분리, 반복 삽입의 빈 공간 탐색 검사.
-- 실제 Chrome에서 분야 필터·검색·마우스 생성, 40종 × 2개 스타일, 예시 10종 UI 삽입 확인.
-- 생성된 224개 객체의 저장과 새로고침 후 ID·도형·텍스트·연결·그룹·스타일 일치를 확인. 서버 거절·브라우저 오류 0건.
-- 최종 배포 후 제어 블록도 16개 객체를 추가해 총 240개의 복원과 간결한 Laplace 영역 이름 E(s)·U(s)·Y(s)을 재검증.
-- Project Orchestra의 정적 프런트엔드 배포 경로로 반영.
+40종의 크기·경계·채우기 영역·비율, 일반/손그림 GPU 경로 및 회로 연결 단자를 검사합니다.
 
-구현: `src/canvas/researchSymbols.js`, `researchTemplates.js`, `ResearchTemplateControls.jsx`, `ShapePicker.jsx`.
-브라우저 재검증 도구: `scripts/test-research-objects-browser.mjs` (별도로 만든 이름이 일치하는 임시 캔버스만 허용).
-
-임시 검증 캔버스와 인증 세션 파일은 검증 후 제거했습니다.
+구현: `src/canvas/researchSymbols.js`, `ShapePicker.jsx`.

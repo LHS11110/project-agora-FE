@@ -1,8 +1,11 @@
+import { ui } from '../i18n/locale.js';
+import { useUiLocale } from '../i18n/useUiLocale.js';
 import { useLayoutEffect, useState } from 'react';
 import { groupLayout } from '../canvas/groupGeometry.js';
 import './rotation-handles.css';
 
 export default function GroupRotationHandles({ sceneRef, ids, items, viewSize, onPointerDown, onPointerMove, onPointerUp }) {
+  useUiLocale();
   const [layout, setLayout] = useState(null);
   const idsKey = ids.join('|');
   useLayoutEffect(() => {
@@ -17,8 +20,8 @@ export default function GroupRotationHandles({ sceneRef, ids, items, viewSize, o
   if (!layout) return null;
   const { left, top, width, height } = layout;
   return <div className="object-rotation-frame group-rotation-frame" style={{ left, top, width, height }}>
-    <span className="group-rotation-label">그룹 · {ids.length}개</span>
-    {['nw', 'ne', 'se', 'sw'].map(corner => <span key={corner} className={`object-rotation-handle rotate-${corner}`} title="그룹 전체 회전"
+    <span className="group-rotation-label">{"" + ui("그룹 ·") + " "}{ids.length}{ui("개")}</span>
+    {['nw', 'ne', 'se', 'sw'].map(corner => <span key={corner} className={`object-rotation-handle rotate-${corner}`} title={ui("그룹 전체 회전")}
       onPointerDown={event => { if (event.button === 0) onPointerDown(event, ids, layout); }}
       onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} />)}
   </div>;

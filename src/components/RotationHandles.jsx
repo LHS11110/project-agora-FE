@@ -1,3 +1,5 @@
+import { ui } from '../i18n/locale.js';
+import { useUiLocale } from '../i18n/useUiLocale.js';
 import { useLayoutEffect, useState } from 'react';
 import { rotationAtPointer } from './objectRotation.js';
 import './rotation-handles.css';
@@ -43,6 +45,7 @@ function getFrame(element, scene, item, viewSize) {
 }
 
 export default function RotationHandles({ sceneRef, id, item, viewSize, onPointerDown, onPointerMove, onPointerUp }) {
+  useUiLocale();
   const [frame, setFrame] = useState(null);
 
   useLayoutEffect(() => {
@@ -74,7 +77,7 @@ export default function RotationHandles({ sceneRef, id, item, viewSize, onPointe
     {corners.map((corner) => <span
       key={corner}
       className={`object-rotation-handle rotate-${corner}`}
-      title="바깥 모서리를 드래그해 회전"
+      title={ui("바깥 모서리를 드래그해 회전")}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
         event.preventDefault();

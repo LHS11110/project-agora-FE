@@ -1,3 +1,5 @@
+import { ui } from '../../i18n/locale.js';
+import { useUiLocale } from '../../i18n/useUiLocale.js';
 import { Fragment, memo, useEffect, useState } from 'react';
 import '../../cursor-smoothing.css';
 
@@ -19,6 +21,7 @@ function cursorColor(nickname, tagNumber) {
 }
 
 const RemoteCursorLayer = memo(function RemoteCursorLayer({ updaterRef, activePeerIds, visibleBounds }) {
+  useUiLocale();
   const [cursors, setCursors] = useState({});
 
   useEffect(() => {
@@ -70,7 +73,7 @@ const RemoteCursorLayer = memo(function RemoteCursorLayer({ updaterRef, activePe
       {selectionVisible && <div className="remote-selection-marquee" data-peer-id={peerId} aria-hidden="true"
         style={{ left: `${selection.minX * 100}%`, top: `${selection.minY * 100}%`,
           width: `${(selection.maxX - selection.minX) * 100}%`, height: `${(selection.maxY - selection.minY) * 100}%`, '--cursor-color': cursor.color }}>
-        <span>{cursor.nickname} · 선택 중</span>
+        <span>{cursor.nickname}{" " + ui("· 선택 중") + ""}</span>
       </div>}
       {cursorVisible && <div className="remote-cursor" style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%`, '--cursor-color': cursor.color }} title={`${cursor.nickname}#${cursor.tag_number}`}><svg viewBox="0 0 18 22" aria-hidden="true"><path d="M1 1v17l4.5-4.3 3.1 7.1 3.1-1.4-3.2-6.8H15z" /></svg><span>{cursor.nickname}</span></div>}
     </Fragment>;

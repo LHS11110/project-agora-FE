@@ -1,3 +1,5 @@
+import { useUiLocale } from '../i18n/useUiLocale.js';
+import { ui } from '../i18n/locale.js';
 import { useLayoutEffect, useRef } from 'react';
 
 let mathJaxLoadPromise;
@@ -44,6 +46,7 @@ function loadMathJax() {
 }
 
 export default function MathFormula({ formula, display = false }) {
+  useUiLocale();
   const elementRef = useRef(null);
 
   useLayoutEffect(() => {
@@ -69,5 +72,7 @@ export default function MathFormula({ formula, display = false }) {
     };
   }, [formula, display]);
 
-  return <span className="mathjax-output" ref={elementRef} aria-label={`수식: ${formula}`} />;
+  return <span className="mathjax-output" ref={elementRef} aria-label={ui("수식: {v0}", {
+  v0: formula
+})} />;
 }

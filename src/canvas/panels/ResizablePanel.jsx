@@ -1,9 +1,12 @@
+import { ui } from '../../i18n/locale.js';
+import { useUiLocale } from '../../i18n/useUiLocale.js';
 import Icon from '../../components/Icon.jsx';
 import { useEffect, useRef, useId } from 'react';
 import './resizable-panels.css';
 
 const labels = { tools: '툴 패널', inspector: '설정 패널', chat: '채팅 패널' };
 export default function ResizablePanel({ children, panel, mobile, value, limits, onChange, onFinish, onReset, collapsed, onToggle }) {
+  useUiLocale();
   const contentId = useId();
   const gesture = useRef(null), frame = useRef(0), latest = useRef(null);
   latest.current = { onChange, onFinish, value, mobile };
@@ -35,16 +38,21 @@ export default function ResizablePanel({ children, panel, mobile, value, limits,
   useEffect(() => { cancelDrag.current(); }, [mobile, collapsed]);
   return <div className={`canvas-panel-slot canvas-panel-slot-${panel}${collapsed ? ' is-collapsed' : ''}`}>
     <button className="canvas-panel-toggle" type="button" onClick={onToggle}
-      aria-expanded={!collapsed} aria-controls={contentId} aria-label={`${labels[panel]} ${collapsed ? '펼치기' : '접기'}`}
-      title={`${labels[panel]} ${collapsed ? '펼치기' : '접기'}`}>
+      aria-expanded={!collapsed} aria-controls={contentId} aria-label={`${ui(labels[panel])} ${collapsed ? ui("펼치기") : ui("접기")}`}
+      title={`${ui(labels[panel])} ${collapsed ? ui("펼치기") : ui("접기")}`}>
       <Icon name={panel === 'chat' ? 'chat' : panel === 'tools' ? 'grid' : 'settings'} size={14} />
-      <span>{labels[panel]}</span><span className="canvas-panel-toggle-mark" aria-hidden="true">{collapsed ? '+' : '−'}</span>
+      <span>{ui(labels[panel])}</span><span className="canvas-panel-toggle-mark" aria-hidden="true">{collapsed ? '+' : '−'}</span>
     </button>
     <div id={contentId} className="canvas-panel-content" hidden={collapsed}>{children}</div>
     {!collapsed && <div className={`canvas-panel-resize canvas-panel-resize-${panel}`} role="separator" tabIndex={0}
-      aria-label={`${labels[panel]} ${vertical ? '너비' : '높이'} 조절`} aria-orientation={vertical ? 'vertical' : 'horizontal'}
-      aria-valuemin={Math.round(limits.min)} aria-valuemax={Math.round(limits.max)} aria-valuenow={Math.round(value)} aria-valuetext={`${Math.round(value)} 픽셀`}
-      title="드래그해 크기 조절 · 두 번 클릭하면 기본 크기"
+      aria-label={ui("{v0} {v1} 조절", {
+  v0: ui(labels[panel]),
+  v1: vertical ? ui("너비") : ui("높이")
+})} aria-orientation={vertical ? 'vertical' : 'horizontal'}
+      aria-valuemin={Math.round(limits.min)} aria-valuemax={Math.round(limits.max)} aria-valuenow={Math.round(value)} aria-valuetext={ui("{v0} 픽셀", {
+  v0: Math.round(value)
+})}
+      title={ui("드래그해 크기 조절 · 두 번 클릭하면 기본 크기")}
       onDoubleClick={event => { event.preventDefault(); event.stopPropagation(); onReset(); }}
       onPointerDown={event => {
         if (event.button !== 0) return;

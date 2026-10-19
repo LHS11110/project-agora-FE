@@ -1,3 +1,5 @@
+import { ui } from '../i18n/locale.js';
+import { useUiLocale } from '../i18n/useUiLocale.js';
 import { drawVectorItems } from '../canvas/drawVectorItems.js';
 export { drawVectorItems } from '../canvas/drawVectorItems.js';
 import { CONNECTOR_METRICS_EVENT } from '../canvas/connectors/objectMetrics.js';
@@ -23,6 +25,7 @@ function vectorSceneChanged(previous, current) {
 }
 
 export default function VectorLayer({ items, referenceItems = items, visibleItemIds, previewStrokes = [], camera, onReady, worldSize }) {
+  useUiLocale();
   const hostRef = useRef(null);
   const appRef = useRef(null);
   const sceneRef = useRef(null);
@@ -154,5 +157,5 @@ export default function VectorLayer({ items, referenceItems = items, visibleItem
     };
   }, []);
 
-  return <div className="vector-layer" ref={hostRef} aria-label="벡터 그래픽 캔버스" />;
+  return <div className="vector-layer" ref={hostRef} aria-label={ui("벡터 그래픽 캔버스")} />;
 }

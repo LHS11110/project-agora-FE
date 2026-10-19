@@ -1,0 +1,83 @@
+{
+  "date": "2026-10-19",
+  "locales": [
+    "ko",
+    "en"
+  ],
+  "messageCount": 1405,
+  "unitTests": {
+    "passed": 197,
+    "failed": 0
+  },
+  "productionBuild": true,
+  "deployment": "Project Orchestra static frontend exporter",
+  "browser": {
+    "home": true,
+    "login": true,
+    "preferencePersistence": true,
+    "crossTab": true,
+    "formPreserved": true,
+    "canvas": {
+      "canvasId": 2048,
+      "readOnly": true,
+      "unchanged": true,
+      "noReconnect": true,
+      "bilingualShapeSearch": true
+    },
+    "pageErrors": 0,
+    "mobile": {
+      "viewport": 390,
+      "routes": [
+        "/",
+        "/login",
+        "/docs",
+        "/tutorial"
+      ],
+      "horizontalOverflow": false,
+      "languageSelectorVisible": true
+    }
+  },
+  "frontendImage": "sha256:b4830fd77a9155dee2b656ceda4f062e8a50ae3c0b83de242cdf9958a280d9d0",
+  "followup": {
+    "translationAudit": {
+      "results": [
+        {
+          "route": "/",
+          "untranslated": []
+        },
+        {
+          "route": "/login",
+          "untranslated": []
+        },
+        {
+          "route": "/docs",
+          "untranslated": []
+        },
+        {
+          "route": "/tutorial",
+          "untranslated": []
+        },
+        {
+          "route": "canvas / Shapes",
+          "untranslated": []
+        },
+        {
+          "route": "canvas / Draw",
+          "untranslated": []
+        },
+        {
+          "route": "canvas / Drawing eraser",
+          "untranslated": []
+        },
+        {
+          "route": "canvas preservation",
+          "unchanged": true,
+          "noReconnect": true,
+          "noExampleControls": true
+        }
+      ],
+      "pageErrors": []
+    },
+    "shapeExamplesRemoved": true
+  }
+}

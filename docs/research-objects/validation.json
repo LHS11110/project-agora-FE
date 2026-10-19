@@ -58,5 +58,12 @@
     "reloadVerified": true,
     "errors": []
   },
-  "temporaryFixtureRemoved": true
+  "temporaryFixtureRemoved": true,
+  "historicalReport": true,
+  "featureUpdate": {
+    "date": "2026-10-19",
+    "exampleStructureFeatureRemoved": true,
+    "symbolCatalogPreserved": true,
+    "existingCanvasObjectsPreserved": true
+  }
 }

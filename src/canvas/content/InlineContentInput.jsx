@@ -1,3 +1,5 @@
+import { ui } from '../../i18n/locale.js';
+import { useUiLocale } from '../../i18n/useUiLocale.js';
 import { useLayoutEffect, useRef } from 'react';
 import { useEditingBoundary } from '../useEditingBoundary.js';
 import { moveTextPosition, textSpliceBetween } from '../collaborativeText.js';
@@ -7,6 +9,7 @@ const labels = { plain: '텍스트', markdown: 'Markdown', latex: 'LaTeX' };
 
 /** Plain input within the object: no editor frame, line numbers or code widgets. */
 export default function InlineContentInput({ value, mode, onChange, onSave, onStopEditing }) {
+  useUiLocale();
   const boundary = useEditingBoundary(true, onStopEditing, { pointerOnly: true });
   const displayed = useRef(String(value));
   const selection = useRef(null);
@@ -35,8 +38,10 @@ export default function InlineContentInput({ value, mode, onChange, onSave, onSt
     }
   }, [value, mode, boundary.ref]);
   return <textarea ref={boundary.ref} className="inline-content-input" data-mode={mode} autoFocus rows={1}
-    aria-label={`${labels[mode] || '내용'} 직접 수정`} value={value} spellCheck={mode === 'plain'}
-    placeholder={mode === 'latex' ? '예: f(x) = x^2 + 2x + 1' : mode === 'markdown' ? 'Markdown과 $수식$을 입력하세요' : '내용을 입력하세요'}
+    aria-label={ui("{v0} 직접 수정", {
+  v0: ui(labels[mode]) || ui("내용")
+})} value={value} spellCheck={mode === 'plain'}
+    placeholder={mode === 'latex' ? ui("예: f(x) = x^2 + 2x + 1") : mode === 'markdown' ? ui("Markdown과 $수식$을 입력하세요") : ui("내용을 입력하세요")}
     onSelect={rememberSelection} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }}
     onChange={event => { displayed.current = event.target.value; rememberSelection(event); onChange(event.target.value); }}
     onPointerDown={event => event.stopPropagation()} onPointerMove={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}

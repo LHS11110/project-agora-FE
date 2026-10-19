@@ -1,8 +1,11 @@
+import { ui } from '../../i18n/locale.js';
+import { useUiLocale } from '../../i18n/useUiLocale.js';
 import './canvas-loading-status.css';
 
 export default function CanvasLoadingStatus({ overlay = false, message = '캔버스를 불러오는 중입니다.' }) {
+  useUiLocale();
   return <div className={`canvas-loading-status${overlay ? ' is-overlay' : ''}`} role="status" aria-live="polite" aria-busy="true">
     <span className="loader" aria-hidden="true" />
-    <p>{message}</p>
+    <p>{ui(message)}</p>
   </div>;
 }

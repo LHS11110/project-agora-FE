@@ -1,26 +1,29 @@
+import { ui } from '../../i18n/locale.js';
+import { useUiLocale } from '../../i18n/useUiLocale.js';
 import ChromeToggle from '../../canvas/panels/ChromeToggle.jsx';
 import './host-canvas-status.css';
 
 export default function HostCanvasStatus({ status, receipt, onRetry, collapsed=false, onToggle }) {
+  useUiLocale();
   const reconnecting = !status.ready && status.editable;
   const summary = receipt?.summary;
   const result = receipt?.status === 'accepted'
-    ? `서버 저장 완료: 생성 ${summary?.created || 0} · 수정 ${summary?.updated || 0} · 삭제 ${summary?.deleted || 0}`
-    : receipt?.status === 'rejected' ? `서버 저장 실패: ${receipt.message || '요청을 반영하지 못했습니다.'}`
+    ? ui('서버 저장 완료: 생성 {created} · 수정 {updated} · 삭제 {deleted}',{created:summary?.created||0,updated:summary?.updated||0,deleted:summary?.deleted||0})
+    : receipt?.status === 'rejected' ? ui('서버 저장 실패: {message}',{message:ui(receipt.message || '요청을 반영하지 못했습니다.')})
       : receipt?.status === 'received' ? '서버가 변경을 수신했습니다.'
         : receipt?.status === 'waiting' ? '서버 동기화 후 다시 전송합니다.' : '';
-  return <div className={`host-canvas-status${reconnecting ? ' is-reconnecting' : ''}${collapsed ? ' is-collapsed' : ''}`} role="status" aria-live="polite" title="서버 저장과 실시간 동기화 상태를 확인합니다.">
-    {collapsed && <span className="canvas-chrome-label">동기화{status.blocked?' · 저장 확인 필요':!status.ready?' · 동기화 중':' 상태'}</span>}
+  return <div className={`host-canvas-status${reconnecting ? ' is-reconnecting' : ''}${collapsed ? ' is-collapsed' : ''}`} role="status" aria-live="polite" title={ui("서버 저장과 실시간 동기화 상태를 확인합니다.")}>
+    {collapsed && <span className="canvas-chrome-label">{ui("동기화")}{status.blocked?ui(" · 저장 확인 필요"):!status.ready?ui(" · 동기화 중"):ui(" 상태")}</span>}
     <div id="canvas-host-status-content" hidden={collapsed}>
     {reconnecting
-      ? '서버 연결이 잠시 중단됐습니다. 작업은 계속할 수 있고, 변경 사항은 연결 후 전송됩니다.'
-      : status.ready ? '서버 동기화됨' : '서버와 동기화 중'}
-    {status.queued > 0 && ` · 저장 대기 ${status.queued}건`}
+      ? ui("서버 연결이 잠시 중단됐습니다. 작업은 계속할 수 있고, 변경 사항은 연결 후 전송됩니다.")
+      : status.ready ? ui("서버 동기화됨") : ui("서버와 동기화 중")}
+    {status.queued > 0 && ui(' · 저장 대기 {count}건',{count:status.queued})}
     {!reconnecting && result && ` · ${result}`}
     {status.blocked && <>
-      <span> · 후속 요청 전송 중단</span>
-      <button type="button" onClick={onRetry}>같은 요청 재시도</button>
+      <span>{" " + ui("· 후속 요청 전송 중단") + ""}</span>
+      <button type="button" onClick={onRetry}>{ui("같은 요청 재시도")}</button>
     </>}
-    </div>{onToggle && <ChromeToggle label="동기화바" collapsed={collapsed} onToggle={onToggle} controls="canvas-host-status-content" />}
+    </div>{onToggle && <ChromeToggle label={ui("동기화바")} collapsed={collapsed} onToggle={onToggle} controls="canvas-host-status-content" />}
   </div>;
 }

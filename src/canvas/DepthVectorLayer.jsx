@@ -1,3 +1,5 @@
+import { ui } from '../i18n/locale.js';
+import { useUiLocale } from '../i18n/useUiLocale.js';
 import { shapeFillOpacity } from './shapeAppearance.js';
 import ImagePreviewCache, { loadImagePreview } from './ImagePreviewCache.js';
 import { apiUrl } from '../api/client.js';
@@ -25,6 +27,7 @@ const EMPTY_PREVIEWS = [];
 const EMPTY_ITEMS={};
 
 export default function DepthVectorLayer(props) {
+  useUiLocale();
   const host = useRef(null), renderer = useRef(null), latest = useRef(props);
   latest.current = props;
   useLayoutEffect(() => {
@@ -405,5 +408,5 @@ export default function DepthVectorLayer(props) {
     };
   }, []);
   useLayoutEffect(() => { renderer.current?.(); });
-  return <div className="vector-layer" style={props.style} ref={host} aria-label="깊이별 벡터 캔버스" />;
+  return <div className="vector-layer" style={props.style} ref={host} aria-label={ui("깊이별 벡터 캔버스")} />;
 }

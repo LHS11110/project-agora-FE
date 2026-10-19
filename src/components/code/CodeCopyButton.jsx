@@ -1,7 +1,10 @@
+import { ui } from '../../i18n/locale.js';
+import { useUiLocale } from '../../i18n/useUiLocale.js';
 import { useEffect, useRef, useState } from 'react';
 import { copyCode } from './copyCode.js';
 
 export default function CodeCopyButton({ value }) {
+  useUiLocale();
   const [status, setStatus] = useState('');
   const timer = useRef(0), busy = useRef(false), mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; clearTimeout(timer.current); }; }, []);
@@ -16,7 +19,7 @@ export default function CodeCopyButton({ value }) {
     setStatus(next); clearTimeout(timer.current);
     timer.current = setTimeout(() => setStatus(''), 2000);
   };
-  return <button type="button" className="code-copy-button" data-object-action="copy" aria-label="코드 복사" onPointerDown={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()} onClick={copy}>
-    <span aria-live="polite">{status || '복사'}</span>
+  return <button type="button" className="code-copy-button" data-object-action="copy" aria-label={ui("코드 복사")} onPointerDown={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()} onClick={copy}>
+    <span aria-live="polite">{ui(status) || ui("복사")}</span>
   </button>;
 }

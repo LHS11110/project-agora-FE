@@ -1,3 +1,5 @@
+import { ui } from '../../i18n/locale.js';
+import { useUiLocale } from '../../i18n/useUiLocale.js';
 import { shapeFillOpacity, shapeStrokeWidth, sketchFillOpacity } from '../../canvas/shapeAppearance.js';
 import { itemDepth } from '../../canvas/itemDepth.js';
 import UserGroupContent from '../../canvas/userGroups/UserGroupContent.jsx';
@@ -18,22 +20,27 @@ const HEIGHT = 600;
 const kinds = new Set(['note', 'text', 'code', 'math', 'table', 'image', 'link', 'shape', 'stroke', 'connector', 'pdf', 'user-group']);
 
 function PreviewContent({ item, token }) {
+  useUiLocale();
   if (item.kind === 'user-group') return <UserGroupContent item={item} token={token} />;
-  if (item.kind === 'pdf') return <div className="canvas-preview-pdf"><AuthenticatedImage src={item.thumbnail} token={token} alt={item.filename || 'PDF'} fallback={<strong>PDF · {item.filename || '문서'}</strong>} /></div>;
-  if (item.kind === 'image') return <AuthenticatedImage src={item.src} token={token} alt={item.filename || '공유 이미지'} fallback={<span>{item.filename || '이미지'}</span>} />;
+  if (item.kind === 'pdf') return <div className="canvas-preview-pdf"><AuthenticatedImage src={item.thumbnail} token={token} alt={item.filename || 'PDF'} fallback={<strong>PDF · {item.filename || ui('문서')}</strong>} /></div>;
+  if (item.kind === 'image') return <AuthenticatedImage src={item.src} token={token} alt={item.filename || ui("공유 이미지")} fallback={<span>{item.filename || ui('이미지')}</span>} />;
   if (item.kind === 'table') return <table><thead><tr>{(item.columns || []).map((value, i) => <th key={i}>{String(value)}</th>)}</tr></thead><tbody>{(item.rows || []).map((row, i) => <tr key={i}>{(Array.isArray(row) ? row : []).map((value, j) => <td key={j}>{String(value)}</td>)}</tr>)}</tbody></table>;
   if (isTextContent(item)) return <RenderedContent value={contentSource(item)} mode={contentMode(item)} language={item.language || 'javascript'} />;
-  if (item.kind === 'link') return <><strong>{item.title || '공유 링크'}</strong><p>{item.url || ''}</p></>;
+  if (item.kind === 'link') return <><strong>{item.title || ui("공유 링크")}</strong><p>{item.url || ''}</p></>;
   return item.format === 'markdown' || item.kind === 'note' ? <MarkdownText source={item.text || ''} /> : <p>{item.text || ''}</p>;
 }
 
 function PreviewLines({ paths, visualStyle, seed, width = 2 }) {
+
+
   return paths.flatMap((path, index) => vectorStrokePaths(path, visualStyle, `${seed}:${index}`).map((stroke, pass) =>
     <polyline key={`${index}:${pass}`} points={stroke.points.map(p => `${p.x},${p.y}`).join(' ')}
       fill="none" strokeOpacity={stroke.alpha} strokeWidth={width * stroke.widthScale} strokeLinejoin="round" />));
 }
 
 function PreviewObject({ id, item, token }) {
+
+
   const [defaultWidth, defaultHeight] = OBJECT_SIZES[item.kind] || [0.2, 0.12];
   const x = (Number(item.x) || 0) * WIDTH;
   const y = (Number(item.y) || 0) * HEIGHT;
@@ -61,15 +68,18 @@ function PreviewObject({ id, item, token }) {
 
 /** Frame the complete document, including objects outside the initial viewport. */
 export default function CanvasContentPreview({ items, token, name }) {
+  useUiLocale();
   const entries = Object.entries(items).filter(([, item]) => item && kinds.has(item.kind)).sort((a, b) => itemDepth(a[1]) - itemDepth(b[1]));
   const bounds = entries.map(([, item]) => objectBounds(item, items, WIDTH, HEIGHT));
   const valid = bounds.filter(b => Object.values(b).every(Number.isFinite));
-  if (!valid.length) return <div className="canvas-preview-message">아직 객체가 없어요</div>;
+  if (!valid.length) return <div className="canvas-preview-message">{ui("아직 객체가 없어요")}</div>;
   const minX = Math.min(...valid.map(b => b.minX)) * WIDTH - 35;
   const minY = Math.min(...valid.map(b => b.minY)) * HEIGHT - 35;
   const width = Math.max(240, Math.max(...valid.map(b => b.maxX)) * WIDTH - minX + 35);
   const height = Math.max(160, Math.max(...valid.map(b => b.maxY)) * HEIGHT - minY + 35);
-  return <svg className="canvas-content-preview" viewBox={`${minX} ${minY} ${width} ${height}`} role="img" aria-label={`${name || '캔버스'} 객체 미리보기`}>
+  return <svg className="canvas-content-preview" viewBox={`${minX} ${minY} ${width} ${height}`} role="img" aria-label={ui("{v0} 객체 미리보기", {
+  v0: name || ui("캔버스")
+})}>
     {entries.map(([id, item]) => {
       if (item.kind !== 'connector') return <PreviewObject key={id} id={id} item={item} token={token} />;
       const geometry = connectorGeometry(item, items, WIDTH, HEIGHT);

@@ -1,11 +1,14 @@
+import { ui } from '../i18n/locale.js';
+import { useUiLocale } from '../i18n/useUiLocale.js';
 import Icon from './Icon.jsx';
 import { inspectShareUrl } from './shareMedia.js';
 
 export default function SharedMediaContent({ item, interactive = true }) {
+  useUiLocale();
   const media = inspectShareUrl(item?.url);
-  if (!media) return <div className="shared-media-invalid">올바른 주소가 아닙니다.</div>;
+  if (!media) return <div className="shared-media-invalid">{ui("올바른 주소가 아닙니다.")}</div>;
   const player = (content) => interactive ? content : <div className="shared-media-preview">
-    {content}<div className="shared-media-activate" aria-hidden="true">두 번 클릭해 재생 조작</div>
+    {content}<div className="shared-media-activate" aria-hidden="true">{ui("두 번 클릭해 재생 조작")}</div>
   </div>;
 
   if (media.mediaType === 'youtube') {
@@ -13,9 +16,7 @@ export default function SharedMediaContent({ item, interactive = true }) {
   }
   if (media.mediaType === 'video') {
     return player(<video className="shared-video-player" controls playsInline preload="metadata" onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
-      <source src={media.url} />
-      브라우저에서 이 동영상을 재생할 수 없습니다.
-    </video>);
+      <source src={media.url} />{ui("브라우저에서 이 동영상을 재생할 수 없습니다.")}</video>);
   }
 
   return <a className="shared-link-card" href={media.url} target="_blank" rel="noopener noreferrer" onPointerDown={(event) => event.stopPropagation()}>

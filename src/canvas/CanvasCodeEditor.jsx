@@ -1,3 +1,5 @@
+import { ui } from '../i18n/locale.js';
+import { useUiLocale } from '../i18n/useUiLocale.js';
 import { useEditingBoundary } from './useEditingBoundary.js';
 import { useEffect, useRef, useState } from 'react';
 import { moveTextPosition, textSpliceBetween } from './collaborativeText.js';
@@ -5,6 +7,7 @@ import './canvas-code-editor.css';
 
 /** One model per open block; remote updates preserve selections and view state. */
 export default function CanvasCodeEditor({ value = '', language = 'javascript', onChange, onSave, onStopEditing }) {
+  useUiLocale();
   const boundary = useEditingBoundary(true, onStopEditing, { pointerOnly: true });
   const hostRef = useRef(null);
   const editorRef = useRef(null);
@@ -103,7 +106,7 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
     if (status !== 'ready' && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); onSave?.(); }
   }}>
     <div ref={hostRef} className="canvas-code-editor-host" />
-    {status === 'loading' && <div className="canvas-code-editor-loading" role="status">코드 에디터를 불러오는 중…</div>}
-    {status === 'failed' && <><p role="status">에디터를 불러오지 못했습니다. 기본 입력창에서 계속 편집할 수 있어요.</p><textarea className="canvas-code-editor-fallback" autoFocus aria-label="코드 편집" value={value} onChange={event => onChange?.(event.target.value)} /></>}
+    {status === 'loading' && <div className="canvas-code-editor-loading" role="status">{ui("코드 에디터를 불러오는 중…")}</div>}
+    {status === 'failed' && <><p role="status">{ui("에디터를 불러오지 못했습니다. 기본 입력창에서 계속 편집할 수 있어요.")}</p><textarea className="canvas-code-editor-fallback" autoFocus aria-label={ui("코드 편집")} value={value} onChange={event => onChange?.(event.target.value)} /></>}
   </div>;
 }

@@ -1,7 +1,10 @@
+import { ui } from '../../i18n/locale.js';
+import { useUiLocale } from '../../i18n/useUiLocale.js';
 import { useRef, useState } from 'react';
 import { api } from '../../api/client.js';
 import UserAvatar from './UserAvatar.jsx';
 export default function ProfileImageControls({ user, token, onChange, disabled = false, onBusyChange }) {
+  useUiLocale();
   const input = useRef(null), pending = useRef(false);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState('');
   const upload = async file => {
@@ -27,8 +30,8 @@ export default function ProfileImageControls({ user, token, onChange, disabled =
     finally { pending.current = false; setBusy(false); onBusyChange?.(false); }
   };
   return <><UserAvatar user={user} token={token} className="avatar-xl" />
-    <div className="profile-image-controls"><button type="button" disabled={busy || disabled} onClick={() => input.current.click()}>{busy ? '변경 중…' : '이미지 변경'}</button><button type="button" disabled={busy || disabled} onClick={reset}>기본 이미지</button></div>
-    <input hidden ref={input} type="file" accept="image/png,image/jpeg" aria-label="프로필 이미지 선택" onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; upload(file); }} />
+    <div className="profile-image-controls"><button type="button" disabled={busy || disabled} onClick={() => input.current.click()}>{busy ? ui("변경 중…") : ui("이미지 변경")}</button><button type="button" disabled={busy || disabled} onClick={reset}>{ui("기본 이미지")}</button></div>
+    <input hidden ref={input} type="file" accept="image/png,image/jpeg" aria-label={ui("프로필 이미지 선택")} onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; upload(file); }} />
     {message && <p className="profile-image-message" role="status">{message}</p>}
   </>;
 }

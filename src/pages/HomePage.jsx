@@ -1,3 +1,6 @@
+import LanguageSwitcher from '../i18n/LanguageSwitcher.jsx';
+import { ui } from '../i18n/locale.js';
+import { useUiLocale } from '../i18n/useUiLocale.js';
 import { useRef } from 'react';
 import { useHomeObjectDrag } from '../home/useHomeObjectDrag.js';
 import { Link, useNavigate } from '../routing.jsx';
@@ -22,6 +25,7 @@ import '../home-scenes.css';
 import '../home/home-responsive.css';
 
 export default function HomePage() {
+  useUiLocale();
   const { introVisible, homeRevealed, finishIntro } = useHomeCinematicIntro();
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -35,14 +39,14 @@ export default function HomePage() {
     <div ref={pageRef} className={`marketing-page home-slides-page${!homeRevealed ? ' home-intro-pending' : ''}`} inert={introVisible ? '' : undefined} aria-hidden={introVisible || undefined}>
     <header className="marketing-header page-container">
       <FreLogBrand />
-      <nav className="marketing-nav" aria-label="소개 슬라이드"><button className={activeSlide === 0 ? 'current' : ''} onClick={() => selectSlide(0)}>FreLog 소개</button><button className={activeSlide === 1 ? 'current' : ''} onClick={() => selectSlide(1)}>작동 방식</button><button className={activeSlide === 2 ? 'current' : ''} onClick={() => selectSlide(2)}>프로젝트 맵</button><button className={activeSlide === 3 ? 'current' : ''} onClick={() => selectSlide(3)}>함께 편집</button><Link to="/docs">문서</Link></nav>
-      <div className="marketing-actions">{isAuthenticated ? <Link className="button button-light" to="/search">워크스페이스 <Icon name="arrow" size={16} /></Link> : <Link className="text-link" to="/login">로그인</Link>}<button className="button button-dark button-small" onClick={() => navigate(target)}>{isAuthenticated ? '캔버스 열기' : '무료로 시작하기'} <Icon name="arrow" size={16} /></button></div>
+      <nav className="marketing-nav" aria-label={ui("소개 슬라이드")}><button className={activeSlide === 0 ? 'current' : ''} onClick={() => selectSlide(0)}>{ui("FreLog 소개")}</button><button className={activeSlide === 1 ? 'current' : ''} onClick={() => selectSlide(1)}>{ui("작동 방식")}</button><button className={activeSlide === 2 ? 'current' : ''} onClick={() => selectSlide(2)}>{ui("프로젝트 맵")}</button><button className={activeSlide === 3 ? 'current' : ''} onClick={() => selectSlide(3)}>{ui("함께 편집")}</button><Link to="/docs">{ui("문서")}</Link></nav>
+      <div className="marketing-actions"><LanguageSwitcher />{isAuthenticated ? <Link className="button button-light" to="/search">{"" + ui("워크스페이스") + " "}<Icon name="arrow" size={16} /></Link> : <Link className="text-link" to="/login">{ui("로그인")}</Link>}<button className="button button-dark button-small" onClick={() => navigate(target)}>{isAuthenticated ? ui("캔버스 열기") : ui("무료로 시작하기")} <Icon name="arrow" size={16} /></button></div>
     </header>
-    <main ref={windowRef} className="home-slide-window" aria-label="FreLog 소개" onWheel={handleWheel} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <main ref={windowRef} className="home-slide-window" aria-label={ui("FreLog 소개")} onWheel={handleWheel} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <div ref={trackRef} className="home-slide-track" style={{ transform: `translate3d(-${activeSlide * 20}%, 0, 0)` }}>
         <HomeIntroSlide navigate={navigate} target={target} selectSlide={selectSlide} />        <ArchitectureSlide />        <ProjectMapSlide />        <CollaborationSlide selectSlide={selectSlide} />        <StartSlide navigate={navigate} target={target} />
       </div>
     </main>
-    <footer className="home-slide-controls page-container"><span className="slide-counter"><b>{String(activeSlide + 1).padStart(2, '0')}</b> / {String(slideLabels.length).padStart(2, '0')}</span><div className="slide-progress" role="tablist" aria-label="슬라이드 이동">{slideLabels.map((label, index) => <button key={label} role="tab" aria-selected={index === activeSlide} aria-label={`${index + 1}번 슬라이드: ${label}`} className={index === activeSlide ? 'active' : ''} onClick={() => selectSlide(index)} />)}</div><div className="slide-control-actions"><button className="slide-arrow" onClick={() => selectSlide(activeSlide - 1)} disabled={activeSlide === 0} aria-label="이전 슬라이드"><Icon name="back" size={17} /></button><button className="slide-arrow next" onClick={() => selectSlide(activeSlide + 1)} disabled={activeSlide === slideLabels.length - 1} aria-label="다음 슬라이드"><Icon name="chevron" size={17} /></button></div></footer>
+    <footer className="home-slide-controls page-container"><span className="slide-counter"><b>{String(activeSlide + 1).padStart(2, '0')}</b> / {String(slideLabels.length).padStart(2, '0')}</span><div className="slide-progress" role="tablist" aria-label={ui("슬라이드 이동")}>{slideLabels.map((label, index) => <button key={label} role="tab" aria-selected={index === activeSlide} aria-label={ui('{index}번 슬라이드: {label}', {index:index+1,label:ui(label)})} className={index === activeSlide ? 'active' : ''} onClick={() => selectSlide(index)} />)}</div><div className="slide-control-actions"><button className="slide-arrow" onClick={() => selectSlide(activeSlide - 1)} disabled={activeSlide === 0} aria-label={ui("이전 슬라이드")}><Icon name="back" size={17} /></button><button className="slide-arrow next" onClick={() => selectSlide(activeSlide + 1)} disabled={activeSlide === slideLabels.length - 1} aria-label={ui("다음 슬라이드")}><Icon name="chevron" size={17} /></button></div></footer>
   </div></>;
 }
