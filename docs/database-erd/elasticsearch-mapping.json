@@ -1,0 +1,358 @@
+{
+  "canvas": {
+    "mappings": {
+      "dynamic_templates": [
+        {
+          "inner_group_uids": {
+            "path_match": "inner-group.*",
+            "mapping": {
+              "type": "long"
+            }
+          }
+        },
+        {
+          "item_id": {
+            "path_match": "items.*.item-id",
+            "mapping": {
+              "type": "long"
+            }
+          }
+        },
+        {
+          "item_type": {
+            "path_match": "items.*.type",
+            "mapping": {
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "item_pos": {
+            "path_match": "items.*.pos",
+            "mapping": {
+              "type": "float"
+            }
+          }
+        },
+        {
+          "item_permission": {
+            "path_match": "items.*.permission",
+            "mapping": {
+              "type": "keyword"
+            }
+          }
+        }
+      ],
+      "properties": {
+        "__broker_sync": {
+          "properties": {
+            "clients": {
+              "properties": {
+                "2:2c0e20c4-34fc-4c31-bd6a-ee5279489e6d": {
+                  "properties": {
+                    "count": {
+                      "type": "long"
+                    },
+                    "digest": {
+                      "type": "text",
+                      "fields": {
+                        "keyword": {
+                          "type": "keyword",
+                          "ignore_above": 256
+                        }
+                      }
+                    },
+                    "request_id": {
+                      "type": "text",
+                      "fields": {
+                        "keyword": {
+                          "type": "keyword",
+                          "ignore_above": 256
+                        }
+                      }
+                    },
+                    "revision": {
+                      "type": "long"
+                    }
+                  }
+                },
+                "2:4e17cfce-95a1-4b4b-ad07-b84568b70f73": {
+                  "properties": {
+                    "count": {
+                      "type": "long"
+                    },
+                    "digest": {
+                      "type": "text",
+                      "fields": {
+                        "keyword": {
+                          "type": "keyword",
+                          "ignore_above": 256
+                        }
+                      }
+                    },
+                    "request_id": {
+                      "type": "text",
+                      "fields": {
+                        "keyword": {
+                          "type": "keyword",
+                          "ignore_above": 256
+                        }
+                      }
+                    },
+                    "revision": {
+                      "type": "long"
+                    }
+                  }
+                },
+                "2:573d3207-8b2e-4170-b7ea-58fd23527509": {
+                  "properties": {
+                    "count": {
+                      "type": "long"
+                    },
+                    "digest": {
+                      "type": "text",
+                      "fields": {
+                        "keyword": {
+                          "type": "keyword",
+                          "ignore_above": 256
+                        }
+                      }
+                    },
+                    "request_id": {
+                      "type": "text",
+                      "fields": {
+                        "keyword": {
+                          "type": "keyword",
+                          "ignore_above": 256
+                        }
+                      }
+                    },
+                    "revision": {
+                      "type": "long"
+                    }
+                  }
+                },
+                "2:765058f5-1333-4d60-89c6-5a01d952eed5": {
+                  "properties": {
+                    "count": {
+                      "type": "long"
+                    },
+                    "digest": {
+                      "type": "text",
+                      "fields": {
+                        "keyword": {
+                          "type": "keyword",
+                          "ignore_above": 256
+                        }
+                      }
+                    },
+                    "request_id": {
+                      "type": "text",
+                      "fields": {
+                        "keyword": {
+                          "type": "keyword",
+                          "ignore_above": 256
+                        }
+                      }
+                    },
+                    "revision": {
+                      "type": "long"
+                    }
+                  }
+                },
+                "2:86603dcd-266a-43df-b708-930673e220a2": {
+                  "properties": {
+                    "count": {
+                      "type": "long"
+                    },
+                    "digest": {
+                      "type": "text",
+                      "fields": {
+                        "keyword": {
+                          "type": "keyword",
+                          "ignore_above": 256
+                        }
+                      }
+                    },
+                    "request_id": {
+                      "type": "text",
+                      "fields": {
+                        "keyword": {
+                          "type": "keyword",
+                          "ignore_above": 256
+                        }
+                      }
+                    },
+                    "revision": {
+                      "type": "long"
+                    }
+                  }
+                },
+                "2:d9efc166-ce66-41c2-9df1-92ac8de82d56": {
+                  "properties": {
+                    "count": {
+                      "type": "long"
+                    },
+                    "digest": {
+                      "type": "text",
+                      "fields": {
+                        "keyword": {
+                          "type": "keyword",
+                          "ignore_above": 256
+                        }
+                      }
+                    },
+                    "request_id": {
+                      "type": "text",
+                      "fields": {
+                        "keyword": {
+                          "type": "keyword",
+                          "ignore_above": 256
+                        }
+                      }
+                    },
+                    "revision": {
+                      "type": "long"
+                    }
+                  }
+                },
+                "2:vector-bb56bd13-8979-4048-b188-d6354dab4107": {
+                  "properties": {
+                    "count": {
+                      "type": "long"
+                    },
+                    "digest": {
+                      "type": "text",
+                      "fields": {
+                        "keyword": {
+                          "type": "keyword",
+                          "ignore_above": 256
+                        }
+                      }
+                    },
+                    "request_id": {
+                      "type": "text",
+                      "fields": {
+                        "keyword": {
+                          "type": "keyword",
+                          "ignore_above": 256
+                        }
+                      }
+                    },
+                    "revision": {
+                      "type": "long"
+                    }
+                  }
+                },
+                "debug-only": {
+                  "properties": {
+                    "count": {
+                      "type": "long"
+                    },
+                    "digest": {
+                      "type": "text",
+                      "fields": {
+                        "keyword": {
+                          "type": "keyword",
+                          "ignore_above": 256
+                        }
+                      }
+                    },
+                    "request_id": {
+                      "type": "text",
+                      "fields": {
+                        "keyword": {
+                          "type": "keyword",
+                          "ignore_above": 256
+                        }
+                      }
+                    },
+                    "revision": {
+                      "type": "long"
+                    }
+                  }
+                }
+              }
+            },
+            "revision": {
+              "type": "long"
+            }
+          }
+        },
+        "admin": {
+          "type": "long"
+        },
+        "admin-user-id": {
+          "type": "long"
+        },
+        "broker-sync-b64": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "canvas-id": {
+          "type": "long"
+        },
+        "canvas-name": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "canvas-password-hash": {
+          "type": "keyword"
+        },
+        "description": {
+          "type": "text"
+        },
+        "init-group": {
+          "type": "keyword"
+        },
+        "inner-group": {
+          "properties": {
+            "admin-group": {
+              "type": "long"
+            },
+            "default": {
+              "type": "long"
+            },
+            "group-name1": {
+              "type": "long"
+            },
+            "group-name2": {
+              "type": "long"
+            }
+          }
+        },
+        "items": {
+          "type": "object"
+        },
+        "items-b64": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "people": {
+          "type": "long"
+        },
+        "peoples": {
+          "type": "long"
+        },
+        "settings-revision": {
+          "type": "long"
+        }
+      }
+    }
+  }
+}

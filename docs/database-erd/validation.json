@@ -1,0 +1,12 @@
+{
+  "canvas_id": 2048,
+  "objects": 176,
+  "serverAcknowledgements": 1,
+  "reloadVerified": true,
+  "errors": [],
+  "schema_tables": 5,
+  "schema_columns": 36,
+  "foreign_keys": 5,
+  "source": "Live SQL catalog",
+  "persisted_items_verified": true
+}

@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2940" height="1800" viewBox="0 0 2940 1800"><rect width="100%" height="100%" fill="#ffffff"/><text font-family="Noto Sans CJK KR, sans-serif" font-size="40" fill="#243447" font-weight="650"><tspan x="80" y="70">데이터베이스 ERD</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="22" fill="#64748b" font-weight="400"><tspan x="80" y="114">AGORA / FreLog · SQL Server 실제 시스템 카탈로그 기준 · 2026.10.19</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#386b94" font-weight="650"><tspan x="80" y="159">5 TABLES     36 COLUMNS     5 FOREIGN KEYS     |     PK · FK · UQ · NULLABLE</tspan></text>
+<rect x="80" y="250" width="640" height="604" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="80" y="250" width="640" height="70" fill="#edf3f8" stroke="#94a3b8" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="26" fill="#243447" font-weight="650"><tspan x="98" y="285">users</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="16" fill="#64748b" font-weight="400"><tspan x="98" y="309">사용자 계정</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="17" fill="#64748b" font-weight="650"><tspan x="98" y="346">컬럼</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="17" fill="#64748b" font-weight="650"><tspan x="418" y="346">SQL 타입</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="17" fill="#64748b" font-weight="650"><tspan x="605" y="346">제약</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="650"><tspan x="98" y="382">user_id  ↗</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="418" y="381">int</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="15" fill="#64748b" font-weight="650"><tspan x="605" y="380">PK</tspan></text>
+<rect x="81" y="394" width="638" height="34" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="98" y="416">email</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="418" y="415">nvarchar(255)</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="98" y="450">password_hash</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="418" y="449">nvarchar(255)</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="15" fill="#64748b" font-weight="650"><tspan x="605" y="448">NULL</tspan></text>
+<rect x="81" y="462" width="638" height="34" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="98" y="484">nickname</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="418" y="483">nvarchar(100)</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="98" y="518">tag_number</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="418" y="517">int</tspan></text>
+<rect x="81" y="530" width="638" height="34" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="98" y="552">role</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="418" y="551">nvarchar(20)</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="98" y="586">status</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="418" y="585">nvarchar(20)</tspan></text>
+<rect x="81" y="598" width="638" height="34" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="98" y="620">oauth_provider</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="418" y="619">nvarchar(50)</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="15" fill="#64748b" font-weight="650"><tspan x="605" y="618">NULL</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="98" y="654">oauth_id</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="418" y="653">nvarchar(255)</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="15" fill="#64748b" font-weight="650"><tspan x="605" y="652">NULL</tspan></text>
+<rect x="81" y="666" width="638" height="34" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="98" y="688">password_changed_at</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="418" y="687">datetime2(7)</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="15" fill="#64748b" font-weight="650"><tspan x="605" y="686">NULL</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="98" y="722">created_at</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="418" y="721">datetime2(7)</tspan></text>
+<rect x="81" y="734" width="638" height="34" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="98" y="756">updated_at</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="418" y="755">datetime2(7)</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="16" fill="#386b94" font-weight="400"><tspan x="98" y="793">UQ  email</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="16" fill="#386b94" font-weight="400"><tspan x="98" y="822">UQ  nickname + tag_number</tspan></text>
+<rect x="1040" y="250" width="640" height="342" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="1040" y="250" width="640" height="70" fill="#edf3f8" stroke="#94a3b8" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="26" fill="#243447" font-weight="650"><tspan x="1058" y="285">user_sessions</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="16" fill="#64748b" font-weight="400"><tspan x="1058" y="309">사용자 접속 상태</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="17" fill="#64748b" font-weight="650"><tspan x="1058" y="346">컬럼</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="17" fill="#64748b" font-weight="650"><tspan x="1378" y="346">SQL 타입</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="17" fill="#64748b" font-weight="650"><tspan x="1565" y="346">제약</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="650"><tspan x="1058" y="382">user_id</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="1378" y="381">int</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="15" fill="#386b94" font-weight="650"><tspan x="1565" y="380">PK FK</tspan></text>
+<rect x="1041" y="394" width="638" height="34" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="1058" y="416">cpp_server_id</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="1378" y="415">int</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="15" fill="#386b94" font-weight="650"><tspan x="1565" y="414">FK NULL</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="1058" y="450">canvas_id</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="1378" y="449">int</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="15" fill="#386b94" font-weight="650"><tspan x="1565" y="448">FK NULL</tspan></text>
+<rect x="1041" y="462" width="638" height="34" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="1058" y="484">is_accessed</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="1378" y="483">bit</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="1058" y="518">last_login_at</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="1378" y="517">datetime2(7)</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="15" fill="#64748b" font-weight="650"><tspan x="1565" y="516">NULL</tspan></text>
+<rect x="1041" y="530" width="638" height="34" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="1058" y="552">updated_at</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="1378" y="551">datetime2(7)</tspan></text>
+<rect x="2060" y="250" width="640" height="342" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="2060" y="250" width="640" height="70" fill="#edf3f8" stroke="#94a3b8" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="26" fill="#243447" font-weight="650"><tspan x="2078" y="285">canvas_info</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="16" fill="#64748b" font-weight="400"><tspan x="2078" y="309">캔버스 등록·할당</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="17" fill="#64748b" font-weight="650"><tspan x="2078" y="346">컬럼</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="17" fill="#64748b" font-weight="650"><tspan x="2398" y="346">SQL 타입</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="17" fill="#64748b" font-weight="650"><tspan x="2585" y="346">제약</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="650"><tspan x="2078" y="382">canvas_id  ↗</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="2398" y="381">int</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="15" fill="#64748b" font-weight="650"><tspan x="2585" y="380">PK</tspan></text>
+<rect x="2061" y="394" width="638" height="34" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="2078" y="416">redis_id</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="2398" y="415">int</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="15" fill="#386b94" font-weight="650"><tspan x="2585" y="414">FK NULL</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="2078" y="450">cpp_server_id</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="2398" y="449">int</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="15" fill="#386b94" font-weight="650"><tspan x="2585" y="448">FK NULL</tspan></text>
+<rect x="2061" y="462" width="638" height="34" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="2078" y="484">is_cached</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="2398" y="483">bit</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="2078" y="518">created_at</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="2398" y="517">datetime2(7)</tspan></text>
+<rect x="2061" y="530" width="638" height="34" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="2078" y="552">updated_at</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="2398" y="551">datetime2(7)</tspan></text>
+<rect x="1040" y="960" width="640" height="405" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="1040" y="960" width="640" height="70" fill="#edf3f8" stroke="#94a3b8" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="26" fill="#243447" font-weight="650"><tspan x="1058" y="995">cpp_server</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="16" fill="#64748b" font-weight="400"><tspan x="1058" y="1019">C++ 서버 인스턴스</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="17" fill="#64748b" font-weight="650"><tspan x="1058" y="1056">컬럼</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="17" fill="#64748b" font-weight="650"><tspan x="1378" y="1056">SQL 타입</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="17" fill="#64748b" font-weight="650"><tspan x="1565" y="1056">제약</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="650"><tspan x="1058" y="1092">server_id  ↗</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="1378" y="1091">int</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="15" fill="#64748b" font-weight="650"><tspan x="1565" y="1090">PK</tspan></text>
+<rect x="1041" y="1104" width="638" height="34" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="1058" y="1126">server_ip</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="1378" y="1125">varchar(45)</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="1058" y="1160">server_port</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="1378" y="1159">varchar(10)</tspan></text>
+<rect x="1041" y="1172" width="638" height="34" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="1058" y="1194">ws_port</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="1378" y="1193">varchar(10)</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="1058" y="1228">is_activated</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="1378" y="1227">bit</tspan></text>
+<rect x="1041" y="1240" width="638" height="34" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="1058" y="1262">created_at</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="1378" y="1261">datetime2(7)</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="1058" y="1296">last_heartbeat_at</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="1378" y="1295">datetime2(7)</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="16" fill="#386b94" font-weight="400"><tspan x="1058" y="1333">UQ  server_ip + server_port</tspan></text>
+<rect x="2060" y="960" width="640" height="337" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+<rect x="2060" y="960" width="640" height="70" fill="#edf3f8" stroke="#94a3b8" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="26" fill="#243447" font-weight="650"><tspan x="2078" y="995">redis_server</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="16" fill="#64748b" font-weight="400"><tspan x="2078" y="1019">Redis 서버 등록</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="17" fill="#64748b" font-weight="650"><tspan x="2078" y="1056">컬럼</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="17" fill="#64748b" font-weight="650"><tspan x="2398" y="1056">SQL 타입</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="17" fill="#64748b" font-weight="650"><tspan x="2585" y="1056">제약</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="650"><tspan x="2078" y="1092">redis_id  ↗</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="2398" y="1091">int</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="15" fill="#64748b" font-weight="650"><tspan x="2585" y="1090">PK</tspan></text>
+<rect x="2061" y="1104" width="638" height="34" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="2078" y="1126">redis_ip</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="2398" y="1125">varchar(45)</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="2078" y="1160">redis_port</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="2398" y="1159">varchar(10)</tspan></text>
+<rect x="2061" y="1172" width="638" height="34" fill="#f7f9fc" stroke="#f7f9fc" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="2078" y="1194">is_activated</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="2398" y="1193">bit</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#243447" font-weight="400"><tspan x="2078" y="1228">created_at</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#64748b" font-weight="400"><tspan x="2398" y="1227">datetime2(7)</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="16" fill="#386b94" font-weight="400"><tspan x="2078" y="1265">UQ  redis_ip + redis_port</tspan></text>
+<polyline points="720,377 1040,377" fill="none" stroke="#386b94" stroke-width="2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#386b94" font-weight="650"><tspan x="748" y="361">1</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="19" fill="#386b94" font-weight="650"><tspan x="950" y="361">0..1</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="16" fill="#64748b" font-weight="400"><tspan x="748" y="413">user_id = PK + FK</tspan></text>
+<polyline points="1680,445 1850,445 1850,377 2060,377" fill="none" stroke="#386b94" stroke-width="2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#386b94" font-weight="650"><tspan x="1696" y="475">0..N</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#386b94" font-weight="650"><tspan x="1975" y="361">0..1</tspan></text>
+<polyline points="1040,411 910,411 910,1087 1040,1087" fill="none" stroke="#386b94" stroke-width="2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#386b94" font-weight="650"><tspan x="950" y="443">0..N</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#386b94" font-weight="650"><tspan x="950" y="1117">0..1</tspan></text>
+<polyline points="2060,445 1930,445 1930,1087 1680,1087" fill="none" stroke="#386b94" stroke-width="2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#386b94" font-weight="650"><tspan x="1967" y="475">0..N</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#386b94" font-weight="650"><tspan x="1698" y="1117">0..1</tspan></text>
+<polyline points="2700,411 2810,411 2810,1087 2700,1087" fill="none" stroke="#386b94" stroke-width="2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#386b94" font-weight="650"><tspan x="2717" y="397">0..N</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#386b94" font-weight="650"><tspan x="2717" y="1119">0..1</tspan></text>
+<rect x="80" y="980" width="640" height="290" fill="#f7f9fc" stroke="#c5d0dc" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="23" fill="#243447" font-weight="650"><tspan x="100" y="1020">표기와 관계 읽기</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="18" fill="#243447" font-weight="400"><tspan x="100" y="1063">PK  기본 키   /   FK  실제 외래 키</tspan><tspan x="100" y="1090">UQ  UNIQUE 제약 ( + 는 복합 키)</tspan><tspan x="100" y="1117">NULL  값 없음 허용 / 미표시 컬럼은 NOT NULL</tspan><tspan x="100" y="1144">↗  IDENTITY 자동 증가</tspan><tspan x="100" y="1171">선 끝의 숫자 = 상대 행 1개당 가능한 행 수</tspan><tspan x="100" y="1198">모든 FK: DELETE · UPDATE = NO ACTION</tspan></text>
+<rect x="80" y="1440" width="2620" height="265" fill="#f7f9fc" stroke="#c5d0dc" stroke-width="1.2"/>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="25" fill="#243447" font-weight="650"><tspan x="104" y="1483">문서 저장소와 관계형 스키마의 경계</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="21" fill="#243447" font-weight="400"><tspan x="104" y="1531">MS SQL: 사용자 계정·접속 상태·서버 등록·캔버스 할당을 관리합니다. users → user_sessions는 사용자당 최대 1행입니다.</tspan><tspan x="104" y="1562.5">Redis: 활성 캔버스 문서 canvas:{canvas_id}를 저장합니다. SQL의 canvas_id와 연결하는 애플리케이션 키이며 SQL FK는 아닙니다.</tspan><tspan x="104" y="1594">Elasticsearch: canvas 인덱스에 캔버스 문서·스냅샷을 보관합니다. 객체·참여자·그룹은 문서 내부 데이터이므로 SQL 테이블로 그리지 않았습니다.</tspan><tspan x="104" y="1625.5">비밀번호 해시·이메일 등 실제 사용자 값은 도식에 포함하지 않았습니다. 스키마 메타데이터만 사용했습니다.</tspan></text>
+<text font-family="Noto Sans CJK KR, sans-serif" font-size="17" fill="#64748b" font-weight="400"><tspan x="80" y="1757">SOURCE  sys.tables · sys.columns · sys.indexes · sys.foreign_keys  |  범위: agora_db / dbo  |  비활성·미신뢰 FK 없음</tspan></text></svg>

@@ -1,3 +1,4 @@
+import {researchSymbolUsesFrameAnchors} from '../canvas/researchSymbols.js';
 import { isLogicGate } from '../canvas/logicGates.js';
 import { logicConnectorGeometry } from '../canvas/connectors/logicConnectorGeometry.js';
 import { connectorControlHandles, connectorPointCount, sampleControlCurve } from '../canvas/connectors/controlPoints.js';
@@ -47,7 +48,7 @@ function objectRect(item, width, height) {
     halfHeight: objectHeight / 2,
     rotation: (Number(item?.rotation) || 0) * Math.PI / 180,
     isEllipse: item?.kind === 'shape' && item.shapeType === 'ellipse',
-    shapePaths: item?.kind === 'shape' && item.shapeType !== 'arrow'
+    shapePaths: item?.kind === 'shape' && item.shapeType !== 'arrow' && !researchSymbolUsesFrameAnchors(item.shapeType)
       ? shapeOutlinePaths(item.shapeType, objectWidth, objectHeight, item) : null,
   };
 }

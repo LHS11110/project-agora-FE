@@ -74,9 +74,15 @@ test('every arrowhead shape including circles uses the same seeded sketch stroke
     assert.deepEqual(parts, arrowheadStrokeParts(head, 'sketch', 'arrow'));
     for (const [index, part] of parts.entries()) {
       assert.equal(part.strokes.length, 2);
-      assert.notDeepEqual(part.strokes[0].points, part.strokes[1].points);
       const outline = part.closed ? [...head.parts[index].points, head.parts[index].points[0]] : head.parts[index].points;
-      assert.notDeepEqual(part.strokes[0].points, outline);
+      // At the 3px sampling resolution, tiny ERD stems contain only anchored endpoints.
+      if (outline.length === 2 && Math.hypot(outline[1].x-outline[0].x, outline[1].y-outline[0].y) <= 3) {
+        assert.deepEqual(part.strokes[0].points, outline);
+        assert.deepEqual(part.strokes[1].points, outline);
+      } else {
+        assert.notDeepEqual(part.strokes[0].points, part.strokes[1].points);
+        assert.notDeepEqual(part.strokes[0].points, outline);
+      }
       assert.deepEqual(part.strokes[0].points[0], outline[0]);
       assert.deepEqual(part.strokes[0].points.at(-1), outline.at(-1));
       assert.ok(part.strokes[1].alpha < part.strokes[0].alpha);

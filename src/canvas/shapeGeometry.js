@@ -1,3 +1,4 @@
+import { researchSymbolGeometry } from './researchSymbols.js';
 import { logicGateGeometry } from './logicGates.js';
 import { hasPolygonVertices, hasShapeCorners, polygonVertexCount } from './shapeAppearance.js';
 
@@ -72,6 +73,8 @@ function createShapeOutlinePaths(type, width, height, options) {
 
 // Every filled shape stretches to its selection frame on both axes.
 export function shapeOutlinePaths(type, width, height, options = {}) {
+  const research = researchSymbolGeometry(type, width, height);
+  if (research) return research.paths;
   const logic = logicGateGeometry(type, width, height);
   if (logic) return logic.paths;
   let paths = createShapeOutlinePaths(type, width, height, options);
@@ -88,6 +91,8 @@ export function shapeOutlinePaths(type, width, height, options = {}) {
 
 /** Fill the cylinder silhouette without closing its open body across the lid. */
 export function shapeFillPaths(type, width, height, options = {}) {
+  const research = researchSymbolGeometry(type, width, height);
+  if (research) return research.fills;
   const logic = logicGateGeometry(type, width, height);
   if (logic) return logic.fills;
   if (type === 'arrow') return [];

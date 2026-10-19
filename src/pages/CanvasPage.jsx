@@ -1,3 +1,4 @@
+import {researchTemplates,researchTemplateManifest,findResearchTemplatePosition} from '../canvas/researchTemplates.js';
 import useCanvasChrome from '../canvas/panels/useCanvasChrome.js';
 import ChromeToggle from '../canvas/panels/ChromeToggle.jsx';
 import '../canvas/panels/canvas-chrome.css';
@@ -1241,6 +1242,21 @@ function CanvasWorkspace() {
   }, [editingId, finishEditing]);
   const updateContentSetting = useContentSettings({ itemsRef, setItems, updateCollaborativeMetadata, sendItemChange, refreshSpatialIndex });
   const canvasCodeApi = useCanvasAsCode({ canvasId, itemsRef, committedItemsRef, canvasSnapshotLoadedRef: hostReadyRef, permission, addItem, deleteItem, updateCollaborativeText, saveCollaborativeItem, sendItemChange, setItems, markItemDirty, refreshSpatialIndex, selectItems, peerMeshRef, syncClockRef, syncActorRef, itemSyncVersionsRef, getCollaborativeDoc });
+  const insertResearchTemplate = (type) => {
+    if (!hostStatus.editable) { setToast('캔버스 연결을 확인해주세요.'); return; }
+    const preset=researchTemplates.find(t=>t.id===type);if(!preset)return;
+    try {
+      const center={x:(viewportSize.width/2-camera.x)/camera.scale,y:(viewportSize.height/2-camera.y)/camera.scale};
+      const position=findResearchTemplatePosition(preset,center,rect=>spatialIndex.query({
+        minX:rect.x/boardSize.width,minY:rect.y/boardSize.height,
+        maxX:(rect.x+rect.width)/boardSize.width,maxY:(rect.y+rect.height)/boardSize.height}).length>0);
+      const manifest=researchTemplateManifest(type,{prefix:createId(),permission,...position});
+      canvasCodeApi.apply(canvasCodeApi.plan(manifest));setActiveTool('select');
+      const scale=Math.max(.01,Math.min(camera.scale,(viewportSize.width-100)/preset.width,(viewportSize.height-100)/preset.height));
+      setCamera({scale,x:viewportSize.width/2-(position.x+preset.width/2)*scale,y:viewportSize.height/2-(position.y+preset.height/2)*scale});
+      setToast('예시 구조를 삽입했습니다. 각 객체를 선택해 편집할 수 있습니다.');
+    } catch(error) { setToast(error.message); }
+  };
   const clipboardBlocked = !hostStatus.editable || editingId != null || showSettings || showParticipants || showCanvasCode || sharePosition != null;
   const objectClipboard = useObjectClipboard({ canvasId, boardRef, itemsRef, selectedIds: selectedObjectIds,
     permission, pointerPosition, canvasSnapshotLoadedRef: hostReadyRef, addItem, deleteItem, saveCollaborativeItem,
@@ -1331,7 +1347,7 @@ function CanvasWorkspace() {
           {activeTool === 'laser' && <div className="draw-cursor-label laser-cursor-label"><Icon name="laser" size={13} /> 가리키는 중 · 1.6초 후 사라짐</div>}{activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} /> 그리는 중</div>}{activeTool === 'eraser' && <div className="draw-cursor-label"><Icon name="eraser" size={13} /> 드로잉을 드래그해 지우기</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? '도착 오브젝트 선택' : '시작 오브젝트 선택'}</div>}{activeTool === 'link' && !sharePosition && <div className="draw-cursor-label"><Icon name="link" size={13} /> 공유 자료를 놓을 위치 선택</div>}
         </div><div className="board-footer"><span>무한 좌표 평면{showXAxis && showYAxis ? ' · X/Y축' : showXAxis ? ' · X축' : showYAxis ? ' · Y축' : ''}</span><span className="board-footer-center">빈 공간 드래그 선택 · 객체 드래그 또는 십자 버튼으로 이동 · 손 도구 또는 Space+드래그 화면 이동</span><span>{visibleItemCount}/{drawableItemCount}개 표시</span></div>
       </main>
-<ResizablePanel {...panelLayout.handle('inspector')}><CanvasInspectorPanel graphicsQuality={graphicsQuality} changeGraphicsQuality={changeGraphicsQuality} spatialIndex={spatialIndex} updateContentSetting={updateContentSetting} onNavigateObject={focusCanvasObject} {...{
+<ResizablePanel {...panelLayout.handle('inspector')}><CanvasInspectorPanel onInsertResearchTemplate={insertResearchTemplate} graphicsQuality={graphicsQuality} changeGraphicsQuality={changeGraphicsQuality} spatialIndex={spatialIndex} updateContentSetting={updateContentSetting} onNavigateObject={focusCanvasObject} {...{
         activeTool,
         canvasId,
         canvasParticipants,

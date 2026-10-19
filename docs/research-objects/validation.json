@@ -1,0 +1,62 @@
+{
+  "canvas_id": 2050,
+  "symbols": 40,
+  "styles": 2,
+  "templateInsertions": [
+    {
+      "template": "service-flow",
+      "created": 9
+    },
+    {
+      "template": "array",
+      "created": 16
+    },
+    {
+      "template": "stack",
+      "created": 11
+    },
+    {
+      "template": "queue",
+      "created": 11
+    },
+    {
+      "template": "vectors",
+      "created": 9
+    },
+    {
+      "template": "linked-list",
+      "created": 14
+    },
+    {
+      "template": "binary-tree",
+      "created": 21
+    },
+    {
+      "template": "min-heap",
+      "created": 21
+    },
+    {
+      "template": "experiment",
+      "created": 15
+    },
+    {
+      "template": "feedback",
+      "created": 16
+    }
+  ],
+  "objects": 224,
+  "searchAndCategoryVerified": true,
+  "mouseCreationVerified": true,
+  "reloadVerified": true,
+  "errors": [],
+  "rejections": [],
+  "finalDeploymentSmoke": {
+    "canvas_id": 2050,
+    "objects": 240,
+    "added": 16,
+    "labelsVerified": true,
+    "reloadVerified": true,
+    "errors": []
+  },
+  "temporaryFixtureRemoved": true
+}
