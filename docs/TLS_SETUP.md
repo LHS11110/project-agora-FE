@@ -13,6 +13,8 @@ git clone https://github.com/LHS11110/project-agora-Wall.git
 
 ## 1. 인증서 직접 준비
 
+외부 브라우저 접속용 운영 인증서는 [Project Orchestra의 Let's Encrypt·Certbot 운영 경로](../../project-orchestra/docs/PUBLIC_TLS.md)로 관리합니다. 현재 공개 IP의 인증서는 호스트 Nginx가 제공하며 자동 갱신합니다. 아래 인증서 묶음은 Docker 내부 TLS와 로컬 개발에 사용합니다. 공개 IP 인증서에는 내부 Docker 이름을 넣을 수 없으므로 내부 CA와 공개 인증서를 구분합니다.
+
 인증서와 개인 키는 직접 발급·생성하여 아래 구조로 넣습니다. 설정 명령은 인증서를 생성하거나 교체하지 않습니다. 프로젝트 밖의 디렉터리에 보관하고, CA 개인 키는 이 디렉터리에 넣거나 컨테이너에 전달하지 않습니다.
 
 ```text
