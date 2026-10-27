@@ -19,7 +19,7 @@ import ShapeFillControls from '../../canvas/ShapeFillControls.jsx';
 import ConnectorPointControls from './ConnectorPointControls.jsx';
 import './inspector-actions.css';
 import ContentRenderControls from '../../canvas/content/ContentRenderControls.jsx';
-import { isTextContent } from '../../canvas/content/contentPresentation.js';
+import { isTextContent, contentMode } from '../../canvas/content/contentPresentation.js';
 import ConnectorLabelControls from './ConnectorLabelControls.jsx';
 import ConnectorEndpointInfo from './ConnectorEndpointInfo.jsx';
 import PenStyleControls from '../../canvas/PenStyleControls.jsx';
@@ -28,6 +28,8 @@ import ObjectSizeControls from '../../canvas/ObjectSizeControls.jsx';
 import ShapePicker from '../../canvas/ShapePicker.jsx';
 import EraserSizeControl from '../../canvas/EraserSizeControl.jsx';
 import EraserModeControl from '../../canvas/EraserModeControl.jsx';
+import ChartControls from '../../canvas/charts/ChartControls.jsx';
+import { isVolumeShape } from '../../canvas/volumeGeometry.js';
 import CanvasColorPicker from '../../canvas/CanvasColorPicker.jsx';
 import Icon from '../Icon.jsx';
 import ArrowHeadControls from '../ArrowHeadControls.jsx';
@@ -38,6 +40,8 @@ export default function CanvasInspectorPanel({
   activeTool,
   graphicsQuality, changeGraphicsQuality,
   updateContentSetting,
+  updateCollaborativeMetadata,
+  updateChartItem,
   changeSelectionGroup,
   changeStrokeWidth,
   eraserWidth,
@@ -106,7 +110,8 @@ export default function CanvasInspectorPanel({
   const shapeToEdit = activeTool === 'select' && selectedItem?.kind === 'shape' ? selectedItem : null;
   const selectionSummary=useMemo(()=>{let grouped=false,savedText=false,groupable=0;for(const id of selectedObjectIds){const item=items[id];grouped ||= Boolean(item?.groupId);savedText ||= ['text','code'].includes(item?.kind);if(!['stroke','connector'].includes(item?.kind))groupable++;}return {grouped,savedText,groupable};},[selectedObjectIds,items]);
   return (
-      <aside className={`canvas-sidepanel canvas-inspector${activeTool === 'select' ? ' server-settings-mode' : ' tool-settings-mode'}`}><div className="inspector-heading"><div><h2>{activeTool === 'select' ? ui("환경 설정") : ui('{tool} 설정', {tool:ui(({ 'user-group': '사용자 그룹', pen: '드로잉', laser: '레이저 포인터', eraser: '지우개', connect: '연결', shape: '도형', text: '텍스트', note: '포스트잇', math: '수식', table: '테이블', code: '코드', link: '동영상·링크' })[activeTool] || ui("도구"))})}</h2></div>{activeTool === 'select' && <button className="icon-button" onClick={() => setShowSettings(true)} aria-label={ui("캔버스 세부 설정")}><Icon name="settings" size={18} /></button>}</div>
+      <aside className={`canvas-sidepanel canvas-inspector${activeTool === 'select' ? ' server-settings-mode' : ' tool-settings-mode'}`}><div className="inspector-heading"><div><h2>{activeTool === 'select' ? ui("환경 설정") : ui('{tool} 설정', {tool:ui(({ 'user-group': '사용자 그룹', pen: '드로잉', laser: '레이저 포인터', eraser: '지우개', connect: '연결', shape: '도형', chart: '그래프', text: '텍스트', note: '포스트잇', math: '수식', table: '테이블', code: '코드', link: '동영상·링크' })[activeTool] || ui("도구"))})}</h2></div>{activeTool === 'select' && <button className="icon-button" onClick={() => setShowSettings(true)} aria-label={ui("캔버스 세부 설정")}><Icon name="settings" size={18} /></button>}</div>
+        {activeTool === 'select' && selectedItem?.kind === 'chart' && <ChartControls key={primarySelectedItemId} item={selectedItem} onChange={patch => updateChartItem(primarySelectedItemId, patch)} />}
         {activeTool === 'select' && <ObjectRecoveryControls items={items} spatialIndex={spatialIndex} onDelete={deleteItem} />}
         {activeTool === 'select' && <GraphicsQualityControls value={graphicsQuality} onChange={changeGraphicsQuality} />}
         {activeTool === 'select' && <ObjectClipboardControls actions={objectClipboard} selectedCount={selectedObjectIds.length} blocked={clipboardBlocked} />}
@@ -125,6 +130,7 @@ export default function CanvasInspectorPanel({
         {selectedConnector && <LogicPortControls item={selectedConnector} items={items} onChange={(field, value) => updateConnectorAppearance(primarySelectedItemId, field, value)} />}
         {selectedConnector && <ConnectorLabelControls item={selectedConnector} onChange={(field, value) => updateConnectorAppearance(primarySelectedItemId, field, value)} />}
         {isTextContent(selectedItem) && <ContentRenderControls item={selectedItem} onChange={(field, value) => updateContentSetting(primarySelectedItemId, field, value)} />}
+        {selectedObjectIds.length === 1 && selectedItem?.kind === 'text' && contentMode(selectedItem) !== 'code' && <section className="inspector-section"><strong className="inspector-label">{ui('텍스트 색상')}</strong><CanvasColorPicker color={selectedItem.color || '#3c5144'} onChange={value => updateCollaborativeMetadata(primarySelectedItemId, 'color', value)} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} label={ui('텍스트 색상')} />{selectedItem.color && <button type="button" className="button button-outline text-color-reset" onClick={() => updateCollaborativeMetadata(primarySelectedItemId, 'color', '')}>{ui('기본 텍스트 색상')}</button>}</section>}
         {selectedConnector && <ConnectorEndpointInfo connector={selectedConnector} items={items} onNavigate={onNavigateObject} />}
         {activeTool === 'select' && <>
         <section className="inspector-section"><div className="inspector-label">{ui("화면 모드")}</div><div className="theme-switch" role="group" aria-label={ui("테마 선택")}><button className={theme === 'light' ? 'active' : ''} aria-pressed={theme === 'light'} onClick={() => changeTheme('light')}><Icon name="sun" size={16} />{ui("라이트")}</button><button className={theme === 'dark' ? 'active' : ''} aria-pressed={theme === 'dark'} onClick={() => changeTheme('dark')}><Icon name="moon" size={16} />{ui("다크")}</button></div></section>
@@ -133,10 +139,12 @@ export default function CanvasInspectorPanel({
         {(selectedObjectIds.length > 1 || selectionSummary.grouped) && <section className="inspector-section selection-actions-section"><div className="selection-actions-heading"><strong>{selectedObjectIds.length}{ui("개 오브젝트 선택됨")}</strong><button type="button" onClick={() => selectItems([])}>{ui("선택 해제")}</button></div><small className="inspector-hint">{ui("빈 공간을 드래그해 여러 개를 선택하고, Shift를 누른 채 개별 선택을 더할 수 있어요.")}</small>{selectionSummary.savedText && <small className="inspector-hint">{ui("텍스트와 코드는 Ctrl + S로 저장하며, 포스트잇은 변경 후 자동 저장합니다.")}</small>}<div className="selection-actions-buttons"><button type="button" className="button button-dark" disabled={!selectionIsSingleGroup && selectionSummary.groupable < 2} onClick={() => changeSelectionGroup(!selectionIsSingleGroup)}>{selectionIsSingleGroup ? ui("그룹 해제") : ui("그룹화")}</button></div></section>}
         </>}
         {activeTool === 'select' && selectedObjectIds.length === 1 && selectedItem && <ObjectNumericControls item={selectedItem} onChange={(field, value) => updateObjectDimensions(primarySelectedItemId, field, value)} onRotationChange={value => updateItemRotation(primarySelectedItemId, value)} />}
+        {shapeToEdit && isVolumeShape(shapeToEdit.shapeType) && <section className="inspector-section"><strong className="inspector-label">{ui('입체 표현')}</strong><div className="theme-switch" role="group" aria-label={ui('입체 표현')}><button type="button" className={shapeToEdit.volumeStyle !== 'wireframe' ? 'active' : ''} aria-pressed={shapeToEdit.volumeStyle !== 'wireframe'} onClick={() => updateShapeAppearance(primarySelectedItemId, 'volumeStyle', 'solid')}>{ui('면 표시')}</button><button type="button" className={shapeToEdit.volumeStyle === 'wireframe' ? 'active' : ''} aria-pressed={shapeToEdit.volumeStyle === 'wireframe'} onClick={() => updateShapeAppearance(primarySelectedItemId, 'volumeStyle', 'wireframe')}>{ui('윤곽선')}</button></div></section>}
         {selectedObjectIds.length === 1 && hasIndependentContentSize(selectedItem) && <ObjectSizeControls item={selectedItem} onFontSizeChange={value => updateObjectFontSize(primarySelectedItemId, value)} onDimensionChange={(field, value) => updateObjectDimensions(primarySelectedItemId, field, value)} />}
 
         {activeTool === 'pen' && <><section className="inspector-section"><strong className="inspector-label">{ui("펜 스타일")}</strong><PenStyleControls brush={penBrush} opacity={penOpacity} onBrushChange={changePenBrush} onOpacityChange={changePenOpacity} /></section><section className="inspector-section"><span className="inspector-label">{ui("선 색상")}</span><CanvasColorPicker color={color} onChange={setColor} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} label={ui("드로잉 색상")} /></section><section className="inspector-section stroke-width-section"><div className="zoom-sensitivity-heading"><strong>{ui("선 굵기")}</strong><span>{strokeWidth}px</span></div><input type="range" min={MIN_STROKE_WIDTH} max={MAX_STROKE_WIDTH} step="1" value={strokeWidth} onChange={changeStrokeWidth} aria-label={ui("드로잉 선 굵기")} /><small>{ui("새로 그리는 선에 적용됩니다.")}</small></section></>}
         {activeTool === 'user-group' && <section className="inspector-section"><strong className="inspector-label">{ui("사용자 그룹 배치")}</strong><small className="inspector-hint">{ui("캔버스의 원하는 위치를 클릭하세요. 생성한 그룹을 선택하면 사용자와 색상을 설정할 수 있습니다.")}</small></section>}
+        {activeTool === 'chart' && <section className="inspector-section"><strong className="inspector-label">{ui('그래프 추가')}</strong><small className="inspector-hint">{ui('캔버스를 클릭해 그래프를 놓으세요.')}</small></section>}
         {activeTool === 'laser' && <section className="inspector-section"><strong className="inspector-label">{ui("레이저 포인터")}</strong><small className="inspector-hint">{ui("드래그해 가리키면 흔적이 1.6초 동안 서서히 사라집니다. 다른 참여자에게도 실시간으로 보여요.")}</small></section>}{activeTool === 'eraser' && <section className="inspector-section"><strong className="inspector-label">{ui("드로잉 지우개")}</strong><EraserModeControl value={eraserMode} onChange={changeEraserMode} /><EraserSizeControl value={eraserWidth} onChange={changeEraserWidth} /></section>}
         {activeTool === 'shape' && <><section className="inspector-section"><span className="inspector-label">{ui("도형 종류")}</span><ShapePicker value={shapeType} onChange={setShapeType} />{shapeType === 'arrow' && <><ArrowHeadControls item={{ headSize: shapeArrowHeadSize, startHead: shapeArrowStartHead, endHead: shapeArrowEndHead, visualStyle: shapeVisualStyle }} onChange={updateNewShapeArrowHead} /><small className="inspector-hint">{ui("이 모양은 새 화살표에 적용됩니다.")}</small></>}<small className="inspector-hint">{ui("캔버스를 클릭해 도형을 놓으세요.")}</small></section></>}
         {activeTool === 'note' && <section className="inspector-section"><span className="inspector-label">{ui("포스트잇 색상")}</span><div className="sticky-note-colors">{stickyNoteColors.map((swatch) => <button key={swatch} type="button" style={{ '--sticky-swatch': swatch }} className={noteColor === swatch ? 'selected' : ''} onClick={() => setNoteColor(swatch)} aria-label={ui("포스트잇 색상 {v0}", {

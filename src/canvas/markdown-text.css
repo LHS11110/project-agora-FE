@@ -7,7 +7,7 @@
 .canvas-stage .markdown-text-object .simple-markdown h3 { font-size: 1.35em; }
 .canvas-stage .markdown-text-object .simple-markdown h4 { font-size: 1.1em; }
 .canvas-stage .markdown-text-object .simple-markdown :is(ul,ol) { margin: .4em 0; padding-left: 1.6em; }
-.canvas-stage .markdown-text-object .simple-markdown blockquote { margin: .5em 0; padding-left: .8em; border-left: 2px solid var(--ink-muted); color: var(--ink-muted); }
+.canvas-stage .markdown-text-object .simple-markdown blockquote { margin: .5em 0; padding-left: .8em; border-left: 2px solid var(--ink-muted); color: var(--text-color, var(--ink-muted)); }
 .canvas-stage .markdown-text-object .simple-markdown code { font-family: var(--mono); background: transparent; }
 .canvas-stage .markdown-text-object .simple-markdown > :last-child { margin-bottom: 0; }
-.canvas-stage .markdown-text-object textarea { font: 12px/1.6 var(--mono); color: var(--ink-strong); }
+.canvas-stage .markdown-text-object textarea { font: 12px/1.6 var(--mono); color: inherit; }

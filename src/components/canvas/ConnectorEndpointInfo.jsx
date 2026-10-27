@@ -9,7 +9,7 @@ import { shapeCatalog } from '../../canvas/shapeCatalog.js';
 import { codeLanguageLabel } from '../../canvas/codeLanguages.js';
 import './connector-endpoint-info.css';
 
-const labels = { 'user-group': '사용자 그룹', text: '텍스트', note: '포스트잇', code: '코드', math: '수식', shape: '도형', table: '테이블', image: '이미지', link: '링크', stroke: '드로잉' };
+const labels = { 'user-group': '사용자 그룹', text: '텍스트', note: '포스트잇', code: '코드', math: '수식', shape: '도형', table: '테이블', chart: '그래프', image: '이미지', link: '링크', stroke: '드로잉' };
 function summary(item) {
   if (item.kind === 'user-group') return `${item.groupTitle || ui('사용자 그룹')} · ${(item.members || []).map(member => member.nickname).join(', ')}`;
   if (isTextContent(item) && contentMode(item) === 'code') return `${item.filename || 'snippet.js'} · ${codeLanguageLabel(item.language || 'text')}`;

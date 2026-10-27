@@ -1,6 +1,7 @@
 import { shapeFillOpacity, shapeStrokeWidth, sketchFillOpacity } from './shapeAppearance.js';
 import { vectorStrokePaths, arrowheadStrokeParts, sketchHatchPaths } from './vectorStyle.js';
 import { shapeOutlinePaths, shapeFillPaths } from './shapeGeometry.js';
+import { volumeGeometry, shadeVolumeColor } from './volumeGeometry.js';
 import { connectorGeometry } from '../components/connectorGeometry.js';
 import { shapeArrowGeometry } from '../components/shapeArrowGeometry.js';
 
@@ -86,8 +87,10 @@ export function drawVectorItems(graphics, items, width, height, visibleItemIds =
     if (item.shapeType === 'arrow') {
       if (item.strokeEnabled !== false) drawShapeArrow(graphics, x, y, w, h, angle, ink, item.bend, item.startHead, item.endHead, item.visualStyle, id, item);
     } else {
-      if (shapeFillOpacity(item) > 0 && /^#[0-9a-f]{6}$/i.test(item.fill || '')) {
-        for (const path of shapeFillPaths(item.shapeType, w, h, item)) {
+      const volume = volumeGeometry(item.shapeType, w, h);
+      if (shapeFillOpacity(item) > 0 && /^#[0-9a-f]{6}$/i.test(item.fill || '') && (!volume || item.volumeStyle !== 'wireframe')) {
+        const faces = volume ? volume.faces : shapeFillPaths(item.shapeType, w, h, item).map(points => ({ points, light: 0 }));
+        for (const { points: path, light } of faces) {
           if (item.visualStyle === 'sketch') {
             const hatches = sketchHatchPaths(path, `${id}:fill`, undefined, shapeFillOpacity(item), sketchFillOpacity(item)).map(stroke => ({ ...stroke,
               points: stroke.points.map(point => rotatePoint(x + point.x, y + point.y, centerX, centerY, angle)) }));
@@ -95,7 +98,7 @@ export function drawVectorItems(graphics, items, width, height, visibleItemIds =
             continue;
           }
           const points = path.map(point => rotatePoint(x + point.x, y + point.y, centerX, centerY, angle));
-          graphics.poly(points.flatMap(point => [point.x, point.y])).fill({ color: colorNumber(item.fill), alpha: shapeFillOpacity(item) });
+          graphics.poly(points.flatMap(point => [point.x, point.y])).fill({ color: colorNumber(shadeVolumeColor(item.fill, light)), alpha: shapeFillOpacity(item) });
         }
       }
       for (const path of item.strokeEnabled === false ? [] : shapeOutlinePaths(item.shapeType, w, h, item)) {

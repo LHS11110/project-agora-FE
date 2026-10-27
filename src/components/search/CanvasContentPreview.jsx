@@ -14,10 +14,12 @@ import ConnectorArrowheads from '../canvas/ConnectorArrowheads.jsx';
 import AuthenticatedImage from '../AuthenticatedImage.jsx';
 import MarkdownText from '../MarkdownText.jsx';
 import MathFormula from '../MathFormula.jsx';
+import ChartView from '../../canvas/charts/ChartView.jsx';
+import { volumeGeometry, shadeVolumeColor } from '../../canvas/volumeGeometry.js';
 
 const WIDTH = 1000;
 const HEIGHT = 600;
-const kinds = new Set(['note', 'text', 'code', 'math', 'table', 'image', 'link', 'shape', 'stroke', 'connector', 'pdf', 'user-group']);
+const kinds = new Set(['note', 'text', 'code', 'math', 'table', 'chart', 'image', 'link', 'shape', 'stroke', 'connector', 'pdf', 'user-group']);
 
 function PreviewContent({ item, token }) {
   useUiLocale();
@@ -25,6 +27,7 @@ function PreviewContent({ item, token }) {
   if (item.kind === 'pdf') return <div className="canvas-preview-pdf"><AuthenticatedImage src={item.thumbnail} token={token} alt={item.filename || 'PDF'} fallback={<strong>PDF · {item.filename || ui('문서')}</strong>} /></div>;
   if (item.kind === 'image') return <AuthenticatedImage src={item.src} token={token} alt={item.filename || ui("공유 이미지")} fallback={<span>{item.filename || ui('이미지')}</span>} />;
   if (item.kind === 'table') return <table><thead><tr>{(item.columns || []).map((value, i) => <th key={i}>{String(value)}</th>)}</tr></thead><tbody>{(item.rows || []).map((row, i) => <tr key={i}>{(Array.isArray(row) ? row : []).map((value, j) => <td key={j}>{String(value)}</td>)}</tr>)}</tbody></table>;
+  if (item.kind === 'chart') return <ChartView item={item} />;
   if (isTextContent(item)) return <RenderedContent value={contentSource(item)} mode={contentMode(item)} language={item.language || 'javascript'} />;
   if (item.kind === 'link') return <><strong>{item.title || ui("공유 링크")}</strong><p>{item.url || ''}</p></>;
   return item.format === 'markdown' || item.kind === 'note' ? <MarkdownText source={item.text || ''} /> : <p>{item.text || ''}</p>;
@@ -54,16 +57,18 @@ function PreviewObject({ id, item, token }) {
   if (item.kind === 'shape') {
     const color = item.color || '#617d68';
     const arrow = item.shapeType === 'arrow' ? shapeArrowGeometry(width, height, item.bend, item.startHead, item.endHead, item) : null;
+    const volume = volumeGeometry(item.shapeType, width, height);
+    const faces = volume ? volume.faces : shapeFillPaths(item.shapeType, width, height, item).map(points => ({ points, light: 0 }));
     return <g transform={`translate(${x} ${y}) rotate(${rotation} ${width / 2} ${height / 2})`} style={{ color }} fill="none" stroke={color} strokeWidth={shapeStrokeWidth(item)}>
-      {!arrow && shapeFillOpacity(item) > 0 && /^#[0-9a-f]{6}$/i.test(item.fill || '') && shapeFillPaths(item.shapeType, width, height, item).map((path, index) => item.visualStyle === 'sketch'
+      {!arrow && (!volume || item.volumeStyle !== 'wireframe') && shapeFillOpacity(item) > 0 && /^#[0-9a-f]{6}$/i.test(item.fill || '') && faces.map(({ points: path, light }, index) => item.visualStyle === 'sketch'
         ? <g key={`fill-${index}`}>{sketchHatchPaths(path, `${id}:fill`, undefined, shapeFillOpacity(item), sketchFillOpacity(item)).map((hatch, line) => <polyline key={line} points={hatch.points.map(p => `${p.x},${p.y}`).join(' ')}
           fill="none" stroke={item.fill} strokeWidth={1.2 * hatch.widthScale} strokeOpacity={hatch.alpha} strokeLinecap="round" />)}</g>
-        : <polygon key={`fill-${index}`} points={path.map(p => `${p.x},${p.y}`).join(' ')} fill={item.fill} fillOpacity={shapeFillOpacity(item)} stroke="none" />)}
+        : <polygon key={`fill-${index}`} points={path.map(p => `${p.x},${p.y}`).join(' ')} fill={shadeVolumeColor(item.fill, light)} fillOpacity={shapeFillOpacity(item)} stroke="none" />)}
       {item.strokeEnabled !== false && (arrow ? <><PreviewLines paths={[arrow.points]} width={shapeStrokeWidth(item)} visualStyle={item.visualStyle} seed={id} /><ConnectorArrowheads geometry={arrow} visualStyle={item.visualStyle} seed={id} /></>
         : <PreviewLines paths={shapeOutlinePaths(item.shapeType, width, height, item)} width={shapeStrokeWidth(item)} visualStyle={item.visualStyle} seed={id} />)}
     </g>;
   }
-  return <foreignObject x={x} y={y} width={width} height={height} transform={`rotate(${rotation} ${x + width / 2} ${y + height / 2})`}><div xmlns="http://www.w3.org/1999/xhtml" className={`preview-object preview-object-${item.kind}`} style={{ background: item.kind === 'note' ? item.color || '#f6edcf' : undefined }}><PreviewContent item={item} token={token} /></div></foreignObject>;
+  return <foreignObject x={x} y={y} width={width} height={height} transform={`rotate(${rotation} ${x + width / 2} ${y + height / 2})`}><div xmlns="http://www.w3.org/1999/xhtml" className={`preview-object preview-object-${item.kind}`} style={{ background: item.kind === 'note' ? item.color || '#f6edcf' : undefined, color: item.kind === 'text' && contentMode(item) !== 'code' && /^#[0-9a-f]{6}$/i.test(item.color || '') ? item.color : undefined }}><PreviewContent item={item} token={token} /></div></foreignObject>;
 }
 
 /** Frame the complete document, including objects outside the initial viewport. */

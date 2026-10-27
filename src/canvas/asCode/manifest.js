@@ -3,10 +3,11 @@ import { validShapeAppearance } from '../shapeAppearance.js';
 import { normalizeArrowHead } from '../../components/arrowheadGeometry.js';
 import { MAX_BEND_POINTS } from '../connectors/controlPoints.js';
 import { CANVAS_SPACE } from '../canvasSpace.js';
+import { CHART_TYPES, MAX_CHART_ROWS, MAX_CHART_COLUMNS, MAX_CHART_TEXT } from '../charts/chartData.js';
 
-const KINDS = new Set(['text', 'note', 'code', 'math', 'shape', 'table', 'image', 'link', 'connector', 'stroke', 'pdf', 'user-group']);
+const KINDS = new Set(['text', 'note', 'code', 'math', 'shape', 'table', 'chart', 'image', 'link', 'connector', 'stroke', 'pdf', 'user-group']);
 const NUMBERS = new Set(['shadowBlur', 'shadowOpacity', 'shadowOffsetX', 'shadowOffsetY', 'depth', 'x', 'y', 'width', 'height', 'rotation', 'fontSize', 'strokeWidth', 'bend', 'opacity', 'contentScale', 'contentScaleX', 'contentScaleY', 'bendPointCount', 'headSize', 'vertexCount', 'fillOpacity', 'sketchFillOpacity']);
-const STRINGS = new Set(['kind', 'text', 'code', 'formula', 'format', 'filename', 'language', 'shapeType', 'visualStyle', 'color', 'fill', 'permission', 'groupId', 'src', 'url', 'title', 'mediaType', 'from', 'to', 'fromPort', 'toPort', 'startHead', 'endHead', 'brush', 'embedUrl', 'videoId', 'renderMode', 'label', 'labelMode', 'groupTitle', 'thumbnail', 'cornerStyle']);
+const STRINGS = new Set(['kind', 'text', 'code', 'formula', 'format', 'filename', 'language', 'shapeType', 'visualStyle', 'volumeStyle', 'chartType', 'color', 'fill', 'permission', 'groupId', 'src', 'url', 'title', 'mediaType', 'from', 'to', 'fromPort', 'toPort', 'startHead', 'endHead', 'brush', 'embedUrl', 'videoId', 'renderMode', 'label', 'labelMode', 'groupTitle', 'thumbnail', 'cornerStyle']);
 const FIELDS = new Set([...NUMBERS, ...STRINGS, 'points', 'rows', 'columns', 'simulatePressure', 'complete', 'strokeEnabled', 'shadowEnabled', 'imageFrameEnabled', 'bendPoints', 'members']);
 export const CANVAS_ITEM_FIELDS = FIELDS;
 const unsafeId = id => !id || ['__proto__', 'constructor', 'prototype'].includes(id);
@@ -52,6 +53,14 @@ function validateItem(id, item) {
   if (item.kind === 'shape' && item.strokeWidth != null && !validShapeAppearance('strokeWidth', item.strokeWidth)) fail(`${id}.strokeWidth: 도형 테두리는 0.5~64px 범위가 필요합니다.`);
   if (item.depth != null && !Number.isSafeInteger(item.depth)) fail(`${id}.depth: 정수가 필요합니다.`);
   if (item.visualStyle != null && !['standard', 'sketch'].includes(item.visualStyle)) fail(`${id}.visualStyle: standard 또는 sketch가 필요합니다.`);
+  if (item.volumeStyle != null && !['solid', 'wireframe'].includes(item.volumeStyle)) fail(`${id}.volumeStyle: solid 또는 wireframe이 필요합니다.`);
+  if (item.kind === 'chart') {
+    if (!CHART_TYPES.includes(item.chartType)) fail(`${id}.chartType: 지원하는 그래프 종류가 필요합니다.`);
+    if (item.title != null && item.title.length > 120) fail(`${id}.title: 최대 120자입니다.`);
+    if (!Array.isArray(item.columns) || item.columns.length < 2 || item.columns.length > MAX_CHART_COLUMNS || item.columns.some(value => typeof value !== 'string' || value.length > 1000)
+      || !Array.isArray(item.rows) || !item.rows.length || item.rows.length > MAX_CHART_ROWS || item.rows.some(row => !Array.isArray(row) || row.length !== item.columns.length || row.some(value => typeof value !== 'string' || value.length > 1000))
+      || JSON.stringify([item.columns, item.rows]).length > MAX_CHART_TEXT * 2 + 4096) fail(`${id}: 올바른 그래프 데이터가 필요합니다.`);
+  }
   if (item.strokeEnabled != null && typeof item.strokeEnabled !== 'boolean') fail(`${id}.strokeEnabled: 불리언이 필요합니다.`);
   if (item.fill != null && item.fill !== '' && !/^#[0-9a-f]{6}$/i.test(item.fill)) fail(`${id}.fill: #RRGGBB 색상 또는 빈 문자열이 필요합니다.`);
   for (const key of ['startHead', 'endHead']) if (item[key] != null && normalizeArrowHead(item[key], null) === null) fail(`${id}.${key}: 지원하는 화살표 머리 모양을 선택해주세요.`);

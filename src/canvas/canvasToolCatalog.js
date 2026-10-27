@@ -20,6 +20,7 @@ export const canvasToolCategories = [
   ] },
   { id: 'structure', label: '자료·계산', tools: [
     { id: 'table', label: '테이블', icon: 'table' },
+    { id: 'chart', label: '그래프', description: '그래프 추가', icon: 'chart' },
   ] },
   { id: 'media', label: '미디어', tools: [
     { id: 'pdf', label: 'PDF', description: 'PDF 문서 올리기', icon: 'document', upload: true, accept: 'application/pdf,.pdf' },

@@ -4,7 +4,7 @@ import { canvasToolCategories } from './canvasToolCatalog.js';
 import { ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
 const tools = Object.fromEntries(canvasToolCategories.flatMap(category => category.tools).map(tool => [tool.id, tool]));
-const groups = [['select', 'hand'], ['pen', 'eraser', 'laser'], ['note', 'shape', 'connect', 'text', 'table', 'image']];
+const groups = [['select', 'hand'], ['pen', 'eraser', 'laser'], ['note', 'shape', 'connect', 'text', 'table', 'chart', 'image']];
 export default function CanvasQuickDock({ activeTool, onSelectTool, onUploadImage, toolsExpanded, onToggleTools }) {
   useUiLocale();
   const imageInput = useRef(null);

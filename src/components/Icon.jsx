@@ -42,6 +42,7 @@ const paths = {
   text: <><path d="M4 5h16M12 5v14M8 19h8"/></>,
   sticky: <><path d="M5 3h10l4 4v14H5z"/><path d="M15 3v5h4M8 12h8M8 16h5"/></>,
   table: <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16M15 4v16"/></>,
+  chart: <><path d="M4 20V4M4 20h17"/><path d="M8 16v-5M12 16V7M16 16v-3M20 16V5"/></>,
   math: <><path d="m3 6 5 6-5 6M10 18h4l4-12h3"/><path d="M13 12h7"/></>,
   link: <path d="M10 13a5 5 0 0 0 7 .1l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7-.1l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>,
   sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></>,

@@ -2,7 +2,7 @@ import { changedItemIds } from '../itemSnapshots.js';
 import { connectorGeometry } from '../../components/connectorGeometry.js';
 import { objectBounds } from '../../components/CanvasSpatialBTree.js';
 import { CANVAS_SPACE } from '../canvasSpace.js';
-const kinds = new Set(['image','link','code','note','table','shape','text','math','stroke','connector','pdf','user-group']);
+const kinds = new Set(['image','link','code','note','table','chart','shape','text','math','stroke','connector','pdf','user-group']);
 export const finiteBounds = bounds => bounds && Object.values(bounds).every(Number.isFinite) && bounds.maxX >= bounds.minX && bounds.maxY >= bounds.minY;
 export function createObjectDiagnostics() { return {items:null,reasons:new Map(),geometry:-1,value:[]}; }
 export function updateObjectDiagnostics(current, items, spatialIndex) {

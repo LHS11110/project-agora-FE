@@ -1,6 +1,8 @@
 import { hasPolygonVertices } from './shapeAppearance.js';
 import { groupMember } from './userGroups/userGroupModel.js';
 import { shapeCreationSize } from './shapeCatalog.js';
+import { newChartData } from './charts/chartData.js';
+import { cursorDeadline, cursorIsDue, CURSOR_INTERVAL_MS } from './cursorSchedule.js';
 import { useEffect, useRef } from 'react';
 import { INK_BRUSH, inkPointAtPointer } from './inkStroke.js';
 import { appendInkInput } from './inkInput.js';
@@ -124,17 +126,23 @@ export function useCanvasStageInteractions(options) {
   };
   const cursorSendFrameRef = useRef(0);
   const pendingCursorRef = useRef(null);
+  const cursorDeadlineRef = useRef(0);
+  const cursorRetryUntilRef = useRef(0);
   const flushCursorFrame = now => {
-    if (now - lastCursorSentAtRef.current < 1000 / 30) {
+    if (!cursorIsDue(cursorDeadlineRef.current, now)) {
       cursorSendFrameRef.current = requestAnimationFrame(flushCursorFrame);
       return;
     }
     cursorSendFrameRef.current = 0;
     const payload = pendingCursorRef.current;
-    pendingCursorRef.current = null;
     if (payload) {
+      if (peerMeshRef.current?.sendCursor(payload) === false && now < cursorRetryUntilRef.current) {
+        cursorSendFrameRef.current = requestAnimationFrame(flushCursorFrame);
+        return;
+      }
+      pendingCursorRef.current = null;
       lastCursorSentAtRef.current = now;
-      peerMeshRef.current?.sendCursor(payload);
+      cursorDeadlineRef.current = cursorDeadline(cursorDeadlineRef.current, now);
     }
   };
   useEffect(() => () => cancelAnimationFrame(cursorSendFrameRef.current), []);
@@ -143,12 +151,18 @@ export function useCanvasStageInteractions(options) {
     const selection = selectionRef.current;
     const payload = { type: 'cursor', x: point.x, y: point.y,
       selection: selection ? { start: selection.start, end: point } : null };
+    cursorRetryUntilRef.current = performance.now() + 1000;
     if (force) {
       cancelAnimationFrame(cursorSendFrameRef.current);
       cursorSendFrameRef.current = 0;
       pendingCursorRef.current = null;
-      lastCursorSentAtRef.current = performance.now();
-      peerMeshRef.current?.sendCursor(payload);
+      const now = performance.now();
+      lastCursorSentAtRef.current = now;
+      cursorDeadlineRef.current = now + CURSOR_INTERVAL_MS;
+      if (peerMeshRef.current?.sendCursor(payload) === false) {
+        pendingCursorRef.current = payload;
+        cursorSendFrameRef.current = requestAnimationFrame(flushCursorFrame);
+      }
     } else {
       pendingCursorRef.current = payload;
       if (!cursorSendFrameRef.current) cursorSendFrameRef.current = requestAnimationFrame(flushCursorFrame);
@@ -158,7 +172,13 @@ export function useCanvasStageInteractions(options) {
     cancelAnimationFrame(cursorSendFrameRef.current);
     cursorSendFrameRef.current = 0;
     pendingCursorRef.current = null;
-    peerMeshRef.current?.sendCursor({ type: 'cursor', visible: false });
+    const payload = { type: 'cursor', visible: false };
+    if (peerMeshRef.current?.sendCursor(payload) === false) {
+      pendingCursorRef.current = payload;
+      cursorDeadlineRef.current = 0;
+      cursorRetryUntilRef.current = performance.now() + 1000;
+      cursorSendFrameRef.current = requestAnimationFrame(flushCursorFrame);
+    }
     hideEraserCursor();
   };
   const startPan = (event) => {
@@ -387,6 +407,15 @@ export function useCanvasStageInteractions(options) {
       else setActiveTool('select');
       return;
     }
+    if (activeTool === 'chart') {
+      event.preventDefault();
+      const point = pointerPosition(event), id = createId();
+      const width = .3, height = .25;
+      const item = { kind: 'chart', ...newChartData(), x: point.x - width / 2, y: point.y - height / 2, width, height, permission };
+      if (!addItem(id, item)) setToast('실시간 서버에 연결된 뒤 그래프를 놓을 수 있어요.');
+      else { setActiveTool('select'); selectItems([id]); }
+      return;
+    }
     if (activeTool === 'shape' || activeTool === 'text' || activeTool === 'markdown' || activeTool === 'math' || activeTool === 'code' || activeTool === 'note') {
       event.preventDefault();
       const point = pointerPosition(event);
@@ -454,7 +483,6 @@ export function useCanvasStageInteractions(options) {
   const moveDrawing = (event) => {
     if (drawingRef.current && drawingSessionRef.current?.pointerId !== event.pointerId) return;
     updateEraserCursor(event);
-    sendCursorPosition(event);
     if (selectionRef.current) { moveMarqueeSelection(event); return; }
     if (panRef.current) {
       const pan = panRef.current;
@@ -594,6 +622,7 @@ export function useCanvasStageInteractions(options) {
     startPan,
     cancelPanInertia,
     centeredItemPosition,
+    sendCursorPosition,
     hideCursor,
     startZoomHold,
     stopZoomHold,

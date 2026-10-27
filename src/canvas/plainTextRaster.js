@@ -37,7 +37,7 @@ export function drawPlainText(context,item,world,fontFamily,color){
   const layout=plainTextLayout(context,item,world,fontFamily);
   context.save();context.beginPath();
   context.rect(layout.paddingX,layout.paddingY,Math.max(0,item.width*world.width-layout.paddingX*2),Math.max(0,item.height*world.height-layout.paddingY*2));context.clip();
-  context.fillStyle=color;context.textBaseline='top';
+  context.fillStyle=/^#[0-9a-f]{6}$/i.test(item.color || '') ? item.color : color;context.textBaseline='top';
   layout.lines.forEach((line,i)=>context.fillText(line,layout.paddingX+1,layout.paddingY+1+i*layout.lineHeight+layout.fontSize*.12));
   context.restore();
 }

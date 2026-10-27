@@ -4,7 +4,7 @@ import { isRasterText } from './plainTextRaster.js';
 import { isOverviewProxy,overviewProxy } from './sceneRepresentation.js';
 import { needsVectorDom } from './vectorHitTest.js';
 import { connectorGeometry } from '../components/connectorGeometry.js';
-const kinds=new Set(['image','link','code','note','table','shape','text','math','stroke','connector','pdf','user-group']);
+const kinds=new Set(['image','link','code','note','table','chart','shape','text','math','stroke','connector','pdf','user-group']);
 
 // Scene membership and static vector maps survive text/draft content updates.
 // Only affected entries change; edit controls are a separate small DOM list.

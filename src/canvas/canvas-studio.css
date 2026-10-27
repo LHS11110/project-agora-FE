@@ -136,6 +136,7 @@
  .canvas-app-page .canvas-panel-slot-chat.is-collapsed {left:10px;bottom:18px;width:86px;}
 }
 @media(prefers-reduced-motion:reduce) {.quick-dock-tool,.quick-dock-tooltip {transition:none;}}
+@media(max-width:420px) {.quick-dock-tool {width:22px;flex-basis:22px}.quick-dock-tool svg {width:16px;height:16px}}
 .canvas-app-page .canvas-title-group {max-width:calc(100% - 530px);}
 .canvas-app-page .canvas-top-right>.language-switcher {background:var(--surface-soft);border-color:var(--line);color:var(--ink-muted);font-size:10px;}
 @media(max-width:820px) {.canvas-app-page .canvas-title-group {max-width:calc(100% - 360px);}}

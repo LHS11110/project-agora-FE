@@ -21,6 +21,7 @@ import Icon from '../components/Icon.jsx';
 import AuthenticatedImage from '../components/AuthenticatedImage.jsx';
 import MarkdownText from '../components/MarkdownText.jsx';
 import EditableTable from '../components/EditableTable.jsx';
+import ChartView from './charts/ChartView.jsx';
 import SharedMediaContent from '../components/SharedMediaContent.jsx';
 import ResizeHandles from '../components/ResizeHandles.jsx';
 import ConnectorArrowheads from '../components/canvas/ConnectorArrowheads.jsx';
@@ -169,7 +170,8 @@ function CanvasObjectView({ id, item, bounds, selected, allowSingleSelectionCont
   </div>);
   if (isTextContent(item)) {
     const mode = contentMode(item);
-    return withResizeHandles(<div key={id} className={`${classes} unified-content-object ${mode === 'code' ? 'code-object' : 'text-object'}${mode === 'markdown' ? ' markdown-text-object' : ''}`} style={style} {...handlers}>
+    const textColor = item.kind === 'text' && mode !== 'code' && /^#[0-9a-f]{6}$/i.test(item.color || '') ? item.color : undefined;
+    return withResizeHandles(<div key={id} className={`${classes} unified-content-object ${mode === 'code' ? 'code-object' : 'text-object'}${mode === 'markdown' ? ' markdown-text-object' : ''}`} style={{ ...style, color: textColor, '--text-color': textColor }} {...handlers}>
       <UnifiedTextContent {...{ id, item, editing, dirty, remoteEditorLabel, onTextChange, onFormulaChange, onMetadataChange, onSave, onStopEditing }} />
     </div>);
   }
@@ -178,6 +180,7 @@ function CanvasObjectView({ id, item, bounds, selected, allowSingleSelectionCont
     {editing ? <textarea ref={collaborativeEditorRef} autoFocus aria-label={ui("포스트잇 Markdown 편집")} value={item.text || ''} placeholder={ui("# 메모 제목\n- 할 일\n**중요한 내용**")} onPointerDown={(event) => event.stopPropagation()} onSelect={rememberCollaborativeSelection} onKeyUp={rememberCollaborativeSelection} onClick={rememberCollaborativeSelection} onChange={handleCollaborativeInput} /> : <div className="sticky-note-content" title={ui("두 번 클릭해 Markdown 편집")}>{item.text ? <MarkdownText source={item.text} /> : <p className="sticky-note-empty">{ui("두 번 클릭해 메모를 작성하세요.")}</p>}</div>}
   </div>);
   if (item.kind === 'table') return withResizeHandles(<div key={id} className={`${classes} canvas-table-object`} style={style} data-item-id={id} {...handlers}><EditableTable item={item} editingActive={editing} enabled={activeTool === 'select' && selected} onStartEditing={() => onStartEditing(id)} onStopEditing={() => onStopEditing(id)} onChange={(location, value) => onTableChange(id, (current) => updateTableValue(current, location, value))} /></div>);
+  if (item.kind === 'chart') return withResizeHandles(<div key={id} className={`${classes} canvas-chart-object`} style={style} data-item-id={id} {...handlers}><ChartView item={item} /></div>);
   if (item.kind === 'shape') {
     const arrowGeometry = item.shapeType === 'arrow' ? shapeArrowGeometry(width * viewSize.width, height * viewSize.height, item.bend, item.startHead, item.endHead, item) : null;
     const bendHandle = arrowGeometry && selected && allowSingleSelectionControls && movable && !editing

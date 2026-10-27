@@ -1,5 +1,6 @@
 import { researchSymbolCatalog } from './researchSymbols.js';
 import { logicGateCatalog } from './logicGates.js';
+import { volumeShapeCatalog } from './volumeGeometry.js';
 export const shapeCatalog = [
   { id: 'circle', label: '원', aspect: 1 },
   { id: 'ellipse', label: '타원', aspect: 1.8 },
@@ -25,6 +26,7 @@ export const shapeCatalog = [
   { id: 'arrow', label: '화살표', aspect: 1.8 },
   ...logicGateCatalog,
   ...researchSymbolCatalog,
+  ...volumeShapeCatalog,
 ].map(shape => ({...shape,category:shape.category || 'basic'}));
 
 export const shapeCategories = {basic:'기본·용지',logic:'논리 회로',development:'개발·흐름도',data:'자료 구조',math:'수학',science:'과학·실험',engineering:'공학·회로',geometry:'입체·기하'};

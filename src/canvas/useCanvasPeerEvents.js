@@ -340,7 +340,7 @@ export function useCanvasPeerEvents(options) {
       const value = data.value;
       const validMetadata = data.field === 'fontSize' ? item.kind === 'text' && isObjectFontSize(value) : data.field === 'groupId'
         ? value.length <= 128
-        : data.field === 'color' ? item.kind === 'note' && /^#[0-9a-f]{6}$/i.test(value)
+        : data.field === 'color' ? (item.kind === 'note' && /^#[0-9a-f]{6}$/i.test(value)) || (item.kind === 'text' && (value === '' || /^#[0-9a-f]{6}$/i.test(value)))
           : data.field === 'renderMode' ? isTextContent(item) && isContentMode(value)
           : isTextContent(item) && (data.field === 'filename'
             ? value.length <= 80

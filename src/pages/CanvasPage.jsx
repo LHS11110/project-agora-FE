@@ -11,6 +11,7 @@ import '../canvas/panels/canvas-chrome.css';
 import { logicPorts } from '../canvas/logicGates.js';
 import useCanvasKeyboardNudge from '../canvas/useCanvasKeyboardNudge.js';
 import { validShapeAppearance } from '../canvas/shapeAppearance.js';
+import { isVolumeShape } from '../canvas/volumeGeometry.js';
 import { overviewScale } from '../canvas/sceneRepresentation.js';
 import { numericObjectPatch } from '../canvas/objectNumericGeometry.js';
 import SceneViewModel from '../canvas/SceneViewModel.js';
@@ -232,6 +233,8 @@ function CanvasWorkspace() {
   const [showYAxis, setShowYAxis] = useState(() => localStorage.getItem('agora_canvas_y_axis') !== 'false');
   const [shapeType, setShapeType] = useState('rectangle');
   const [shapeFillColor, setShapeFillColor] = useState('');
+  const [shapeFillWasSet, setShapeFillWasSet] = useState(false);
+  const changeShapeFillColor = value => { setShapeFillWasSet(true); setShapeFillColor(value); };
   const [shapeFillOpacity, setShapeFillOpacity] = useState(1);
   const [shapeSketchFillOpacity, setShapeSketchFillOpacity] = useState(.8);
   const [shapeVertexCount, setShapeVertexCount] = useState(6);
@@ -243,6 +246,7 @@ function CanvasWorkspace() {
   };
   const changeShapeType = type => {
     setShapeType(type);
+    if (isVolumeShape(type) && !shapeFillWasSet) setShapeFillColor('#b8a9e8');
     setShapeVertexCount(({ triangle: 3, pentagon: 5, hexagon: 6, star: 5 })[type] || 6);
   };
   const [shapeVisualStyle, setShapeVisualStyle] = useState('standard');
@@ -398,7 +402,7 @@ function CanvasWorkspace() {
     const validField = field === 'fontSize' ? item?.kind === 'text' && isObjectFontSize(value) : field === 'groupId'
       ? isCollaborativeItem(item) && nextValue.length <= 128
       : field === 'color'
-      ? item?.kind === 'note' && /^#[0-9a-f]{6}$/i.test(nextValue)
+      ? (item?.kind === 'note' && /^#[0-9a-f]{6}$/i.test(nextValue)) || (item?.kind === 'text' && (nextValue === '' || /^#[0-9a-f]{6}$/i.test(nextValue)))
       : field === 'renderMode' ? isTextContent(item) && isContentMode(nextValue)
       : isTextContent(item) && (field === 'filename' ? nextValue.length <= 80 : field === 'language' && isCodeLanguage(nextValue));
     if (!isCollaborativeItem(item) || !validField) return;
@@ -459,7 +463,7 @@ function CanvasWorkspace() {
   const updateTableItem = useCallback((id, update) => {
     const key = String(id);
     const previous = itemsRef.current[key];
-    if (previous?.kind !== 'table') return false;
+    if (!['table', 'chart'].includes(previous?.kind)) return false;
     const nextItem = typeof update === 'function' ? update(previous) : { ...previous, ...update };
     if (!nextItem || nextItem === previous) return false;
     itemsRef.current = { ...itemsRef.current, [key]: nextItem };
@@ -469,7 +473,7 @@ function CanvasWorkspace() {
       itemsRef.current = { ...itemsRef.current, [key]: previous };
       setItems((current) => ({ ...current, [key]: previous }));
       refreshSpatialIndex();
-      setToast('연결이 복구되면 테이블을 다시 편집해주세요.');
+      setToast(previous.kind === 'chart' ? '연결이 복구되면 그래프를 다시 편집해주세요.' : '연결이 복구되면 테이블을 다시 편집해주세요.');
       return false;
     }
     return true;
@@ -581,6 +585,7 @@ function CanvasWorkspace() {
     const key = String(id), previous = itemsRef.current[key];
     if (previous?.kind !== 'shape') return;
     if (!(field === 'visualStyle' && ['standard', 'sketch'].includes(value)
+      || field === 'volumeStyle' && ['solid', 'wireframe'].includes(value)
       || field === 'strokeEnabled' && typeof value === 'boolean'
       || field === 'color' && /^#[0-9a-f]{6}$/i.test(value)
       || validShapeAppearance(field, value))) return;
@@ -1034,7 +1039,7 @@ function CanvasWorkspace() {
     if (participant) Object.assign(payload, participant); else payload.value = value;
     if (sendRaw(payload)) setSettingsPending(true);
   };
-  const { pointerPosition, startPan, cancelPanInertia, centeredItemPosition, hideCursor, startZoomHold, stopZoomHold, cancelZoomHold, clickZoom, startDrawing, moveDrawing, stopDrawing } = useCanvasStageInteractions({
+  const { pointerPosition, startPan, cancelPanInertia, centeredItemPosition, hideCursor, sendCursorPosition, startZoomHold, stopZoomHold, cancelZoomHold, clickZoom, startDrawing, moveDrawing, stopDrawing } = useCanvasStageInteractions({
     boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth, eraserMode,
     addItem, setToast, setItems, patchItems, refreshSpatialIndex, spatialIndexRef,
     sendStrokeFrameChanges, pendingItemChangesRef, strokeSaveFlushRef,
@@ -1292,7 +1297,7 @@ function CanvasWorkspace() {
       <CanvasQuickDock activeTool={activeTool} onSelectTool={selectCanvasTool} onUploadImage={uploadImage}
         toolsExpanded={!panelLayout.handle('tools').collapsed} onToggleTools={panelLayout.handle('tools').onToggle} />
       <main className="board-region"><div className="board-topline"><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(true); }}><Icon name="code" size={15} />{ui("캔버스 코드")}</button><button className="zoom-button" aria-label={ui("확대")} title={ui("클릭: 한 단계 확대 · 길게 누르기: 계속 확대")} onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label={ui("축소")} title={ui("클릭: 한 단계 축소 · 길게 누르기: 계속 축소")} onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>{ui("맞춤")}</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />{"" + ui("격자") + " "}{showGrid ? ui("켜짐") : ui("꺼짐")}</button></div></div>
-        <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ ...canvasGridStyle(camera), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion: cancelPanInertia, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, pickVector: (event,doubleClick = false,capture = false) => {
+        <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ ...canvasGridStyle(camera), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion: cancelPanInertia, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, sendCursorPosition, pickVector: (event,doubleClick = false,capture = false) => {
             if (!['select', 'connect'].includes(activeTool) || event.button !== 0 || event.target.closest?.('.canvas-minimap, .stage-label, button, input, textarea')) return false;
             const target=event.target.closest?.('.canvas-object');
             if(capture !== Boolean(target))return false;
@@ -1340,8 +1345,9 @@ function CanvasWorkspace() {
           {activeTool === 'laser' && <div className="draw-cursor-label laser-cursor-label"><Icon name="laser" size={13} />{" " + ui("가리키는 중 · 1.6초 후 사라짐") + ""}</div>}{activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} />{" " + ui("그리는 중") + ""}</div>}{activeTool === 'eraser' && <div className="draw-cursor-label"><Icon name="eraser" size={13} />{" " + ui("드로잉을 드래그해 지우기") + ""}</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? ui("도착 오브젝트 선택") : ui("시작 오브젝트 선택")}</div>}{activeTool === 'link' && !sharePosition && <div className="draw-cursor-label"><Icon name="link" size={13} />{" " + ui("공유 자료를 놓을 위치 선택") + ""}</div>}
         </div>
       </main>
-<ResizablePanel {...panelLayout.handle('inspector')}><CanvasInspectorPanel graphicsQuality={graphicsQuality} changeGraphicsQuality={changeGraphicsQuality} spatialIndex={spatialIndex} updateContentSetting={updateContentSetting} onNavigateObject={focusCanvasObject} {...{
+<ResizablePanel {...panelLayout.handle('inspector')}><CanvasInspectorPanel graphicsQuality={graphicsQuality} changeGraphicsQuality={changeGraphicsQuality} spatialIndex={spatialIndex} updateContentSetting={updateContentSetting} updateChartItem={updateTableItem} onNavigateObject={focusCanvasObject} {...{
         activeTool,
+        updateCollaborativeMetadata,
         canvasId,
         canvasParticipants,
         backgroundColor,
@@ -1392,7 +1398,7 @@ function CanvasWorkspace() {
         shapeFillOpacity, setShapeFillOpacity, shapeSketchFillOpacity, setShapeSketchFillOpacity, shapeVertexCount, shapeCornerStyle, updateNewShapeGeometry,
         shapeVisualStyle, setShapeVisualStyle, shapeStrokeEnabled, setShapeStrokeEnabled, shapeBorderWidth, setShapeBorderWidth, updateShapeAppearance,
         connectorVisualStyle, setConnectorVisualStyle,
-        setShapeFillColor,
+        setShapeFillColor: changeShapeFillColor,
         updateShapeFill,
         showGrid, showXAxis, showYAxis, toggleXAxis, toggleYAxis,
         strokeWidth,

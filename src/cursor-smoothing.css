@@ -1,6 +1,8 @@
 .remote-cursor {
-  transition: left 45ms linear, top 45ms linear;
-  will-change: left, top;
+  left: 0;
+  top: 0;
+  transition: transform 36ms linear;
+  will-change: transform;
 }
 
 .remote-selection-marquee {

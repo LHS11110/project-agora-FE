@@ -10,6 +10,7 @@
 .unified-latex-preview{padding:6px 0;overflow:auto;font-size:16px}
 .content-render-controls label,.connector-label-controls label{display:flex;flex-direction:column;gap:6px;margin:10px 0;color:var(--ink-muted);font-size:10px}
 .content-render-controls select,.content-render-controls input,.connector-label-controls select,.connector-label-controls textarea{width:100%;padding:7px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink-strong);font:11px/1.5 var(--display)}
+.text-color-reset{margin-top:8px;padding:6px 9px;font-size:10px}
 .connector-label-controls textarea{min-height:80px;resize:vertical}
 
 .tutorial-stage .unified-content-object{display:flex;flex-direction:column;min-height:40px;padding:10px 12px}
