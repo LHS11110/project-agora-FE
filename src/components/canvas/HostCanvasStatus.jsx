@@ -1,3 +1,4 @@
+import { canvasNeedsAttention } from '../../canvas/syncAttention.js';
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
 import ChromeToggle from '../../canvas/panels/ChromeToggle.jsx';
@@ -5,6 +6,7 @@ import './host-canvas-status.css';
 
 export default function HostCanvasStatus({ status, receipt, onRetry, collapsed=false, onToggle }) {
   useUiLocale();
+  if (!canvasNeedsAttention(status, receipt)) return null;
   const reconnecting = !status.ready && status.editable;
   const summary = receipt?.summary;
   const result = receipt?.status === 'accepted'

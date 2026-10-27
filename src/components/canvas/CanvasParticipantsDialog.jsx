@@ -12,7 +12,7 @@ export default function CanvasParticipantsDialog({ settings, participants = [], 
   const valid = nickname.trim() && /^\d+$/.test(tag) && Number.isSafeInteger(Number(tag));
   return <CanvasManagementDialog titleId="participants-title" onClose={onClose}>
     <button className="icon-button modal-close" onClick={onClose} aria-label={ui("닫기")}><Icon name="close" /></button>
-    <span className="section-kicker">CANVAS PARTICIPANTS</span><h2 id="participants-title">{ui("참여자 관리")}</h2>
+    <h2 id="participants-title">{ui("참여자 관리")}</h2>
     <p>{ui("닉네임과 태그로 캔버스 참여자를 추가하거나 제외할 수 있습니다.")}</p>
     <div className="settings-dialog-content">
       <div className="form-field"><span>{"" + ui("참여자 ·") + " "}{participants.length}{ui("명")}</span>
@@ -30,6 +30,6 @@ export default function CanvasParticipantsDialog({ settings, participants = [], 
       </form>
     </div>
     {pending && <div className="settings-pending" role="status"><span className="loader" />{" " + ui("변경 내용을 확인하고 있어요.") + ""}</div>}
-    <div className="settings-dialog-footer"><span>revision {settings?.settings_revision ?? '—'}</span><button className="button button-dark" onClick={onClose}>{ui("완료")}</button></div>
+    <div className="settings-dialog-footer"><button className="button button-dark" onClick={onClose}>{ui("완료")}</button></div>
   </CanvasManagementDialog>;
 }

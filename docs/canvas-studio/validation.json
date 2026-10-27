@@ -1,0 +1,35 @@
+{
+  "results": [
+    {
+      "label": "desktop-light",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "dockVisible": true,
+      "blockedButtons": 0
+    },
+    {
+      "label": "desktop-dark",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "dockVisible": true,
+      "blockedButtons": 0
+    },
+    {
+      "label": "mobile-dark",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "dockVisible": true,
+      "blockedButtons": 0
+    }
+  ],
+  "objectsUnchanged": true,
+  "toolSelection": true,
+  "panelToggles": true,
+  "inspectorResize": true,
+  "pageErrors": 0,
+  "date": "2026-10-27",
+  "unitTestsPassed": 198,
+  "reference": "User-supplied FigJam screenshot",
+  "deployment": "Project Orchestra static frontend exporter",
+  "frontendImage": "sha256:fdc436ca0068adfc5cc89278d6c69147ca481972598f6e3b5212e33dc6ddc45e"
+}

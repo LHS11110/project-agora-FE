@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { fitPanelSizes, PANEL_DEFAULTS, PANEL_LAYOUT_KEY, panelLimits, readPanelSizes, readPanelVisibility, PANEL_VISIBILITY_KEY } from './panelLayout.js';
+import { fitPanelSizes, PANEL_DEFAULTS, PANEL_LAYOUT_KEY, panelLimits, readPanelSizes, readPanelVisibility, PANEL_VISIBILITY_KEY, mobilePanelVisibility } from './panelLayout.js';
 
 export function usePanelLayout() {
   const [node, setNode] = useState(null), [raw, setRaw] = useState(readPanelSizes);
@@ -7,8 +7,9 @@ export function usePanelLayout() {
   const [mobile, setMobile] = useState(() => window.matchMedia('(max-width:650px)').matches);
   const [bounds, setBounds] = useState({ width: window.innerWidth, height: Math.max(360, window.innerHeight - 91) });
   const mode = mobile ? 'mobile' : 'desktop';
-  const sizes = fitPanelSizes(raw[mode], mode, bounds, collapsed);
-  const latest = useRef(null); latest.current = { raw, mode, sizes, bounds, collapsed };
+  const effectiveCollapsed = mobile ? mobilePanelVisibility(collapsed) : collapsed;
+  const sizes = fitPanelSizes(raw[mode], mode, bounds, effectiveCollapsed);
+  const latest = useRef(null); latest.current = { raw, mode, sizes, bounds, collapsed: effectiveCollapsed };
   useEffect(() => {
     const media = window.matchMedia('(max-width:650px)');
     const change = () => setMobile(media.matches);
@@ -33,7 +34,8 @@ export function usePanelLayout() {
     setRaw(next);
   };
   const toggle = key => {
-    const next = { ...latest.current.collapsed, [key]: !latest.current.collapsed[key] };
+    const opening = latest.current.collapsed[key];
+    const next = mobile && opening ? {tools:true,inspector:true,chat:true,[key]:false} : { ...latest.current.collapsed, [key]: !latest.current.collapsed[key] };
     latest.current.collapsed = next;
     setCollapsed(next);
     try { localStorage.setItem(PANEL_VISIBILITY_KEY, JSON.stringify(next)); } catch {}
@@ -42,6 +44,6 @@ export function usePanelLayout() {
   return {
     ref: setNode, mobile,
     style: { '--tools-width': `${sizes.tools}px`, '--inspector-width': `${sizes.inspector}px`, '--chat-height': `${sizes.chat}px`, '--tools-height': `${sizes.tools}px`, '--inspector-height': `${sizes.inspector}px` },
-    handle: key => ({ panel: key, collapsed: collapsed[key], onToggle: () => toggle(key), mobile, value: sizes[key], limits: panelLimits(mode, key, bounds, sizes), onChange: value => change(key, value), onFinish: persist, onReset: () => reset(key) }),
+    handle: key => ({ panel: key, collapsed: effectiveCollapsed[key], onToggle: () => toggle(key), mobile, value: sizes[key], limits: panelLimits(mode, key, bounds, sizes), onChange: value => change(key, value), onFinish: persist, onReset: () => reset(key) }),
   };
 }

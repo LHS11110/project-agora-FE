@@ -1404,5 +1404,7 @@ export default {
   "+X / C / V · 여러 객체도 함께 처리합니다. 편집 중에는 내용에 적용됩니다.": "+X / C / V · Supports multiple objects. While editing, shortcuts apply to the content.",
   "# 메모 제목\n- 할 일\n**중요한 내용**": "# Note title\n- Task\n**Important content**",
   "실시간 협업": "Live collaboration",
-  "직접 체험": "Try it yourself"
+  "직접 체험": "Try it yourself",
+  "현재 접속 중인 사용자": "Currently online",
+  "현재 접속 중인 사용자 {count}": "Currently online: {count}"
 };

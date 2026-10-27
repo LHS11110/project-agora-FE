@@ -1,0 +1,69 @@
+{
+  "initial": {
+    "step": 100,
+    "scale": 0.9,
+    "originX": 720,
+    "originY": 500,
+    "counts": {
+      "x": 14,
+      "y": 10
+    },
+    "maxError": 0,
+    "nodes": 24
+  },
+  "zoomed": {
+    "step": 50,
+    "scale": 2.5705,
+    "originX": 720.0000000000009,
+    "originY": 500.0000000000002,
+    "counts": {
+      "x": 10,
+      "y": 6
+    },
+    "maxError": 0.0025024414053405053,
+    "nodes": 24
+  },
+  "reduced": {
+    "step": 500,
+    "scale": 0.3151,
+    "originX": 720.0000000000001,
+    "originY": 500.0000000000001,
+    "counts": {
+      "x": 8,
+      "y": 5
+    },
+    "maxError": 0.03003387451190065,
+    "nodes": 26
+  },
+  "panned": {
+    "step": 500,
+    "scale": 0.3151,
+    "originX": 597.9897491633309,
+    "originY": 423.7435932270819,
+    "counts": {
+      "x": 8,
+      "y": 5
+    },
+    "maxError": 0.03759458666900173,
+    "nodes": 26
+  },
+  "mobile": {
+    "step": 500,
+    "scale": 0.3151,
+    "originX": 64.93156552898282,
+    "originY": 340.7072284556144,
+    "counts": {
+      "x": 1,
+      "y": 4
+    },
+    "maxError": 0.015037169385550442,
+    "nodes": 13
+  },
+  "axisToggles": true,
+  "objectsUnchanged": true,
+  "pageErrors": 0,
+  "unitTestsPassed": 206,
+  "date": "2026-10-27",
+  "frontendImage": "sha256:a973591ddb75e720853128dea7265aa076143b577d5e75546028bed6a20d5ac4",
+  "deployment": "Project Orchestra"
+}

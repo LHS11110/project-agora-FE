@@ -3,7 +3,7 @@ export const COLLAPSED_PANEL_SIZE = 32;
 export function readPanelVisibility() {
   let saved;
   try { saved = JSON.parse(localStorage.getItem(PANEL_VISIBILITY_KEY)); } catch { saved = null; }
-  return Object.fromEntries(['tools', 'inspector', 'chat'].map(key => [key, saved?.[key] === true]));
+  return Object.fromEntries(['tools', 'inspector', 'chat'].map(key => [key, typeof saved?.[key] === 'boolean' ? saved[key] : key !== 'inspector']));
 }
 export const PANEL_LAYOUT_KEY = 'frelog_canvas_panel_sizes_v1';
 export const PANEL_DEFAULTS = { desktop: { tools: 112, inspector: 292, chat: 205 }, mobile: { tools: 88, inspector: 420, chat: 210 } };
@@ -37,4 +37,9 @@ export function fitPanelSizes(raw, mode, bounds, collapsed = {}) {
   const inspector = collapsed.inspector ? COLLAPSED_PANEL_SIZE : clamp(raw.inspector, 220, Math.max(220, Math.min(600, bounds.width - tools - 240)));
   const limits = panelLimits(mode, 'chat', bounds, { tools, inspector });
   return { tools, inspector, chat: collapsed.chat ? COLLAPSED_PANEL_SIZE : clamp(raw.chat, limits.min, limits.max) };
+}
+
+export function mobilePanelVisibility(value) {
+  const expanded = ['inspector', 'tools', 'chat'].find(key => !value[key]);
+  return Object.fromEntries(['tools','inspector','chat'].map(key=>[key,key!==expanded]));
 }

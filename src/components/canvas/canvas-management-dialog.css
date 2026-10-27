@@ -31,3 +31,4 @@ dialog.canvas-management-dialog::backdrop{background:#14241d80;backdrop-filter:b
 .canvas-management-dialog>p,.canvas-management-dialog>.section-kicker{color:var(--ink-muted)}
 .canvas-management-dialog .plain-input{background:var(--surface-soft);color:var(--ink-strong);border-color:var(--line)}
 .canvas-management-dialog .settings-dialog-footer{border-color:var(--line);color:var(--ink-muted)}
+.canvas-management-dialog .settings-dialog-footer{justify-content:flex-end}
