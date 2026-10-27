@@ -2,14 +2,13 @@ import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
 import KnowledgeStrip from './knowledge/KnowledgeStrip.jsx';
 import SlideContextRibbon from './SlideContextRibbon.jsx';
-import PointerWater from '../frelog/PointerWater.jsx';
 import SlideDeskObjects from './SlideDeskObjects.jsx';
 import Icon from '../Icon.jsx';
 
 export default function CollaborationSlide({selectSlide}) {
   useUiLocale();
   return (
-        <section className="home-slide slide-collab" aria-roledescription="슬라이드" aria-label="4 / 5"><PointerWater />
+        <section className="home-slide slide-collab" aria-roledescription="슬라이드" aria-label="4 / 5">
           <div className="home-slide-inner page-container"><div className="home-slide-copy"><span className="home-slide-kicker"><i /> SHARED THINKING · 04</span><h1>{ui("각자의 생각이")}<br /><em>{ui("실시간으로 이어져요.")}</em></h1><p>{ui("메모와 코드 아이디어를 같은 화면에서 함께 다듬고,")}<br />{ui("바뀐 생각은 팀의 캔버스에 바로 이어집니다.")}</p><SlideDeskObjects variant="collaboration" /><div className="collab-card-row"><article><span>MEMO / LIVE</span><strong>{ui("메모를")}<br />{ui("같이 다듬고")}</strong><small>{ui("한 문장도 함께 다듬어요")}</small></article><article><span>CODE / LIVE</span><strong>{ui("코드 생각을")}<br />{ui("이어 붙여요")}</strong><small>{ui("수식도 읽기 좋게 보여요")}</small></article></div><button className="button button-dark button-large" onClick={() => selectSlide(4)}>{"" + ui("다음 장면") + " "}<Icon name="arrow" size={18} /></button></div><div className="collab-showcase-stack"><div className="live-edit-showcase"><div className="showcase-window-top"><span><i /><i /><i /></span><strong>idea.js</strong><span className="live-badge"><i /> LIVE</span></div><div className="shared-editor-demo"><div className="editor-lines"><span>01</span><span>02</span><span>03</span><span>04</span></div><code><b>const</b> <em>idea</em> = <strong>{ui("\"함께 그려요\"")}</strong>;<br />notes.add(<strong>"what if?"</strong>);<br /><b>share</b>(<em>idea</em>, <em>withTeam</em>);<br /><span>{ui("지수 · 한 줄 더하는 중")}</span></code></div><div className="formula-preview"><span>EXPRESSION / 02</span><strong className="formula-display">ƒ(x) = ∑ᵢ xᵢ</strong></div><div className="shared-cursor cursor-minji"><i>M</i>{" " + ui("민지") + ""}</div></div><div className="text-edit-showcase"><div className="text-edit-showcase-head"><span><Icon name="text" size={13} /><b>{ui("공유 메모")}</b></span><small><i /> MARKDOWN · LIVE</small></div><p>{"" + ui("작은 아이디어도") + " "}<strong>{ui("함께 다듬으면")}</strong>{" " + ui("더 선명해져요.") + " "}<span className="remote-caret">{ui("민지")}</span></p></div><KnowledgeStrip variant="collaboration" /></div><SlideContextRibbon variant="collaboration" /></div>
         </section>
   );

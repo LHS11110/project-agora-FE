@@ -75,7 +75,7 @@ export function useMotionField(canvasRef, quiet) {
       scope.addEventListener('pointermove', move, { passive: true });
       scope.addEventListener('pointerleave', leave);
     }
-    scope.addEventListener('pointerdown', press, { passive: true, capture: true });
+    if (!quiet) scope.addEventListener('pointerdown', press, { passive: true, capture: true });
     document.addEventListener('visibilitychange', resume);
     preference.addEventListener('change', resume);
     resize(); resume();

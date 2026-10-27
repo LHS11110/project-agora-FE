@@ -6,7 +6,7 @@ const {chromium}=await import(process.env.PLAYWRIGHT_MODULE_PATH?pathToFileURL(p
 const state=JSON.parse(fs.readFileSync(process.env.SYNC_SESSION_FILE||'/tmp/agora-sync-session.json'));
 const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox','--host-resolver-rules=MAP 112.168.71.147 127.0.0.1','--disable-features=LocalNetworkAccessChecks']});
 const report={dropped:[],exceptions:[],sockets:{},joinMs:[],codes:[]};let rules={};
-const ready=page=>page.waitForFunction(()=>window.frelogCanvas && !document.querySelector('.canvas-loading-status.is-overlay') && !document.querySelector('.host-canvas-status')?.textContent.includes('승인 대기') && !document.querySelector('.host-canvas-status')?.classList.contains('is-reconnecting'),null,{timeout:20000});
+const ready=page=>page.waitForFunction(()=>window.frelogCanvas && !document.querySelector('.canvas-loading-status.is-overlay'),null,{timeout:20000});
 async function join(name){
  const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1440,height:1000}});
  await context.addInitScript(s=>{localStorage.setItem('agora_token',s.token);localStorage.setItem('agora_user',JSON.stringify(s.user));},state);

@@ -1,13 +1,18 @@
 import { useEffect, useState } from 'react';
 import { isPenStyle } from './penStyles.js';
 const KEY = 'frelog_pen_style';
+const DEFAULT_SETTINGS = { brush: 'pen', opacity: 1 };
+export function readPenStyle(storage) {
+  try {
+    const saved = JSON.parse(storage?.getItem(KEY));
+    if (isPenStyle(saved?.brush) && Number.isFinite(saved.opacity) && saved.opacity >= 0 && saved.opacity <= 1) return saved;
+  } catch { /* Use defaults without browser storage. */ }
+  return { ...DEFAULT_SETTINGS };
+}
 export function usePenStyle() {
   const [settings, setSettings] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(KEY));
-      if (isPenStyle(saved?.brush) && Number.isFinite(saved.opacity) && saved.opacity >= 0 && saved.opacity <= 1) return saved;
-    } catch { /* Use defaults without browser storage. */ }
-    return { brush: 'ink', opacity: 1 };
+    try { return readPenStyle(localStorage); }
+    catch { return { ...DEFAULT_SETTINGS }; }
   });
   useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(settings)); } catch { /* Drawing still works. */ } }, [settings]);
   return {

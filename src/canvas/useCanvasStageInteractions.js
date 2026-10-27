@@ -3,6 +3,7 @@ import { groupMember } from './userGroups/userGroupModel.js';
 import { shapeCreationSize } from './shapeCatalog.js';
 import { useEffect, useRef } from 'react';
 import { INK_BRUSH, inkPointAtPointer } from './inkStroke.js';
+import { appendInkInput } from './inkInput.js';
 import { canvasPointAtPointer, zoomCanvasCamera } from './canvasSpace.js';
 import { useCanvasStrokeSaveBatch } from './useCanvasStrokeSaveBatch.js';
 import { editorCanScroll } from './editorWheel.js';
@@ -20,7 +21,7 @@ import { DEFAULT_SHAPE_ARROW_BEND } from '../components/shapeArrowGeometry.js';
 
 export function useCanvasStageInteractions(options) {
   const {
-    boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth = ERASER_RADIUS * 2,
+    boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth = ERASER_RADIUS * 2, eraserMode,
     addItem, setToast, setItems, patchItems, refreshSpatialIndex, spatialIndexRef,
     sendStrokeFrameChanges, pendingItemChangesRef, strokeSaveFlushRef,
     lastCursorSentAtRef, peerMeshRef, panRef, zoomHoldRef, zoomPointerPressRef,
@@ -92,7 +93,7 @@ export function useCanvasStageInteractions(options) {
       : Object.entries(itemsRef.current).filter(([, item]) => item?.kind === 'stroke');
     for (const [id, item] of entries) {
       if (itemsRef.current[id]?.kind !== 'stroke') continue;
-      const remainingPaths = eraseStrokeWithEraser(item, from, to, boardSize, camera.scale, eraserWidth / 2);
+      const remainingPaths = eraseStrokeWithEraser(item, from, to, boardSize, camera.scale, eraserWidth / 2, eraserMode);
       if (remainingPaths === null) continue;
       const changes={},removed=[];
       if (remainingPaths.length === 0) {
@@ -161,7 +162,7 @@ export function useCanvasStageInteractions(options) {
     hideEraserCursor();
   };
   const startPan = (event) => {
-    if (panRef.current) return;
+    if (panRef.current || drawingRef.current) return;
     cancelPanInertia();
     event.preventDefault();
     event.stopPropagation();
@@ -451,6 +452,7 @@ export function useCanvasStageInteractions(options) {
     queueDrawingStroke();
   };
   const moveDrawing = (event) => {
+    if (drawingRef.current && drawingSessionRef.current?.pointerId !== event.pointerId) return;
     updateEraserCursor(event);
     sendCursorPosition(event);
     if (selectionRef.current) { moveMarqueeSelection(event); return; }
@@ -474,21 +476,13 @@ export function useCanvasStageInteractions(options) {
     if (!drawingRef.current) return;
     const session = drawingSessionRef.current;
     if (!session || session.pointerId !== event.pointerId) return;
-    const coalesced = event.nativeEvent?.getCoalescedEvents?.() || event.getCoalescedEvents?.() || [];
-    // Some browsers omit the newest dispatch position from their coalesced list.
-    const samples = coalesced.length ? [...coalesced, event] : [event];
-    let changed = false;
-    for (const sample of samples) {
-      if (draftRef.current.length >= MAX_REALTIME_STROKE_POINTS) break;
-      const point = inkPointAtPointer(sample, pointerPosition(sample));
-      const previous = draftRef.current[draftRef.current.length - 1];
-      const distance = previous ? Math.hypot((point.x - previous.x) * boardSize.width, (point.y - previous.y) * boardSize.height) : Infinity;
-      if (distance < (session.brush === 'pen' ? 0.25 : 0.5) && Math.abs((point.pressure ?? 0.5) - (previous?.pressure ?? 0.5)) < 0.02) continue;
-      draftRef.current.push(point);
-      session.pendingPoints.push(point);
-      changed = true;
-    }
-    if (!changed) return;
+    const bounds = boardRef.current.getBoundingClientRect();
+    const added = appendInkInput(event, draftRef.current, {
+      toPoint: sample => canvasPointAtPointer(sample, bounds, camera, boardSize),
+      size: boardSize, scale: camera.scale, brush: session.brush, maxPoints: MAX_REALTIME_STROKE_POINTS,
+    });
+    if (!added.length) return;
+    session.pendingPoints.push(...added);
     queueDrawingStroke();
     vectorDraftRef.current?.({ id: session.id, brush: session.brush, opacity: session.opacity, simulatePressure: session.simulatePressure, complete: false, points: draftRef.current, color: session.color, strokeWidth: session.strokeWidth });
     const now = performance.now();
@@ -498,6 +492,7 @@ export function useCanvasStageInteractions(options) {
     }
   };
   const stopDrawing = (event) => {
+    if (drawingRef.current && drawingSessionRef.current?.pointerId !== event.pointerId) return;
     if (selectionRef.current) { finishMarqueeSelection(event); return; }
     if (panRef.current) {
       const pan = panRef.current;
@@ -550,13 +545,13 @@ export function useCanvasStageInteractions(options) {
     // Capture the final location before pointerup; some devices do not send a
     // pointermove for the last segment. Do not record release pressure (zero).
     if (event.type === 'pointerup') {
-      const point = pointerPosition(event);
-      const previous = draftRef.current[draftRef.current.length - 1];
-      if (previous && Math.hypot((point.x - previous.x) * boardSize.width, (point.y - previous.y) * boardSize.height) >= 0.5) {
-        const finalPoint = { ...point, ...(Number.isFinite(previous.pressure) ? { pressure: previous.pressure } : {}) };
-        draftRef.current.push(finalPoint);
-        drawingSessionRef.current.pendingPoints.push(finalPoint);
-      }
+      const bounds = boardRef.current.getBoundingClientRect();
+      const added = appendInkInput(event, draftRef.current, {
+        toPoint: sample => canvasPointAtPointer(sample, bounds, camera, boardSize),
+        size: boardSize, scale: camera.scale, brush: drawingSessionRef.current.brush,
+        maxPoints: MAX_REALTIME_STROKE_POINTS, final: true,
+      });
+      drawingSessionRef.current.pendingPoints.push(...added);
     }
     drawingRef.current = false;
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);

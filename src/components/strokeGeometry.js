@@ -9,6 +9,29 @@ function pointToSegmentDistance(point, start, end) {
   return Math.hypot(point.x - (start.x + dx * progress), point.y - (start.y + dy * progress));
 }
 
+function sweptSegmentHits(start, end, eraserStart, eraserEnd, radius) {
+  if (Math.max(start.x, end.x) < Math.min(eraserStart.x, eraserEnd.x) - radius
+      || Math.min(start.x, end.x) > Math.max(eraserStart.x, eraserEnd.x) + radius
+      || Math.max(start.y, end.y) < Math.min(eraserStart.y, eraserEnd.y) - radius
+      || Math.min(start.y, end.y) > Math.max(eraserStart.y, eraserEnd.y) + radius) return false;
+
+  const ux = end.x - start.x, uy = end.y - start.y;
+  const vx = eraserEnd.x - eraserStart.x, vy = eraserEnd.y - eraserStart.y;
+  const cross = ux * vy - uy * vx;
+  if (cross !== 0) {
+    const dx = eraserStart.x - start.x, dy = eraserStart.y - start.y;
+    const alongStroke = (dx * vy - dy * vx) / cross;
+    const alongEraser = (dx * uy - dy * ux) / cross;
+    if (alongStroke >= 0 && alongStroke <= 1 && alongEraser >= 0 && alongEraser <= 1) return true;
+  }
+  // Disjoint (or parallel) segments are closest at an endpoint. This also
+  // handles zero-length strokes and eraser gestures without special cases.
+  return pointToSegmentDistance(start, eraserStart, eraserEnd) <= radius
+    || pointToSegmentDistance(end, eraserStart, eraserEnd) <= radius
+    || pointToSegmentDistance(eraserStart, start, end) <= radius
+    || pointToSegmentDistance(eraserEnd, start, end) <= radius;
+}
+
 function interpolate(start, end, progress) {
   return {
     x: start.x + (end.x - start.x) * progress,
@@ -84,9 +107,10 @@ function appendPoint(points, point) {
 /**
  * Remove the part of a stroke swept by the eraser and return the surviving paths.
  * Returns null when the eraser misses, an empty array when it removes all ink, or
- * one or more point arrays for the remaining pieces.
+ * one or more point arrays for the remaining pieces. In stroke mode, any hit
+ * removes the entire stroke using the same geometry as partial erasing.
  */
-export function eraseStrokeWithEraser(stroke, eraserStart, eraserEnd, viewSize, scale = 1, radius = 12) {
+export function eraseStrokeWithEraser(stroke, eraserStart, eraserEnd, viewSize, scale = 1, radius = 12, mode = 'partial') {
   const source = stroke?.points;
   if (!Array.isArray(source) || source.length === 0) return null;
 
@@ -110,6 +134,13 @@ export function eraseStrokeWithEraser(stroke, eraserStart, eraserEnd, viewSize, 
   const hitPixels = pixels.map((point) => rotate(point, center, angle));
 
   if (source.length === 1) return pointToSegmentDistance(hitPixels[0], eraserA, eraserB) <= hitDistance ? [] : null;
+
+  if (mode === 'stroke') {
+    for (let index = 1; index < hitPixels.length; index += 1) {
+      if (sweptSegmentHits(hitPixels[index - 1], hitPixels[index], eraserA, eraserB, hitDistance)) return [];
+    }
+    return null;
+  }
 
   const paths = [];
   let current = [];

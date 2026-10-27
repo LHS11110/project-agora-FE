@@ -2,7 +2,6 @@ import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
 import KnowledgeStrip from './knowledge/KnowledgeStrip.jsx';
 import SlideContextRibbon from './SlideContextRibbon.jsx';
-import PointerWater from '../frelog/PointerWater.jsx';
 import SlideDeskObjects from './SlideDeskObjects.jsx';
 import { Link } from '../../routing.jsx';
 import Icon from '../Icon.jsx';
@@ -11,7 +10,7 @@ import '../../home/start-slide.css';
 export default function StartSlide({navigate, target}) {
   useUiLocale();
   return (
-        <section className="home-slide slide-start" aria-roledescription="슬라이드" aria-label="5 / 5"><PointerWater />
+        <section className="home-slide slide-start" aria-roledescription="슬라이드" aria-label="5 / 5">
           <div className="home-slide-inner page-container"><div className="start-slide-card"><span className="home-slide-kicker"><i /> YOUR NEXT GOOD IDEA · 05</span><h1>{ui("생각을 움직여볼까요?")}</h1><p>{ui("좋은 아이디어는 함께 시작하는 순간부터 자라나요.")}<br />{ui("샘플 캔버스를 체험하거나, 팀의 공간을 열어보세요.")}</p><KnowledgeStrip variant="start" /><SlideDeskObjects variant="start" /><div className="home-slide-actions"><Link className="button button-dark button-large" to="/tutorial">{"" + ui("튜토리얼 체험하기") + " "}<Icon name="arrow" size={18} /></Link><button className="button button-cream button-large" onClick={() => navigate(target)}>{"" + ui("FreLog 시작하기") + " "}<Icon name="arrow" size={18} /></button></div><div className="start-slide-links"><Link to="/docs">{"" + ui("프로젝트 구조와 API 문서 보기") + " "}<Icon name="arrow" size={14} /></Link><span>© 2026 FreLog</span></div><span className="start-star start-star-a">✳</span><span className="start-star start-star-b">✦</span></div><SlideContextRibbon variant="start" target={target} /></div>
         </section>
   );

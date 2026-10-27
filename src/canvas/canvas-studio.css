@@ -75,8 +75,6 @@
 .canvas-app-page .zoom-button {width:28px;height:28px;border:0;border-radius:8px;font-size:16px;background:var(--surface-soft);color:var(--ink-strong);}
 .canvas-app-page .zoom-reset {width:auto;font-size:10px;padding:0 8px;}
 .canvas-app-page .zoom-value {font-size:10px;min-width:40px;}
-.canvas-app-page .host-canvas-status {top:82px;left:calc(var(--tools-width) + 32px);right:auto;max-width:calc(100% - var(--tools-width) - var(--inspector-width) - 80px);padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink-muted);font:10px/1.5 var(--display);box-shadow:var(--studio-shadow);}
-.canvas-app-page .host-canvas-status.is-collapsed {top:82px;}
 .canvas-app-page .board-footer {left:calc(var(--tools-width) + 32px);right:calc(var(--inspector-width) + 32px);bottom:92px;min-height:0;border:0;background:transparent;box-shadow:none;font:9px var(--mono);pointer-events:none;}
 .canvas-app-page .board-footer-center {display:none;}
 .canvas-app-page .stage-label {display:none;}
@@ -131,7 +129,6 @@
  .canvas-app-page .canvas-panel-slot-tools:not(.is-collapsed) {top:88px;bottom:auto;height:var(--tools-height);}
  .canvas-app-page .canvas-panel-slot-inspector:not(.is-collapsed) {top:calc(100px + var(--tools-height));bottom:148px;height:auto;max-height:var(--inspector-height);}
  .canvas-app-page .canvas-panel-slot-chat:not(.is-collapsed) {bottom:126px;}
- .canvas-app-page .host-canvas-status {top:88px;left:66px;right:54px;max-width:none;font-size:8px;}
  .canvas-app-page .board-topline {left:auto;right:10px;bottom:16px;}
  .canvas-app-page .board-toolbar-actions {gap:2px;}
  .canvas-app-page .board-toggle {font-size:8px;padding:0 4px;}
@@ -168,8 +165,6 @@
 /* Reserved chrome lanes keep persistent widgets out of each other's bounds. */
 .canvas-app-page {--canvas-panel-top:84px;--studio-panel-bottom:98px;--studio-map-gap:112px;}
 .canvas-app-page[data-info-collapsed="true"] {--canvas-panel-top:72px;}
-.canvas-app-page[data-sync-attention="true"] {--canvas-panel-top:148px;}
-.canvas-app-page[data-info-collapsed="true"][data-sync-attention="true"] {--canvas-panel-top:136px;}
 .canvas-app-page .canvas-title-group {height:50px;padding:8px 14px 8px 46px;}
 .canvas-app-page .canvas-header-right {height:50px;}
 .canvas-app-page .canvas-topbar {height:50px;}
@@ -177,8 +172,6 @@
 .canvas-app-page .canvas-title-copy h1 {font-size:13px;}
 .canvas-app-page .canvas-topbar.is-collapsed {padding-left:44px;width:172px;}
 .canvas-app-page .canvas-folded-language {position:absolute;top:4px;left:calc(100% + 12px);pointer-events:auto;}
-.canvas-app-page .host-canvas-status,.canvas-app-page .host-canvas-status.is-collapsed {top:80px;left:16px;right:16px;max-width:none;max-height:52px;}
-.canvas-app-page[data-info-collapsed="true"] .host-canvas-status {top:68px;}
 .canvas-app-page .canvas-panel-slot-tools,.canvas-app-page .canvas-panel-slot-inspector {top:var(--canvas-panel-top);bottom:var(--studio-panel-bottom);}
 .canvas-app-page .canvas-panel-slot-tools.is-collapsed,.canvas-app-page .canvas-panel-slot-inspector.is-collapsed {bottom:auto;}
 .canvas-app-page .canvas-panel-slot-chat:not(.is-collapsed) {bottom:var(--studio-panel-bottom);}
@@ -190,8 +183,6 @@
 @media(max-width:1200px){.canvas-app-page {--studio-panel-bottom:148px;--studio-map-gap:162px;}}
 @media(max-width:650px){
  .canvas-app-page {--canvas-panel-top:84px;}
- .canvas-app-page[data-sync-attention="true"] {--canvas-panel-top:140px;}
- .canvas-app-page[data-info-collapsed="true"][data-sync-attention="true"] {--canvas-panel-top:136px;}
  .canvas-app-page .canvas-title-group {height:50px;padding-left:42px;max-width:calc(100% - 205px);}
  .canvas-app-page .canvas-topbar:not(.is-collapsed)>.canvas-chrome-toggle {top:9px;right:0;}
  .canvas-app-page .canvas-header-right {right:40px;}
@@ -200,7 +191,6 @@
  .canvas-app-page .canvas-header-right .canvas-settings-button {height:30px;}
  .canvas-app-page .canvas-top-right {gap:5px;}
  .canvas-app-page .canvas-topbar .canvas-folded-language {top:4px;left:calc(100% + 8px);}
- .canvas-app-page .host-canvas-status,.canvas-app-page .host-canvas-status.is-collapsed {top:72px;left:12px;right:12px;}
  .canvas-app-page .canvas-panel-slot-tools:not(.is-collapsed) {top:var(--canvas-panel-top);left:12px;right:66px;width:auto;bottom:auto;height:var(--tools-height);}
  .canvas-app-page .canvas-panel-slot-inspector:not(.is-collapsed) {top:var(--canvas-panel-top);right:12px;bottom:var(--studio-panel-bottom);height:auto;max-height:var(--inspector-height);}
  .canvas-app-page .canvas-panel-slot-chat:not(.is-collapsed) {bottom:var(--studio-panel-bottom);}
@@ -216,6 +206,5 @@
  .app-shell.is-canvas-shell:has(.canvas-app-page[data-info-collapsed="true"]) .app-navigation-toggle{top:69px}
  .app-shell.is-navigation-collapsed:has(.canvas-app-page[data-info-collapsed="true"]) .app-navigation-toggle{top:13px}
 }
-.canvas-app-page .host-canvas-status {overflow:auto;align-items:flex-start;}
 .app-shell.is-canvas-shell .sidebar-account {margin-top:auto;justify-content:flex-end;}
 .canvas-app-page .settings-dialog-footer,.canvas-app-page .participants-dialog .settings-dialog-footer {justify-content:flex-end;}

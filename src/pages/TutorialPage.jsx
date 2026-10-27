@@ -19,6 +19,7 @@ import ShapePicker from '../canvas/ShapePicker.jsx';
 import { shapeCreationSize } from '../canvas/shapeCatalog.js';
 import { useEraserSize } from '../canvas/useEraserSize.js';
 import EraserSizeControl from '../canvas/EraserSizeControl.jsx';
+import EraserModeControl from '../canvas/EraserModeControl.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from '../routing.jsx';
 import Icon from '../components/Icon.jsx';
@@ -81,6 +82,7 @@ export default function TutorialPage() {
   const stageWheelHandlerRef = useRef(null);
   const draftSetterRef = useRef(null);
   const drawingRef = useRef(false);
+  const drawingPointerRef = useRef(null);
   const laserDrawingRef = useRef(null);
   const eraserRef = useRef(null);
   const eraserCursorRef = useRef(null);
@@ -104,7 +106,7 @@ export default function TutorialPage() {
   const [shapeArrowEndHead, setShapeArrowEndHead] = useState(DEFAULT_ARROW_END_HEAD);
   const [noteColor, setNoteColor] = useState(stickyNoteColors[0]);
   const [tableConfig, setTableConfig] = useState({ rows: 3, columns: 3, width: 42, height: 32 });
-  const { eraserWidth, changeEraserWidth } = useEraserSize();
+  const { eraserWidth, changeEraserWidth, eraserMode, changeEraserMode } = useEraserSize();
   const [shapeType, setShapeType] = useState('rectangle');
   const { penBrush, penOpacity, changePenBrush, changePenOpacity } = usePenStyle();
   const drawingStyleRef = useRef(null);
@@ -247,7 +249,7 @@ export default function TutorialPage() {
     const edits = entries.map(([id, item]) => ({
       id,
       item,
-      remainingPaths: eraseStrokeWithEraser(item, from, to, boardSize, camera.scale, eraserWidth / 2),
+      remainingPaths: eraseStrokeWithEraser(item, from, to, boardSize, camera.scale, eraserWidth / 2, eraserMode),
     })).filter(({ remainingPaths }) => remainingPaths !== null)
       .map((edit) => ({
         ...edit,
@@ -280,6 +282,7 @@ export default function TutorialPage() {
   };
 
   const startOnBoard = (event) => {
+    if (drawingRef.current || (event.button !== 0 && event.button !== 1)) return;
     updateEraserCursor(event);
     const targetItem = event.target.closest?.('.tutorial-item');
     if (event.button === 0 && !targetItem) {
@@ -303,6 +306,7 @@ export default function TutorialPage() {
       event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);
       drawingRef.current = true;
+      drawingPointerRef.current = event.pointerId;
       drawingStyleRef.current = { brush: penBrush, opacity: penOpacity, color, strokeWidth, simulatePressure: event.pointerType !== 'pen' };
       pointsRef.current = [inkPointAtPointer(event, position(event))];
       draftSetterRef.current?.({ ...drawingStyleRef.current, points: pointsRef.current, complete: false });
@@ -380,6 +384,7 @@ export default function TutorialPage() {
     draftSetterRef,
     dragRef,
     drawingRef,
+    drawingPointerRef,
     drawingStyleRef,
     eraseStrokesBetween,
     eraserRef,
@@ -395,6 +400,7 @@ export default function TutorialPage() {
     setConnectionStartId,
     setItems,
     setSelectedItemId,
+    camera,
     spacePressedRef,
     strokeWidth,
     updateEraserCursor,
@@ -641,7 +647,7 @@ export default function TutorialPage() {
               {activeTool === 'shape' && <ShapePicker value={shapeType} onChange={setShapeType} compact />}
               {(activeTool === 'arrow' || activeTool === 'shape' && shapeType === 'arrow') && <ArrowHeadControls className="tutorial-arrow-head-controls" item={{ startHead: shapeArrowStartHead, endHead: shapeArrowEndHead }} onChange={updateNewShapeArrowHead} />}
               {activeTool === 'select' && selectedArrow && <ArrowHeadControls className="tutorial-arrow-head-controls" item={selectedArrow} onChange={updateArrowHead} />}
-              {activeTool === 'eraser' && <EraserSizeControl value={eraserWidth} onChange={changeEraserWidth} compact />}
+              {activeTool === 'eraser' && <><EraserModeControl value={eraserMode} onChange={changeEraserMode} compact /><EraserSizeControl value={eraserWidth} onChange={changeEraserWidth} compact /></>}
               {activeTool === 'pen' && <PenStyleControls compact brush={penBrush} opacity={penOpacity} onBrushChange={changePenBrush} onOpacityChange={changePenOpacity} />}
               {activeTool === 'pen' && <label className="tutorial-range-control">{"" + ui("굵기") + " "}<input type="range" min="1" max="20" step="1" value={strokeWidth} onChange={(event) => setStrokeWidth(Number(event.target.value))} aria-label={ui("드로잉 선 굵기")} /><b>{strokeWidth}px</b></label>}
               <label className="tutorial-range-control">{"" + ui("줌 감도") + " "}<input type="range" min="0.5" max="2" step="0.1" value={zoomSensitivity} onChange={(event) => setZoomSensitivity(Number(event.target.value))} aria-label={ui("줌 감도")} /><b>{Math.round(zoomSensitivity * 100)}%</b></label>
@@ -762,7 +768,7 @@ export default function TutorialPage() {
             {activeTool === 'eraser' && <div className="eraser-cursor" ref={eraserCursorRef} style={{ width: `${eraserWidth}px`, height: `${eraserWidth}px` }} aria-hidden="true" />}
             {sharePosition && <ShareComposer onCancel={() => { setSharePosition(null); setActiveTool('select'); }} onSubmit={placeSharedLink} />}
             {composer && <form className="tutorial-editor" onPointerDown={(event) => event.stopPropagation()} onSubmit={(event) => { event.preventDefault(); placeComposer(); }}><div className="tutorial-editor-heading"><span>{ui("수식 작성")}</span><button type="button" onClick={() => setComposer(null)} aria-label={ui("닫기")}><Icon name="close" size={15} /></button></div><textarea autoFocus value={composer.value} onChange={(event) => setComposer((current) => ({ ...current, value: event.target.value }))} aria-label={ui("수식 입력")} /><button className="tutorial-place-button" type="submit">{"" + ui("캔버스에 놓기") + " "}<Icon name="arrow" size={14} /></button></form>}
-            <span className="tutorial-stage-hint">{activeTool === 'select' && (selectedArrow || selectedConnector) ? ui("가운데 조절점을 드래그해 화살표 몸통을 휘어보세요.") : activeTool === 'select' ? ui("오브젝트 드래그 이동 · 빈 곳 드래그 또는 Space + 드래그 이동") : activeTool === 'eraser' ? ui("지우개 도구 · 드래그한 곳의 선 부분만 지우기") : activeTool === 'laser' ? ui("드래그해 가리키면 흔적이 1.6초 동안 서서히 사라져요.") : ui("{v0} 도구 · 캔버스를 클릭", {
+            <span className="tutorial-stage-hint">{activeTool === 'select' && (selectedArrow || selectedConnector) ? ui("가운데 조절점을 드래그해 화살표 몸통을 휘어보세요.") : activeTool === 'select' ? ui("오브젝트 드래그 이동 · 빈 곳 드래그 또는 Space + 드래그 이동") : activeTool === 'eraser' ? (eraserMode === 'stroke' ? ui("지우개 도구 · 닿은 선 전체 지우기") : ui("지우개 도구 · 드래그한 곳의 선 부분만 지우기")) : activeTool === 'laser' ? ui("드래그해 가리키면 흔적이 1.6초 동안 서서히 사라져요.") : ui("{v0} 도구 · 캔버스를 클릭", {
   v0: ui(tools.find(tool => tool.id === activeTool)?.label)
 })}</span>
           </div>

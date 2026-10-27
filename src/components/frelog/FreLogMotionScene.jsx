@@ -89,7 +89,7 @@ export default function FreLogMotionScene({ compact = false, variant = 'home' })
         onPointerUp={() => { dragRef.current = null; }}
         onPointerCancel={() => { dragRef.current = null; }}
         onKeyDown={(event) => nudgeObject(object.id, event)}
-        onClick={(event) => { setFocusedObject(object.id); playFeedback(event); }}
+        onClick={(event) => { setFocusedObject(object.id); if (variant !== 'home') playFeedback(event); }}
       >
         <span data-feedback-pulse aria-hidden="true" />
         {object.type === 'note' && <><span className="scene-object-index">A QUESTION</span><strong>{ui(object.detail)}</strong><small>{ui("민지 · 방금 전")}</small></>}

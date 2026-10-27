@@ -1,5 +1,7 @@
 import { connectorControlFromPointer, connectorPointCount } from '../canvas/connectors/controlPoints.js';
-import { inkPointAtPointer } from '../canvas/inkStroke.js';
+import { appendInkInput } from '../canvas/inkInput.js';
+import { canvasPointAtPointer } from '../canvas/canvasSpace.js';
+import { MAX_REALTIME_STROKE_POINTS } from '../canvas/canvasConstants.js';
 import { captureResize, resizeItemAtPointer } from '../components/objectResize.js';
 import { rotationAtPointer } from '../components/RotationHandles.jsx';
 import { connectorBendFromPointer, connectorGeometry } from '../components/connectorGeometry.js';
@@ -19,6 +21,7 @@ export function useTutorialObjectInteractions(options) {
     draftSetterRef,
     dragRef,
     drawingRef,
+    drawingPointerRef,
     drawingStyleRef,
     eraseStrokesBetween,
     eraserRef,
@@ -34,6 +37,7 @@ export function useTutorialObjectInteractions(options) {
     setConnectionStartId,
     setItems,
     setSelectedItemId,
+    camera,
     spacePressedRef,
     strokeWidth,
     updateEraserCursor,
@@ -146,6 +150,7 @@ export function useTutorialObjectInteractions(options) {
   };
 
   const moveOnBoard = (event) => {
+    if (drawingRef.current && drawingPointerRef.current !== event.pointerId) return;
     updateEraserCursor(event);
     if (panRef.current) {
       const pan = panRef.current;
@@ -195,14 +200,18 @@ export function useTutorialObjectInteractions(options) {
       return;
     }
     if (!drawingRef.current) return;
-    const point = position(event);
-    const previous = pointsRef.current[pointsRef.current.length - 1];
-    if (previous && Math.hypot(point.x - previous.x, point.y - previous.y) < 0.0018) return;
-    pointsRef.current.push(inkPointAtPointer(event, point));
+    const bounds = boardRef.current.getBoundingClientRect();
+    const size = { width: Math.max(1, bounds.width), height: Math.max(1, bounds.height) };
+    const added = appendInkInput(event, pointsRef.current, {
+      toPoint: sample => canvasPointAtPointer(sample, bounds, camera, size),
+      size, scale: camera.scale, brush: drawingStyleRef.current?.brush, maxPoints: MAX_REALTIME_STROKE_POINTS,
+    });
+    if (!added.length) return;
     draftSetterRef.current?.({ ...drawingStyleRef.current, points: pointsRef.current, complete: false });
   };
 
   const finishInteraction = (event) => {
+    if (drawingRef.current && drawingPointerRef.current !== event.pointerId) return;
     if (panRef.current) {
       panRef.current = null;
       boardRef.current?.classList.remove('panning');
@@ -221,7 +230,17 @@ export function useTutorialObjectInteractions(options) {
     }
     if (dragRef.current) { dragRef.current.element?.classList.remove('object-dragging', 'object-resizing', 'object-rotating', 'object-bending'); dragRef.current = null; return; }
     if (!drawingRef.current) return;
+    if (event.type === 'pointerup') {
+      const bounds = boardRef.current.getBoundingClientRect();
+      const size = { width: Math.max(1, bounds.width), height: Math.max(1, bounds.height) };
+      appendInkInput(event, pointsRef.current, {
+        toPoint: sample => canvasPointAtPointer(sample, bounds, camera, size),
+        size, scale: camera.scale, brush: drawingStyleRef.current?.brush,
+        maxPoints: MAX_REALTIME_STROKE_POINTS, final: true,
+      });
+    }
     drawingRef.current = false;
+    drawingPointerRef.current = null;
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     const points = pointsRef.current;
     pointsRef.current = [];

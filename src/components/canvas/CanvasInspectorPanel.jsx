@@ -27,6 +27,7 @@ import { hasIndependentContentSize } from '../../canvas/objectSize.js';
 import ObjectSizeControls from '../../canvas/ObjectSizeControls.jsx';
 import ShapePicker from '../../canvas/ShapePicker.jsx';
 import EraserSizeControl from '../../canvas/EraserSizeControl.jsx';
+import EraserModeControl from '../../canvas/EraserModeControl.jsx';
 import CanvasColorPicker from '../../canvas/CanvasColorPicker.jsx';
 import Icon from '../Icon.jsx';
 import ArrowHeadControls from '../ArrowHeadControls.jsx';
@@ -41,6 +42,8 @@ export default function CanvasInspectorPanel({
   changeStrokeWidth,
   eraserWidth,
   changeEraserWidth,
+  eraserMode,
+  changeEraserMode,
   changeTableCount,
   changeTableSize,
   changeTheme,
@@ -134,7 +137,7 @@ export default function CanvasInspectorPanel({
 
         {activeTool === 'pen' && <><section className="inspector-section"><strong className="inspector-label">{ui("펜 스타일")}</strong><PenStyleControls brush={penBrush} opacity={penOpacity} onBrushChange={changePenBrush} onOpacityChange={changePenOpacity} /></section><section className="inspector-section"><span className="inspector-label">{ui("선 색상")}</span><CanvasColorPicker color={color} onChange={setColor} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} label={ui("드로잉 색상")} /></section><section className="inspector-section stroke-width-section"><div className="zoom-sensitivity-heading"><strong>{ui("선 굵기")}</strong><span>{strokeWidth}px</span></div><input type="range" min={MIN_STROKE_WIDTH} max={MAX_STROKE_WIDTH} step="1" value={strokeWidth} onChange={changeStrokeWidth} aria-label={ui("드로잉 선 굵기")} /><small>{ui("새로 그리는 선에 적용됩니다.")}</small></section></>}
         {activeTool === 'user-group' && <section className="inspector-section"><strong className="inspector-label">{ui("사용자 그룹 배치")}</strong><small className="inspector-hint">{ui("캔버스의 원하는 위치를 클릭하세요. 생성한 그룹을 선택하면 사용자와 색상을 설정할 수 있습니다.")}</small></section>}
-        {activeTool === 'laser' && <section className="inspector-section"><strong className="inspector-label">{ui("레이저 포인터")}</strong><small className="inspector-hint">{ui("드래그해 가리키면 흔적이 1.6초 동안 서서히 사라집니다. 다른 참여자에게도 실시간으로 보여요.")}</small></section>}{activeTool === 'eraser' && <section className="inspector-section"><strong className="inspector-label">{ui("드로잉 지우개")}</strong><EraserSizeControl value={eraserWidth} onChange={changeEraserWidth} /><small className="inspector-hint">{ui("지우려는 선 위를 드래그하면 닿은 부분만 지워집니다. 드로잉은 개체로 선택되지 않습니다.")}</small></section>}
+        {activeTool === 'laser' && <section className="inspector-section"><strong className="inspector-label">{ui("레이저 포인터")}</strong><small className="inspector-hint">{ui("드래그해 가리키면 흔적이 1.6초 동안 서서히 사라집니다. 다른 참여자에게도 실시간으로 보여요.")}</small></section>}{activeTool === 'eraser' && <section className="inspector-section"><strong className="inspector-label">{ui("드로잉 지우개")}</strong><EraserModeControl value={eraserMode} onChange={changeEraserMode} /><EraserSizeControl value={eraserWidth} onChange={changeEraserWidth} /></section>}
         {activeTool === 'shape' && <><section className="inspector-section"><span className="inspector-label">{ui("도형 종류")}</span><ShapePicker value={shapeType} onChange={setShapeType} />{shapeType === 'arrow' && <><ArrowHeadControls item={{ headSize: shapeArrowHeadSize, startHead: shapeArrowStartHead, endHead: shapeArrowEndHead, visualStyle: shapeVisualStyle }} onChange={updateNewShapeArrowHead} /><small className="inspector-hint">{ui("이 모양은 새 화살표에 적용됩니다.")}</small></>}<small className="inspector-hint">{ui("캔버스를 클릭해 도형을 놓으세요.")}</small></section></>}
         {activeTool === 'note' && <section className="inspector-section"><span className="inspector-label">{ui("포스트잇 색상")}</span><div className="sticky-note-colors">{stickyNoteColors.map((swatch) => <button key={swatch} type="button" style={{ '--sticky-swatch': swatch }} className={noteColor === swatch ? 'selected' : ''} onClick={() => setNoteColor(swatch)} aria-label={ui("포스트잇 색상 {v0}", {
   v0: swatch

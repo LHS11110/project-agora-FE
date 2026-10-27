@@ -35,7 +35,7 @@
 .auth-form-panel > .motion-field { z-index: -1; }
 .auth-visual-panel > .motion-field { z-index: 0; }
 
-/* The canvas keeps only click ripples and its arrival wave. */
+/* Keep the canvas tool controls still while the canvas opens. */
 .canvas-app-page .tool-button { transition: none; }
 .canvas-app-page .tool-button:hover,
 .canvas-app-page .tool-button:active { scale: none; }

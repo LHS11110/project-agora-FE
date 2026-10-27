@@ -11,6 +11,9 @@ try{
  await page.goto(`https://112.168.71.147/canvases/${session.canvas_id}`);
  await page.waitForFunction(()=>window.frelogCanvas&&document.querySelector('.connection-pill.connected')&&!document.querySelector('.canvas-loading-status.is-overlay'),null,{timeout:60000});
  await page.locator('.canvas-axis-ticks').waitFor();await page.waitForTimeout(200);
+ assert.equal(await page.locator('.coordinate-origin').textContent(),'0');
+ assert.doesNotMatch(await page.locator('.coordinate-plane').textContent(),/px/i);
+ assert.equal(await page.locator('.coordinate-x-label, .coordinate-y-label').count(),0);
  const before=await page.evaluate(()=>JSON.stringify(window.frelogCanvas.read()));
  async function measure(){return page.evaluate(()=>{
   const svg=document.querySelector('.canvas-axis-ticks'),plane=svg.parentElement;
@@ -34,7 +37,8 @@ try{
  await page.locator('.canvas-quick-dock').getByRole('button',{name:'선택 및 이동',exact:true}).click();
  await page.getByRole('switch',{name:'X축 표시',exact:true}).click();await page.waitForTimeout(100);
  assert.equal((await measure()).counts.x,0);assert.ok((await measure()).counts.y>0);
- await page.getByRole('switch',{name:'Y축 표시',exact:true}).click();assert.equal(await page.locator('.canvas-axis-ticks').count(),0);
+ assert.equal(await page.locator('.coordinate-origin').textContent(),'0');
+ await page.getByRole('switch',{name:'Y축 표시',exact:true}).click();assert.equal(await page.locator('.canvas-axis-ticks').count(),0);assert.equal(await page.locator('.coordinate-origin').count(),0);
  await page.getByRole('switch',{name:'X축 표시',exact:true}).click();await page.getByRole('switch',{name:'Y축 표시',exact:true}).click();
  await page.screenshot({path:'/tmp/agora-axis-ticks.png'});
  await page.setViewportSize({width:390,height:844});await page.waitForTimeout(200);const mobile=await measure();assert.ok(mobile.maxError<1);assert.ok(mobile.nodes<=512);

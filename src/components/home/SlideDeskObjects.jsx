@@ -8,18 +8,14 @@ import '../../home/desk-objects.css';
 function DeskObject({ object }) {
   useUiLocale();
 
-  const { trackPointer, playFeedback } = useObjectFeedback();
+  const { trackPointer } = useObjectFeedback();
   const [active, setActive] = useState(false);
   return <button type="button" className="slide-desk-object object-feedback" aria-label={ui(object.label)}
-    aria-pressed={active} data-feedback-motion={object.motion}
+    aria-pressed={active}
     onPointerMove={trackPointer}
-    onClick={(event) => {
-      playFeedback(event);
-      setActive((value) => !value);
-    }}>
-    <span data-feedback-pulse aria-hidden="true" />
+    onClick={() => setActive((value) => !value)}>
     <span className="desk-object-icon" aria-hidden="true">{object.icon}</span>
-    <span><b>{ui(object.label)}</b><small key={String(active)}>{ui(object.states[active ? 1 : 0])}</small></span>
+    <span><b>{ui(object.label)}</b><small>{ui(object.states[active ? 1 : 0])}</small></span>
   </button>;
 }
 

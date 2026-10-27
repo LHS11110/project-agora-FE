@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 const KEY='agora_canvas_chrome_collapsed';
-const defaults={info:false,host:false,minimap:false};
+const defaults={info:false,minimap:false};
 export default function useCanvasChrome(){
   const [collapsed,setCollapsed]=useState(()=>{
     try{const value=JSON.parse(localStorage.getItem(KEY));return Object.fromEntries(Object.keys(defaults).map(key=>[key,value?.[key]===true]));}

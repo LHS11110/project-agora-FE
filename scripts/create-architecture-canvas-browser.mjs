@@ -17,7 +17,6 @@ try {
  await page.goto(`https://112.168.71.147/canvases/${canvas_id}`);
  await page.waitForTimeout(3000);
  await page.screenshot({path:'/tmp/agora-architecture-debug.png'});
- console.log('Initial UI:',await page.locator('.host-canvas-status').innerText().catch(()=>''));
  await page.waitForFunction(()=>window.frelogCanvas && document.querySelector('.connection-pill.connected'),null,{timeout:60000});
  await page.waitForFunction(()=>{try {window.frelogCanvas.plan({version:1,items:{}});return true;} catch{return false;}},null,{timeout:60000});
  await page.waitForFunction(()=>!document.querySelector('.canvas-loading-status.is-overlay'),null,{timeout:60000});

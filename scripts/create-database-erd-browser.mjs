@@ -17,11 +17,9 @@ try {
  await page.goto(`https://112.168.71.147/canvases/${canvas_id}`);
  await page.waitForTimeout(3000);
  await page.screenshot({path:'/tmp/agora-database-erd-debug.png'});
- console.log('Initial UI:',await page.locator('.host-canvas-status').innerText().catch(()=>''));
  await page.waitForFunction(()=>window.frelogCanvas && document.querySelector('.connection-pill.connected'),null,{timeout:60000});
  await page.waitForFunction(()=>{try {window.frelogCanvas.plan({version:1,items:{}});return true;} catch{return false;}},null,{timeout:60000});
  await page.waitForFunction(()=>!document.querySelector('.canvas-loading-status.is-overlay'),null,{timeout:60000});
- await page.waitForFunction(()=>{const el=document.querySelector('.host-canvas-status');return el && !el.textContent.includes('동기화 중') && !el.classList.contains('is-reconnecting');},null,{timeout:60000});
  const initial=await page.evaluate(()=>window.frelogCanvas.read());
  const foreign=Object.keys(initial.items).filter(id=>!id.startsWith('erd-'));
  assert.deepEqual(foreign,[],'Use only the newly created ERD canvas');

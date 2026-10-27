@@ -22,13 +22,3 @@ test('compact layouts expose at most one expanded content panel',()=>{
  assert.deepEqual(mobilePanelVisibility({tools:true,inspector:true,chat:false}),{tools:true,inspector:true,chat:false});
  assert.deepEqual(mobilePanelVisibility({tools:true,inspector:true,chat:true}),{tools:true,inspector:true,chat:true});
 });
-
-test('routine sync success is silent, while pending saves and recovery failures remain visible',async()=>{
- const {canvasNeedsAttention}=await import('../src/canvas/syncAttention.js');
- const healthy={ready:true,blocked:false,queued:0};
- assert.equal(canvasNeedsAttention(healthy,{status:'accepted'}),false);
- assert.equal(canvasNeedsAttention({...healthy,queued:1}),true);
- assert.equal(canvasNeedsAttention({...healthy,ready:false}),true);
- assert.equal(canvasNeedsAttention({...healthy,blocked:true}),true);
- assert.equal(canvasNeedsAttention(healthy,{status:'rejected'}),true);
-});

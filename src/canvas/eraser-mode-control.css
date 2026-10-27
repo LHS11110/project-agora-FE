@@ -1,0 +1,7 @@
+.eraser-mode-control{display:flex;flex-direction:column;gap:8px;margin-top:12px;color:var(--ink-strong,#405347);font-size:11px}
+.eraser-mode-control>div{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:3px;border:1px solid var(--line,#dce5da);border-radius:8px;background:var(--surface-soft,#f5f7f4)}
+.eraser-mode-control button{min-height:30px;padding:4px;border:0;border-radius:6px;background:transparent;color:var(--ink-muted,#879288);font:inherit;cursor:pointer}
+.eraser-mode-control button[aria-pressed=true]{background:var(--surface,#fff);color:var(--ink-strong,#405347);box-shadow:0 1px 3px #0002}
+.eraser-mode-control button:focus-visible,.eraser-mode-control select:focus-visible{outline:2px solid #8675df;outline-offset:2px}
+.eraser-mode-control.compact{flex-direction:row;align-items:center;gap:5px;margin:0;white-space:nowrap;font-size:9px}
+.eraser-mode-control.compact select{padding:4px;border:1px solid var(--line,#dce5da);border-radius:5px;background:var(--surface,#fff);color:inherit;font:inherit}

@@ -2,7 +2,6 @@ import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
 import KnowledgeStrip from './knowledge/KnowledgeStrip.jsx';
 import SlideContextRibbon from './SlideContextRibbon.jsx';
-import PointerWater from '../frelog/PointerWater.jsx';
 import SlideDeskObjects from './SlideDeskObjects.jsx';
 import Icon from '../Icon.jsx';
 import FreLogMotionScene from '../frelog/FreLogMotionScene.jsx';
@@ -10,7 +9,7 @@ import FreLogMotionScene from '../frelog/FreLogMotionScene.jsx';
 export default function HomeIntroSlide({navigate, target, selectSlide}) {
   useUiLocale();
   return (
-        <section className="home-slide slide-hero" aria-roledescription="슬라이드" aria-label="1 / 5"><PointerWater />
+        <section className="home-slide slide-hero" aria-roledescription="슬라이드" aria-label="1 / 5">
           <div className="home-slide-inner page-container">
             <div className="home-slide-copy">
               <span className="home-slide-kicker"><i /> FRELOG · COLLABORATIVE CANVAS</span>

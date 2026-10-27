@@ -17,18 +17,16 @@ try {
  await page.goto(`https://112.168.71.147/canvases/${canvas_id}`);
  await page.waitForTimeout(3000);
  await page.screenshot({path:'/tmp/agora-adder-debug.png'});
- console.log('Initial UI:',await page.locator('.host-canvas-status').innerText().catch(()=>''));
  await page.waitForFunction(()=>window.frelogCanvas && document.querySelector('.connection-pill.connected'),null,{timeout:60000});
  await page.waitForFunction(()=>{try {window.frelogCanvas.plan({version:1,items:{}});return true;} catch{return false;}},null,{timeout:60000});
  await page.waitForFunction(()=>!document.querySelector('.canvas-loading-status.is-overlay'),null,{timeout:60000});
- await page.waitForFunction(()=>{const s=document.querySelector('.host-canvas-status');return s && !s.classList.contains('is-reconnecting') && !s.textContent.includes('동기화 중');},null,{timeout:60000});
  const initial=await page.evaluate(()=>window.frelogCanvas.read());
  const foreign=Object.keys(initial.items).filter(id=>!['rca-','fa-','gallery-','gate-','truth-'].some(prefix=>id.startsWith(prefix)));
  assert.deepEqual(foreign,[],'Use only the newly created logic circuit canvas');
  const result=await page.evaluate(manifest=>window.frelogCanvas.apply(window.frelogCanvas.plan(manifest)),manifest);
  console.log('Adder apply:',JSON.stringify(result));
  await page.waitForTimeout(2000);
- console.log('After apply UI:',await page.locator('.host-canvas-status').innerText(), 'Errors:',JSON.stringify(errors));
+ console.log('Errors:',JSON.stringify(errors));
  await page.screenshot({path:'/tmp/agora-adder-applied.png'});
  await page.waitForFunction(count=>Object.keys(window.frelogCanvas.read().items).length===count,expected,{timeout:30000});
  await page.waitForFunction(()=>!document.querySelector('.host-sync-status')?.textContent?.includes('저장 중'),null,{timeout:30000});
@@ -49,7 +47,7 @@ try {
  await page.screenshot({path:'/tmp/agora-adder-overview.png'});
  await page.reload();
  await page.waitForFunction(count=>window.frelogCanvas && document.querySelector('.connection-pill.connected') && Object.keys(window.frelogCanvas.read().items).length===count,expected,{timeout:60000});
- await page.waitForFunction(()=>!document.querySelector('.canvas-loading-status.is-overlay') && document.querySelector('.host-canvas-status') && !document.querySelector('.host-canvas-status').textContent.includes('동기화 중'),null,{timeout:60000});
+ await page.waitForFunction(()=>!document.querySelector('.canvas-loading-status.is-overlay'),null,{timeout:60000});
  const reloaded=await page.evaluate(()=>window.frelogCanvas.read());
  assert.deepEqual(Object.keys(reloaded.items).sort(),Object.keys(manifest.items).sort());
  for(const [id,item] of Object.entries(manifest.items))for(const field of ['text','fill','color','shapeType','endHead','fromPort','toPort'])if(item[field]!=null)assert.equal(reloaded.items[id][field],item[field],id+'.'+field);

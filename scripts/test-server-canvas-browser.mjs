@@ -47,7 +47,7 @@ const waitItems=(page,expected)=>page.waitForFunction(expected=>{
 try{
  const a=await open({blockRtc:true});
  await apply(a,{'sync-box':{kind:'shape',shapeType:'rectangle',x:120,y:120,width:180,height:100,color:'#123456',fill:'#ffffff',permission:'default'},'sync-text':{kind:'text',text:'서버 직접 저장',x:120,y:250,width:250,height:60,fontSize:20,permission:'default'}});
- await a.waitForFunction(()=>document.querySelector('.host-canvas-status')?.textContent.includes('서버 저장 완료')&&!document.querySelector('.host-canvas-status')?.textContent.includes('저장 대기'),null,{timeout:20000});
+ await a.waitForFunction(()=>['sync-box','sync-text'].every(id=>window.__canvasEvents.some(event=>event.type==='canvas_commit'&&event.items?.[id])),null,{timeout:20000});
  console.log('No-RTC editing and save passed.');
  const b=await open({dropCommit:true});await waitItems(b,{'sync-box':{x:120},'sync-text':{text:'서버 직접 저장'}});
  await apply(a,{'sync-box':{x:180}});

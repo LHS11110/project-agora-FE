@@ -32,7 +32,7 @@ try {
   await page.goto(`${base}/canvases/${session.canvas_id}`);await page.waitForFunction(()=>window.frelogCanvas&&document.querySelector('.connection-pill.connected')&&!document.querySelector('.canvas-loading-status.is-overlay'),{timeout:60000});
   const before=await page.evaluate(()=>JSON.stringify(window.frelogCanvas.read()));let sockets=0;page.on('websocket',()=>sockets++);
   await page.getByRole('button',{name:'Expand all',exact:true}).click();
-  const roots=['.canvas-tools','.canvas-inspector','.canvas-panel-toggle','.host-canvas-status','.board-topline','.canvas-minimap','.side-nav'];
+  const roots=['.canvas-tools','.canvas-inspector','.canvas-panel-toggle','.board-topline','.canvas-minimap','.side-nav'];
   for(const tool of ['Shapes','Draw','Drawing eraser','Object clipboard']){
    if(tool==='Object clipboard')continue;
    await page.getByRole('button',{name:tool,exact:true}).click();await audit('canvas / '+tool,roots);

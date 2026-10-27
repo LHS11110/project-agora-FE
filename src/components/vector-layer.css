@@ -7,8 +7,6 @@
 .canvas-stage .canvas-world-layer{pointer-events:none}
 .canvas-stage .coordinate-x{top:0;transform:translateY(var(--axis-origin-y));will-change:transform}
 .canvas-stage .coordinate-y{left:0;transform:translateX(var(--axis-origin-x));will-change:transform}
-.canvas-stage .coordinate-x-label{top:-14px;transform:translateY(var(--axis-origin-y));will-change:transform}
-.canvas-stage .coordinate-y-label{left:7px;transform:translateX(var(--axis-origin-x));will-change:transform}
 .canvas-stage .coordinate-origin{left:5px;top:4px;transform:translate(var(--axis-origin-x),var(--axis-origin-y));will-change:transform}
 /* Apply axis opacity to the small primitives instead of an entire viewport surface. */
 .canvas-stage .coordinate-plane{opacity:1}

@@ -1,5 +1,4 @@
 import CanvasAxisTicks from '../canvas/CanvasAxisTicks.jsx';
-import { canvasNeedsAttention } from '../canvas/syncAttention.js';
 import CanvasPresenceStack from '../components/canvas/CanvasPresenceStack.jsx';
 import { onlineCanvasParticipants } from '../canvas/onlineParticipants.js';
 import LanguageSwitcher from '../i18n/LanguageSwitcher.jsx';
@@ -67,7 +66,6 @@ import CanvasParticipantsDialog from '../components/canvas/CanvasParticipantsDia
 import CanvasInspectorPanel from '../components/canvas/CanvasInspectorPanel.jsx';
 import CanvasChatPanel from '../components/canvas/CanvasChatPanel.jsx';
 import CanvasLoadingStatus from '../components/canvas/CanvasLoadingStatus.jsx';
-import HostCanvasStatus from '../components/canvas/HostCanvasStatus.jsx';
 import { CHAT_HISTORY_LIMIT, CHAT_ROOM_ID } from '../canvas/canvasChat.js';
 import { createId } from '../canvas/canvasIds.js';
 import {
@@ -203,7 +201,7 @@ function CanvasWorkspace() {
   const [connection, setConnection] = useState('connecting');
   const [reconnectEpoch, setReconnectEpoch] = useState(0);
   const [error, setError] = useState('');
-  const { eraserWidth, changeEraserWidth } = useEraserSize();
+  const { eraserWidth, changeEraserWidth, eraserMode, changeEraserMode } = useEraserSize();
   const [activeTool, setActiveTool] = useState('select');
   const [sharePosition, setSharePosition] = useState(null);
   const { color, setColor, favoriteColors, saveFavoriteColor } = useCanvasPalette();
@@ -264,7 +262,7 @@ function CanvasWorkspace() {
   const [showParticipants, setShowParticipants] = useState(false);
   const [settingsPending, setSettingsPending] = useState(false);
   const [toast, setToast] = useState('');
-  const { items, setItems, patchItems, moveItems, flushMoves, committedItemsRef, status: hostStatus, lastReceipt, retryRejected, sessionRef: hostSessionRef, receiveServerItems, receiveServerEvent } = useServerCanvas({
+  const { items, setItems, patchItems, moveItems, flushMoves, committedItemsRef, status: hostStatus, sessionRef: hostSessionRef, receiveServerItems, receiveServerEvent } = useServerCanvas({
     itemsRef, peerMeshRef, wsRef, rtcWsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems, reconnectRequestRef,
   });
   const hostReadyRef = useRef(false);
@@ -1037,7 +1035,7 @@ function CanvasWorkspace() {
     if (sendRaw(payload)) setSettingsPending(true);
   };
   const { pointerPosition, startPan, cancelPanInertia, centeredItemPosition, hideCursor, startZoomHold, stopZoomHold, cancelZoomHold, clickZoom, startDrawing, moveDrawing, stopDrawing } = useCanvasStageInteractions({
-    boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth,
+    boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth, eraserMode,
     addItem, setToast, setItems, patchItems, refreshSpatialIndex, spatialIndexRef,
     sendStrokeFrameChanges, pendingItemChangesRef, strokeSaveFlushRef,
     lastCursorSentAtRef, peerMeshRef, panRef, zoomHoldRef, zoomPointerPressRef, zoomSensitivity,
@@ -1264,7 +1262,6 @@ function CanvasWorkspace() {
   const canvasParticipants = useParticipantProfiles(settings?.participants, token, user);
   const { backgroundColor, setBackgroundColor, backgroundStyle } = useCanvasBackground(canvasId);
   const onlineParticipants = useMemo(() => onlineCanvasParticipants(user, peerList, canvasParticipants, connection === 'connected'), [user, peerList, canvasParticipants, connection]);
-  const syncAttention = canvasNeedsAttention(hostStatus, lastReceipt);
   const objectActionsRef = useRef(null);
   objectActionsRef.current = {
     onStartEditing:startEditing, onTextChange:updateCollaborativeText,
@@ -1281,7 +1278,7 @@ function CanvasWorkspace() {
     .map(key=>[key,(...args)=>objectActionsRef.current[key](...args)])),[]);
 
 
-  return <div className="canvas-app-page" data-theme={theme} data-info-collapsed={chrome.collapsed.info} data-sync-attention={syncAttention}>
+  return <div className="canvas-app-page" data-theme={theme} data-info-collapsed={chrome.collapsed.info}>
     <div style={{ display: 'contents' }} inert={!hostStatus.editable && !error ? '' : undefined}>
     <header className={`canvas-topbar${chrome.collapsed.info?' is-collapsed':''}`}>
       {chrome.collapsed.info && <span className="canvas-chrome-label">{ui("캔버스 정보")}</span>}
@@ -1295,7 +1292,6 @@ function CanvasWorkspace() {
       <CanvasQuickDock activeTool={activeTool} onSelectTool={selectCanvasTool} onUploadImage={uploadImage}
         toolsExpanded={!panelLayout.handle('tools').collapsed} onToggleTools={panelLayout.handle('tools').onToggle} />
       <main className="board-region"><div className="board-topline"><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(true); }}><Icon name="code" size={15} />{ui("캔버스 코드")}</button><button className="zoom-button" aria-label={ui("확대")} title={ui("클릭: 한 단계 확대 · 길게 누르기: 계속 확대")} onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label={ui("축소")} title={ui("클릭: 한 단계 축소 · 길게 누르기: 계속 축소")} onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>{ui("맞춤")}</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />{"" + ui("격자") + " "}{showGrid ? ui("켜짐") : ui("꺼짐")}</button></div></div>
-      <HostCanvasStatus status={hostStatus} receipt={lastReceipt} onRetry={retryRejected} collapsed={chrome.collapsed.host} onToggle={()=>chrome.toggle('host')} />
         <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ ...canvasGridStyle(camera), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion: cancelPanInertia, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, pickVector: (event,doubleClick = false,capture = false) => {
             if (!['select', 'connect'].includes(activeTool) || event.button !== 0 || event.target.closest?.('.canvas-minimap, .stage-label, button, input, textarea')) return false;
             const target=event.target.closest?.('.canvas-object');
@@ -1314,7 +1310,7 @@ function CanvasWorkspace() {
           <InteractiveAtmosphere variant="canvas" />
           <div className="stage-label"><span>FRELOG / {String(canvasId).padStart(2, '0')}</span><b>{canvas?.canvas_name || ui("공유 캔버스")}</b></div>
           <div className="canvas-grid-surface" aria-hidden="true" />
-          <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true">{(showXAxis || showYAxis) && <CanvasAxisTicks boardRef={boardRef} camera={camera} showXAxis={showXAxis} showYAxis={showYAxis} />}{showXAxis && <><span className="coordinate-x" /><b className="coordinate-x-label">X · px</b></>}{showYAxis && <><span className="coordinate-y" /><b className="coordinate-y-label">Y · px</b></>}{(showXAxis || showYAxis) && <i className="coordinate-origin">0</i>}</div>
+          <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true">{(showXAxis || showYAxis) && <CanvasAxisTicks boardRef={boardRef} camera={camera} showXAxis={showXAxis} showYAxis={showYAxis} />}{showXAxis && <span className="coordinate-x" />}{showYAxis && <span className="coordinate-y" />}{(showXAxis || showYAxis) && <i className="coordinate-origin">0</i>}</div>
           <div className="canvas-scene" ref={sceneRef} style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }}>
             {depthLayers.map((layer, index) => <div className="canvas-depth-layer" key={layer.depth} data-depth={layer.depth} style={{ position: 'absolute', inset: 0, zIndex: index + 1, pointerEvents: 'none' }}>
               <VectorLayer token={token} graphicsQuality={graphicsQuality} style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }} worldSize={boardSize} items={layer.vectors} referenceItems={items} routingRevision={spatialIndex.stats.boundsCalculated} inkItems={layer.inkItems} previewStrokes={layer.depth === 0 ? remoteDrawingStrokes : undefined} camera={camera} onReady={layer.depth === 0 ? (setDraft) => { vectorDraftRef.current = setDraft; } : undefined} />
@@ -1354,6 +1350,8 @@ function CanvasWorkspace() {
         changeStrokeWidth,
         eraserWidth,
         changeEraserWidth,
+        eraserMode,
+        changeEraserMode,
         changeTableCount,
         changeTableSize,
         changeTheme,

@@ -4,12 +4,12 @@ import {pathToFileURL} from 'node:url';
 const {chromium}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE_PATH).href);
 const auth=JSON.parse(fs.readFileSync(process.env.ERD_TEST_SESSION_FILE));
 assert.equal(auth.canvas.canvas_name,'ERD 연결 표기 검증 (임시)');
-const id=auth.canvas.canvas_id,errors=[],rejections=[];
+const id=auth.canvas.canvas_id,errors=[],rejections=[];let finalHeadsCommitted=false;
 const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox','--host-resolver-rules=MAP 112.168.71.147 127.0.0.1','--disable-features=LocalNetworkAccessChecks','--enable-gpu','--use-gl=angle','--use-angle=gl-egl','--ignore-gpu-blocklist']});
 try{
  const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1920,height:1200}});
  await context.addInitScript(({token,user})=>{localStorage.setItem('agora_token',token);localStorage.setItem('agora_user',JSON.stringify(user));},auth);
- const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('websocket',ws=>ws.on('framereceived',({payload})=>{try{const m=JSON.parse(payload);if(m.type==='error'||m.type==='canvas_result'&&m.ok===false)rejections.push(m.code);}catch{}}));
+ const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('websocket',ws=>ws.on('framereceived',({payload})=>{try{const m=JSON.parse(payload);if(m.type==='error'||m.type==='canvas_result'&&m.ok===false)rejections.push(m.code);const item=m.type==='canvas_commit'&&m.items?.['erd-fixture-line-0-0'];if(item?.startHead==='erd-zero-one'&&item?.endHead==='erd-one-many')finalHeadsCommitted=true;}catch{}}));
  const ready=()=>page.waitForFunction(()=>window.frelogCanvas&&document.querySelector('.connection-pill.connected')&&!document.querySelector('.canvas-loading-status.is-overlay'),null,{timeout:60000});
  await page.goto(`https://112.168.71.147/canvases/${id}`);await ready();
  const types=['erd-one','erd-zero-one','erd-one-many','erd-zero-many'],items={};
@@ -29,7 +29,8 @@ try{
  assert.equal(await start.locator('optgroup[label="ERD 관계"] option').count(),4);
  await start.selectOption('erd-zero-one');await end.selectOption('erd-one-many');
  await page.waitForFunction(()=>{const i=window.frelogCanvas.read().items['erd-fixture-line-0-0'];return i.startHead==='erd-zero-one'&&i.endHead==='erd-one-many';});
- await page.waitForFunction(()=>document.querySelector('.host-canvas-status')?.textContent.includes('서버 동기화됨'),null,{timeout:30000});
+ for(let attempt=0;attempt<300&&!finalHeadsCommitted;attempt++)await page.waitForTimeout(100);
+ assert.ok(finalHeadsCommitted,'The final arrowhead change was saved before reload');
  await page.screenshot({path:'/tmp/agora-erd-arrowheads-inspector.png'});
  await page.reload();await ready();
  await page.waitForFunction(n=>Object.keys(window.frelogCanvas.read().items).length===n,Object.keys(items).length);
