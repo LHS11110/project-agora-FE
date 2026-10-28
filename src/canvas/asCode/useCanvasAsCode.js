@@ -31,9 +31,11 @@ export function useCanvasAsCode(options) {
     for (const { id, item } of preview.updates) {
       const previous = c.itemsRef.current[id];
       if (isCollaborativeItem(previous)) {
+        const { __initialTextColors, ...metadata } = item;
         const field = collaborativeField(previous);
         c.updateCollaborativeText(id, item[field] || '');
-        const next = { ...c.itemsRef.current[id], ...item };
+        if (__initialTextColors && !c.replaceTextColors(id, __initialTextColors)) throw new Error(`${id}: 글자 색상을 변경하지 못했습니다.`);
+        const next = { ...c.itemsRef.current[id], ...metadata };
         c.itemsRef.current = { ...c.itemsRef.current, [id]: next };
         c.setItems(currentItems => ({ ...currentItems, [id]: next }));
         c.markItemDirty(id);

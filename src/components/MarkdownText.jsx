@@ -4,14 +4,16 @@ import MarkdownCodeBlock from './markdown/MarkdownCodeBlock.jsx';
 import { parseMarkdownBlocks } from './markdown/parseBlocks.js';
 import './markdown/markdown-blocks.css';
 
-export default function MarkdownText({ source = '' }) {
+export default function MarkdownText({ source = '', colorRanges = [] }) {
+  const offsets = [0];
+  for (const match of String(source).matchAll(/\r\n|\r|\n/g)) offsets.push(match.index + match[0].length);
   const blocks = [];
   let listType = null;
   let listItems = [];
   const flushList = () => {
     if (!listType) return;
     const List = listType === 'ordered' ? 'ol' : 'ul';
-    blocks.push(<List key={`list-${blocks.length}`}>{listItems.map((item, index) => <li key={index}><MarkdownInline value={item} /></li>)}</List>);
+    blocks.push(<List key={`list-${blocks.length}`}>{listItems.map((item, index) => <li key={index}><MarkdownInline value={item.value} offset={item.offset} colorRanges={colorRanges} /></li>)}</List>);
     listType = null;
     listItems = [];
   };
@@ -29,7 +31,8 @@ export default function MarkdownText({ source = '' }) {
       const nextType = unordered ? 'unordered' : 'ordered';
       if (listType && listType !== nextType) flushList();
       listType = nextType;
-      listItems.push((unordered || ordered)[1]);
+      const value = (unordered || ordered)[1];
+      listItems.push({ value, offset: offsets[index] + line.length - value.length });
       continue;
     }
     flushList();
@@ -37,10 +40,11 @@ export default function MarkdownText({ source = '' }) {
     const heading = line.match(/^(#{1,3})\s+(.+)$/);
     if (heading) {
       const Heading = `h${Number(heading[1].length) + 1}`;
-      blocks.push(<Heading key={`heading-${index}`}><MarkdownInline value={heading[2]} /></Heading>);
+      blocks.push(<Heading key={`heading-${index}`}><MarkdownInline value={heading[2]} offset={offsets[index] + line.length - heading[2].length} colorRanges={colorRanges} /></Heading>);
     } else if (/^>\s?/.test(line)) {
-      blocks.push(<blockquote key={`quote-${index}`}><MarkdownInline value={line.replace(/^>\s?/, '')} /></blockquote>);
-    } else blocks.push(<p key={`paragraph-${index}`}><MarkdownInline value={line} /></p>);
+      const value = line.replace(/^>\s?/, '');
+      blocks.push(<blockquote key={`quote-${index}`}><MarkdownInline value={value} offset={offsets[index] + line.length - value.length} colorRanges={colorRanges} /></blockquote>);
+    } else blocks.push(<p key={`paragraph-${index}`}><MarkdownInline value={line} offset={offsets[index]} colorRanges={colorRanges} /></p>);
   }
   flushList();
   return <div className="simple-markdown">{blocks}</div>;

@@ -33,6 +33,7 @@ import { usePanelLayout } from '../canvas/panels/usePanelLayout.js';
 import { useObjectClipboard } from '../canvas/clipboard/useObjectClipboard.js';
 import { MAX_BEND_POINTS, connectorBendPatch, resizeConnectorControls } from '../canvas/connectors/controlPoints.js';
 import { isContentMode, isTextContent } from '../canvas/content/contentPresentation.js';
+import { applyTextColor, colorRangesFromDoc, TEXT_COLOR_MARK } from '../canvas/content/textColors.js';
 import { isCodeLanguage } from '../canvas/codeLanguages.js';
 import { useContentSettings } from '../canvas/content/useContentSettings.js';
 import { CONNECTOR_METRICS_EVENT } from '../canvas/connectors/objectMetrics.js';
@@ -394,6 +395,34 @@ function CanvasWorkspace() {
       peerMeshRef.current?.sendData({ type: 'doc_change', item_id: String(id), field, change, version }, (peer) => canPeerAccessItem(item, peer));
     }
     markItemDirty(id);
+  }, [getCollaborativeDoc, markItemDirty, patchItems]);
+  const updateTextColor = useCallback((id, start, end, color) => {
+    const key = String(id), item = itemsRef.current[key];
+    if (item?.kind !== 'text' || !hostSessionRef.current.editable) return false;
+    const previous = getCollaborativeDoc(key, item);
+    let next;
+    try { next = applyTextColor(previous, start, end, color); } catch { return false; }
+    if (next === previous) return false;
+    collaborativeDocsRef.current.set(key, next);
+    patchItems({ [key]: { ...item } });
+    markItemDirty(key);
+    return true;
+  }, [getCollaborativeDoc, markItemDirty, patchItems]);
+  const replaceTextColors = useCallback((id, ranges) => {
+    const key = String(id), item = itemsRef.current[key];
+    if (item?.kind !== 'text' || !hostSessionRef.current.editable) return false;
+    const previous = getCollaborativeDoc(key, item);
+    if (JSON.stringify(colorRangesFromDoc(previous)) === JSON.stringify(ranges)) return true;
+    let next;
+    try {
+      next = Automerge.change(previous, draft => {
+        if (draft.content.length) Automerge.unmark(draft, ['content'], { start: 0, end: draft.content.length, expand: 'none' }, TEXT_COLOR_MARK);
+        for (const range of ranges) Automerge.mark(draft, ['content'], { start: range.start, end: range.end, expand: 'none' }, TEXT_COLOR_MARK, range.color);
+      });
+    } catch { return false; }
+    collaborativeDocsRef.current.set(key, next);
+    patchItems({ [key]: { ...item } }); markItemDirty(key);
+    return true;
   }, [getCollaborativeDoc, markItemDirty, patchItems]);
   const updateCollaborativeMetadata = useCallback((id, field, value) => {
     const key = String(id);
@@ -1252,7 +1281,7 @@ function CanvasWorkspace() {
     return () => document.removeEventListener('pointerdown', onDocumentPointerDown, true);
   }, [editingId, finishEditing]);
   const updateContentSetting = useContentSettings({ itemsRef, setItems, updateCollaborativeMetadata, sendItemChange, refreshSpatialIndex });
-  const canvasCodeApi = useCanvasAsCode({ canvasId, itemsRef, committedItemsRef, canvasSnapshotLoadedRef: hostReadyRef, permission, addItem, deleteItem, updateCollaborativeText, saveCollaborativeItem, sendItemChange, setItems, markItemDirty, refreshSpatialIndex, selectItems, peerMeshRef, syncClockRef, syncActorRef, itemSyncVersionsRef, getCollaborativeDoc });
+  const canvasCodeApi = useCanvasAsCode({ canvasId, itemsRef, committedItemsRef, canvasSnapshotLoadedRef: hostReadyRef, permission, addItem, deleteItem, updateCollaborativeText, replaceTextColors, saveCollaborativeItem, sendItemChange, setItems, markItemDirty, refreshSpatialIndex, selectItems, peerMeshRef, syncClockRef, syncActorRef, itemSyncVersionsRef, getCollaborativeDoc });
   const selectCanvasTool = (tool) => {
     if (tool === 'hand') finishEditing();
     if (tool === 'connect') setConnectionStartId(null);
@@ -1269,7 +1298,7 @@ function CanvasWorkspace() {
   const onlineParticipants = useMemo(() => onlineCanvasParticipants(user, peerList, canvasParticipants, connection === 'connected'), [user, peerList, canvasParticipants, connection]);
   const objectActionsRef = useRef(null);
   objectActionsRef.current = {
-    onStartEditing:startEditing, onTextChange:updateCollaborativeText,
+    onStartEditing:startEditing, onTextChange:updateCollaborativeText, onTextColorChange:updateTextColor,
     onMetadataChange:(id,field,value)=>['renderMode','filename','language'].includes(field)
       ? updateContentSetting(id,field,value) : updateCollaborativeMetadata(id,field,value),
     onFormulaChange:updateFormulaItem, onTableChange:updateTableItem, onStopEditing:stopEditing,
@@ -1347,7 +1376,6 @@ function CanvasWorkspace() {
       </main>
 <ResizablePanel {...panelLayout.handle('inspector')}><CanvasInspectorPanel graphicsQuality={graphicsQuality} changeGraphicsQuality={changeGraphicsQuality} spatialIndex={spatialIndex} updateContentSetting={updateContentSetting} updateChartItem={updateTableItem} onNavigateObject={focusCanvasObject} {...{
         activeTool,
-        updateCollaborativeMetadata,
         canvasId,
         canvasParticipants,
         backgroundColor,

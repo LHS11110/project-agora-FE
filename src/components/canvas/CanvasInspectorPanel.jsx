@@ -40,7 +40,6 @@ export default function CanvasInspectorPanel({
   activeTool,
   graphicsQuality, changeGraphicsQuality,
   updateContentSetting,
-  updateCollaborativeMetadata,
   updateChartItem,
   changeSelectionGroup,
   changeStrokeWidth,
@@ -130,7 +129,7 @@ export default function CanvasInspectorPanel({
         {selectedConnector && <LogicPortControls item={selectedConnector} items={items} onChange={(field, value) => updateConnectorAppearance(primarySelectedItemId, field, value)} />}
         {selectedConnector && <ConnectorLabelControls item={selectedConnector} onChange={(field, value) => updateConnectorAppearance(primarySelectedItemId, field, value)} />}
         {isTextContent(selectedItem) && <ContentRenderControls item={selectedItem} onChange={(field, value) => updateContentSetting(primarySelectedItemId, field, value)} />}
-        {selectedObjectIds.length === 1 && selectedItem?.kind === 'text' && contentMode(selectedItem) !== 'code' && <section className="inspector-section"><strong className="inspector-label">{ui('텍스트 색상')}</strong><CanvasColorPicker color={selectedItem.color || '#3c5144'} onChange={value => updateCollaborativeMetadata(primarySelectedItemId, 'color', value)} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} label={ui('텍스트 색상')} />{selectedItem.color && <button type="button" className="button button-outline text-color-reset" onClick={() => updateCollaborativeMetadata(primarySelectedItemId, 'color', '')}>{ui('기본 텍스트 색상')}</button>}</section>}
+        {selectedObjectIds.length === 1 && selectedItem?.kind === 'text' && ['plain', 'markdown'].includes(contentMode(selectedItem)) && <section className="inspector-section"><strong className="inspector-label">{ui('텍스트 색상')}</strong><small className="inspector-hint">{ui('텍스트를 더블 클릭하고 글자를 선택해 색상을 바꾸세요.')}</small></section>}
         {selectedConnector && <ConnectorEndpointInfo connector={selectedConnector} items={items} onNavigate={onNavigateObject} />}
         {activeTool === 'select' && <>
         <section className="inspector-section"><div className="inspector-label">{ui("화면 모드")}</div><div className="theme-switch" role="group" aria-label={ui("테마 선택")}><button className={theme === 'light' ? 'active' : ''} aria-pressed={theme === 'light'} onClick={() => changeTheme('light')}><Icon name="sun" size={16} />{ui("라이트")}</button><button className={theme === 'dark' ? 'active' : ''} aria-pressed={theme === 'dark'} onClick={() => changeTheme('dark')}><Icon name="moon" size={16} />{ui("다크")}</button></div></section>

@@ -1,5 +1,5 @@
 .canvas-stage .unified-content-object{display:flex;flex-direction:column;min-width:0;min-height:36px}
-.canvas-stage .unified-content-object:not(.code-object){padding:10px 12px;background:transparent;border:1px solid transparent;border-radius:6px;box-shadow:none;color:var(--ink-strong)}
+.canvas-stage .unified-content-object:not(.code-object){padding:10px 12px;background:transparent;border:1px solid transparent;border-radius:6px;box-shadow:none;color:var(--text-color,var(--ink-strong))}
 .canvas-stage .unified-content-object:not(.code-object):hover,.canvas-stage .unified-content-object:not(.code-object).selected{border-color:var(--line)}
 .unified-content-body{min-width:0;min-height:0;flex:1;overflow:auto}
 .unified-content-body>.canvas-code-editor{height:260px;min-height:120px}

@@ -1,5 +1,8 @@
 // UI messages only. User-authored content is never translated.
 export default {
+  "선택한 글자 색상": "Selected text color",
+  "선택 영역 색상 지우기": "Clear selection color",
+  "텍스트를 더블 클릭하고 글자를 선택해 색상을 바꾸세요.": "Double-click the text and select characters to change their color.",
   "텍스트 색상": "Text color",
   "기본 텍스트 색상": "Default text color",
   "그래프": "Chart",

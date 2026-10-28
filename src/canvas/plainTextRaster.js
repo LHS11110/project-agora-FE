@@ -1,5 +1,6 @@
 import { contentMode } from './content/contentPresentation.js';
 import { objectFontSize } from './objectSize.js';
+import { colorPieces } from './content/textColors.js';
 
 // Explicit boxes can be painted without a DOM measurement. Rich content and
 // auto-height text keep the browser's layout/accessibility and editor behavior.
@@ -38,6 +39,20 @@ export function drawPlainText(context,item,world,fontFamily,color){
   context.save();context.beginPath();
   context.rect(layout.paddingX,layout.paddingY,Math.max(0,item.width*world.width-layout.paddingX*2),Math.max(0,item.height*world.height-layout.paddingY*2));context.clip();
   context.fillStyle=/^#[0-9a-f]{6}$/i.test(item.color || '') ? item.color : color;context.textBaseline='top';
-  layout.lines.forEach((line,i)=>context.fillText(line,layout.paddingX+1,layout.paddingY+1+i*layout.lineHeight+layout.fontSize*.12));
+  let sourceOffset = 0;
+  layout.lines.forEach((line,i)=>{
+    const text = String(item.text || ''), found = text.indexOf(line, sourceOffset), start = found < 0 ? sourceOffset : found;
+    const y = layout.paddingY+1+i*layout.lineHeight+layout.fontSize*.12, x = layout.paddingX+1;
+    if (!item.__textColorRanges?.length) context.fillText(line,x,y);
+    else {
+      let prefix = '';
+      for (const piece of colorPieces(line,item.__textColorRanges,start)) {
+        context.fillStyle = piece.color || (/^#[0-9a-f]{6}$/i.test(item.color || '') ? item.color : color);
+        context.fillText(piece.text,x+context.measureText(prefix).width,y);prefix += piece.text;
+      }
+    }
+    sourceOffset = start + line.length;
+    if (text[sourceOffset] === '\n') sourceOffset++;
+  });
   context.restore();
 }

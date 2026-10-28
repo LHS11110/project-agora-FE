@@ -4,12 +4,16 @@ import { normalizeArrowHead } from '../../components/arrowheadGeometry.js';
 import { MAX_BEND_POINTS } from '../connectors/controlPoints.js';
 import { CANVAS_SPACE } from '../canvasSpace.js';
 import { CHART_TYPES, MAX_CHART_ROWS, MAX_CHART_COLUMNS, MAX_CHART_TEXT } from '../charts/chartData.js';
+import * as Automerge from '@automerge/automerge/slim';
+import { textColorRanges, colorRangesFromDoc } from '../content/textColors.js';
+import { loadItemDoc } from '../host/hostOperations.js';
+import { textSpliceBetween } from '../collaborativeText.js';
 
 const KINDS = new Set(['text', 'note', 'code', 'math', 'shape', 'table', 'chart', 'image', 'link', 'connector', 'stroke', 'pdf', 'user-group']);
 const NUMBERS = new Set(['shadowBlur', 'shadowOpacity', 'shadowOffsetX', 'shadowOffsetY', 'depth', 'x', 'y', 'width', 'height', 'rotation', 'fontSize', 'strokeWidth', 'bend', 'opacity', 'contentScale', 'contentScaleX', 'contentScaleY', 'bendPointCount', 'headSize', 'vertexCount', 'fillOpacity', 'sketchFillOpacity']);
 const STRINGS = new Set(['kind', 'text', 'code', 'formula', 'format', 'filename', 'language', 'shapeType', 'visualStyle', 'volumeStyle', 'chartType', 'color', 'fill', 'permission', 'groupId', 'src', 'url', 'title', 'mediaType', 'from', 'to', 'fromPort', 'toPort', 'startHead', 'endHead', 'brush', 'embedUrl', 'videoId', 'renderMode', 'label', 'labelMode', 'groupTitle', 'thumbnail', 'cornerStyle']);
-const FIELDS = new Set([...NUMBERS, ...STRINGS, 'points', 'rows', 'columns', 'simulatePressure', 'complete', 'strokeEnabled', 'shadowEnabled', 'imageFrameEnabled', 'bendPoints', 'members']);
-export const CANVAS_ITEM_FIELDS = FIELDS;
+const FIELDS = new Set([...NUMBERS, ...STRINGS, 'points', 'rows', 'columns', 'simulatePressure', 'complete', 'strokeEnabled', 'shadowEnabled', 'imageFrameEnabled', 'bendPoints', 'members', 'textColors']);
+export const CANVAS_ITEM_FIELDS = new Set([...FIELDS].filter(field => field !== 'textColors'));
 const unsafeId = id => !id || ['__proto__', 'constructor', 'prototype'].includes(id);
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const fail = message => { throw new Error(message); };
@@ -20,6 +24,11 @@ export function stable(value) {
 }
 function convert(item, direction) {
   const result = JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(item).filter(([key]) => FIELDS.has(key)))));
+  if (direction === 'export' && item.kind === 'text') {
+    const ranges = item.__initialTextColors ?? textColorRanges(item);
+    if (ranges.length || item.__initialTextColors !== undefined) result.textColors = ranges;
+  }
+  if (direction === 'import' && result.textColors != null) { result.__initialTextColors = result.textColors; delete result.textColors; }
   for (const key of ['x', 'y', 'width', 'height']) {
     if (result[key] != null) {
       const size = ['x', 'width'].includes(key) ? CANVAS_SPACE.width : CANVAS_SPACE.height;
@@ -47,6 +56,7 @@ function validateItem(id, item) {
   if (item.groupTitle != null && item.groupTitle.length > 80) fail(`${id}.groupTitle: 최대 80자입니다.`);
   if (item.members != null && (!Array.isArray(item.members) || item.members.length > 50 || item.members.some(member => !plain(member) || !Number.isInteger(member.user_id) || member.user_id < 1 || typeof member.nickname !== 'string' || member.nickname.length > 100 || !Number.isInteger(member.tag_number) || member.tag_number < 0 || (member.profile_image && !/^\/api\/users\/profile-images\/\d+$/.test(member.profile_image)) || ['borderColor', 'nameColor'].some(field => member[field] != null && !/^#[0-9a-f]{6}$/i.test(member[field]))))) fail(`${id}.members: 올바른 사용자 프로필 배열이 필요합니다(최대 50명).`);
   if (item.imageFrameEnabled != null && typeof item.imageFrameEnabled !== 'boolean') fail(`${id}.imageFrameEnabled: 불리언이 필요합니다.`);
+  if (item.textColors != null && (item.kind !== 'text' || !Array.isArray(item.textColors) || item.textColors.length > 10000 || item.textColors.some((range, index) => !plain(range) || !Number.isInteger(range.start) || !Number.isInteger(range.end) || range.start < 0 || range.end <= range.start || range.end > String(item.text || '').length || !/^#[0-9a-f]{6}$/i.test(range.color || '') || (index > 0 && item.textColors[index - 1].end > range.start)))) fail(`${id}.textColors: 올바른 글자 색상 범위가 필요합니다.`);
   if (item.shadowEnabled != null && typeof item.shadowEnabled !== 'boolean') fail(`${id}.shadowEnabled: 불리언이 필요합니다.`);
   for (const [field, min, max] of [['shadowBlur',0,24],['shadowOpacity',0,1],['shadowOffsetX',-24,24],['shadowOffsetY',-24,24]]) if (item[field] != null && (item[field] < min || item[field] > max)) fail(`${id}.${field}: ${min}~${max} 범위가 필요합니다.`);
   for (const field of ['vertexCount', 'cornerStyle', 'fillOpacity', 'sketchFillOpacity']) if (item[field] != null && !validShapeAppearance(field, item[field])) fail(`${id}.${field}: 꼭짓점은 3~64 정수, 모서리는 sharp/rounded, 채우기는 0~1 범위가 필요합니다.`);
@@ -101,6 +111,11 @@ export function planManifest(source, currentItems, permission) {
     const previous = Object.hasOwn(currentItems, id) ? currentItems[id] : null;
     if (!plain(definition)) fail(`${id}: 객체 정의가 필요합니다.`);
     const merged = { ...(previous ? convert(previous, 'export') : { permission }), ...definition };
+    if (previous?.kind === 'text' && typeof definition.text === 'string' && definition.text !== previous.text && !Object.hasOwn(definition, 'textColors') && merged.textColors?.length) {
+      const doc = loadItemDoc(previous), change = textSpliceBetween(doc.content, definition.text);
+      const updated = Automerge.change(doc, draft => Automerge.splice(draft, ['content'], change.index, change.deleteCount, change.insertText));
+      merged.textColors = colorRangesFromDoc(updated);
+    }
     validateItem(id, merged);
     if (previous && previous.kind !== merged.kind) fail(`${id}: 기존 kind 변경은 새 ID로 생성해주세요.`);
     if (!['connector', 'stroke'].includes(merged.kind) && (!Number.isFinite(merged.x) || !Number.isFinite(merged.y))) fail(`${id}: x, y 좌표가 필요합니다.`);

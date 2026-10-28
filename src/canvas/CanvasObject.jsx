@@ -32,7 +32,7 @@ import { updateTableValue } from '../components/tableModel.js';
 import { stickyNoteColors } from './canvasConstants.js';
 import { moveTextPosition, textSpliceBetween } from './collaborativeText.js';
 
-function CanvasObjectView({ id, item, bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, token, onStartEditing, onTextChange, onMetadataChange, onFormulaChange, onTableChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
+function CanvasObjectView({ id, item, bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, token, onStartEditing, onTextChange, onTextColorChange, onMetadataChange, onFormulaChange, onTableChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
   useUiLocale();
   const collaborativeValue = String(item.kind === 'code' ? item.code || '' : item.text || '');
   const geometryElementRef = useRef(null);
@@ -172,7 +172,7 @@ function CanvasObjectView({ id, item, bounds, selected, allowSingleSelectionCont
     const mode = contentMode(item);
     const textColor = item.kind === 'text' && mode !== 'code' && /^#[0-9a-f]{6}$/i.test(item.color || '') ? item.color : undefined;
     return withResizeHandles(<div key={id} className={`${classes} unified-content-object ${mode === 'code' ? 'code-object' : 'text-object'}${mode === 'markdown' ? ' markdown-text-object' : ''}`} style={{ ...style, color: textColor, '--text-color': textColor }} {...handlers}>
-      <UnifiedTextContent {...{ id, item, editing, dirty, remoteEditorLabel, onTextChange, onFormulaChange, onMetadataChange, onSave, onStopEditing }} />
+      <UnifiedTextContent {...{ id, item, editing, dirty, remoteEditorLabel, onTextChange, onTextColorChange, onFormulaChange, onMetadataChange, onSave, onStopEditing }} />
     </div>);
   }
   if (item.kind === 'note') return withResizeHandles(<div key={id} className={`${classes} sticky-note-object`} style={{ ...style, '--sticky-note-color': item.color || stickyNoteColors[0], '--sticky-note-rotation': `${Number(item.rotation) || -1}deg` }} data-item-id={id} {...handlers} onBlur={editingBoundary.onBlur} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}>

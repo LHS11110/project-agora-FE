@@ -5,6 +5,7 @@ import { itemDepth } from '../../canvas/itemDepth.js';
 import UserGroupContent from '../../canvas/userGroups/UserGroupContent.jsx';
 import RenderedContent from '../../canvas/content/RenderedContent.jsx';
 import { isTextContent, contentMode, contentSource } from '../../canvas/content/contentPresentation.js';
+import { textColorRanges } from '../../canvas/content/textColors.js';
 import { shapeOutlinePaths, shapeFillPaths } from '../../canvas/shapeGeometry.js';
 import { objectBounds } from '../CanvasSpatialBTree.js';
 import { connectorGeometry, OBJECT_SIZES } from '../connectorGeometry.js';
@@ -28,7 +29,7 @@ function PreviewContent({ item, token }) {
   if (item.kind === 'image') return <AuthenticatedImage src={item.src} token={token} alt={item.filename || ui("공유 이미지")} fallback={<span>{item.filename || ui('이미지')}</span>} />;
   if (item.kind === 'table') return <table><thead><tr>{(item.columns || []).map((value, i) => <th key={i}>{String(value)}</th>)}</tr></thead><tbody>{(item.rows || []).map((row, i) => <tr key={i}>{(Array.isArray(row) ? row : []).map((value, j) => <td key={j}>{String(value)}</td>)}</tr>)}</tbody></table>;
   if (item.kind === 'chart') return <ChartView item={item} />;
-  if (isTextContent(item)) return <RenderedContent value={contentSource(item)} mode={contentMode(item)} language={item.language || 'javascript'} />;
+  if (isTextContent(item)) return <RenderedContent value={contentSource(item)} mode={contentMode(item)} language={item.language || 'javascript'} colorRanges={textColorRanges(item)} />;
   if (item.kind === 'link') return <><strong>{item.title || ui("공유 링크")}</strong><p>{item.url || ''}</p></>;
   return item.format === 'markdown' || item.kind === 'note' ? <MarkdownText source={item.text || ''} /> : <p>{item.text || ''}</p>;
 }

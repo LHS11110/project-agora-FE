@@ -7,12 +7,14 @@ import { canvasGraphics } from './canvasGraphics.js';
 import { objectShadow } from './objectShadow.js';
 import { drawPlainText } from './plainTextRaster.js';
 import { objectFontSize } from './objectSize.js';
+import { textColorRanges } from './content/textColors.js';
 
 const fields = ['__imagePreview','imageFrameEnabled','kind','shapeType','volumeStyle','vertexCount','cornerStyle','fillOpacity','sketchFillOpacity','width','height','color','fill','strokeEnabled','visualStyle','strokeWidth','startHead','endHead','headSize','bend','bendPoints','bendPointCount','from','to','fromPort','toPort','brush','opacity','simulatePressure','complete','text','fontSize','contentScale','contentScaleX','contentScaleY'];
 const renderFields = [...fields,'x','y','rotation','points','shadowEnabled','shadowBlur','shadowOpacity','shadowOffsetX','shadowOffsetY','__selectionOutline'];
-export const sameRasterInput = (a,b) => a === b || (a && b && renderFields.every(field => a[field] === b[field]));
+export const sameRasterInput = (a,b) => a === b || (a && b && !(a.kind === 'text' && (a.automerge_snapshot !== b.automerge_snapshot || a.automerge_changes !== b.automerge_changes) && JSON.stringify(textColorRanges(a)) !== JSON.stringify(textColorRanges(b))) && renderFields.every(field => a[field] === b[field]));
 export function rasterDescriptor(id, item, world, referenceItems, routeKey = '') {
   const local = Object.fromEntries(fields.filter(field => item[field] !== undefined).map(field => [field, item[field]]));
+  if (item.kind === 'text') { const ranges = textColorRanges(item); if (ranges.length) local.__textColorRanges = ranges; }
   let x = 0, y = 0, centerX = 0, centerY = 0;
   const rotation = item.kind === 'connector' ? 0 : Number(item.rotation) || 0;
   if (item.kind === 'shape' || item.kind === 'text') {

@@ -30,9 +30,13 @@ export function createActorId() {
 
 export function makeCollaborativeItem(item) {
   if (!['text', 'note', 'code'].includes(item.kind)) return item;
-  const doc = Automerge.from({ content: collaborativeContent(item) });
+  const { __initialTextColors: initialColors, ...clean } = item;
+  let doc = Automerge.from({ content: collaborativeContent(clean) });
+  if (clean.kind === 'text' && Array.isArray(initialColors) && initialColors.length) doc = Automerge.change(doc, draft => {
+    for (const range of initialColors) if (Number.isInteger(range?.start) && Number.isInteger(range?.end) && range.start >= 0 && range.end > range.start && range.end <= draft.content.length && /^#[0-9a-f]{6}$/i.test(range.color || '')) Automerge.mark(draft, ['content'], { start: range.start, end: range.end, expand: 'none' }, 'textColor', range.color);
+  });
   return {
-    ...item,
+    ...clean,
     automerge_snapshot: encodeBase64(Automerge.save(doc)),
     automerge_changes: [],
   };

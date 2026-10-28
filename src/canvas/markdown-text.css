@@ -1,5 +1,5 @@
 .markdown-tool-mark { font: 700 13px var(--mono); letter-spacing: -1px; }
-.canvas-stage .markdown-text-object { background: transparent; color: var(--ink-strong); }
+.canvas-stage .markdown-text-object { background: transparent; color: var(--text-color, var(--ink-strong)); }
 .canvas-stage .markdown-text-object .simple-markdown { font: 13px/1.6 var(--display); color: inherit; overflow-wrap: anywhere; }
 .canvas-stage .markdown-text-object .simple-markdown p { margin: 0 0 .5em; }
 .canvas-stage .markdown-text-object .simple-markdown :is(h2,h3,h4) { margin: 0 0 .4em; font-family: var(--display); line-height: 1.3; color: inherit; }

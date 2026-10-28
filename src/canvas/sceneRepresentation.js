@@ -18,7 +18,8 @@ export function overviewProxy(item, world, scale){
     const text = contentSource(item);
     return { kind: 'text', renderMode: 'plain', x: item.x, y: item.y, width: item.width, height: item.height,
       rotation: item.rotation, depth: item.depth, fontSize: objectFontSize(item),
-      text: text || ' ', color: item.kind === 'text' ? item.color : undefined, shadowEnabled: false };
+      text: text || ' ', color: item.kind === 'text' ? item.color : undefined,
+      ...(item.kind === 'text' ? { automerge_snapshot: item.automerge_snapshot, automerge_changes: item.automerge_changes } : {}), shadowEnabled: false };
   }
   if (item.kind === 'image' && world && (Math.min(item.width * world.width, item.height * world.height) * scale < 2 || item.width * world.width * item.height * world.height * scale * scale < 16)) return { kind: 'shape', shapeType: 'rectangle', x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, depth: item.depth, fill: '', color: '#9ca99f', strokeEnabled: true, shadowEnabled: false };
   if (item.kind === 'image') return { kind: 'shape', shapeType: 'rectangle',

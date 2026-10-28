@@ -59,11 +59,16 @@ export function itemOperations(previous, next, docs, changedIds = null) {
       if (after[field] === undefined) unset.push(field);
       else patch[field] = after[field];
     }
-    if (!before || Object.keys(patch).length || unset.length) {
+    const doc = isCollaborativeItem(after) ? docs?.get(String(id)) : null;
+    let documentChanged = false;
+    if (before && doc && !Object.keys(patch).length && !unset.length) {
+      try { documentChanged = stable(Automerge.getHeads(loadItemDoc(before))) !== stable(Automerge.getHeads(doc)); } catch { documentChanged = true; }
+    }
+    if (!before || Object.keys(patch).length || unset.length || documentChanged) {
       const operation = { id, action: before ? 'patch' : 'create', patch, unset };
       if (isCollaborativeItem(after)) {
-        const doc = docs?.get(String(id)) || loadItemDoc(after);
-        operation.doc = encodeDocument(doc);
+        const document = doc || loadItemDoc(after);
+        operation.doc = encodeDocument(document);
         if (!before && after.automerge_snapshot && after.automerge_snapshot !== operation.doc) operation.base = after.automerge_snapshot;
       }
       operations.push(operation);
