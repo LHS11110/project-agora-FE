@@ -16,7 +16,7 @@ export function normalizeFolderLayout(value) {
   const folders = value.folders.filter(folder => typeof folder?.id === 'string' && folder.id !== UNASSIGNED && !['__proto__', 'constructor', 'prototype'].includes(folder.id) && !folderIds.has(folder.id) && folderIds.add(folder.id)).map(folder => ({ id: folder.id, label: String(folder.label || '폴더').slice(0, 40), color: normalizeCanvasColor(folder.color) || '#6484b8', open: Boolean(folder.open), tools: takeTools(folder.tools) }));
   const unassigned = takeTools(value.unassigned);
   for (const id of Object.keys(toolsById)) if (!seen.has(id)) {
-    const collaboration = folders.find(folder => (id === 'user-group' && folder.id === 'navigate') || (id === 'pdf' && folder.id === 'media') || (id === 'chart' && folder.id === 'structure'));
+    const collaboration = folders.find(folder => (id === 'user-group' && folder.id === 'navigate') || (id === 'pdf' && folder.id === 'media') || (['chart', 'executor', 'code', 'execution-output'].includes(id) && folder.id === 'structure'));
     if (collaboration) collaboration.tools.push(id); else unassigned.push(id);
   }
   return { folders, unassigned };

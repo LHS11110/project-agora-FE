@@ -416,6 +416,15 @@ export function useCanvasStageInteractions(options) {
       else { setActiveTool('select'); selectItems([id]); }
       return;
     }
+    if (activeTool === 'executor' || activeTool === 'execution-output') {
+      event.preventDefault();
+      const point = pointerPosition(event), id = createId(), width = .24, height = activeTool === 'executor' ? .16 : .24;
+      const item = { kind: 'shape', shapeType: 'rectangle', runtimeRole: activeTool === 'executor' ? 'executor' : 'output',
+        x: point.x - width / 2, y: point.y - height / 2, width, height, permission };
+      if (!addItem(id, item)) setToast('실시간 서버에 연결된 뒤 캔버스를 수정할 수 있어요.');
+      else { setActiveTool('select'); selectItems([id]); }
+      return;
+    }
     if (activeTool === 'shape' || activeTool === 'text' || activeTool === 'markdown' || activeTool === 'math' || activeTool === 'code' || activeTool === 'note') {
       event.preventDefault();
       const point = pointerPosition(event);

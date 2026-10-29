@@ -10,7 +10,7 @@ export function buildDepthLayers(entries, domTextIds = new Set(), world = {width
     if (!layers.has(depth)) layers.set(depth, { depth, objects: [], vectors: {} });
     const layer = layers.get(depth);
     layer.objects.push(entry);
-    if (['stroke', 'shape', 'connector'].includes(item?.kind) || (isRasterText(item) && !domTextIds.has(String(id)))) layer.vectors[id] = item;
+    if ((!item?.runtimeRole && ['stroke', 'shape', 'connector'].includes(item?.kind)) || (isRasterText(item) && !domTextIds.has(String(id)))) layer.vectors[id] = item;
     else if(!domTextIds.has(String(id)) && isOverviewProxy(item,world,scale)) layer.vectors[id]=overviewProxy(item,world,scale);
     if(layer.vectors[id] && selected.has(String(id)) && !domTextIds.has(String(id)))layer.vectors[id]={...layer.vectors[id],__selectionOutline:true};
   }

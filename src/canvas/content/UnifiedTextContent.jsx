@@ -8,7 +8,7 @@ import RenderedContent from './RenderedContent.jsx';
 import { contentMode, contentSource } from './contentPresentation.js';
 import { textColorRanges } from './textColors.js';
 import './unified-content.css';
-export default function UnifiedTextContent({ id, item, editing, onTextChange, onTextColorChange, onFormulaChange, onMetadataChange, onSave, onStopEditing }) {
+export default function UnifiedTextContent({ id, item, editing, onTextChange, onTextColorChange, onFormulaChange, onMetadataChange, onSave, onStopEditing, runtimeStore }) {
   useUiLocale();
   const mode = contentMode(item), value = contentSource(item), colorRanges = textColorRanges(item);
   return <>

@@ -19,6 +19,9 @@ export const canvasToolCategories = [
     { id: 'note', label: '포스트잇', icon: 'sticky' },
   ] },
   { id: 'structure', label: '자료·계산', tools: [
+    { id: 'executor', label: '실행 객체', description: '연결된 코드 실행', icon: 'code' },
+    { id: 'code', label: '코드 객체', description: '블루프린트 코드 편집', icon: 'code' },
+    { id: 'execution-output', label: '실행 결과 객체', description: '연결된 코드의 출력 표시', icon: 'document' },
     { id: 'table', label: '테이블', icon: 'table' },
     { id: 'chart', label: '그래프', description: '그래프 추가', icon: 'chart' },
   ] },

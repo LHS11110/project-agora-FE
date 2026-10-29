@@ -52,7 +52,7 @@ export default class SceneViewModel {
   entry(entry,items,world){const item=items[entry.id]||entry.item;return [entry.id,item,entry.bounds,item.kind==='connector'?connectorGeometry(item,items,world.width,world.height):null];}
   representation(id,item,domIds,selected,world,scale){
     if(item.kind==='stroke' && item.complete===false)return {ink:true};
-    let vector=['stroke','shape','connector'].includes(item.kind) || (isRasterText(item)&&!domIds.has(String(id)))?item:null;
+    let vector=!item.runtimeRole && ['stroke','shape','connector'].includes(item.kind) || (isRasterText(item)&&!domIds.has(String(id)))?item:null;
     if(!vector && !domIds.has(String(id)) && isOverviewProxy(item,world,scale))vector=overviewProxy(item,world,scale);
     if(vector && selected.has(String(id)) && !domIds.has(String(id)))vector={...vector,__selectionOutline:true};
     return {vector};

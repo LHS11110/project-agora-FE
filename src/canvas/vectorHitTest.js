@@ -7,7 +7,7 @@ import { strokeSelectionGeometry } from './strokeSelection.js';
 import { isRasterText } from './plainTextRaster.js';
 import { isOverviewProxy } from './sceneRepresentation.js';
 
-export const isVectorItem = item => ['shape', 'stroke', 'connector'].includes(item?.kind) || isRasterText(item);
+export const isVectorItem = item => !item?.runtimeRole && (['shape', 'stroke', 'connector'].includes(item?.kind) || isRasterText(item));
 export const needsVectorDom = (id, item, selected, editingId, connectionStartId, world = {width:1600,height:1000}, scale = 1) =>
   (!isVectorItem(item) && !isOverviewProxy(item,world,scale)) || selected.has(String(id)) || editingId === id || connectionStartId === id
   || (item.kind === 'connector' && Boolean(item.label));

@@ -13,7 +13,7 @@ export function toChatEntry(message, user) {
   const nickname = message.sender || '알 수 없는 사용자';
   const tagNumber = message.tag_number;
   return {
-    id: hasSequence ? `${CHAT_ROOM_ID}-${sequence}` : createId(),
+    id: hasSequence ? `${message.object_id ? `object:${message.object_id}` : CHAT_ROOM_ID}-${sequence}` : createId(),
     sequence: hasSequence ? sequence : null,
     sender: `${nickname}#${tagNumber ?? '?'}`,
     text: message.text || '',

@@ -1,9 +1,11 @@
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { useEditingBoundary } from '../useEditingBoundary.js';
 import { moveTextPosition, textSpliceBetween } from '../collaborativeText.js';
 import ColorText from './ColorText.jsx';
+import { colorPieces } from './textColors.js';
+import TextSelectionColorPopover from './TextSelectionColorPopover.jsx';
 import './inline-content-input.css';
 
 const labels = { plain: '텍스트', markdown: 'Markdown', latex: 'LaTeX' };
@@ -16,11 +18,16 @@ export default function InlineContentInput({ value, mode, colorRanges = [], onCo
   const selection = useRef(null);
   const composing = useRef(false);
   const overlay = useRef(null);
-  const [hasSelection, setHasSelection] = useState(false), [color, setColor] = useState('#7558d9'), [isComposing, setIsComposing] = useState(false);
+  const owner = useId();
+  const [selectedRange, setSelectedRange] = useState(null), [dismissed, setDismissed] = useState(false);
+  const [anchor, setAnchor] = useState(null), [isComposing, setIsComposing] = useState(false);
+  const hasSelection = selectedRange && selectedRange.start !== selectedRange.end;
   const rememberSelection = event => {
     const input = event.currentTarget;
-    selection.current = { start: input.selectionStart, end: input.selectionEnd, direction: input.selectionDirection };
-    setHasSelection(input.selectionStart !== input.selectionEnd);
+    const next = { start: input.selectionStart, end: input.selectionEnd, direction: input.selectionDirection };
+    if (next.start !== selection.current?.start || next.end !== selection.current?.end) setDismissed(false);
+    selection.current = next;
+    setSelectedRange(next);
   };
   useLayoutEffect(() => {
     const input = boundary.ref.current;
@@ -33,7 +40,7 @@ export default function InlineContentInput({ value, mode, colorRanges = [], onCo
       const end = Math.max(start, Math.min(source.length, moveTextPosition(next.end, change)));
       if (input === document.activeElement) input.setSelectionRange(start, end, next.direction);
       selection.current = { start, end, direction: next.direction };
-      setHasSelection(start !== end);
+      setSelectedRange({ start, end, direction: next.direction });
     }
     displayed.current = source;
     if (overlay.current) overlay.current.style.transform = `translate(${-input.scrollLeft}px, ${-input.scrollTop}px)`;
@@ -43,16 +50,22 @@ export default function InlineContentInput({ value, mode, colorRanges = [], onCo
       input.style.height = `${Math.max(28, input.scrollHeight)}px`;
     }
   }, [value, mode, boundary.ref, colorRanges]);
-  const setSelectionColor = value => {
+  const restoreSelection = () => {
+    const input = boundary.ref.current, range = selection.current;
+    if (input && range) { input.focus({ preventScroll: true }); input.setSelectionRange(range.start, range.end, range.direction); }
+  };
+  const setSelectionColor = (value, restoreFocus = true) => {
     const range = selection.current;
     if (!range || range.start === range.end) return;
     onColorChange?.(range.start, range.end, value);
+    if (restoreFocus) restoreSelection();
   };
-  return <div className="inline-content-editor">
-    {onColorChange && hasSelection && <div className="text-selection-colors" onPointerDown={event => event.stopPropagation()}>
-      <label>{ui('선택한 글자 색상')}<input type="color" aria-label={ui('선택한 글자 색상')} value={color} onChange={event => { setColor(event.target.value); setSelectionColor(event.target.value); }} /></label>
-      <button type="button" onClick={() => setSelectionColor('')}>{ui('선택 영역 색상 지우기')}</button>
-    </div>}
+  const selectedText = hasSelection ? String(value).slice(selectedRange.start, selectedRange.end) : '';
+  const colors = new Set(hasSelection ? colorPieces(selectedText, colorRanges, selectedRange.start).map(piece => piece.color?.toLowerCase() || '') : []);
+  const activeColor = colors.size === 1 ? [...colors][0] : null;
+  return <div className="inline-content-editor" data-text-selection-editor={owner}>
+    {onColorChange && hasSelection && !dismissed && !isComposing && <TextSelectionColorPopover owner={owner} inputRef={boundary.ref} anchor={anchor} selectedText={selectedText} activeColor={activeColor} mixed={colors.size > 1}
+      onChoose={setSelectionColor} onClose={() => { setDismissed(true); restoreSelection(); }} />}
     <div className="inline-content-input-frame">
     {colorRanges.length > 0 && !isComposing && <div className="inline-content-color-overlay" aria-hidden="true"><div ref={overlay}><ColorText value={value} ranges={colorRanges} />{'\n'}</div></div>}
     <textarea ref={boundary.ref} className={`inline-content-input${colorRanges.length && !isComposing ? ' has-text-colors' : ''}`} data-mode={mode} autoFocus rows={1}
@@ -63,12 +76,18 @@ export default function InlineContentInput({ value, mode, colorRanges = [], onCo
     onSelect={rememberSelection} onCompositionStart={() => { composing.current = true; setIsComposing(true); }} onCompositionEnd={() => { composing.current = false; setIsComposing(false); }}
     onScroll={event => { if (overlay.current) overlay.current.style.transform = `translate(${-event.currentTarget.scrollLeft}px, ${-event.currentTarget.scrollTop}px)`; }}
     onChange={event => { displayed.current = event.target.value; rememberSelection(event); onChange(event.target.value); }}
-    onPointerDown={event => event.stopPropagation()} onPointerMove={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}
+    onPointerDown={event => event.stopPropagation()} onPointerMove={event => event.stopPropagation()} onPointerUp={event => {
+      event.stopPropagation(); rememberSelection(event);
+      const bounds = event.currentTarget.getBoundingClientRect();
+      setAnchor({ x: Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)), y: Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)) });
+      setDismissed(false);
+    }} onDoubleClick={event => event.stopPropagation()}
+    onKeyUp={event => { if (event.shiftKey || event.key.startsWith('Arrow') || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a')) { rememberSelection(event); setAnchor(null); } }}
     onKeyDown={event => {
       event.stopPropagation();
       if (event.isComposing || event.nativeEvent.isComposing || composing.current) return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); onSave(); }
-      else if (event.key === 'Escape') { event.preventDefault(); onStopEditing(); }
+      else if (event.key === 'Escape') { event.preventDefault(); if (hasSelection && !dismissed && onColorChange) setDismissed(true); else onStopEditing(); }
     }} />
     </div>
   </div>;

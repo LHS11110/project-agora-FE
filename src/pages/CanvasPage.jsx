@@ -38,6 +38,12 @@ import { isCodeLanguage } from '../canvas/codeLanguages.js';
 import { useContentSettings } from '../canvas/content/useContentSettings.js';
 import { CONNECTOR_METRICS_EVENT } from '../canvas/connectors/objectMetrics.js';
 import CanvasAsCodeDialog from '../canvas/asCode/CanvasAsCodeDialog.jsx';
+import { createBlueprintStore } from '../canvas/runtime/blueprintStore.js';
+import { executeCanvasCode } from '../canvas/runtime/executeCanvasCode.js';
+import { useCommentsAndMentions } from '../canvas/comments/useCommentsAndMentions.js';
+import ObjectCommentsPanel from '../canvas/comments/ObjectCommentsPanel.jsx';
+import MentionNotifications from '../canvas/comments/MentionNotifications.jsx';
+import { uniqueCanvasParticipants } from '../canvas/canvasParticipants.js';
 import { useCanvasAsCode } from '../canvas/asCode/useCanvasAsCode.js';
 import { isInternalEditorPointer } from '../canvas/editorInteraction.js';
 import { usePenStyle } from '../canvas/usePenStyle.js';
@@ -111,6 +117,12 @@ function CanvasWorkspace() {
   const [showCanvasCode, setShowCanvasCode] = useState(false);
   const { canvasId } = useParams();
   const { token, user } = useAuth();
+  const runtimeRequestRef = useRef(null);
+  runtimeRequestRef.current = request => executeCanvasCode({ ...request, canvasId, token, user });
+  const saveBlueprintOutputRef = useRef(() => false);
+  const runtimeStore = useMemo(() => createBlueprintStore({ getItems: () => itemsRef.current,
+    execute: request => runtimeRequestRef.current(request), saveOutput: (id, records) => saveBlueprintOutputRef.current(id, records) }), []);
+  useEffect(() => { runtimeStore.resume(); return () => runtimeStore.dispose(); }, [runtimeStore]);
   const navigate = useNavigate();
   const boardRef = useRef(null);
   const cancelCameraMotionRef = useRef(() => {});
@@ -260,6 +272,9 @@ function CanvasWorkspace() {
   const [selectionBox, setSelectionBox] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [chatHighlight, setChatHighlight] = useState(null);
+  const [chatJumpNote, setChatJumpNote] = useState(null);
+  const requestedChatMention = useRef(null);
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const [chatHistoryLoading, setChatHistoryLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -270,6 +285,12 @@ function CanvasWorkspace() {
   const { items, setItems, patchItems, moveItems, flushMoves, committedItemsRef, status: hostStatus, sessionRef: hostSessionRef, receiveServerItems, receiveServerEvent } = useServerCanvas({
     itemsRef, peerMeshRef, wsRef, rtcWsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems, reconnectRequestRef,
   });
+  saveBlueprintOutputRef.current = (id, records) => {
+    const previous = itemsRef.current[id];
+    if (!hostStatus.editable || previous?.runtimeRole !== 'output') return false;
+    patchItems({ [id]: { ...previous, runtimeResults: records } });
+    return true;
+  };
   const hostReadyRef = useRef(false);
   hostReadyRef.current = hostStatus.editable;
   useEffect(() => {
@@ -294,6 +315,9 @@ function CanvasWorkspace() {
       ? payload : { ...payload, request_id: createId() };
     socket.send(JSON.stringify(request)); return true;
   }, []);
+  const comments = useCommentsAndMentions({ sendRaw, connection, user, canvasId });
+  const chatEventsRef = useRef(null);
+  chatEventsRef.current = comments;
   const rtcSendBudgetRef=useRef(new SocketSendBudget());
   const sendRtcRaw = useCallback((payload) => {
     const socket = rtcWsRef.current;
@@ -301,11 +325,12 @@ function CanvasWorkspace() {
     const request = payload?.request_id ? payload : { ...payload, request_id: createId() };
     return rtcSendBudgetRef.current.send(socket,request);
   }, []);
-  const requestChatHistory = useCallback((toSequence) => {
+  const requestChatHistory = useCallback((toSequence, aroundSequence) => {
     if (chatHistoryRequestRef.current) return false;
     const requestId = createId();
     const payload = { type: 'chat_history', room_id: CHAT_ROOM_ID, request_id: requestId };
-    if (toSequence == null) payload.limit = CHAT_HISTORY_LIMIT;
+    if (aroundSequence) { payload.from_sequence = Math.max(1, aroundSequence - 10); payload.to_sequence = aroundSequence + 10; }
+    else if (toSequence == null) payload.limit = CHAT_HISTORY_LIMIT;
     else payload.to_sequence = toSequence;
     chatHistoryRequestRef.current = requestId;
     if (!sendRaw(payload)) {
@@ -319,6 +344,10 @@ function CanvasWorkspace() {
     const { hasMore, nextToSequence } = chatHistoryPageRef.current;
     if (hasMore && nextToSequence != null) requestChatHistory(nextToSequence);
   }, [requestChatHistory]);
+  useEffect(() => {
+    if (!chatJumpNote || chatHistoryLoading || messages.some(entry => entry.id === chatJumpNote.id) || requestedChatMention.current === chatJumpNote.key) return;
+    if (requestChatHistory(null, chatJumpNote.sequence)) requestedChatMention.current = chatJumpNote.key;
+  }, [chatJumpNote, chatHistoryLoading, messages, requestChatHistory]);
   const markItemDirty = useCallback((id) => {
     const key = String(id);
     itemEditRevisionRef.current.set(key, (itemEditRevisionRef.current.get(key) || 0) + 1);
@@ -831,6 +860,7 @@ function CanvasWorkspace() {
       canvasSnapshotLoadedRef,
       chatHistoryPageRef,
       chatHistoryRequestRef,
+      chatEventsRef,
       collaborativeBaseDocsRef,
       collaborativeDocsRef,
       deletedItemSyncVersionsRef,
@@ -1119,7 +1149,8 @@ function CanvasWorkspace() {
     } catch { setToast('이미지를 읽지 못했습니다.'); }
   };
   const submitMessage = (event) => {
-    event.preventDefault(); const text = message.trim();
+    event?.preventDefault(); const text = message.trim();
+    if (new TextEncoder().encode(text).length > 4096) { setToast('메시지는 UTF-8 기준 4096바이트 이하여야 합니다.'); return; }
     if (!text || !sendRaw({ type: 'chat', room_id: CHAT_ROOM_ID, text, request_id: createId() })) return;
     setMessage('');
   };
@@ -1296,6 +1327,17 @@ function CanvasWorkspace() {
   const canvasParticipants = useParticipantProfiles(settings?.participants, token, user);
   const { backgroundColor, setBackgroundColor, backgroundStyle } = useCanvasBackground(canvasId);
   const onlineParticipants = useMemo(() => onlineCanvasParticipants(user, peerList, canvasParticipants, connection === 'connected'), [user, peerList, canvasParticipants, connection]);
+  const mentionParticipants = useMemo(() => uniqueCanvasParticipants([...canvasParticipants, ...onlineParticipants]), [canvasParticipants, onlineParticipants]);
+  const jumpToMention = note => {
+    if (note.objectId) { focusCanvasObject(note.objectId); comments.open(note.objectId, note.id, note.sequence, note); }
+    else {
+      const chat = panelLayout.handle('chat');
+      if (chat.collapsed) chat.onToggle();
+      setChatHighlight(note.id);
+      requestedChatMention.current = null;
+      setChatJumpNote(note);
+    }
+  };
   const objectActionsRef = useRef(null);
   objectActionsRef.current = {
     onStartEditing:startEditing, onTextChange:updateCollaborativeText, onTextColorChange:updateTextColor,
@@ -1348,7 +1390,7 @@ function CanvasWorkspace() {
           <div className="canvas-scene" ref={sceneRef} style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }}>
             {depthLayers.map((layer, index) => <div className="canvas-depth-layer" key={layer.depth} data-depth={layer.depth} style={{ position: 'absolute', inset: 0, zIndex: index + 1, pointerEvents: 'none' }}>
               <VectorLayer token={token} graphicsQuality={graphicsQuality} style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }} worldSize={boardSize} items={layer.vectors} referenceItems={items} routingRevision={spatialIndex.stats.boundsCalculated} inkItems={layer.inkItems} previewStrokes={layer.depth === 0 ? remoteDrawingStrokes : undefined} camera={camera} onReady={layer.depth === 0 ? (setDraft) => { vectorDraftRef.current = setDraft; } : undefined} />
-            <div className="canvas-world-layer" style={{position:'absolute',width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`}}><CanvasLayerObjects objects={layer.domObjects} domSelection={domSelection} editingId={editingId} connectionStartId={connectionStartId} world={boardSize} scale={representationScale} token={token} selected={selectedObjectIdSet} singleSelection={hasSingleSelection} activeTool={activeTool} dirtyItems={dirtyItems} editorsByItem={editorsByItem} actions={objectActions} /></div>
+            <div className="canvas-world-layer" style={{position:'absolute',width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`}}><CanvasLayerObjects objects={layer.domObjects} domSelection={domSelection} editingId={editingId} connectionStartId={connectionStartId} world={boardSize} scale={representationScale} token={token} runtimeStore={runtimeStore} selected={selectedObjectIdSet} singleSelection={hasSingleSelection} activeTool={activeTool} dirtyItems={dirtyItems} editorsByItem={editorsByItem} actions={objectActions} /></div>
             </div>)}
             <div className="canvas-world-layer" style={{ position: 'absolute', width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`, zIndex: depthLayers.length + 1, pointerEvents: 'none' }}>
             {selectedItem && selectedItem.kind !== 'connector' && activeTool === 'select' && !editingId && <RotationHandles sceneRef={sceneRef} id={String(primarySelectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startObjectRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
@@ -1374,7 +1416,7 @@ function CanvasWorkspace() {
           {activeTool === 'laser' && <div className="draw-cursor-label laser-cursor-label"><Icon name="laser" size={13} />{" " + ui("가리키는 중 · 1.6초 후 사라짐") + ""}</div>}{activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} />{" " + ui("그리는 중") + ""}</div>}{activeTool === 'eraser' && <div className="draw-cursor-label"><Icon name="eraser" size={13} />{" " + ui("드로잉을 드래그해 지우기") + ""}</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? ui("도착 오브젝트 선택") : ui("시작 오브젝트 선택")}</div>}{activeTool === 'link' && !sharePosition && <div className="draw-cursor-label"><Icon name="link" size={13} />{" " + ui("공유 자료를 놓을 위치 선택") + ""}</div>}
         </div>
       </main>
-<ResizablePanel {...panelLayout.handle('inspector')}><CanvasInspectorPanel graphicsQuality={graphicsQuality} changeGraphicsQuality={changeGraphicsQuality} spatialIndex={spatialIndex} updateContentSetting={updateContentSetting} updateChartItem={updateTableItem} onNavigateObject={focusCanvasObject} {...{
+<ResizablePanel {...panelLayout.handle('inspector')}><CanvasInspectorPanel graphicsQuality={graphicsQuality} changeGraphicsQuality={changeGraphicsQuality} spatialIndex={spatialIndex} updateContentSetting={updateContentSetting} updateChartItem={updateTableItem} onNavigateObject={focusCanvasObject} onOpenComments={id => { finishEditing(editingId); comments.open(id); }} {...{
         activeTool,
         canvasId,
         canvasParticipants,
@@ -1444,9 +1486,11 @@ function CanvasWorkspace() {
         updateShapeArrowBend,
         zoomSensitivity
       }} /></ResizablePanel>
-<ResizablePanel {...panelLayout.handle('chat')}><CanvasChatPanel {...{ chatHistoryLoading, connection, hasOlderMessages, loadOlderMessages, message, messages, setMessage, submitMessage }} /></ResizablePanel>
+<ResizablePanel {...panelLayout.handle('chat')}><CanvasChatPanel {...{ chatHistoryLoading, connection, hasOlderMessages, loadOlderMessages, message, messages, setMessage, submitMessage }} participants={mentionParticipants} highlight={chatHighlight} onHighlightVisible={() => { if (chatJumpNote) { comments.dismiss(chatJumpNote); setChatJumpNote(null); } }} /></ResizablePanel>
     </div>}
     {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{ui(toast)}</div>}
+    {comments.activeId && <ObjectCommentsPanel comments={comments} participants={mentionParticipants} connection={connection} />}
+    <MentionNotifications notifications={comments.notifications} onJump={jumpToMention} onDismiss={comments.dismiss} />
     {showCanvasCode && <CanvasAsCodeDialog api={canvasCodeApi} canvasId={canvasId} onClose={() => setShowCanvasCode(false)} />}
     {showSettings && <SettingsDialog backgroundColor={backgroundColor} setBackgroundColor={setBackgroundColor} favoriteColors={favoriteColors} saveFavoriteColor={saveFavoriteColor} theme={theme} canvasId={canvasId} image={canvas?.image} token={token} onImageSaved={(image) => setCanvas(current => ({ ...current, image }))} settings={settings} pending={settingsPending} onClose={() => setShowSettings(false)} onUpdate={sendSettings} />}
     {showParticipants && <CanvasParticipantsDialog participants={canvasParticipants} token={token} settings={settings} pending={settingsPending} onClose={() => setShowParticipants(false)} onAddParticipant={(nickname, tag) => sendSettings('participant_add', null, { nickname, tag_number: tag })} onRemoveParticipant={(person) => sendSettings('participant_remove', null, { nickname: person.nickname, tag_number: person.tag_number })} />}

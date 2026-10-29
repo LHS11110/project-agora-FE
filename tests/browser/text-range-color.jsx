@@ -20,7 +20,7 @@ function Fixture() {
   });
   return <div className="canvas-app-page"><div className="canvas-stage" style={{width:1600,height:1000}}>
     <CanvasObject id="range-fixture" item={item} viewSize={{width:1600,height:1000}} selected editing={editing} activeTool="select"
-      onTextChange={noop} onTextColorChange={color} onPointerDown={noop} onResizeStart={noop} onStopEditing={noop} onSave={noop} />
+      onTextChange={noop} onTextColorChange={color} onPointerDown={noop} onResizeStart={noop} onStopEditing={() => setEditing(false)} onSave={noop} />
   </div></div>;
 }
 createRoot(document.getElementById('root')).render(<Fixture />);

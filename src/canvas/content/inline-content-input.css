@@ -12,6 +12,3 @@
 .inline-content-color-overlay{position:absolute;inset:0;overflow:hidden;pointer-events:none;white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.6 var(--display);color:inherit}
 .inline-content-color-overlay>div{white-space:pre-wrap;overflow-wrap:anywhere}
 .canvas-stage .inline-content-input-frame>.inline-content-input.has-text-colors{position:relative;color:transparent;caret-color:var(--text-color,var(--ink-strong))}
-.text-selection-colors{display:flex;align-items:center;gap:8px;margin:0 0 5px;padding:4px 6px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink-muted);font:10px/1.4 var(--display)}
-.text-selection-colors label{display:flex;align-items:center;gap:5px}.text-selection-colors input{width:24px;height:22px;padding:0;border:0;background:transparent;cursor:pointer}
-.text-selection-colors button{padding:3px 5px;border:0;background:transparent;color:inherit;cursor:pointer;font:inherit}

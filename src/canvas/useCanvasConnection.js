@@ -26,6 +26,7 @@ export function useCanvasConnection(options) {
       canvasSnapshotLoadedRef,
       chatHistoryPageRef,
       chatHistoryRequestRef,
+      chatEventsRef,
       collaborativeBaseDocsRef,
       collaborativeDocsRef,
       deletedItemSyncVersionsRef,
@@ -366,6 +367,7 @@ export function useCanvasConnection(options) {
           if (data.type === 'host_batch_result') return;
           if (['item_update', 'item_add', 'update_item', 'item_save', 'item_delete', 'delete_item'].includes(data.type)) return;
           if (data.type === 'chat_history') {
+            if (data.object_id) { chatEventsRef.current?.receiveHistory(data); return; }
             if (chatHistoryRequestRef.current && data.request_id !== chatHistoryRequestRef.current) return;
             chatHistoryRequestRef.current = null;
             setChatHistoryLoading(false);
@@ -378,9 +380,16 @@ export function useCanvasConnection(options) {
             return;
           }
           if (data.type === 'chat') {
-            setMessages((current) => mergeChatEntries(current, [toChatEntry(data, user)]));
+            if (data.object_id) { chatEventsRef.current?.receiveComment(data); return; }
+            const entry = toChatEntry(data, user);
+            setMessages((current) => mergeChatEntries(current, [entry]));
+            chatEventsRef.current?.notify(entry);
             return;
           }
+          if (data.type === 'event_ack') { chatEventsRef.current?.receiveAck(data); return; }
+          if (data.type === 'mentions_snapshot') { chatEventsRef.current?.receiveMentions(data); return; }
+          if (data.type === 'mentions_changed') { chatEventsRef.current?.refreshMentions(); return; }
+          if (data.type === 'mention_read') { chatEventsRef.current?.receiveMentionRead(data); return; }
           if (data.type === 'pong') {
             if (rejectedEventPongsRef.current > 0) rejectedEventPongsRef.current -= 1;
             else {
@@ -396,6 +405,7 @@ export function useCanvasConnection(options) {
             return;
           }
           if (data.type === 'error') {
+            chatEventsRef.current?.receiveError(data);
             if (['ITEM_BATCH_INVALID', 'RATE_LIMITED'].includes(data.code) && pendingItemChangesRef.current.length) {
               requestServerReconnect({ retry_after_ms: 250 });
               return;
