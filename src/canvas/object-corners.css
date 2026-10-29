@@ -1,0 +1,7 @@
+/* Clip card contents, never the outer selection/resize handles. */
+.canvas-stage .canvas-object[data-corner-style="rounded"]{--object-corner-radius:24px}
+.canvas-stage .canvas-object[data-corner-style="sharp"]{--object-corner-radius:0px}
+.canvas-stage .canvas-object[data-corner-style]:not(.scalable-object-frame){border-radius:var(--object-corner-radius)}
+.canvas-stage .canvas-object[data-corner-style].scalable-object-frame .scalable-object-content{border-radius:calc(var(--object-corner-radius) / var(--content-fit-scale,1));overflow:hidden}
+.canvas-stage .canvas-object[data-corner-style]>.chart-card,
+.canvas-stage .canvas-object[data-corner-style]>.pdf-document{border-radius:inherit}

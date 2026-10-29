@@ -726,23 +726,25 @@ test('three-handle straightening, recurve and persistence converge on every host
   assert.equal(saved.record.item.bendPoints.length, saved.record.item.bendPointCount);
 });
 
-test('image frame visibility synchronizes and persists without changing image dimensions or source', () => {
+test('image frame and corner styles synchronize and persist independently without changing dimensions or source', () => {
   const image = { kind: 'image', x: .1, y: .2, width: .3, height: .2, src: 'data:image/png;base64,AA==', filename: 'fixture.png', permission: 'default' };
   const net = network(['a', 'z'], { image });
   const author = net.sessions.get('a');
-  for (const enabled of [false, true]) {
+  for (const [enabled, cornerStyle] of [[false, 'rounded'], [true, 'rounded'], [true, 'sharp'], [false, 'sharp']]) {
     const current = author.items.image;
-    assert.equal(author.submit(itemOperations({ image: current }, { image: { ...current, imageFrameEnabled: enabled } }, new Map())), true);
+    assert.equal(author.submit(itemOperations({ image: current }, { image: { ...current, imageFrameEnabled: enabled, cornerStyle } }, new Map())), true);
     for (let i = 0; i < 6; i++) net.advance();
     assert.deepEqual(net.errors, []);
     for (const session of net.sessions.values()) {
       assert.equal(session.items.image.imageFrameEnabled, enabled);
+      assert.equal(session.items.image.cornerStyle, cornerStyle);
       assert.equal(session.items.image.src, image.src);
       assert.equal(session.items.image.width, image.width);
       assert.equal(session.items.image.height, image.height);
     }
     const saved = net.saved.flatMap(entry => entry.changes).filter(change => change.id === 'image').at(-1);
     assert.equal(saved.record.item.imageFrameEnabled, enabled);
+    assert.equal(saved.record.item.cornerStyle, cornerStyle);
   }
 });
 

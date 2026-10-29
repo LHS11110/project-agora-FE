@@ -11,7 +11,7 @@ import './inline-content-input.css';
 const labels = { plain: '텍스트', markdown: 'Markdown', latex: 'LaTeX' };
 
 /** Plain input within the object: no editor frame, line numbers or code widgets. */
-export default function InlineContentInput({ value, mode, colorRanges = [], onColorChange, onChange, onSave, onStopEditing }) {
+export default function InlineContentInput({ value, mode, fitContainer = false, colorRanges = [], onColorChange, onChange, onSave, onStopEditing }) {
   useUiLocale();
   const boundary = useEditingBoundary(true, onStopEditing, { pointerOnly: true });
   const displayed = useRef(String(value));
@@ -45,11 +45,11 @@ export default function InlineContentInput({ value, mode, colorRanges = [], onCo
     displayed.current = source;
     if (overlay.current) overlay.current.style.transform = `translate(${-input.scrollLeft}px, ${-input.scrollTop}px)`;
     // Fit the source rather than inserting a fixed-height editor into the object.
-    if (!input.closest('.has-custom-height')) {
+    if (!fitContainer && !input.closest('.has-custom-height')) {
       input.style.height = '0px';
-      input.style.height = `${Math.max(28, input.scrollHeight)}px`;
+      input.style.height = `${Math.max(1, input.scrollHeight)}px`;
     }
-  }, [value, mode, boundary.ref, colorRanges]);
+  }, [value, mode, boundary.ref, colorRanges, fitContainer]);
   const restoreSelection = () => {
     const input = boundary.ref.current, range = selection.current;
     if (input && range) { input.focus({ preventScroll: true }); input.setSelectionRange(range.start, range.end, range.direction); }

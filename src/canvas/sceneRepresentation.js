@@ -21,11 +21,11 @@ export function overviewProxy(item, world, scale){
       text: text || ' ', color: item.kind === 'text' ? item.color : undefined,
       ...(item.kind === 'text' ? { automerge_snapshot: item.automerge_snapshot, automerge_changes: item.automerge_changes } : {}), shadowEnabled: false };
   }
-  if (item.kind === 'image' && world && (Math.min(item.width * world.width, item.height * world.height) * scale < 2 || item.width * world.width * item.height * world.height * scale * scale < 16)) return { kind: 'shape', shapeType: 'rectangle', x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, depth: item.depth, fill: '', color: '#9ca99f', strokeEnabled: true, shadowEnabled: false };
+  if (item.kind === 'image' && world && (Math.min(item.width * world.width, item.height * world.height) * scale < 2 || item.width * world.width * item.height * world.height * scale * scale < 16)) return { kind: 'shape', shapeType: 'rectangle', x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, depth: item.depth, cornerStyle: item.cornerStyle, fill: '', color: '#9ca99f', strokeEnabled: true, shadowEnabled: false };
   if (item.kind === 'image') return { kind: 'shape', shapeType: 'rectangle',
     x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, depth: item.depth,
-    __imagePreview: item.src, imageFrameEnabled: item.imageFrameEnabled, strokeEnabled: false, shadowEnabled: false };
+    __imagePreview: item.src, cornerStyle: item.cornerStyle, imageFrameEnabled: item.imageFrameEnabled, strokeEnabled: false, shadowEnabled: false };
 
   return {kind:'shape',shapeType:'rectangle',x:item.x,y:item.y,width:item.width,height:item.height,rotation:item.rotation,
-    fill:colors[item.kind],strokeEnabled:false,shadowEnabled:false,depth:item.depth};
+    cornerStyle:item.cornerStyle,fill:colors[item.kind],strokeEnabled:false,shadowEnabled:false,depth:item.depth};
 }

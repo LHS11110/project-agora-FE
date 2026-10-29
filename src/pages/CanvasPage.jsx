@@ -10,6 +10,7 @@ import ChromeToggle from '../canvas/panels/ChromeToggle.jsx';
 import '../canvas/panels/canvas-chrome.css';
 import { logicPorts } from '../canvas/logicGates.js';
 import useCanvasKeyboardNudge from '../canvas/useCanvasKeyboardNudge.js';
+import { supportsObjectCorners, validObjectCornerStyle } from '../canvas/objectCorners.js';
 import { validShapeAppearance } from '../canvas/shapeAppearance.js';
 import { isVolumeShape } from '../canvas/volumeGeometry.js';
 import { overviewScale } from '../canvas/sceneRepresentation.js';
@@ -589,6 +590,14 @@ function CanvasWorkspace() {
     const key = String(id), previous = itemsRef.current[key];
     if (previous?.kind !== 'image' || typeof enabled !== 'boolean' || !hostSessionRef.current.editable) return;
     const next = { ...previous, imageFrameEnabled: enabled };
+    itemsRef.current = { ...itemsRef.current, [key]: next };
+    setItems(current => ({ ...current, [key]: next }));
+    refreshSpatialIndex();
+  };
+  const updateObjectCornerStyle = (id, value) => {
+    const key = String(id), previous = itemsRef.current[key];
+    if (!hostSessionRef.current.editable || !supportsObjectCorners(previous) || !validObjectCornerStyle(value)) return;
+    const next = { ...previous, cornerStyle: value };
     itemsRef.current = { ...itemsRef.current, [key]: next };
     setItems(current => ({ ...current, [key]: next }));
     refreshSpatialIndex();
@@ -1478,7 +1487,7 @@ function CanvasWorkspace() {
         toggleGrid,
         updateArrowHead,
         updateConnectorAppearance,
-        updateItemRotation, updateItemDepth, updateItemShadow, updateImageFrame,
+        updateItemRotation, updateItemDepth, updateItemShadow, updateImageFrame, updateObjectCornerStyle,
         updateObjectDimensions,
         updateObjectFontSize,
         updateNewConnectorHead,

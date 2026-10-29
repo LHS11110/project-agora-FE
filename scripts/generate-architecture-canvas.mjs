@@ -19,7 +19,7 @@ text('main-title','프로젝트 아키텍처',60,108,1300,30);
 text('main-subtitle','실행 중인 Docker 구성과 코드 기준 · 2026.10.15 · 아래로 이동하면 데이터 흐름과 운영 상세를 볼 수 있습니다.',62,149,1460,13);
 for(const [label,x,c] of [['클라이언트',60,C.green],['HTTPS 진입점',340,C.blue],['라우팅 · 통신',620,C.purple],['애플리케이션',920,C.peach],['저장소 연결',1240,C.yellow]]) {box('column-rule',x,196,240,4,c,{strokeEnabled:false,depth:1});text('column-title',label,x,211,250,12);}
 card('browser','브라우저 / FE','React · Vite · PixiJS\n캔버스 편집 · GPU/2D 렌더링\nAutomerge · 브라우저 호스트\n객체 · 포인터 · 레이저 송수신',60,260,230,180,C.green);
-card('edge','호스트 Nginx','공개 HTTPS :443\n112.168.71.147\n외부 TLS 종료 · WSS 전달\n127.0.0.1:8444로 프록시',340,260,230,180,C.blue);
+card('edge','호스트 Nginx','공개 HTTPS :443\n118.34.144.201\n외부 TLS 종료 · WSS 전달\n127.0.0.1:8444로 프록시',340,260,230,180,C.blue);
 card('gateway','Wall / Nginx','Docker HTTPS 게이트웨이\n정적 FE 배포본 · /api · /wss\n내부 C++ 서버 ID 라우팅\n현재 정적 빌드 배포 방식',620,260,240,180,C.blue);
 card('spring','Spring Boot','HTTPS :8080\n인증 · 계정 · ACL · 캔버스 등록\n캔버스 접근 JWT · 서버 할당\n검색 API · 내부 C++ 요청',920,260,240,180,C.peach);
 card('voice-peer','다른 브라우저','WebRTC P2P: 음성 통화\nRTC 시그널링: Phoenix 경유\n객체·커서·레이저는 브로커 중계\nP2P 데이터 채널로 보내지 않음',60,520,230,180,C.green);

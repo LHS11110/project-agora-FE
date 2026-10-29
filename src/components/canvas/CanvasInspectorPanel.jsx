@@ -2,6 +2,8 @@ import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
 import LogicPortControls from './LogicPortControls.jsx';
 import ShapeGeometryControls from '../../canvas/ShapeGeometryControls.jsx';
+import ObjectCornerControls from '../../canvas/ObjectCornerControls.jsx';
+import { supportsObjectCorners } from '../../canvas/objectCorners.js';
 import ImageFrameControls from '../../canvas/ImageFrameControls.jsx';
 import ObjectNumericControls from '../../canvas/ObjectNumericControls.jsx';
 import { SizeInput } from '../../canvas/ObjectSizeControls.jsx';
@@ -98,7 +100,7 @@ export default function CanvasInspectorPanel({
   toggleGrid,
   updateArrowHead,
   updateConnectorAppearance,
-  updateItemRotation, updateItemDepth, updateItemShadow, updateImageFrame,
+  updateItemRotation, updateItemDepth, updateItemShadow, updateImageFrame, updateObjectCornerStyle,
   updateObjectDimensions,
   updateObjectFontSize,
   updateNewConnectorHead,
@@ -120,6 +122,7 @@ export default function CanvasInspectorPanel({
         {activeTool === 'select' && selectedObjectIds.length > 0 && <ObjectDepthControls ids={selectedObjectIds} items={items} onChange={updateItemDepth} />}
         {activeTool === 'select' && selectedObjectIds.length > 0 && <ObjectShadowControls ids={selectedObjectIds} items={items} onChange={updateItemShadow} />}
         {activeTool === 'select' && selectedObjectIds.length === 1 && selectedItem?.kind === 'image' && <ImageFrameControls item={selectedItem} onChange={enabled => updateImageFrame(primarySelectedItemId, enabled)} />}
+        {activeTool === 'select' && selectedObjectIds.length === 1 && supportsObjectCorners(selectedItem) && <ObjectCornerControls item={selectedItem} onChange={value => updateObjectCornerStyle(primarySelectedItemId, value)} />}
         {selectedItem?.kind === 'user-group' && <UserGroupControls key={primarySelectedItemId} item={selectedItem} token={token} user={user} onChange={patch => updateUserGroup(primarySelectedItemId, patch)} />}
         {(activeTool === 'shape' || shapeToEdit) && <>
           <section className="inspector-section"><strong className="inspector-label">{shapeToEdit ? ui("선택한 도형 스타일") : ui("새 도형 스타일")}</strong><VectorStyleControls value={shapeToEdit ? shapeToEdit.visualStyle : shapeVisualStyle} onChange={value => shapeToEdit ? updateShapeAppearance(primarySelectedItemId, 'visualStyle', value) : setShapeVisualStyle(value)} /></section>

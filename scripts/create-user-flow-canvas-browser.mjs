@@ -7,14 +7,14 @@ const statePath=process.env.USER_FLOW_SESSION_FILE || '/tmp/agora-user-flow-sess
 const { token,user,canvas_id }=JSON.parse(fs.readFileSync(statePath,'utf8'));
 const manifest=JSON.parse(fs.readFileSync(new URL('../docs/user-flow/user-flow.canvas.json',import.meta.url),'utf8'));
 const expected=Object.keys(manifest.items).length;
-const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-gpu','--use-gl=angle','--use-angle=gl-egl','--ignore-gpu-blocklist','--disable-features=LocalNetworkAccessChecks','--host-resolver-rules=MAP 112.168.71.147 127.0.0.1']});
+const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--enable-gpu','--use-gl=angle','--use-angle=gl-egl','--ignore-gpu-blocklist','--disable-features=LocalNetworkAccessChecks','--host-resolver-rules=MAP 118.34.144.201 127.0.0.1']});
 try {
  const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1920,height:1200}});
  await context.addInitScript(({token,user})=>{localStorage.setItem('agora_token',token);localStorage.setItem('agora_user',JSON.stringify(user));}, {token,user});
  const page=await context.newPage(),errors=[],frames=[],saved=[];
  page.on('pageerror',e=>errors.push(e.message));
  page.on('websocket',socket=>socket.on('framereceived',({payload})=>{try{const frame=JSON.parse(payload.toString()); if(['canvas_result','error'].includes(frame.type))console.log('Server result:',JSON.stringify({type:frame.type,ok:frame.ok,code:frame.code,count:frame.applied,results:frame.results?.map(r=>({ok:r.ok,code:r.code}))}));if(frame.type==='canvas_result')saved.push(frame);if(['init_items','canvas_snapshot'].includes(frame.type))frames.push(frame.type);}catch{}}));
- await page.goto(`https://112.168.71.147/canvases/${canvas_id}`);
+ await page.goto(`https://118.34.144.201/canvases/${canvas_id}`);
  await page.waitForTimeout(3000);
  await page.screenshot({path:'/tmp/agora-user-flow-debug.png'});
  await page.waitForFunction(()=>window.frelogCanvas && document.querySelector('.connection-pill.connected'),null,{timeout:60000});

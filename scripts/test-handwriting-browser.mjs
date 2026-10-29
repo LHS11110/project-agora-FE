@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 const auth = JSON.parse(await fs.readFile(process.env.AGORA_SESSION_FILE || '/tmp/agora-handwriting-session.json', 'utf8'));
 assert.equal(auth.canvas.canvas_name, '필기 검증 (임시)');
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || '/tmp/agora-studio-browser/node_modules/playwright-core/index.mjs');
-const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--host-resolver-rules=MAP 112.168.71.147 127.0.0.1', '--disable-features=LocalNetworkAccessChecks', '--enable-gpu', '--use-gl=angle', '--use-angle=gl-egl', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--host-resolver-rules=MAP 118.34.144.201 127.0.0.1', '--disable-features=LocalNetworkAccessChecks', '--enable-gpu', '--use-gl=angle', '--use-angle=gl-egl', '--ignore-gpu-blocklist'] });
 const errors = [];
 async function open() {
   const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1440, height: 1000 }, locale: 'ko-KR' });
@@ -16,7 +16,7 @@ async function open() {
   // RTC is for calls; shared drawing must arrive via the broker and server.
   await context.routeWebSocket(url => url.pathname.includes('/rtc/canvas/'), socket => socket.onMessage(() => {}));
   const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message));
-  await page.goto(`https://112.168.71.147/canvases/${auth.canvas_id}`);
+  await page.goto(`https://118.34.144.201/canvases/${auth.canvas_id}`);
   await page.waitForFunction(() => window.frelogCanvas && document.querySelector('.connection-pill.connected') && !document.querySelector('.canvas-loading-status.is-overlay'), null, { timeout: 60000 });
   return { context, page };
 }

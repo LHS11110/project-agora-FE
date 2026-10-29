@@ -6,7 +6,7 @@ import { moveTextPosition, textSpliceBetween } from './collaborativeText.js';
 import './canvas-code-editor.css';
 
 /** One model per open block; remote updates preserve selections and view state. */
-export default function CanvasCodeEditor({ value = '', language = 'javascript', onChange, onSave, onStopEditing }) {
+export default function CanvasCodeEditor({ value = '', language = 'javascript', inline = false, onChange, onSave, onStopEditing }) {
   useUiLocale();
   const boundary = useEditingBoundary(true, onStopEditing, { pointerOnly: true });
   const hostRef = useRef(null);
@@ -28,23 +28,29 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
       model = monaco.editor.createModel(String(latest.current.value), editorLanguage(latest.current.language), runtime.codeModelUri(monaco));
       model.setEOL(monaco.editor.EndOfLineSequence.LF);
       subscriptions.push(runtime.registerModelCompletions(monaco, model, () => latest.current.language));
+      const appearance = getComputedStyle(hostRef.current);
       editor = monaco.editor.create(hostRef.current, {
         model, theme: 'frelog-night', automaticLayout: true,
-        fontSize: 13, lineHeight: 20, tabSize: 2, insertSpaces: true,
+        fontSize: 13, lineHeight: 20,
+        ...(inline ? { fontFamily: appearance.fontFamily, fontSize: parseFloat(appearance.fontSize) || 13, lineHeight: parseFloat(appearance.lineHeight) || 21, letterSpacing: 0 } : {}),
+        fontLigatures: false, tabSize: 2, insertSpaces: true,
         minimap: { enabled: false }, scrollBeyondLastLine: false,
-        lineNumbersMinChars: 3, padding: { top: 10, bottom: 10 },
-        wordWrap: 'off', folding: true, glyphMargin: false,
+        lineNumbersMinChars: 3, padding: { top: inline ? 12 : 10, bottom: inline ? 12 : 10 },
+        wordWrap: 'off', folding: !inline, glyphMargin: false,
+        ...(inline ? { lineNumbers: 'off', lineDecorationsWidth: 12, overviewRulerLanes: 0, overviewRulerBorder: false, hideCursorInOverviewRuler: true, guides: { indentation: false, bracketPairs: false }, renderWhitespace: 'none', renderValidationDecorations: 'off' } : {}),
         quickSuggestions: { other: true, comments: false, strings: false },
         suggestOnTriggerCharacters: true, snippetSuggestions: 'top',
         wordBasedSuggestions: 'currentDocument', tabCompletion: 'on',
-        renderLineHighlight: 'line', bracketPairColorization: { enabled: true },
+        renderLineHighlight: inline ? 'none' : 'line', bracketPairColorization: { enabled: !inline },
         autoClosingBrackets: 'always', autoClosingQuotes: 'always',
         formatOnPaste: true, formatOnType: true,
-        fixedOverflowWidgets: false, mouseWheelZoom: false,
+        fixedOverflowWidgets: inline,
+        overflowWidgetsDomNode: inline ? hostRef.current.closest('.canvas-app-page') || document.body : undefined,
+        mouseWheelZoom: false,
         // Keep browser native editing contexts from retargeting pointer/focus events.
         editContext: false,
-        scrollbar: { alwaysConsumeMouseWheel: true },
-        ariaLabel: '공동 편집 코드 에디터',
+        scrollbar: { alwaysConsumeMouseWheel: true, ...(inline ? { useShadows: false, verticalScrollbarSize: 8, horizontalScrollbarSize: 8 } : {}) },
+        ariaLabel: ui('공동 편집 코드 에디터'),
       });
       editorRef.current = editor;
       subscriptions.push(editor.onDidChangeModelContent(() => {
@@ -101,7 +107,7 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
 
   // Monaco moves focus between its input, widgets and native editing context.
   // Only an explicit pointer outside the object closes the editing session.
-  return <div ref={boundary.ref} className="canvas-code-editor" onBlur={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()} onPointerMove={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()} onKeyDown={event => {
+  return <div ref={boundary.ref} className={`canvas-code-editor${inline ? ' is-inline' : ''}`} data-status={status} onBlur={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()} onPointerMove={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()} onKeyDown={event => {
     event.stopPropagation();
     if (status !== 'ready' && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); onSave?.(); }
   }}>

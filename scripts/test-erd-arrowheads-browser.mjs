@@ -5,13 +5,13 @@ const {chromium}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE_PATH).
 const auth=JSON.parse(fs.readFileSync(process.env.ERD_TEST_SESSION_FILE));
 assert.equal(auth.canvas.canvas_name,'ERD 연결 표기 검증 (임시)');
 const id=auth.canvas.canvas_id,errors=[],rejections=[];let finalHeadsCommitted=false;
-const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox','--host-resolver-rules=MAP 112.168.71.147 127.0.0.1','--disable-features=LocalNetworkAccessChecks','--enable-gpu','--use-gl=angle','--use-angle=gl-egl','--ignore-gpu-blocklist']});
+const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox','--host-resolver-rules=MAP 118.34.144.201 127.0.0.1','--disable-features=LocalNetworkAccessChecks','--enable-gpu','--use-gl=angle','--use-angle=gl-egl','--ignore-gpu-blocklist']});
 try{
  const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1920,height:1200}});
  await context.addInitScript(({token,user})=>{localStorage.setItem('agora_token',token);localStorage.setItem('agora_user',JSON.stringify(user));},auth);
  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('websocket',ws=>ws.on('framereceived',({payload})=>{try{const m=JSON.parse(payload);if(m.type==='error'||m.type==='canvas_result'&&m.ok===false)rejections.push(m.code);const item=m.type==='canvas_commit'&&m.items?.['erd-fixture-line-0-0'];if(item?.startHead==='erd-zero-one'&&item?.endHead==='erd-one-many')finalHeadsCommitted=true;}catch{}}));
  const ready=()=>page.waitForFunction(()=>window.frelogCanvas&&document.querySelector('.connection-pill.connected')&&!document.querySelector('.canvas-loading-status.is-overlay'),null,{timeout:60000});
- await page.goto(`https://112.168.71.147/canvases/${id}`);await ready();
+ await page.goto(`https://118.34.144.201/canvases/${id}`);await ready();
  const types=['erd-one','erd-zero-one','erd-one-many','erd-zero-many'],items={};
  for(const [styleIndex,visualStyle] of ['standard','sketch'].entries())for(const [i,type] of types.entries()){
   const x=80+styleIndex*950,y=160+i*240,from=`erd-fixture-from-${styleIndex}-${i}`,to=`erd-fixture-to-${styleIndex}-${i}`,line=`erd-fixture-line-${styleIndex}-${i}`;

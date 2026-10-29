@@ -1,3 +1,7 @@
+import CanvasImageContent from './CanvasImageContent.jsx';
+import { supportsObjectCorners } from './objectCorners.js';
+import './object-corners.css';
+import EditingSurface from './content/EditingSurface.jsx';
 import { ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
 import { canvasObjectPropsEqual } from './canvasRenderEquality.js';
@@ -19,7 +23,6 @@ import { scaleObjectElement } from './ScalableObjectContent.jsx';
 import { handleObjectDoubleClick } from './objectDoubleClick.js';
 import { cloneElement, memo, useMemo, useLayoutEffect, useRef } from 'react';
 import Icon from '../components/Icon.jsx';
-import AuthenticatedImage from '../components/AuthenticatedImage.jsx';
 import MarkdownText from '../components/MarkdownText.jsx';
 import EditableTable from '../components/EditableTable.jsx';
 import ChartView from './charts/ChartView.jsx';
@@ -103,6 +106,7 @@ function CanvasObjectView({ id, item, bounds, selected, allowSingleSelectionCont
   const movable = activeTool === 'select' && selected;
   const classes = `canvas-object canvas-object-${item.kind}${movable ? ' movable' : ''}${selected ? ' selected' : ''}${connectionStartId === id ? ' connection-source' : ''}${item.height ? ' has-custom-height' : ''}`;
   const handlers = {
+    ...(supportsObjectCorners(item) && item.cornerStyle ? { 'data-corner-style': item.cornerStyle } : {}),
     ref: editingBoundary.ref,
     'data-item-id': id,
     onDoubleClickCapture: (event) => handleObjectDoubleClick(event, { id, item, activeTool, editing, onStartEditing, onConnectorDoubleClick }),
@@ -163,7 +167,7 @@ function CanvasObjectView({ id, item, bounds, selected, allowSingleSelectionCont
       : null;
     return withResizeHandles(<div key={id} className={`${classes} vector-object-hit`} style={vectorStyle} data-item-id={id} {...handlers} title={ui("한 번 클릭해 선택 · 두 번 클릭해 연결된 객체로 이동")}>{curvePath && <svg className="connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} />{connectorEnds.map((point, index) => <circle key={index} cx={point.x - offsetX} cy={point.y - offsetY} r="9" />)}<ConnectorArrowheads visualStyle={item.visualStyle} seed={id} geometry={connectorCurve} offsetX={offsetX} offsetY={offsetY} strokeWidth={Number(item.strokeWidth) || 1.5} /></svg>}{selected && <ConnectorSelectionEffect geometry={connectorCurve} offsetX={offsetX} offsetY={offsetY} width={geometryWidth} height={geometryHeight} color={item.color} strokeWidth={item.strokeWidth} />}<ConnectorLabel item={item} geometry={connectorCurve} offsetX={offsetX} offsetY={offsetY} />{bendHandle}</div>);
   }
-  if (item.kind === 'image') return withResizeHandles(<div key={id} className={`${classes} image-object${item.imageFrameEnabled === false ? ' image-frame-hidden' : ''}`} style={style} {...handlers}><AuthenticatedImage src={item.src} token={token} alt={item.filename || ui("공유된 이미지")} fallback={<div className="image-object-fallback"><Icon name="image" size={19} /><span>{ui("이미지를 표시할 수 없어요")}</span></div>} loadingFallback={<div className="image-object-fallback"><Icon name="image" size={19} /><span>{ui("이미지를 불러오는 중…")}</span></div>} />{item.imageFrameEnabled !== false && <div className="object-caption"><Icon name="image" size={13} />{item.filename || ui("공유 이미지")}</div>}</div>);
+  if (item.kind === 'image') return withResizeHandles(<div key={id} className={`${classes} image-object${item.imageFrameEnabled === false ? ' image-frame-hidden' : ''}`} style={style} {...handlers}><CanvasImageContent item={item} token={token} />{item.imageFrameEnabled !== false && <div className="object-caption"><Icon name="image" size={13} />{item.filename || ui("공유 이미지")}</div>}</div>);
   if (item.kind === 'link') return withResizeHandles(<div key={id} className={`${classes} media-link-object${item.mediaType === 'link' ? ' external-link-object' : ' video-link-object'}`} style={style} data-item-id={id} {...handlers}>
     <div className="shared-media-header"><span className="shared-media-drag-handle" title={ui("여기를 끌어 자료를 이동하세요")}><Icon name={item.mediaType === 'link' ? 'link' : 'image'} size={13} />{item.mediaType === 'youtube' ? `YouTube · ${item.title || ui("동영상")}` : item.mediaType === 'video' ? ui("동영상 · {v0}", {
   v0: item.title || ui("재생")
@@ -179,7 +183,9 @@ function CanvasObjectView({ id, item, bounds, selected, allowSingleSelectionCont
   }
   if (item.kind === 'note') return withResizeHandles(<div key={id} className={`${classes} sticky-note-object`} style={{ ...style, '--sticky-note-color': item.color || stickyNoteColors[0], '--sticky-note-rotation': `${Number(item.rotation) || -1}deg` }} data-item-id={id} {...handlers} onBlur={editingBoundary.onBlur} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}>
     <div className="sticky-note-head"><span title={ui("끌어서 포스트잇 이동")}><Icon name="sticky" size={13} />{" " + ui("포스트잇") + ""}</span><input type="color" aria-label={ui("포스트잇 색상")} title={ui("포스트잇 색상 변경")} value={item.color || stickyNoteColors[0]} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'color', event.target.value)} /></div>
-    {editing ? <textarea ref={collaborativeEditorRef} autoFocus aria-label={ui("포스트잇 Markdown 편집")} value={item.text || ''} placeholder={ui("# 메모 제목\n- 할 일\n**중요한 내용**")} onPointerDown={(event) => event.stopPropagation()} onSelect={rememberCollaborativeSelection} onKeyUp={rememberCollaborativeSelection} onClick={rememberCollaborativeSelection} onChange={handleCollaborativeInput} /> : <div className="sticky-note-content" title={ui("두 번 클릭해 Markdown 편집")}>{item.text ? <MarkdownText source={item.text} /> : <p className="sticky-note-empty">{ui("두 번 클릭해 메모를 작성하세요.")}</p>}</div>}
+    <EditingSurface editing={editing} renderPreview={() => <div className="sticky-note-content" title={ui("두 번 클릭해 Markdown 편집")}>{item.text ? <MarkdownText source={item.text} /> : <p className="sticky-note-empty">{ui("두 번 클릭해 메모를 작성하세요.")}</p>}</div>}>
+      <textarea className="sticky-note-input" ref={collaborativeEditorRef} autoFocus aria-label={ui("포스트잇 Markdown 편집")} value={item.text || ''} placeholder={ui("# 메모 제목\n- 할 일\n**중요한 내용**")} onPointerDown={(event) => event.stopPropagation()} onSelect={rememberCollaborativeSelection} onKeyUp={rememberCollaborativeSelection} onClick={rememberCollaborativeSelection} onChange={handleCollaborativeInput} />
+    </EditingSurface>
   </div>);
   if (item.kind === 'table') return withResizeHandles(<div key={id} className={`${classes} canvas-table-object`} style={style} data-item-id={id} {...handlers}><EditableTable item={item} editingActive={editing} enabled={activeTool === 'select' && selected} onStartEditing={() => onStartEditing(id)} onStopEditing={() => onStopEditing(id)} onChange={(location, value) => onTableChange(id, (current) => updateTableValue(current, location, value))} /></div>);
   if (item.kind === 'chart') return withResizeHandles(<div key={id} className={`${classes} canvas-chart-object`} style={style} data-item-id={id} {...handlers}><ChartView item={item} /></div>);

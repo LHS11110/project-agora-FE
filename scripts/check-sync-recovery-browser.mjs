@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE_PATH?pathToFileURL(process.env.PLAYWRIGHT_MODULE_PATH).href:'playwright-core');
 const state=JSON.parse(fs.readFileSync(process.env.SYNC_SESSION_FILE||'/tmp/agora-sync-session.json'));
-const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox','--host-resolver-rules=MAP 112.168.71.147 127.0.0.1','--disable-features=LocalNetworkAccessChecks']});
+const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox','--host-resolver-rules=MAP 118.34.144.201 127.0.0.1','--disable-features=LocalNetworkAccessChecks']});
 const report={dropped:[],exceptions:[],sockets:{},joinMs:[],codes:[]};let rules={};
 const ready=page=>page.waitForFunction(()=>window.frelogCanvas && !document.querySelector('.canvas-loading-status.is-overlay'),null,{timeout:20000});
 async function join(name){
@@ -22,7 +22,7 @@ async function join(name){
  const page=await context.newPage();report.sockets[name]=0;
  page.on('pageerror',e=>report.exceptions.push(e.message));
  page.on('websocket',ws=>{report.sockets[name]++;ws.on('framereceived',({payload})=>{try{const f=JSON.parse(payload.toString());if(f.type==='error'||f.ok===false)report.codes.push({name,type:f.type,code:f.code});}catch{}});});
- const start=Date.now();await page.goto('https://112.168.71.147/canvases/'+state.canvas_id);await ready(page);report.joinMs.push({name,ms:Date.now()-start});console.log('Ready',name,Date.now()-start);
+ const start=Date.now();await page.goto('https://118.34.144.201/canvases/'+state.canvas_id);await ready(page);report.joinMs.push({name,ms:Date.now()-start});console.log('Ready',name,Date.now()-start);
  return {page,context};
 }
 const stored=()=>JSON.parse(execFileSync('/home/steam/Github/project-agora-DB/redis/redis-ha-cli.sh',['--raw','JSON.GET','canvas:'+state.canvas_id,'$.items'],{cwd:'/home/steam/Github/project-agora-DB',maxBuffer:8*1024*1024}))[0];

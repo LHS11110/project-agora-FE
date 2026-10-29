@@ -7,13 +7,13 @@ let browser;
 try {
   await server.listen();
   browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', headless: true, args: ['--no-sandbox'] });
-  const page = await browser.newPage(); const errors = [];
+  const page = await browser.newPage({ locale: 'ko-KR' }); const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/tests/browser/image-frame.html`);
-  const image = page.locator('.image-object > img'); await image.waitFor();
+  const image = page.locator('.image-object img'); await image.waitFor();
   const toggle = page.getByRole('switch', { name: '이미지 테두리 표시' });
   const measure = () => image.evaluate(el => {
-    const style = getComputedStyle(el), box = el.getBoundingClientRect();
+    const style = getComputedStyle(el.closest('.image-object-surface')), box = el.closest('.image-object-surface').getBoundingClientRect();
     return { border: style.borderTopWidth, bottom: style.borderBottomWidth, width: box.width, height: box.height };
   });
   const original = await measure(); assert.equal(original.border, '7px'); assert.equal(original.bottom, '26px');

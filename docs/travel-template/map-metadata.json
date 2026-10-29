@@ -1,0 +1,14 @@
+{
+  "source": "https://www.openstreetmap.org/copyright",
+  "dataEndpoint": "https://api.openstreetmap.org/api/0.6/map",
+  "license": "ODbL 1.0",
+  "bounds": {
+    "west": 127.028,
+    "east": 127.076,
+    "south": 37.5278,
+    "north": 37.5478
+  },
+  "width": 960,
+  "height": 506,
+  "displayedWays": 1755
+}

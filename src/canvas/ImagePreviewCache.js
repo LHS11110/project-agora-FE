@@ -1,3 +1,4 @@
+import { objectCornerRadius } from './objectCorners.js';
 // Small decoded previews are bounded independently of GPU atlas resources.
 // Eviction never invalidates pixels already copied into a layer's raster atlas.
 export default class ImagePreviewCache {
@@ -77,12 +78,16 @@ export async function loadImagePreview(source, token, apiUrl, signal) {
 
 export function drawImagePreview(context, item, world, bitmap) {
   const width = item.width * world.width, height = item.height * world.height;
+  const radius = objectCornerRadius(item, width, height);
+  if (radius) { context.save(); context.beginPath(); context.roundRect(0, 0, width, height, radius); context.clip(); }
   if (item.imageFrameEnabled !== false) {
     context.fillStyle = '#fff'; context.fillRect(0, 0, width, height);
+    context.fillStyle = '#f3f3ef'; context.fillRect(7, 7, Math.max(0, width - 14), Math.max(0, height - 33));
   }
   if (!bitmap) {
     // An outline while loading avoids replacing the image with an opaque block.
     context.strokeStyle = '#a8b2aa'; context.lineWidth = 1; context.strokeRect(1, 1, Math.max(0, width - 2), Math.max(0, height - 2));
+    if (radius) context.restore();
     return;
   }
   const border = item.imageFrameEnabled === false ? 0 : 7;
@@ -90,5 +95,9 @@ export function drawImagePreview(context, item, world, bitmap) {
   const boxWidth = Math.max(1, width - border * 2), boxHeight = Math.max(1, height - border - footer);
   const ratio = Math.min(boxWidth / bitmap.width, boxHeight / bitmap.height);
   const w = bitmap.width * ratio, h = bitmap.height * ratio;
-  context.drawImage(bitmap, border + (boxWidth - w) / 2, border + (boxHeight - h) / 2, w, h);
+  const x = border + (boxWidth - w) / 2, y = border + (boxHeight - h) / 2;
+  const innerRadius = Math.max(0, radius - border);
+  if (innerRadius) { context.beginPath(); context.roundRect(x, y, w, h, Math.min(innerRadius, w / 2, h / 2)); context.clip(); }
+  context.drawImage(bitmap, x, y, w, h);
+  if (radius) context.restore();
 }

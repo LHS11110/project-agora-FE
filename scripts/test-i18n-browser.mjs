@@ -2,8 +2,8 @@
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const {chromium} = await import(process.env.PLAYWRIGHT_MODULE || '/tmp/agora-erd-browser/node_modules/playwright-core/index.mjs');
-const base=process.env.AGORA_BASE_URL||'https://112.168.71.147';
-const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--host-resolver-rules=MAP 112.168.71.147 127.0.0.1','--disable-features=LocalNetworkAccessChecks','--enable-gpu','--use-gl=angle','--use-angle=gl-egl','--ignore-gpu-blocklist']});
+const base=process.env.AGORA_BASE_URL||'https://118.34.144.201';
+const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--host-resolver-rules=MAP 118.34.144.201 127.0.0.1','--disable-features=LocalNetworkAccessChecks','--enable-gpu','--use-gl=angle','--use-angle=gl-egl','--ignore-gpu-blocklist']});
 try {
  const context=await browser.newContext({ignoreHTTPSErrors:true,locale:'ko-KR',viewport:{width:1920,height:1200}});
  const page=await context.newPage(), errors=[];page.on('pageerror',err=>errors.push(err.message));

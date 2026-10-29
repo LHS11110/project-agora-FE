@@ -1,9 +1,13 @@
-.canvas-code-editor{position:relative;min-width:0;height:260px;min-height:160px;background:#1e1e1e;cursor:text;touch-action:auto}
+.canvas-code-editor{position:relative;min-width:0;height:260px;min-height:160px;background:#192233;cursor:text;touch-action:auto;font:13px/21px var(--mono);letter-spacing:0}
 .canvas-code-editor-host{width:100%;height:100%}
 .canvas-code-editor-loading{position:absolute;inset:0;display:grid;place-items:center;color:#c3d3c6;font-size:12px}
+.canvas-code-editor.is-inline .canvas-code-editor-loading{inset:auto;display:block;position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.canvas-code-editor[data-status="loading"]{background:transparent}
+.canvas-code-editor[data-status="loading"] .canvas-code-editor-host{visibility:hidden}
 .canvas-code-editor .monaco-editor{cursor:text}
 .canvas-code-editor>p{margin:0;padding:8px;color:#d9e8dc;font-size:11px}
-.canvas-code-editor-fallback{width:100%;height:200px;resize:none;border:0;padding:10px;background:#1e1e1e;color:#eee;font:13px/20px monospace}
+.canvas-code-editor.is-inline>p{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.canvas-code-editor-fallback{display:block;box-sizing:border-box;width:100%;height:100%;min-height:0;margin:0;resize:none;border:0;outline:0;padding:12px;background:#192233;color:#dce6f5;font:inherit;white-space:pre;overflow:auto;tab-size:2}
 .canvas-stage .code-object.has-custom-height,.tutorial-code-item.has-custom-height{display:flex;flex-direction:column}
 .canvas-stage .code-object.has-custom-height>.canvas-code-editor,.tutorial-code-item.has-custom-height>.canvas-code-editor{flex:1;min-height:100px;height:auto}
 .canvas-stage .code-object.has-custom-height>.code-object-head,.canvas-stage .code-object.has-custom-height>.code-object-foot{flex-shrink:0}

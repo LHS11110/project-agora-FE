@@ -4,7 +4,7 @@ if (!process.env.AGORA_E2E_STATE || !process.env.AGORA_E2E_PLAYWRIGHT_MODULE) th
 const state=JSON.parse(await fs.readFile(process.env.AGORA_E2E_STATE,'utf8'));
 const origin=process.env.AGORA_E2E_ORIGIN || 'https://localhost';
 const {chromium}=await import(process.env.AGORA_E2E_PLAYWRIGHT_MODULE);
-const browser=await chromium.launch({executablePath:process.env.AGORA_E2E_CHROME || '/usr/bin/google-chrome',args:['--no-sandbox','--host-resolver-rules=MAP 112.168.71.147 127.0.0.1','--disable-features=LocalNetworkAccessChecks','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']});
+const browser=await chromium.launch({executablePath:process.env.AGORA_E2E_CHROME || '/usr/bin/google-chrome',args:['--no-sandbox','--host-resolver-rules=MAP 118.34.144.201 127.0.0.1','--disable-features=LocalNetworkAccessChecks','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']});
 const pages=[];
 async function ready(page){await page.waitForFunction(()=>window.frelogCanvas&&window.testSocket?.readyState===1&&document.querySelector('.connection-pill.connected')&&!document.querySelector('.canvas-loading-status.is-overlay'),null,{timeout:60000})}
 async function open(auth){

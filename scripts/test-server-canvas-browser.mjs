@@ -7,7 +7,7 @@ if(!process.env.SYNC_SESSION_FILE)throw new Error('Provide SYNC_SESSION_FILE for
 const auth=JSON.parse(fs.readFileSync(process.env.SYNC_SESSION_FILE));
 assert.ok(auth.canvas.canvas_name.startsWith('서버 동기화 검증 (임시)'), 'Use only an explicitly named disposable synchronization test canvas');
 const canvasId=auth.canvas.canvas_id;
-const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox','--host-resolver-rules=MAP 112.168.71.147 127.0.0.1','--disable-features=LocalNetworkAccessChecks','--enable-gpu','--use-gl=angle','--use-angle=gl-egl','--ignore-gpu-blocklist']});
+const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox','--host-resolver-rules=MAP 118.34.144.201 127.0.0.1','--disable-features=LocalNetworkAccessChecks','--enable-gpu','--use-gl=angle','--use-angle=gl-egl','--ignore-gpu-blocklist']});
 const contexts=[], errors=[], frames=[], sends=[];
 async function open({blockRtc=false,dropCommit=false}={}){
  const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1440,height:1000}});contexts.push(context);
@@ -35,7 +35,7 @@ async function open({blockRtc=false,dropCommit=false}={}){
    ws.on('framereceived',({payload})=>{try{const d=JSON.parse(payload.toString());frames.push({type:d.type,ok:d.ok,code:d.code,revision:d.revision});if(d.type==='init_items'&&d.client_id!==new URL(ws.url()).searchParams.get('client_id'))errors.push('Initial snapshot client ID does not match the editing session');if(d.type==='error'||d.type==='canvas_result')console.log('Result',d.type,d.code,d.ok);}catch{}});
    ws.on('framesent',({payload})=>{try{const d=JSON.parse(payload.toString());sends.push({type:d.type,...(d.type==='canvas_ops'?{operations:d.operations.map(o=>({action:o.action,ids:o.ids}))}:{})});}catch{}});
  });
- await page.goto(`https://112.168.71.147/canvases/${canvasId}`);
+ await page.goto(`https://118.34.144.201/canvases/${canvasId}`);
  await page.waitForFunction(()=>window.frelogCanvas&&document.querySelector('.connection-pill.connected')&&!document.querySelector('.canvas-loading-status.is-overlay'),null,{timeout:45000});
  return page;
 }

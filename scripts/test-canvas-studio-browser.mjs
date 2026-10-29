@@ -3,14 +3,14 @@ import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'/tmp/agora-studio-browser/node_modules/playwright-core/index.mjs');
 const session=JSON.parse(await fs.readFile(process.env.AGORA_SESSION_FILE||'/tmp/agora-studio-session.json','utf8'));
-const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox','--host-resolver-rules=MAP 112.168.71.147 127.0.0.1','--disable-features=LocalNetworkAccessChecks','--enable-gpu','--use-gl=angle','--use-angle=gl-egl','--ignore-gpu-blocklist']});
+const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox','--host-resolver-rules=MAP 118.34.144.201 127.0.0.1','--disable-features=LocalNetworkAccessChecks','--enable-gpu','--use-gl=angle','--use-angle=gl-egl','--ignore-gpu-blocklist']});
 const results=[];
 try{
  const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1440,height:1000},locale:'ko-KR'});
  await context.addInitScript(({token,user})=>{localStorage.setItem('agora_token',token);localStorage.setItem('agora_user',JSON.stringify(user));},{token:session.token,user:session.user});
  const page=await context.newPage(),errors=[];page.on('pageerror',err=>errors.push(err.message));
  const ready=()=>page.waitForFunction(()=>window.frelogCanvas&&document.querySelector('.connection-pill.connected')&&!document.querySelector('.canvas-loading-status.is-overlay'),{timeout:60000});
- await page.goto(`https://112.168.71.147/canvases/${session.canvas_id}`);await ready();
+ await page.goto(`https://118.34.144.201/canvases/${session.canvas_id}`);await ready();
  const before=await page.evaluate(()=>JSON.stringify(window.frelogCanvas.read()));
  const dock=page.locator('.canvas-quick-dock');await dock.waitFor();await page.screenshot({path:'/tmp/agora-studio-initial.png'});
  await dock.getByRole('button',{name:'도형',exact:true}).click();

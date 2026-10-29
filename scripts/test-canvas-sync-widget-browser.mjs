@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 const session = JSON.parse(await fs.readFile(process.env.AGORA_SESSION_FILE || '/tmp/agora-sync-widget-session.json', 'utf8'));
 assert.equal(session.canvas.canvas_name, '동기화 상태 검증 (임시)');
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || '/tmp/agora-studio-browser/node_modules/playwright-core/index.mjs');
-const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--host-resolver-rules=MAP 112.168.71.147 127.0.0.1', '--disable-features=LocalNetworkAccessChecks', '--enable-gpu', '--use-gl=angle', '--use-angle=gl-egl', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--host-resolver-rules=MAP 118.34.144.201 127.0.0.1', '--disable-features=LocalNetworkAccessChecks', '--enable-gpu', '--use-gl=angle', '--use-angle=gl-egl', '--ignore-gpu-blocklist'] });
 try {
   const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1440, height: 1000 }, locale: 'ko-KR' });
   await context.addInitScript(({ token, user }) => {
@@ -34,7 +34,7 @@ try {
   page.on('websocket', socket => socket.on('framereceived', ({ payload }) => {
     try { const frame = JSON.parse(payload.toString()); if (frame.type === 'canvas_commit') commits.push(frame); } catch { /* Ignore non-JSON frames. */ }
   }));
-  await page.goto(`https://112.168.71.147/canvases/${session.canvas_id}`);
+  await page.goto(`https://118.34.144.201/canvases/${session.canvas_id}`);
   const ready = () => page.waitForFunction(() => window.frelogCanvas && document.querySelector('.connection-pill.connected') && !document.querySelector('.canvas-loading-status.is-overlay'), null, { timeout: 60000 });
   await ready();
   assert.equal(Object.keys(await page.evaluate(() => window.frelogCanvas.read().items)).length, 0, 'The test canvas must start empty');
