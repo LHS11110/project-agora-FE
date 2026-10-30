@@ -1,0 +1,44 @@
+// Run against the Vite development server; this fixture uses no accounts or stored canvases.
+import assert from 'node:assert/strict';
+const {chromium}=await import(process.env.AGORA_E2E_PLAYWRIGHT_MODULE || 'playwright-core');
+const browser=await chromium.launch({executablePath:process.env.AGORA_E2E_CHROME || '/usr/bin/google-chrome',args:['--no-sandbox']});
+try{
+ const context=await browser.newContext({viewport:{width:1100,height:800},hasTouch:true,isMobile:true,deviceScaleFactor:2,ignoreHTTPSErrors:process.env.AGORA_E2E_INSECURE_LOCAL_TLS === '1'});
+ const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await page.goto((process.env.AGORA_E2E_ORIGIN || 'https://localhost:5191')+'/tests/browser/touch-navigation.html');
+ await page.waitForFunction(()=>window.touchFixture&&document.querySelector('.blueprint-results'));
+ const camera=()=>page.evaluate(()=>({x:window.touchFixture.camera.x,y:window.touchFixture.camera.y,scale:window.touchFixture.camera.scale}));
+ const before=await camera();const body=page.locator('.blueprint-node-body');
+ await body.hover();await page.mouse.wheel(0,150);await page.waitForTimeout(200);
+ assert.equal(await body.evaluate(el=>el.scrollTop),0,'unselected result does not scroll');
+ assert.notDeepEqual(await camera(),before,'unselected result wheel navigates canvas');
+ await page.evaluate(()=>window.touchFixture.reset());await page.waitForTimeout(150);
+ await body.click();await page.locator('.blueprint-object.selected').waitFor();
+ assert.ok(await body.evaluate(el=>el.scrollHeight>el.clientHeight));
+ await body.hover();await page.mouse.wheel(0,500);await page.waitForTimeout(300);
+ assert.ok(await body.evaluate(el=>el.scrollTop>0),'wheel scrolls output');assert.deepEqual(await camera(),before);
+ await body.evaluate(el=>{el.scrollTop=el.scrollHeight;});await page.mouse.wheel(0,300);await page.waitForTimeout(150);
+ assert.deepEqual(await camera(),before,'output boundary does not pan canvas');
+ const end=await body.evaluate(el=>el.scrollTop);await page.mouse.wheel(0,-400);await page.waitForTimeout(300);
+ assert.ok(await body.evaluate(el=>el.scrollTop)<end);
+ console.log('PASS: long output scrolls up/down by wheel; canvas stays fixed including at boundaries');
+ await page.evaluate(()=>window.touchFixture.setTool('pen'));await page.waitForTimeout(100);
+ const client=await context.newCDPSession(page);
+ const touch=(type,points)=>client.send('Input.dispatchTouchEvent',{type,touchPoints:points.map(([id,x,y])=>({id,x,y,radiusX:4,radiusY:4,force:1}))});
+ await touch('touchStart',[[1,650,400]]);
+ await touch('touchStart',[[1,650,400],[2,850,400]]);
+ await touch('touchMove',[[1,600,400],[2,900,400]]);await page.waitForTimeout(200);
+ assert.ok(Math.abs((await camera()).scale-1.5)<.03,JSON.stringify(await camera()));
+ await touch('touchMove',[[1,675,400],[2,825,400]]);await page.waitForTimeout(200);
+ assert.ok(Math.abs((await camera()).scale-.75)<.03,JSON.stringify(await camera()));
+ await touch('touchEnd',[]);await page.waitForTimeout(100);
+ assert.equal(await page.evaluate(()=>window.visualViewport.scale),1,'browser page is not zoomed');
+ assert.equal(await page.evaluate(()=>window.touchFixture.frames.current.length),0,'pinch in pen mode adds no stroke');
+ assert.equal(await page.evaluate(()=>window.touchFixture.drawingRef.current),false);
+ console.log('PASS: tablet two-finger spread/contract changes canvas zoom, not page zoom; pen mode leaves no dot');
+ await page.evaluate(()=>window.touchFixture.reset());await page.waitForTimeout(150);
+ await touch('touchStart',[[3,650,450]]);await touch('touchMove',[[3,720,500]]);await touch('touchEnd',[]);await page.waitForTimeout(150);
+ assert.equal(await page.evaluate(()=>Object.values(window.touchFixture.itemsRef.current).filter(item=>item.kind==='stroke').length),1);
+ console.log('PASS: one-finger drawing still works after pinch');
+ assert.deepEqual(errors,[]);
+}finally{await browser.close();}

@@ -40,7 +40,9 @@ import { useContentSettings } from '../canvas/content/useContentSettings.js';
 import { CONNECTOR_METRICS_EVENT } from '../canvas/connectors/objectMetrics.js';
 import CanvasAsCodeDialog from '../canvas/asCode/CanvasAsCodeDialog.jsx';
 import { createBlueprintStore } from '../canvas/runtime/blueprintStore.js';
+import RuntimeSettingsDialog from '../canvas/runtime/RuntimeSettingsDialog.jsx';
 import { executeCanvasCode } from '../canvas/runtime/executeCanvasCode.js';
+import useCodeExecutionShortcut from '../canvas/runtime/useCodeExecutionShortcut.js';
 import { useCommentsAndMentions } from '../canvas/comments/useCommentsAndMentions.js';
 import ObjectCommentsPanel from '../canvas/comments/ObjectCommentsPanel.jsx';
 import MentionNotifications from '../canvas/comments/MentionNotifications.jsx';
@@ -52,6 +54,7 @@ import { isObjectFontSize, hasIndependentContentSize } from '../canvas/objectSiz
 import { canvasGridStyle } from '../canvas/canvasGrid.js';
 import { useEraserSize } from '../canvas/useEraserSize.js';
 import { useCanvasPalette } from '../canvas/useCanvasPalette.js';
+import { useCanvasTouchNavigation } from '../canvas/useCanvasTouchNavigation.js';
 import { stagePointerHandlers } from '../canvas/stagePointerHandlers.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Automerge from '@automerge/automerge/slim';
@@ -116,6 +119,7 @@ const automergeReady = Automerge.initializeWasm(automergeWasmUrl);
 function CanvasWorkspace() {
   useUiLocale();
   const [showCanvasCode, setShowCanvasCode] = useState(false);
+  const [showRuntimeSettings, setShowRuntimeSettings] = useState(false);
   const { canvasId } = useParams();
   const { token, user } = useAuth();
   const runtimeRequestRef = useRef(null);
@@ -180,6 +184,7 @@ function CanvasWorkspace() {
   const newCollaborativeItemsRef = useRef(new Set());
   const saveCollaborativeItemRef = useRef(null);
   const editingIdRef = useRef(null);
+  const selectedIdsRef = useRef([]);
   const chatHistoryRequestRef = useRef(null);
   const chatHistoryPageRef = useRef({ hasMore: false, nextToSequence: null });
   const itemEditRevisionRef = useRef(new Map());
@@ -302,6 +307,7 @@ function CanvasWorkspace() {
   }, [hostStatus.editable]);
   const selectItems = useCallback((ids, primaryId) => {
     const normalized = [...new Set((ids || []).filter((id) => id != null).map(String))];
+    selectedIdsRef.current = normalized;
     setSelectedItemIds(normalized);
     setSelectedItemId(normalized.length ? String(primaryId ?? normalized[normalized.length - 1]) : null);
   }, []);
@@ -1107,7 +1113,7 @@ function CanvasWorkspace() {
     if (participant) Object.assign(payload, participant); else payload.value = value;
     if (sendRaw(payload)) setSettingsPending(true);
   };
-  const { pointerPosition, startPan, cancelPanInertia, centeredItemPosition, hideCursor, sendCursorPosition, startZoomHold, stopZoomHold, cancelZoomHold, clickZoom, startDrawing, moveDrawing, stopDrawing } = useCanvasStageInteractions({
+  const { cancelStageGesture, pointerPosition, startPan, cancelPanInertia, centeredItemPosition, hideCursor, sendCursorPosition, startZoomHold, stopZoomHold, cancelZoomHold, clickZoom, startDrawing, moveDrawing, stopDrawing } = useCanvasStageInteractions({
     boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth, eraserMode,
     addItem, setToast, setItems, patchItems, refreshSpatialIndex, spatialIndexRef,
     sendStrokeFrameChanges, pendingItemChangesRef, strokeSaveFlushRef,
@@ -1206,6 +1212,12 @@ function CanvasWorkspace() {
     spacePressedRef,
     startPan,
   });
+  const touchNavigation = useCanvasTouchNavigation({ boardRef, setCamera, onStart: point => {
+    cancelPanInertia();
+    if (dragRef.current) stopObjectDrag({ ...point, pointerId: dragRef.current.pointerId, type: 'pointercancel', currentTarget: boardRef.current, target: dragRef.current.captureElement });
+    cancelStageGesture(point);
+    hideCursor();
+  } });
   const changeTheme = (nextTheme) => { localStorage.setItem('agora_canvas_theme', nextTheme); setTheme(nextTheme); };
   const toggleGrid = () => { const next = !showGrid; localStorage.setItem('agora_canvas_grid', String(next)); setShowGrid(next); };
   const toggleXAxis = () => { const next = !showXAxis; localStorage.setItem('agora_canvas_x_axis', String(next)); setShowXAxis(next); };
@@ -1244,6 +1256,7 @@ function CanvasWorkspace() {
     }
     if (selectedTable) updateTableItem(primarySelectedItemId, { [field]: nextSize / 100 });
   };
+  useCodeExecutionShortcut({selectedIds:selectedObjectIds,selectedIdsRef,itemsRef,editingId,editingIdRef,sessionRef:hostSessionRef,dragRef,store:runtimeStore,onMessage:setToast});
   useCanvasKeyboardNudge({ activeTool, editingId, selectedIds: selectedObjectIds, itemsRef, sessionRef: hostSessionRef, dragRef, moveItems, flushMoves });
   useEffect(() => {
     const isEditableTarget = (target) => target instanceof HTMLElement
@@ -1376,8 +1389,8 @@ function CanvasWorkspace() {
       <ResizablePanel {...panelLayout.handle('tools')}><CanvasToolPanel activeTool={activeTool} onSelectTool={selectCanvasTool} color={color} onColorChange={setColor} onUploadPdf={uploadPdf} onUploadImage={uploadImage} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} /></ResizablePanel>
       <CanvasQuickDock activeTool={activeTool} onSelectTool={selectCanvasTool} onUploadImage={uploadImage}
         toolsExpanded={!panelLayout.handle('tools').collapsed} onToggleTools={panelLayout.handle('tools').onToggle} />
-      <main className="board-region"><div className="board-topline"><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(true); }}><Icon name="code" size={15} />{ui("캔버스 코드")}</button><button className="zoom-button" aria-label={ui("확대")} title={ui("클릭: 한 단계 확대 · 길게 누르기: 계속 확대")} onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label={ui("축소")} title={ui("클릭: 한 단계 축소 · 길게 누르기: 계속 축소")} onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>{ui("맞춤")}</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />{"" + ui("격자") + " "}{showGrid ? ui("켜짐") : ui("꺼짐")}</button></div></div>
-        <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ ...canvasGridStyle(camera), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion: cancelPanInertia, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, sendCursorPosition, pickVector: (event,doubleClick = false,capture = false) => {
+      <main className="board-region"><div className="board-topline"><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(true); }}><Icon name="code" size={15} />{ui("캔버스 코드")}</button><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={()=>setShowRuntimeSettings(true)}><Icon name="settings" size={15}/>{ui("실행 환경")}</button><button className="zoom-button" aria-label={ui("확대")} title={ui("클릭: 한 단계 확대 · 길게 누르기: 계속 확대")} onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label={ui("축소")} title={ui("클릭: 한 단계 축소 · 길게 누르기: 계속 축소")} onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>{ui("맞춤")}</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />{"" + ui("격자") + " "}{showGrid ? ui("켜짐") : ui("꺼짐")}</button></div></div>
+        <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ ...canvasGridStyle(camera), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ touchNavigation, activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion: cancelPanInertia, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, sendCursorPosition, pickVector: (event,doubleClick = false,capture = false) => {
             if (!['select', 'connect'].includes(activeTool) || event.button !== 0 || event.target.closest?.('.canvas-minimap, .stage-label, button, input, textarea')) return false;
             const target=event.target.closest?.('.canvas-object');
             if(capture !== Boolean(target))return false;
@@ -1500,6 +1513,7 @@ function CanvasWorkspace() {
     {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{ui(toast)}</div>}
     {comments.activeId && <ObjectCommentsPanel comments={comments} participants={mentionParticipants} connection={connection} />}
     <MentionNotifications notifications={comments.notifications} onJump={jumpToMention} onDismiss={comments.dismiss} />
+    {showRuntimeSettings && <RuntimeSettingsDialog canvasId={canvasId} token={token} user={user} initialLanguage={selectedItem?.language || 'cpp'} isRunning={()=>runtimeStore.isRunning()} onClose={()=>setShowRuntimeSettings(false)} />}
     {showCanvasCode && <CanvasAsCodeDialog api={canvasCodeApi} canvasId={canvasId} onClose={() => setShowCanvasCode(false)} />}
     {showSettings && <SettingsDialog backgroundColor={backgroundColor} setBackgroundColor={setBackgroundColor} favoriteColors={favoriteColors} saveFavoriteColor={saveFavoriteColor} theme={theme} canvasId={canvasId} image={canvas?.image} token={token} onImageSaved={(image) => setCanvas(current => ({ ...current, image }))} settings={settings} pending={settingsPending} onClose={() => setShowSettings(false)} onUpdate={sendSettings} />}
     {showParticipants && <CanvasParticipantsDialog participants={canvasParticipants} token={token} settings={settings} pending={settingsPending} onClose={() => setShowParticipants(false)} onAddParticipant={(nickname, tag) => sendSettings('participant_add', null, { nickname, tag_number: tag })} onRemoveParticipant={(person) => sendSettings('participant_remove', null, { nickname: person.nickname, tag_number: person.tag_number })} />}

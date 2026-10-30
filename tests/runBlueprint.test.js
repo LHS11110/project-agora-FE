@@ -20,3 +20,15 @@ test('execution failure stops subsequent code and reports only to connected outp
   await runBlueprint(items,'run',async () => { calls++; throw new Error('offline'); },(id,result)=>output.push([id,result.result.error]));
   assert.equal(calls,1); assert.deepEqual(output,[['out','offline']]);
 });
+
+test('kernel resets are visible and persisted using the broker result schema', async () => {
+  const items={run:{runtimeRole:'executor'},a:{kind:'code',code:'while True: pass',language:'python'},out:{runtimeRole:'output'},
+    e1:{kind:'connector',from:'run',to:'a'},e2:{kind:'connector',from:'a',to:'out'}};
+  let saved;
+  const outcome=await runBlueprint(items,'run',async()=>({exitCode:1,output:'last output',timedOut:true,truncated:false,environmentReset:true}),
+    (_id,entry)=>{saved=entry.result;});
+  assert.equal(outcome.failed,true);
+  assert.match(saved.error,/last output/);
+  assert.match(saved.error,/초기화/);
+  assert.equal(Object.hasOwn(saved,'environmentReset'),false);
+});

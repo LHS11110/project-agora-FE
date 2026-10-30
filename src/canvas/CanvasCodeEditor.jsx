@@ -4,6 +4,7 @@ import { useEditingBoundary } from './useEditingBoundary.js';
 import { useEffect, useRef, useState } from 'react';
 import { moveTextPosition, textSpliceBetween } from './collaborativeText.js';
 import './canvas-code-editor.css';
+import './code-completions.css';
 
 /** One model per open block; remote updates preserve selections and view state. */
 export default function CanvasCodeEditor({ value = '', language = 'javascript', inline = false, onChange, onSave, onStopEditing }) {
@@ -19,7 +20,7 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
 
   useEffect(() => {
     let disposed = false;
-    let editor, model, observer;
+    let editor, model, observer, widgetRoot;
     const subscriptions = [];
     import('./monacoRuntime.js').then(runtime => {
       if (disposed) return;
@@ -29,6 +30,11 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
       model.setEOL(monaco.editor.EndOfLineSequence.LF);
       subscriptions.push(runtime.registerModelCompletions(monaco, model, () => latest.current.language));
       const appearance = getComputedStyle(hostRef.current);
+      // A dedicated unscaled owner supplies Monaco's CSS scope outside the canvas.
+      widgetRoot=document.createElement('div');
+      widgetRoot.className='monaco-editor vs-dark agora-code-widgets';
+      widgetRoot.dataset.codeWidgetOwner=model.uri.toString();
+      (hostRef.current.closest('.canvas-app-page')||document.body).appendChild(widgetRoot);
       editor = monaco.editor.create(hostRef.current, {
         model, theme: 'frelog-night', automaticLayout: true,
         fontSize: 13, lineHeight: 20,
@@ -40,12 +46,15 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
         ...(inline ? { lineNumbers: 'off', lineDecorationsWidth: 12, overviewRulerLanes: 0, overviewRulerBorder: false, hideCursorInOverviewRuler: true, guides: { indentation: false, bracketPairs: false }, renderWhitespace: 'none', renderValidationDecorations: 'off' } : {}),
         quickSuggestions: { other: true, comments: false, strings: false },
         suggestOnTriggerCharacters: true, snippetSuggestions: 'top',
-        wordBasedSuggestions: 'currentDocument', tabCompletion: 'on',
+        quickSuggestionsDelay:120,suggestFontSize:13,suggestLineHeight:32,
+        suggest:{showIcons:true,showStatusBar:true,showInlineDetails:true,preview:true,previewMode:'prefix',localityBonus:false,shareSuggestSelections:false},
+        acceptSuggestionOnEnter:'smart',
+        wordBasedSuggestions: 'off', tabCompletion: 'on',
         renderLineHighlight: inline ? 'none' : 'line', bracketPairColorization: { enabled: !inline },
         autoClosingBrackets: 'always', autoClosingQuotes: 'always',
         formatOnPaste: true, formatOnType: true,
-        fixedOverflowWidgets: inline,
-        overflowWidgetsDomNode: inline ? hostRef.current.closest('.canvas-app-page') || document.body : undefined,
+        fixedOverflowWidgets:true,
+        overflowWidgetsDomNode:widgetRoot,
         mouseWheelZoom: false,
         // Keep browser native editing contexts from retargeting pointer/focus events.
         editContext: false,
@@ -68,7 +77,7 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
       disposed = true;
       observer?.disconnect();
       subscriptions.forEach(subscription => subscription.dispose());
-      editor?.dispose(); model?.dispose();
+      editor?.setModel(null);editor?.dispose(); model?.dispose();widgetRoot?.remove();
       editorRef.current = null;
     };
   }, []);

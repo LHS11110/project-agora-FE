@@ -31,7 +31,27 @@ test('only executor runs and removed output links receive no pending result', as
 });
 
 test('unsupported languages fail before any code executes or results are written', async () => {
-  const items=graph();items.code.language='java';let executed=false;
+  const items=graph();items.code.language='ruby';let executed=false;
   const store=createBlueprintStore({getItems:()=>items,execute:async()=>{executed=true;},saveOutput:()=>true});
   await store.run('run');assert.equal(executed,false);assert.match(store.get('run').error,/言語|언어/);
+});
+
+test('reset shares the run lock, clears executor status, and preserves stored outputs', async () => {
+  const items=graph(), requests=[], writes=[];
+  let finish;
+  const store=createBlueprintStore({getItems:()=>items, execute:request=>{
+    requests.push(request);
+    return new Promise(resolve=>{finish=resolve;});
+  },saveOutput:(...args)=>{writes.push(args);return true;}});
+  const reset=store.reset('run');
+  await store.run('run');
+  assert.deepEqual(requests,[{action:'reset'}]);
+  finish({reset:true});await reset;
+  assert.equal(store.get('run').reset,true);
+  assert.deepEqual(writes,[]);
+  const running=store.run('run');
+  await store.reset('run');
+  assert.equal(requests.length,2);
+  finish({exitCode:0,output:'ok'});await running;
+  assert.equal(store.get('run').completed,true);
 });

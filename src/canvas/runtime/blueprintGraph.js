@@ -3,13 +3,16 @@ export const isBlueprintCode = item => isTextContent(item) && contentMode(item) 
 export const isBlueprintNode = item => item?.kind === 'shape' && ['executor', 'output'].includes(item.runtimeRole);
 
 /** Directed control flow is a DAG; output nodes may forward to more output nodes. */
-export function resolveBlueprint(items, executorId) {
+export function resolveBlueprint(items, executorId) { return resolveGraph(items,executorId,false); }
+export function resolveCode(items, codeId) { return resolveGraph(items,codeId,true); }
+
+function resolveGraph(items, executorId, codeOnly) {
   executorId = String(executorId);
-  if (items[executorId]?.runtimeRole !== 'executor') throw new Error('실행 객체가 필요합니다.');
+  if (codeOnly ? !isBlueprintCode(items[executorId]) : items[executorId]?.runtimeRole !== 'executor') throw new Error(codeOnly?'코드 객체가 필요합니다.':'실행 객체가 필요합니다.');
   const adjacent = new Map();
   for (const [, edge] of Object.entries(items).filter(([, item]) => item?.kind === 'connector').sort(([a], [b]) => a.localeCompare(b))) {
     const from = String(edge.from), to = String(edge.to), source = items[from], target = items[to];
-    const allowed = ((from === executorId || isBlueprintCode(source)) && isBlueprintCode(target))
+    const allowed = (!codeOnly && (from === executorId || isBlueprintCode(source)) && isBlueprintCode(target))
       || ((isBlueprintCode(source) || source?.runtimeRole === 'output') && target?.runtimeRole === 'output');
     if (allowed) {
       if (!adjacent.has(from)) adjacent.set(from, new Set());

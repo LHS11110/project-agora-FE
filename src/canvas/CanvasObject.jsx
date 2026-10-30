@@ -138,7 +138,7 @@ function CanvasObjectView({ id, item, bounds, selected, allowSingleSelectionCont
     <>{element.props.children}{resizeHandles && <button type="button" className="object-move-handle" aria-label={ui("선택한 객체 이동")} title={ui("잡고 끌어 객체 이동")} onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onPointerDown(event, id, item); }}><Icon name="move" size={16} /></button>}{resizeHandles}</>), item);
 
 
-  if (item.kind === 'shape' && ['executor', 'output'].includes(item.runtimeRole)) return withResizeHandles(<div className={`${classes} blueprint-object`} style={style} {...handlers}><BlueprintNode id={id} item={item} store={runtimeStore} /></div>);
+  if (item.kind === 'shape' && ['executor', 'output'].includes(item.runtimeRole)) return withResizeHandles(<div className={`${classes} blueprint-object`} style={style} {...handlers}><BlueprintNode id={id} item={item} store={runtimeStore} selected={selected} /></div>);
   if (item.kind === 'pdf') return withResizeHandles(<div className={`${classes} pdf-object`} style={style} {...handlers}><PdfDocumentContent item={item} token={token} interactive={selected && activeTool === 'select'} /></div>);
   if (item.kind === 'user-group') return withResizeHandles(<div className={`${classes} user-group-object`} style={style} {...handlers}><UserGroupContent item={item} token={token} /></div>);
   if (item.kind === 'stroke') {

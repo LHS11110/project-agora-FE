@@ -471,6 +471,7 @@ export function useCanvasStageInteractions(options) {
     const session = {
       id: strokeId,
       pointerId: event.pointerId,
+      pendingTouchStart: event.pointerType === 'touch',
       brush: penBrush || INK_BRUSH,
       opacity: penOpacity ?? 1,
       simulatePressure: event.pointerType !== 'pen',
@@ -486,8 +487,10 @@ export function useCanvasStageInteractions(options) {
     drawingSessionRef.current = session;
     draftRef.current = [point];
     vectorDraftRef.current?.({ id: session.id, brush: session.brush, opacity: session.opacity, simulatePressure: session.simulatePressure, complete: false, points: draftRef.current, color: session.color, strokeWidth: session.strokeWidth });
-    sendStrokePreviewStart(peerMeshRef.current, session, point);
-    queueDrawingStroke();
+    if (!session.pendingTouchStart) {
+      sendStrokePreviewStart(peerMeshRef.current, session, point);
+      queueDrawingStroke();
+    }
   };
   const moveDrawing = (event) => {
     if (drawingRef.current && drawingSessionRef.current?.pointerId !== event.pointerId) return;
@@ -519,6 +522,10 @@ export function useCanvasStageInteractions(options) {
       size: boardSize, scale: camera.scale, brush: session.brush, maxPoints: MAX_REALTIME_STROKE_POINTS,
     });
     if (!added.length) return;
+    if (session.pendingTouchStart) {
+      session.pendingTouchStart = false;
+      sendStrokePreviewStart(peerMeshRef.current, session, draftRef.current[0]);
+    }
     session.pendingPoints.push(...added);
     queueDrawingStroke();
     vectorDraftRef.current?.({ id: session.id, brush: session.brush, opacity: session.opacity, simulatePressure: session.simulatePressure, complete: false, points: draftRef.current, color: session.color, strokeWidth: session.strokeWidth });
@@ -579,6 +586,16 @@ export function useCanvasStageInteractions(options) {
     }
     if (!drawingRef.current) return;
     if (drawingSessionRef.current?.pointerId !== event.pointerId) return;
+    if (drawingSessionRef.current?.pendingTouchStart && event.type === 'pointercancel') {
+      drawingRef.current = false; drawingSessionRef.current = null; draftRef.current = [];
+      vectorDraftRef.current?.(null);
+      if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+      return;
+    }
+    if (drawingSessionRef.current?.pendingTouchStart) {
+      drawingSessionRef.current.pendingTouchStart = false;
+      sendStrokePreviewStart(peerMeshRef.current, drawingSessionRef.current, draftRef.current[0]);
+    }
     // Capture the final location before pointerup; some devices do not send a
     // pointermove for the last segment. Do not record release pressure (zero).
     if (event.type === 'pointerup') {
@@ -626,7 +643,13 @@ export function useCanvasStageInteractions(options) {
       }, (peer) => canPeerAccessItem(session.aclItem, peer));
     }
   };
+  const cancelStageGesture = point => {
+    const stage = boardRef.current;
+    const pointerId = drawingSessionRef.current?.pointerId ?? panRef.current?.pointerId ?? selectionRef.current?.pointerId ?? point.pointerId;
+    stopDrawing({ ...point, pointerId, type: 'pointercancel', currentTarget: stage, target: stage });
+  };
   return {
+    cancelStageGesture,
     pointerPosition,
     startPan,
     cancelPanInertia,
