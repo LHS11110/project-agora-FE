@@ -1656,4 +1656,10 @@ export default {
   '타입': 'Type',
   '네임스페이스': 'Namespace',
   '변수': 'Variable',
+  "Google로 계속하기": "Continue with Google",
+  "또는 이메일로 계속하기": "Or continue with email",
+  "로그인 중…": "Signing in…",
+  "Google 로그인을 완료하지 못했습니다. 다시 시도해주세요.": "Could not complete Google sign-in. Please try again.",
+  "같은 이메일의 기존 계정이 있습니다. 기존 로그인 방식을 사용해주세요.": "An account already uses this email. Please use its existing sign-in method.",
+  "Google 로그인이 취소되었거나 실패했습니다. 다시 시도해주세요.": "Google sign-in was cancelled or failed. Please try again.",
 };

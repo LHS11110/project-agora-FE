@@ -14,15 +14,18 @@ test('publishes complete releases, keeps old chunks, preserves current on failur
     await mkdir(join(source, 'assets'), { recursive: true });
     await writeFile(join(source, 'index.html'), 'version1');
     await writeFile(join(source, 'assets', 'old-hash.js'), 'old');
+    await mkdir(join(source,'licenses'));await writeFile(join(source,'licenses','old-library.txt'),'old notice');
     await exportDist(source, output);
     assert.equal((await stat(join(output, 'current'))).mode & 0o777, 0o755);
     assert.equal(await readFile(join(output, 'current', 'index.html'), 'utf8'), 'version1');
     await rm(join(source, 'assets', 'old-hash.js'));
     await writeFile(join(source, 'index.html'), 'version2');
+    await rm(join(source,'licenses','old-library.txt'));
     await writeFile(join(source, 'assets', 'new-hash.js'), 'new');
     await exportDist(source, output);
     assert.equal(await readFile(join(output, 'current', 'index.html'), 'utf8'), 'version2');
     assert.equal(await readFile(join(output, 'current', 'assets', 'old-hash.js'), 'utf8'), 'old');
+    assert.equal(await readFile(join(output,'current','licenses','old-library.txt'),'utf8'),'old notice');
     const active = await readlink(join(output, 'current'));
     await rm(join(source, 'index.html'));
     await assert.rejects(exportDist(source, output));
@@ -31,6 +34,7 @@ test('publishes complete releases, keeps old chunks, preserves current on failur
     await exportDist(source, output);
     assert.equal((await readdir(join(output, 'releases'))).length, 2);
     assert.equal(await readFile(join(output, 'current', 'assets', 'old-hash.js'), 'utf8'), 'old');
+    assert.equal(await readFile(join(output,'current','licenses','old-library.txt'),'utf8'),'old notice');
     await mkdir(join(output, '.deploy-lock'));
     await assert.rejects(exportDist(source, output), /locked/);
     assert.equal(await readFile(join(output, 'current', 'index.html'), 'utf8'), 'version3');

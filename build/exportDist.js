@@ -21,6 +21,11 @@ async function publishDist(source, output) {
       try { await cp(join(previousPath, 'assets'), join(release, 'assets'), { recursive: true }); }
       catch (error) { if (error.code !== 'ENOENT') throw error; }
     }
+    // Old JavaScript chunks remain downloadable, so retain their attribution too.
+    if (previousPath?.startsWith(`${resolve(releases)}/release-`)) {
+      try { await cp(join(previousPath, 'licenses'), join(release, 'licenses'), { recursive: true }); }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
+    }
     await cp(source, release, { recursive: true });
     await chmod(release, 0o755); // Nginx workers must be able to traverse the release directory.
     await symlink(`releases/${basename(release)}`, link);

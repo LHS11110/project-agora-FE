@@ -1,3 +1,4 @@
+import { thirdPartyNotices } from './build/thirdPartyNotices.js';
 import { localPdfAssets } from './build/pdfAssets.js';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -61,7 +62,7 @@ export default defineConfig(({ mode, command }) => {
   } : undefined;
   const agent = command === 'serve' ? new Agent({ minVersion: 'TLSv1.3', ca: readFileSync(env.SERVICE_TLS_CA || resolve(tlsRoot, 'ca.pem')) }) : undefined;
   return {
-    plugins: [react(), localMathJaxAssets(), localPdfAssets()],
+    plugins: [react(), localMathJaxAssets(), localPdfAssets(), thirdPartyNotices()],
     server: { https, host: '0.0.0.0', allowedHosts: (env.VITE_ALLOWED_HOSTS || '').split(',').map((host) => host.trim()).filter(Boolean), proxy: { '/api': { target: apiTarget, agent, secure: true, changeOrigin: true } } },
     preview: { https },
   };

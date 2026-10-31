@@ -6,3 +6,13 @@ dist
 !.env.example
 npm-debug.log*
 .local-https
+
+# Local authentication material must not enter build contexts
+.envrc
+.envrc.*
+.netrc
+.pypirc
+**/client_secret*.json
+**/service-account*.json
+**/application_default_credentials.json
+**/.ssh/
