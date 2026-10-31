@@ -1,3 +1,4 @@
+import MfaSettings from '../components/account/MfaSettings.jsx';
 import { ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
 import ProfileImageControls from '../components/account/ProfileImageControls.jsx';
@@ -44,6 +45,7 @@ export default function ProfilePage() {
         {notice && <div className={`inline-notice ${notice.kind}`} role="status">{ui(notice.text)}</div>}<div className="form-actions"><button className="button button-dark" type="submit" disabled={busy || imageBusy}>{busy ? ui("저장 중…") : ui("변경사항 저장")} <Icon name="check" size={17} /></button></div>
       </form></section>
     </div>
+    <MfaSettings />
     <div className="profile-security-note"><span className="security-icon"><Icon name="lock" size={17} /></span><p><strong>{ui("계정은 안전하게 보호돼요.")}</strong><br />{ui("비밀번호는 암호화되어 저장되며, 사용자 태그는 공개 식별자로 사용됩니다.")}</p><Icon name="chevron" size={18} /></div>
     <section className="account-delete-section"><div><h2>{ui("계정 삭제")}</h2><p>{ui("FreLog에서 탈퇴하고 계정을 비활성화합니다.")}<br />{ui("캔버스를 정리하려면 탈퇴 전에 삭제해주세요.")}</p></div><button type="button" className="button account-delete-button" disabled={busy || imageBusy || !user} onClick={() => setShowDelete(true)}><Icon name="trash" size={16} />{ui("계정 삭제")}</button></section>
     {showDelete && user && <AccountDeleteDialog user={user} token={token} onClose={() => setShowDelete(false)} onDeleted={() => { logout(); navigate('/', { replace: true }); }} />}

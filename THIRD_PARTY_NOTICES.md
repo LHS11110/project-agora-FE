@@ -19,3 +19,5 @@ Additional direct packages include React/React DOM, Monaco Editor, perfect-freeh
 `@pixi/colord` omits a license file from its npm archive; the pinned upstream text and provenance are retained in `licenses/upstream/`. The MathJax font package declares Apache-2.0 but omits a standalone license file, so the MathJax Apache text is supplied. Native `@napi-rs/canvas` platform package notices use the parent package's MIT text. These supplements do not establish that every embedded upstream font/native component has been audited: review font/native binary provenance separately before distributing those binaries.
 
 Third-party components retain their own licenses; this repository's MIT license does not relicense them. External Google Fonts requests and user-uploaded images/content are outside the npm inventory.
+
+Authenticator enrollment uses `qrcode` (MIT) to create QR images locally. Its exact version, transitive dependencies and license files are included in the generated npm inventory. Enrollment secrets are not sent to a third-party QR service.

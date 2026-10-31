@@ -9,11 +9,12 @@ import WorkspacePreview from '../components/home/WorkspacePreview.jsx';
 import { useAuth } from '../state/AuthContext.jsx';
 import '../frelog-auth.css';
 import { api, apiUrl } from '../api/client.js';
+import MfaLogin from '../components/account/MfaLogin.jsx';
 import { oauthReturnPath } from '../auth/oauthReturn.js';
 
 export default function LoginPage() {
   useUiLocale();
-  const { isAuthenticated, authError, login, signup, completeGoogleLogin } = useAuth();
+  const { isAuthenticated, authError, login, signup, completeGoogleLogin, pendingMfa, verifyMfa, cancelMfa } = useAuth();
   const [mode, setMode] = useState('login');
   const [form, setForm] = useState({ email: '', password: '', nickname: '' });
   const [showPassword, setShowPassword] = useState(false);
@@ -33,8 +34,9 @@ export default function LoginPage() {
     let cancelled = false;
     if (oauth === 'success') {
       setBusy(true);
-      completeGoogleLogin().then(() => {
+      completeGoogleLogin().then(result => {
         if (!cancelled) {
+          if (result.mfaRequired) {setBusy(false);navigate('/login', {replace:true});return;}
           const target = sessionStorage.getItem('frelog_oauth_return');
           sessionStorage.removeItem('frelog_oauth_return');
           navigate(oauthReturnPath(target), { replace: true });
@@ -53,13 +55,13 @@ export default function LoginPage() {
     setBusy(true);
     window.location.assign(apiUrl('/api/auth/oauth2/authorize/google'));
   };
-  if (isAuthenticated && !oauth) return <Navigate to={location.state?.from || '/search'} replace />;
+  if (isAuthenticated && !oauth && !busy) return <Navigate to={location.state?.from || '/search'} replace />;
   const change = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
   const submit = async (event) => {
     event.preventDefault(); setBusy(true); setError('');
     try {
-      if (mode === 'signup') await signup(form);
-      else await login(form.email, form.password);
+      const result = mode === 'signup' ? await signup(form) : await login(form.email, form.password);
+      if (result.mfaRequired) return;
       navigate(location.state?.from || '/search', { replace: true });
     } catch (err) { setError(err.message || '로그인할 수 없습니다. 입력 정보를 확인해주세요.'); }
     finally { setBusy(false); }
@@ -75,6 +77,7 @@ export default function LoginPage() {
       </section>
       <section className="auth-form-panel" aria-labelledby="auth-form-title">
       <div className="auth-form-wrap"><div className="auth-card-label"><span>F / {mode === 'login' ? '01' : '02'}</span><Icon name="arrow" size={18} /></div><div className="auth-heading"><span className="section-kicker">{mode === 'login' ? 'WELCOME BACK' : 'START SOMETHING NEW'}</span><h2 id="auth-form-title">{mode === 'login' ? ui("다시 만났네요.") : ui("함께 시작해요.")}</h2><p>{mode === 'login' ? ui("로그인하고 이어서 아이디어를 나눠보세요.") : ui("계정을 만들고 팀의 첫 캔버스를 열어보세요.")}</p></div>
+        {pendingMfa ? <MfaLogin onVerify={async code=>{setBusy(true);try{await verifyMfa(code);const target=sessionStorage.getItem('frelog_oauth_return');sessionStorage.removeItem('frelog_oauth_return');navigate(oauthReturnPath(target||location.state?.from),{replace:true});}catch(error){setBusy(false);throw error;}}} onCancel={cancelMfa}/> : <>
         {googleEnabled && <><button className="auth-google-button" type="button" onClick={startGoogle} disabled={busy}>
           <svg aria-hidden="true" width="20" height="20" viewBox="0 0 48 48"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.2h6.6c3.9-3.6 6.1-8.9 6.1-15.1Z"/><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.9l-6.6-5.2c-1.8 1.2-4.1 2-6.9 2-5.3 0-9.8-3.6-11.4-8.4H5.8v5.4A20.4 20.4 0 0 0 24 44Z"/><path fill="#FBBC05" d="M12.6 27.5a12 12 0 0 1 0-7V15H5.8a20 20 0 0 0 0 18l6.8-5.5Z"/><path fill="#EA4335" d="M24 12.1c3 0 5.7 1 7.8 3.1l5.9-5.9A19.7 19.7 0 0 0 24 4 20.4 20.4 0 0 0 5.8 15l6.8 5.5c1.6-4.8 6.1-8.4 11.4-8.4Z"/></svg>
           {busy && oauth === 'success' ? ui('로그인 중…') : ui('Google로 계속하기')}</button><div className="auth-divider"><span>{ui('또는 이메일로 계속하기')}</span></div></>}
@@ -87,6 +90,7 @@ export default function LoginPage() {
           <button className="button button-dark button-submit" type="submit" disabled={busy}>{busy ? ui("잠시만요…") : mode === 'login' ? ui("로그인") : ui("계정 만들기")} <Icon name="arrow" size={17} /></button>
         </form>
         <div className="auth-switch">{mode === 'login' ? ui("아직 계정이 없으신가요?") : ui("이미 FreLog 계정이 있나요?")} <button type="button" onClick={() => { setError(''); setMode(mode === 'login' ? 'signup' : 'login'); }}>{mode === 'login' ? ui("회원가입") : ui("로그인")}</button></div>
+        </>}
         <div className="auth-terms">{ui("계속 진행하면 FreLog의 이용약관과 개인정보 처리방침에 동의하게 됩니다.")}</div>
       </div>
       </section>
