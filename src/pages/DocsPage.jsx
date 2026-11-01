@@ -8,7 +8,7 @@ import FreLogBrand from '../components/frelog/FreLogBrand.jsx';
 import '../docs-directory.css';
 
 const publicEndpoints = [
-  ['POST', '/api/auth/signup', '없음', '회원가입. JSON { email, password, nickname }. 이메일 형식, 비밀번호 6자 이상, 닉네임 최대 100자. 성공 시 201 + UserResponse.'],
+  ['POST', '/api/auth/signup', '없음', '회원가입. JSON { email, password, nickname, emailVerificationToken }. 먼저 이메일 인증을 완료해야 합니다. 인증 증명은 해당 이메일에만 한 번 사용할 수 있습니다. 성공 시 201 + UserResponse.'],
   ['POST', '/api/auth/login', '없음', '로그인. JSON { email, password }. 200 응답에 tokenType, accessToken, user를 반환합니다.'],
   ['POST', '/api/auth/me', '본문 token', '현재 사용자 조회. JSON { token }에 로그인 JWT를 넣습니다. 누락·무효 토큰은 401입니다.'],
   ['GET', '/api/auth/health', '없음', '인증 서비스 상태 확인. { status: "UP", service: "Agora Auth Service" }.'],
@@ -45,6 +45,11 @@ const internalEndpoints = [
 
 const publicApiGroups = [
   { id: 'api-auth', title: '인증', rows: publicEndpoints.slice(0, 4) },
+  { id: 'api-email', title: '이메일 인증', rows: [
+    ['GET', '/api/auth/email/status', '없음', '인증 메일 발송 설정 여부. { available }.'],
+    ['POST', '/api/auth/email/request', '없음', 'JSON { email }. 6자리 코드 발송 요청. 202 + challengeId, expiresInSeconds, resendAfterSeconds.'],
+    ['POST', '/api/auth/email/verify', '없음', 'JSON { email, challengeId, code }. 성공 시 회원가입용 emailVerificationToken을 반환합니다. 로그인 토큰이 아닙니다.'],
+  ] },
   { id: 'api-users', title: '사용자·프로필', rows: publicEndpoints.slice(4, 9) },
   { id: 'api-canvases', title: '캔버스', rows: publicEndpoints.slice(9) },
 ];

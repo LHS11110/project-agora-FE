@@ -16,12 +16,14 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(readUser);
   const [authError, setAuthError] = useState('');
   const [pendingMfa, setPendingMfa] = useState(null);
+  const [pendingOAuthEnrollment,setPendingOAuthEnrollment]=useState(null);
   const acceptLoginResponse = useCallback(result => {
-    if (result.mfaRequired) { setPendingMfa({ challengeToken: result.challengeToken }); return result; }
+    if(result.oauthEnrollmentRequired){setPendingOAuthEnrollment(result);setPendingMfa(null);return result;}
+    if (result.mfaRequired) { setPendingOAuthEnrollment(null); setPendingMfa({ challengeToken: result.challengeToken }); return result; }
     if (!result.accessToken || !result.user) throw new Error('로그인을 완료하지 못했습니다. 다시 시도해주세요.');
     localStorage.setItem(TOKEN_KEY, result.accessToken);
     localStorage.setItem(USER_KEY, JSON.stringify(result.user));
-    setAuthError(''); setPendingMfa(null);setToken(result.accessToken);setUser(result.user);
+    setAuthError(''); setPendingOAuthEnrollment(null); setPendingMfa(null);setToken(result.accessToken);setUser(result.user);
     return result;
   }, []);
   const login = useCallback(async (email, password) => acceptLoginResponse(await api('/api/auth/login', { method: 'POST', body: { email, password } })), [acceptLoginResponse]);
@@ -30,10 +32,12 @@ export function AuthProvider({ children }) {
     if (!oauthRequest.current) oauthRequest.current = api('/api/auth/oauth2/session').then(acceptLoginResponse);
     return oauthRequest.current;
   }, [acceptLoginResponse]);
+  const completeOAuthEnrollment=useCallback(async(email,emailVerificationToken)=>acceptLoginResponse(await api('/api/auth/oauth2/enrollment',{method:'POST',body:{email,emailVerificationToken,enrollmentToken:pendingOAuthEnrollment?.enrollmentToken}})),[pendingOAuthEnrollment,acceptLoginResponse]);
+  const cancelOAuthEnrollment=useCallback(()=>{setPendingOAuthEnrollment(null);oauthRequest.current=null;},[]);
   const verifyMfa = useCallback(async code => acceptLoginResponse(await api('/api/auth/mfa/verify', {method:'POST',body:{challengeToken:pendingMfa?.challengeToken,code}})), [pendingMfa,acceptLoginResponse]);
   const cancelMfa = useCallback(() => {setPendingMfa(null);oauthRequest.current=null;}, []);
-  const signup = useCallback(async ({ email, password, nickname }) => {
-    await api('/api/auth/signup', { method: 'POST', body: { email, password, nickname } });
+  const signup = useCallback(async ({ email, password, nickname, emailVerificationToken }) => {
+    await api('/api/auth/signup', { method: 'POST', body: { email, password, nickname, emailVerificationToken } });
     return login(email, password);
   }, [login]);
   const updateUser = useCallback((nextUser) => {
@@ -44,7 +48,7 @@ export function AuthProvider({ children }) {
     });
   }, []);
   const logout = useCallback(() => {
-    setPendingMfa(null);oauthRequest.current=null;
+    setPendingMfa(null);setPendingOAuthEnrollment(null);oauthRequest.current=null;
     localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); setToken(null); setUser(null);
   }, []);
   useEffect(() => {
@@ -86,8 +90,8 @@ export function AuthProvider({ children }) {
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [token, logout]);
-  const value = useMemo(() => ({ token, user, authError, isAuthenticated: Boolean(token && user && !tokenExpired(token)), login, signup, completeGoogleLogin, pendingMfa, verifyMfa, cancelMfa, acceptLoginResponse, updateUser, logout }),
-    [token, user, authError, login, signup, completeGoogleLogin, pendingMfa, verifyMfa, cancelMfa, acceptLoginResponse, updateUser, logout]);
+  const value = useMemo(() => ({ token, user, authError, isAuthenticated: Boolean(token && user && !tokenExpired(token)), login, signup, completeGoogleLogin, completeOAuthLogin:completeGoogleLogin, pendingOAuthEnrollment, completeOAuthEnrollment, cancelOAuthEnrollment, pendingMfa, verifyMfa, cancelMfa, acceptLoginResponse, updateUser, logout }),
+    [token, user, authError, login, signup, completeGoogleLogin, pendingOAuthEnrollment, completeOAuthEnrollment, cancelOAuthEnrollment, pendingMfa, verifyMfa, cancelMfa, acceptLoginResponse, updateUser, logout]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

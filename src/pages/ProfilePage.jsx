@@ -1,3 +1,4 @@
+import PasskeySettings from '../components/account/PasskeySettings.jsx';
 import MfaSettings from '../components/account/MfaSettings.jsx';
 import { ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
@@ -41,11 +42,12 @@ export default function ProfilePage() {
       <section className="profile-card profile-edit-card"><div className="card-heading"><span className="settings-badge"><Icon name="settings" size={18} /></span><div><h2>{ui("기본 정보")}</h2><p>{ui("다른 멤버에게 보여지는 정보를 수정할 수 있어요.")}</p></div></div><form className="profile-form" onSubmit={save}>
         <label className="form-field"><span>{"" + ui("이메일 주소") + " "}<small>{ui("변경할 수 없음")}</small></span><div className="input-wrap disabled-input"><Icon name="mail" size={18} /><input value={user?.email || ''} readOnly /></div></label>
         <label className="form-field"><span>{ui("닉네임")}</span><div className="input-wrap"><Icon name="user" size={18} /><input value={nickname} onChange={(event) => setNickname(event.target.value)} maxLength={100} required /></div><small className="field-hint">{ui("최대 100자 · 태그 번호는 계정 식별을 위해 고정되어 있어요.")}</small></label>
-        <label className="form-field"><span>{"" + ui("새 비밀번호") + " "}<small>{ui("변경할 때만 입력")}</small></span><div className="input-wrap"><Icon name="lock" size={18} /><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" minLength={4} placeholder={ui("새 비밀번호를 입력해주세요")} /></div><small className="field-hint">{ui("비밀번호를 바꾸지 않으려면 비워두세요.")}</small></label>
+        <label className="form-field"><span>{"" + ui("새 비밀번호") + " "}<small>{ui("변경할 때만 입력")}</small></span><div className="input-wrap"><Icon name="lock" size={18} /><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" minLength={12} placeholder={ui("새 비밀번호를 입력해주세요")} /></div><small className="field-hint">{ui("12자 이상 · 문자, 숫자, 특수문자 포함 · 공백 제외 · 최대 72바이트. 변경하지 않으려면 비워두세요.")}</small></label>
         {notice && <div className={`inline-notice ${notice.kind}`} role="status">{ui(notice.text)}</div>}<div className="form-actions"><button className="button button-dark" type="submit" disabled={busy || imageBusy}>{busy ? ui("저장 중…") : ui("변경사항 저장")} <Icon name="check" size={17} /></button></div>
       </form></section>
     </div>
     <MfaSettings />
+    <PasskeySettings />
     <div className="profile-security-note"><span className="security-icon"><Icon name="lock" size={17} /></span><p><strong>{ui("계정은 안전하게 보호돼요.")}</strong><br />{ui("비밀번호는 암호화되어 저장되며, 사용자 태그는 공개 식별자로 사용됩니다.")}</p><Icon name="chevron" size={18} /></div>
     <section className="account-delete-section"><div><h2>{ui("계정 삭제")}</h2><p>{ui("FreLog에서 탈퇴하고 계정을 비활성화합니다.")}<br />{ui("캔버스를 정리하려면 탈퇴 전에 삭제해주세요.")}</p></div><button type="button" className="button account-delete-button" disabled={busy || imageBusy || !user} onClick={() => setShowDelete(true)}><Icon name="trash" size={16} />{ui("계정 삭제")}</button></section>
     {showDelete && user && <AccountDeleteDialog user={user} token={token} onClose={() => setShowDelete(false)} onDeleted={() => { logout(); navigate('/', { replace: true }); }} />}

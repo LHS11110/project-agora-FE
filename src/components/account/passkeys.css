@@ -1,0 +1,16 @@
+.passkey-settings{margin-top:24px;padding:23px 25px;color:#43574a;font-family:"DM Sans","Noto Sans KR",sans-serif}
+.passkey-settings .card-heading h2{font:600 15px/1.4 "DM Sans","Noto Sans KR",sans-serif;margin:0 0 4px}
+.passkey-settings .card-heading p{font-size:12px;line-height:1.6;color:#88938b;margin:0}
+.passkey-description,.passkey-empty{font-size:12px;line-height:1.8;color:#7e8983;margin:18px 0}
+.passkey-list{padding:0;margin:18px 0;list-style:none;border:1px solid #e5e9e3;border-radius:10px;overflow:hidden}
+.passkey-list li{display:flex;align-items:center;gap:12px;padding:14px;border-bottom:1px solid #edf0e9}
+.passkey-list li:last-child{border-bottom:0}.passkey-device{display:grid;place-items:center;flex-shrink:0;width:32px;height:32px;border-radius:8px;background:#f1f5ed;color:#718474}
+.passkey-list li>div{flex:1;min-width:0}.passkey-list strong{display:block;font-size:12px;font-weight:600;overflow-wrap:anywhere}.passkey-list small{display:block;margin-top:5px;font-size:10px;line-height:1.7;color:#939d96}
+.passkey-settings .passkey-remove,.passkey-text-button{font:500 11px/1.5 "DM Sans","Noto Sans KR",sans-serif;cursor:pointer;border:0;background:none;color:#a25950;padding:7px 9px;border-radius:6px}.passkey-settings .passkey-remove:hover{background:#fcf4f2}.passkey-text-button{display:block;color:#596e5c;text-decoration:underline}
+.passkey-register{display:flex;align-items:flex-end;gap:12px;padding-top:4px}.passkey-register .form-field{display:flex;flex:1;flex-direction:column;gap:8px;min-width:0;font-size:11px;color:#67786c}.passkey-register label small{font-size:10px;color:#a0a9a2;margin-left:5px}
+.passkey-settings .plain-input{box-sizing:border-box;width:100%;min-height:42px;padding:10px 12px;border:1px solid #dfe5dc;border-radius:9px;background:#fff;color:#34483d;font:400 12px/1.5 "DM Sans","Noto Sans KR",sans-serif}
+.passkey-settings .button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:42px;padding:10px 15px;flex-shrink:0;border:1px solid #344f43;border-radius:9px;background:#344f43;color:#fff;font:600 12px/1.5 "DM Sans","Noto Sans KR",sans-serif;cursor:pointer}
+.passkey-settings button:disabled{opacity:.45;cursor:not-allowed}.passkey-settings :is(button,input):focus-visible{outline:2px solid #b4c9b7;outline-offset:3px}
+.auth-page .auth-passkey-button{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:48px;margin:12px 0 18px;padding:12px;border:1px solid #dfe0ed;border-radius:9px;background:#f0eff8;color:#565275;font:500 12px/1.5 "DM Sans","Noto Sans KR",sans-serif;cursor:pointer}
+.auth-page .auth-passkey-button:hover:not(:disabled){background:#eae7f6}.auth-page .auth-passkey-button:disabled{opacity:.5;cursor:not-allowed}.auth-page .auth-passkey-button:focus-visible{outline:2px solid #b6a4ed;outline-offset:3px}
+@media(max-width:650px){.passkey-settings{padding:20px 18px}.passkey-register{align-items:stretch;flex-direction:column}.passkey-list li{padding:12px;gap:9px}}

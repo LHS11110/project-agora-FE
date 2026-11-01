@@ -7,7 +7,7 @@ const token='eyJhbGciOiJIUzI1NiJ9.'+Buffer.from(JSON.stringify({exp:Math.floor(D
 const user={email:'mfa-ui@example.invalid',nickname:'MFA UI',tag_number:1,role:'ROLE_USER',status:'ACTIVE'};
 const login={accessToken:token,user,mfaRequired:false},challenge={mfaRequired:true,challengeToken:'opaque-test-challenge',accessToken:null,user:null};
 const errors=[];
-async function context(){const c=await browser.newContext({locale:'ko-KR',viewport:{width:1440,height:1200},ignoreHTTPSErrors:process.env.AGORA_E2E_INSECURE_LOCAL_TLS==='1'});await c.route('**/api/auth/providers',r=>r.fulfill({json:{google:true}}));await c.route('**/api/auth/me',r=>r.fulfill({json:user}));return c;}
+async function context(){const c=await browser.newContext({locale:'ko-KR',viewport:{width:1440,height:1200},ignoreHTTPSErrors:process.env.AGORA_E2E_INSECURE_LOCAL_TLS==='1'});await c.route('**/api/auth/passkeys',r=>r.fulfill({json:[]}));await c.route('**/api/auth/passkeys/status',r=>r.fulfill({json:{available:false}}));await c.route('**/api/auth/providers',r=>r.fulfill({json:{google:true}}));await c.route('**/api/auth/me',r=>r.fulfill({json:user}));return c;}
 try{
  for(const google of [false,true]){
   const c=await context();const page=await c.newPage();page.on('pageerror',e=>errors.push(e.message));let attempts=0,handoffs=0;
