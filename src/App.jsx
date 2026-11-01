@@ -1,3 +1,4 @@
+import QrApprovalPage from './pages/QrApprovalPage.jsx';
 import { ui } from './i18n/locale.js';
 import { useUiLocale } from './i18n/useUiLocale.js';
 import { lazy, Suspense } from 'react';
@@ -31,6 +32,7 @@ export default function App() {
     <Route path="/" element={<HomePage />} />
     <Route path="/docs" element={<DocsPage />} />
     <Route path="/tutorial" element={<Suspense fallback={<div className="route-loading">{ui("캔버스 체험을 준비하고 있어요.")}</div>}><TutorialPage /></Suspense>} />
+    <Route path="/qr-login" element={<QrApprovalPage />} />
     <Route path="/login" element={<LoginPage />} />
     <Route path="/profile" element={<Protected><ProfilePage /></Protected>} />
     <Route path="/search" element={<Protected><SearchPage /></Protected>} />

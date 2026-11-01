@@ -1,3 +1,4 @@
+import { assertObjectOperations } from '../locks/objectLock.js';
 import { encodeDocument,loadEncodedDocument,cachedItemDocument,rememberItemDocument } from './documentCache.js';
 import * as Automerge from '@automerge/automerge/slim';
 import { CANVAS_ITEM_FIELDS, exportManifest, planManifest, stable } from '../asCode/manifest.js';
@@ -79,6 +80,7 @@ export function itemOperations(previous, next, docs, changedIds = null) {
 
 export function reduceHostOperations(items, operations, peer, connectorDependencies = null) {
   if (!Array.isArray(operations) || !operations.length || operations.length > 512) throw new Error('올바른 변경 묶음이 필요합니다.');
+  assertObjectOperations(items, operations);
   const next = Object.create(items);
   const touched = new Set();
   for (const operation of operations) {

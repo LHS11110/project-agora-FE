@@ -65,7 +65,7 @@ export function useCanvasConnection(options) {
       setConnection,
       setDirtyItems,
       setError,
-      setGroups,
+      setGroups, setCapabilities,
       setHasOlderMessages,
       setItems,
       setLaserStrokes,
@@ -342,6 +342,7 @@ export function useCanvasConnection(options) {
             const currentGroups = Array.isArray(data.groups) ? data.groups : [];
             groupsRef.current = currentGroups;
             setGroups(currentGroups);
+            setCapabilities?.({groups:currentGroups,write_groups:Array.isArray(data.write_groups)?data.write_groups:currentGroups,execute_groups:Array.isArray(data.execute_groups)?data.execute_groups:currentGroups,is_admin:data.is_admin===true});
             setCanvas((current) => ({ ...current, canvas_name: data.canvas_name || current?.canvas_name }));
             canvasConnectionId = data.rtc_canvas_connection_id == null ? '' : String(data.rtc_canvas_connection_id);
             canvasConnectionHash = typeof data.rtc_canvas_connection_hash === 'string' ? data.rtc_canvas_connection_hash : '';

@@ -184,7 +184,7 @@ export function useCanvasPeerEvents(options) {
     if (data.type === 'editor_presence' && data.item_id && typeof data.editing === 'boolean' && peer?.peer_id) {
       const key = String(data.item_id);
       const item = itemsRef.current[key];
-      if (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)) return;
+      if (item.locked === true || !isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)) return;
       setRemoteEditors((current) => {
         const next = { ...current };
         if (data.editing) {
@@ -247,7 +247,7 @@ export function useCanvasPeerEvents(options) {
       const key = String(data.item_id);
       const item = data.item || itemsRef.current[key];
       const currentItem = itemsRef.current[key];
-      if (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)
+      if (item.locked === true || !isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)
         || (currentItem && currentItem.kind !== item.kind)
         || (currentItem && (!canPeerAccessItem(currentItem, localPeer) || !canPeerAccessItem(currentItem, peer)))) return;
       const version = normalizeSyncVersion(data.version) || INITIAL_SYNC_VERSION;
@@ -297,7 +297,7 @@ export function useCanvasPeerEvents(options) {
         }
         return;
       }
-      if (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)) return;
+      if (item.locked === true || !isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)) return;
       const version = normalizeSyncVersion(data.version);
       const tombstone = deletedItemSyncVersionsRef.current.get(key);
       if (tombstone && (!version || compareSyncVersions(version, tombstone.version) <= 0)) return;
@@ -331,7 +331,7 @@ export function useCanvasPeerEvents(options) {
         }
         return;
       }
-      if (!isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)) return;
+      if (item.locked === true || !isCollaborativeItem(item) || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)) return;
       const version = normalizeSyncVersion(data.version);
       const tombstone = deletedItemSyncVersionsRef.current.get(key);
       if (tombstone && (!version || compareSyncVersions(version, tombstone.version) <= 0)) return;
@@ -374,7 +374,7 @@ export function useCanvasPeerEvents(options) {
         }
         return;
       }
-      if (!isCanvasSyncItem(item) || ['connector', 'stroke'].includes(item.kind)
+      if (item.locked === true || !isCanvasSyncItem(item) || ['connector', 'stroke'].includes(item.kind)
         || !canPeerAccessItem(item, localPeer) || !canPeerAccessItem(item, peer)) return;
       const version = normalizeSyncVersion(data.version);
       const tombstone = deletedItemSyncVersionsRef.current.get(key);

@@ -1,3 +1,5 @@
+import { canUseItem, canUseCanvas, WRITE_DENIED, EXECUTE_DENIED } from '../canvas/permissions/access.js';
+import { isObjectLocked, OBJECT_LOCK_MESSAGE } from '../canvas/locks/objectLock.js';
 import CanvasAxisTicks from '../canvas/CanvasAxisTicks.jsx';
 import CanvasPresenceStack from '../components/canvas/CanvasPresenceStack.jsx';
 import { onlineCanvasParticipants } from '../canvas/onlineParticipants.js';
@@ -122,8 +124,16 @@ function CanvasWorkspace() {
   const [showRuntimeSettings, setShowRuntimeSettings] = useState(false);
   const { canvasId } = useParams();
   const { token, user } = useAuth();
+  const [capabilities,setCapabilities]=useState(null);
+  const accessRef=useRef(null);accessRef.current=capabilities;
+  const canWriteItem=useCallback(item=>canUseItem(item,accessRef.current,'write'),[]);
+  const canExecuteItem=useCallback(item=>canUseItem(item,accessRef.current,'execute'),[]);
+  const canWriteCanvas=canUseCanvas(capabilities,'write');
   const runtimeRequestRef = useRef(null);
-  runtimeRequestRef.current = request => executeCanvasCode({ ...request, canvasId, token, user });
+  runtimeRequestRef.current = request => {
+    if(!canUseCanvas(accessRef.current,'execute') || (request.action==='reset'&&!canUseCanvas(accessRef.current,'write')))return Promise.reject(new Error(EXECUTE_DENIED));
+    return executeCanvasCode({ ...request, canvasId, token, user });
+  };
   const saveBlueprintOutputRef = useRef(() => false);
   const runtimeStore = useMemo(() => createBlueprintStore({ getItems: () => itemsRef.current,
     execute: request => runtimeRequestRef.current(request), saveOutput: (id, records) => saveBlueprintOutputRef.current(id, records) }), []);
@@ -289,7 +299,7 @@ function CanvasWorkspace() {
   const [settingsPending, setSettingsPending] = useState(false);
   const [toast, setToast] = useState('');
   const { items, setItems, patchItems, moveItems, flushMoves, committedItemsRef, status: hostStatus, sessionRef: hostSessionRef, receiveServerItems, receiveServerEvent } = useServerCanvas({
-    itemsRef, peerMeshRef, wsRef, rtcWsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems, reconnectRequestRef,
+    accessRef, itemsRef, peerMeshRef, wsRef, rtcWsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems, reconnectRequestRef,
   });
   saveBlueprintOutputRef.current = (id, records) => {
     const previous = itemsRef.current[id];
@@ -405,7 +415,7 @@ function CanvasWorkspace() {
   }, [getCollaborativeDoc]);
   const updateCollaborativeText = useCallback((id, value) => {
     const item = itemsRef.current[id];
-    if (!isCollaborativeItem(item)) return;
+    if (!isCollaborativeItem(item) || isObjectLocked(item) || !canWriteItem(item)) return;
     const previousDoc = getCollaborativeDoc(id, item);
     let nextDoc;
     try {
@@ -434,7 +444,7 @@ function CanvasWorkspace() {
   }, [getCollaborativeDoc, markItemDirty, patchItems]);
   const updateTextColor = useCallback((id, start, end, color) => {
     const key = String(id), item = itemsRef.current[key];
-    if (item?.kind !== 'text' || !hostSessionRef.current.editable) return false;
+    if (item?.kind !== 'text' || isObjectLocked(item) || !canWriteItem(item) || !hostSessionRef.current.editable) return false;
     const previous = getCollaborativeDoc(key, item);
     let next;
     try { next = applyTextColor(previous, start, end, color); } catch { return false; }
@@ -446,7 +456,7 @@ function CanvasWorkspace() {
   }, [getCollaborativeDoc, markItemDirty, patchItems]);
   const replaceTextColors = useCallback((id, ranges) => {
     const key = String(id), item = itemsRef.current[key];
-    if (item?.kind !== 'text' || !hostSessionRef.current.editable) return false;
+    if (item?.kind !== 'text' || isObjectLocked(item) || !canWriteItem(item) || !hostSessionRef.current.editable) return false;
     const previous = getCollaborativeDoc(key, item);
     if (JSON.stringify(colorRangesFromDoc(previous)) === JSON.stringify(ranges)) return true;
     let next;
@@ -470,7 +480,7 @@ function CanvasWorkspace() {
       ? (item?.kind === 'note' && /^#[0-9a-f]{6}$/i.test(nextValue)) || (item?.kind === 'text' && (nextValue === '' || /^#[0-9a-f]{6}$/i.test(nextValue)))
       : field === 'renderMode' ? isTextContent(item) && isContentMode(nextValue)
       : isTextContent(item) && (field === 'filename' ? nextValue.length <= 80 : field === 'language' && isCodeLanguage(nextValue));
-    if (!isCollaborativeItem(item) || !validField) return;
+    if (!isCollaborativeItem(item) || isObjectLocked(item) || !canWriteItem(item) || !validField) return;
     const nextItem = { ...item, [field]: field === 'fontSize' ? Number(nextValue) : field === 'groupId' ? nextValue || null : nextValue };
     itemsRef.current = { ...itemsRef.current, [key]: nextItem };
     setItems((current) => ({ ...current, [key]: nextItem }));
@@ -517,7 +527,7 @@ function CanvasWorkspace() {
   }, []);
   // Mutations are captured by setItems as proposals. No follower can write to
   // the persistence socket, and drafts are never rendered as committed objects.
-  const sendItemChange = useCallback(() => hostSessionRef.current.editable, []);
+  const sendItemChange = useCallback((_payload, previous) => hostSessionRef.current.editable && !isObjectLocked(previous) && (!previous || canWriteItem(previous)), []);
   const sendStrokeFrameChanges = useCallback(frame => {
     if (!hostSessionRef.current.editable) return false;
     const changes={},removed=[];
@@ -607,6 +617,17 @@ function CanvasWorkspace() {
     itemsRef.current = { ...itemsRef.current, [key]: next };
     setItems(current => ({ ...current, [key]: next }));
     refreshSpatialIndex();
+  };
+  useEffect(() => {
+    if (editingId && (items[editingId]?.locked === true || !canWriteItem(items[editingId]))) stopEditing(editingId);
+  }, [editingId, items[editingId]?.locked, capabilities]);
+  const updateItemLocked = (ids, locked) => {
+    if (!hostSessionRef.current.editable) return;
+    if(ids.some(id=>!canWriteItem(itemsRef.current[id]))){setToast(WRITE_DENIED);return;}
+    if (editingIdRef.current && ids.includes(editingIdRef.current)) finishEditing(editingIdRef.current);
+    const changes = {};
+    for (const id of ids) { const item=itemsRef.current[id]; if(item && isObjectLocked(item)!==locked) changes[id]={...item,locked}; }
+    patchItems(changes);
   };
   const updateItemDepth = (id, value) => {
     const key = String(id), previous = itemsRef.current[key];
@@ -759,6 +780,7 @@ function CanvasWorkspace() {
   };
   const addItem = useCallback((id, item) => {
     if (!canvasSnapshotLoadedRef.current) return false;
+    if(!canWriteItem(item)){setToast(WRITE_DENIED);return false;}
     if (item?.kind === 'connector' && !connectorGeometry(item, itemsRef.current, boardSize.width, boardSize.height)) { setToast('객체가 겹쳐 연결을 만들 수 없습니다. 객체를 옮긴 뒤 다시 연결해주세요.'); return false; }
     const sharedItem = makeCollaborativeItem(item);
     if (isCollaborativeItem(sharedItem)) {
@@ -786,6 +808,8 @@ function CanvasWorkspace() {
   }, [boardSize, markItemDirty, refreshSpatialIndex, selectItems, sendItemChange]);
   const deleteItem = useCallback((id) => {
     const previous = itemsRef.current[id];
+    if(previous&&!canWriteItem(previous)){setToast(WRITE_DENIED);return false;}
+    if (isObjectLocked(previous) || Object.values(itemsRef.current).some(item => item?.kind === 'connector' && isObjectLocked(item) && (String(item.from) === String(id) || String(item.to) === String(id)))) { setToast(OBJECT_LOCK_MESSAGE); return false; }
     if (!Object.hasOwn(itemsRef.current, String(id))) return true;
     const key = String(id);
     if (!sendItemChange({ type: 'item_delete', item_id: id }, previous)) return false;
@@ -837,7 +861,8 @@ function CanvasWorkspace() {
   const receivePeerData = useCallback((peer, data, channelName) => {
     if (data?.type === 'editor_presence') receiveLegacyPeerData(peer, data, channelName);
   }, [receiveLegacyPeerData]);
-  const permission = groups.includes('default') ? 'default' : groups[0] || 'admin-group';
+  const creationGroups=capabilities?.write_groups||groups;
+  const permission = (capabilities?.is_admin && settings?.group_permissions?.default) || creationGroups.includes('default') ? 'default' : creationGroups[0] || 'admin-group';
 
   useEffect(() => {
     if (!laserStrokes.length) return undefined;
@@ -914,7 +939,7 @@ function CanvasWorkspace() {
       setConnection,
       setDirtyItems,
       setError,
-      setGroups,
+      setGroups, setCapabilities,
       setHasOlderMessages,
       setItems: receiveServerItems,
       setLaserStrokes,
@@ -1027,6 +1052,7 @@ function CanvasWorkspace() {
   const selectionIsSingleGroup = selectedObjectIds.length > 0 && selectedGroupIds.size === 1
     && selectedObjectIds.every((id) => items[id]?.groupId === [...selectedGroupIds][0]);
   const changeSelectionGroup = (shouldGroup) => {
+    if (selectedObjectIds.some(id => isObjectLocked(itemsRef.current[id]) || !canWriteItem(itemsRef.current[id]))) { setToast(OBJECT_LOCK_MESSAGE); return; }
     const ids = selectedObjectIds.filter((id) => itemsRef.current[id] && !['stroke', 'connector'].includes(itemsRef.current[id].kind));
     if (shouldGroup && ids.length < 2) { setToast('그룹화할 오브젝트를 두 개 이상 선택해주세요.'); return; }
     const groupId = shouldGroup ? createId() : null;
@@ -1056,6 +1082,8 @@ function CanvasWorkspace() {
   };
   useGroupShortcuts({ editing: !hostStatus.editable || editingId != null, onGroup: changeSelectionGroup });
   const startEditing = (id) => {
+    if (!canWriteItem(itemsRef.current[id])) { setToast(WRITE_DENIED); return; }
+    if (isObjectLocked(itemsRef.current[id])) { setToast(OBJECT_LOCK_MESSAGE); return; }
     const key = String(id);
     const previous = editingIdRef.current;
     if (previous && previous !== key) broadcastEditorPresence(previous, false);
@@ -1113,7 +1141,7 @@ function CanvasWorkspace() {
     if (participant) Object.assign(payload, participant); else payload.value = value;
     if (sendRaw(payload)) setSettingsPending(true);
   };
-  const { cancelStageGesture, pointerPosition, startPan, cancelPanInertia, centeredItemPosition, hideCursor, sendCursorPosition, startZoomHold, stopZoomHold, cancelZoomHold, clickZoom, startDrawing, moveDrawing, stopDrawing } = useCanvasStageInteractions({
+  const { cancelStageGesture, pointerPosition, startPan, cancelPanInertia, centeredItemPosition, hideCursor, sendCursorPosition, startZoomHold, stopZoomHold, cancelZoomHold, clickZoom, startDrawing, moveDrawing, stopDrawing } = useCanvasStageInteractions({ canWriteItem, canWriteCanvas,
     boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth, eraserMode,
     addItem, setToast, setItems, patchItems, refreshSpatialIndex, spatialIndexRef,
     sendStrokeFrameChanges, pendingItemChangesRef, strokeSaveFlushRef,
@@ -1177,7 +1205,7 @@ function CanvasWorkspace() {
     moveObject,
     stopObjectDrag,
     startGroupRotation,
-  } = useCanvasObjectInteractions({
+  } = useCanvasObjectInteractions({ canWriteItem,
     moveItems, flushMoves,
     activeTool,
     spatialIndexRef,
@@ -1257,7 +1285,7 @@ function CanvasWorkspace() {
     if (selectedTable) updateTableItem(primarySelectedItemId, { [field]: nextSize / 100 });
   };
   useCodeExecutionShortcut({selectedIds:selectedObjectIds,selectedIdsRef,itemsRef,editingId,editingIdRef,sessionRef:hostSessionRef,dragRef,store:runtimeStore,onMessage:setToast});
-  useCanvasKeyboardNudge({ activeTool, editingId, selectedIds: selectedObjectIds, itemsRef, sessionRef: hostSessionRef, dragRef, moveItems, flushMoves });
+  useCanvasKeyboardNudge({ canWriteItem, activeTool, editingId, selectedIds: selectedObjectIds, itemsRef, sessionRef: hostSessionRef, dragRef, moveItems, flushMoves });
   useEffect(() => {
     const isEditableTarget = (target) => target instanceof HTMLElement
       && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
@@ -1334,8 +1362,9 @@ function CanvasWorkspace() {
     return () => document.removeEventListener('pointerdown', onDocumentPointerDown, true);
   }, [editingId, finishEditing]);
   const updateContentSetting = useContentSettings({ itemsRef, setItems, updateCollaborativeMetadata, sendItemChange, refreshSpatialIndex });
-  const canvasCodeApi = useCanvasAsCode({ canvasId, itemsRef, committedItemsRef, canvasSnapshotLoadedRef: hostReadyRef, permission, addItem, deleteItem, updateCollaborativeText, replaceTextColors, saveCollaborativeItem, sendItemChange, setItems, markItemDirty, refreshSpatialIndex, selectItems, peerMeshRef, syncClockRef, syncActorRef, itemSyncVersionsRef, getCollaborativeDoc });
+  const canvasCodeApi = useCanvasAsCode({ canWriteItem, canWriteCanvas, canvasId, itemsRef, committedItemsRef, canvasSnapshotLoadedRef: hostReadyRef, permission, addItem, deleteItem, updateCollaborativeText, replaceTextColors, saveCollaborativeItem, sendItemChange, setItems, markItemDirty, refreshSpatialIndex, selectItems, peerMeshRef, syncClockRef, syncActorRef, itemSyncVersionsRef, getCollaborativeDoc });
   const selectCanvasTool = (tool) => {
+    if(!canWriteCanvas&&!(['select','hand','laser'].includes(tool))){setToast(WRITE_DENIED);return;}
     if (tool === 'hand') finishEditing();
     if (tool === 'connect') setConnectionStartId(null);
     setActiveTool(tool);
@@ -1387,7 +1416,7 @@ function CanvasWorkspace() {
     </header>
     {error ? <div className="canvas-error-state"><div className="error-art"><Icon name="grid" size={30} /></div><span className="section-kicker">CANVAS CONNECTION</span><h1>{ui("캔버스를 열 수 없어요.")}</h1><p>{error}</p><div><button className="button button-dark" onClick={() => window.location.reload()}>{ui("다시 연결하기")}</button><Link className="button button-outline" to="/search">{ui("캔버스 목록")}</Link></div></div> : <div className="canvas-workspace resizable-workspace" ref={panelLayout.ref} style={panelLayout.style}>
       <ResizablePanel {...panelLayout.handle('tools')}><CanvasToolPanel activeTool={activeTool} onSelectTool={selectCanvasTool} color={color} onColorChange={setColor} onUploadPdf={uploadPdf} onUploadImage={uploadImage} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} /></ResizablePanel>
-      <CanvasQuickDock activeTool={activeTool} onSelectTool={selectCanvasTool} onUploadImage={uploadImage}
+      <CanvasQuickDock canWrite={canWriteCanvas} activeTool={activeTool} onSelectTool={selectCanvasTool} onUploadImage={uploadImage}
         toolsExpanded={!panelLayout.handle('tools').collapsed} onToggleTools={panelLayout.handle('tools').onToggle} />
       <main className="board-region"><div className="board-topline"><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(true); }}><Icon name="code" size={15} />{ui("캔버스 코드")}</button><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={()=>setShowRuntimeSettings(true)}><Icon name="settings" size={15}/>{ui("실행 환경")}</button><button className="zoom-button" aria-label={ui("확대")} title={ui("클릭: 한 단계 확대 · 길게 누르기: 계속 확대")} onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label={ui("축소")} title={ui("클릭: 한 단계 축소 · 길게 누르기: 계속 축소")} onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>{ui("맞춤")}</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />{"" + ui("격자") + " "}{showGrid ? ui("켜짐") : ui("꺼짐")}</button></div></div>
         <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ ...canvasGridStyle(camera), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ touchNavigation, activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion: cancelPanInertia, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, sendCursorPosition, pickVector: (event,doubleClick = false,capture = false) => {
@@ -1412,11 +1441,11 @@ function CanvasWorkspace() {
           <div className="canvas-scene" ref={sceneRef} style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }}>
             {depthLayers.map((layer, index) => <div className="canvas-depth-layer" key={layer.depth} data-depth={layer.depth} style={{ position: 'absolute', inset: 0, zIndex: index + 1, pointerEvents: 'none' }}>
               <VectorLayer token={token} graphicsQuality={graphicsQuality} style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }} worldSize={boardSize} items={layer.vectors} referenceItems={items} routingRevision={spatialIndex.stats.boundsCalculated} inkItems={layer.inkItems} previewStrokes={layer.depth === 0 ? remoteDrawingStrokes : undefined} camera={camera} onReady={layer.depth === 0 ? (setDraft) => { vectorDraftRef.current = setDraft; } : undefined} />
-            <div className="canvas-world-layer" style={{position:'absolute',width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`}}><CanvasLayerObjects objects={layer.domObjects} domSelection={domSelection} editingId={editingId} connectionStartId={connectionStartId} world={boardSize} scale={representationScale} token={token} runtimeStore={runtimeStore} selected={selectedObjectIdSet} singleSelection={hasSingleSelection} activeTool={activeTool} dirtyItems={dirtyItems} editorsByItem={editorsByItem} actions={objectActions} /></div>
+            <div className="canvas-world-layer" style={{position:'absolute',width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`}}><CanvasLayerObjects objects={layer.domObjects} domSelection={domSelection} editingId={editingId} connectionStartId={connectionStartId} world={boardSize} scale={representationScale} token={token} runtimeStore={runtimeStore} selected={selectedObjectIdSet} singleSelection={hasSingleSelection} activeTool={activeTool} dirtyItems={dirtyItems} editorsByItem={editorsByItem} actions={objectActions} access={capabilities} canWriteItem={canWriteItem} canExecuteItem={canExecuteItem} /></div>
             </div>)}
             <div className="canvas-world-layer" style={{ position: 'absolute', width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`, zIndex: depthLayers.length + 1, pointerEvents: 'none' }}>
-            {selectedItem && selectedItem.kind !== 'connector' && activeTool === 'select' && !editingId && <RotationHandles sceneRef={sceneRef} id={String(primarySelectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startObjectRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
-            {selectionIsSingleGroup && selectedObjectIds.length > 1 && activeTool === 'select' && !editingId && <GroupRotationHandles sceneRef={sceneRef} ids={selectedObjectIds} items={items} viewSize={boardSize} onPointerDown={startGroupRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
+            {selectedItem && canWriteItem(selectedItem) && !isObjectLocked(selectedItem) && selectedItem.kind !== 'connector' && activeTool === 'select' && !editingId && <RotationHandles sceneRef={sceneRef} id={String(primarySelectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startObjectRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
+            {selectionIsSingleGroup && selectedObjectIds.every(id => canWriteItem(items[id]) && !isObjectLocked(items[id])) && selectedObjectIds.length > 1 && activeTool === 'select' && !editingId && <GroupRotationHandles sceneRef={sceneRef} ids={selectedObjectIds} items={items} viewSize={boardSize} onPointerDown={startGroupRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
             <RemoteCursorLayer updaterRef={remoteCursorUpdaterRef} activePeerIds={activePeerIds} visibleBounds={visibleBounds} />
             </div>
           </div>
@@ -1468,7 +1497,7 @@ function CanvasWorkspace() {
         selectedArrow,
         selectedConnector,
         selectedItem,
-        objectClipboard, clipboardBlocked,
+        objectClipboard, clipboardBlocked, canWriteItem, canWriteCanvas,
         deleteItem,
         user, token, updateUserGroup,
         selectedObjectIds,
@@ -1500,7 +1529,7 @@ function CanvasWorkspace() {
         toggleGrid,
         updateArrowHead,
         updateConnectorAppearance,
-        updateItemRotation, updateItemDepth, updateItemShadow, updateImageFrame, updateObjectCornerStyle,
+        updateItemRotation, updateItemDepth, updateItemLocked, updateItemShadow, updateImageFrame, updateObjectCornerStyle,
         updateObjectDimensions,
         updateObjectFontSize,
         updateNewConnectorHead,
@@ -1508,12 +1537,12 @@ function CanvasWorkspace() {
         updateShapeArrowBend,
         zoomSensitivity
       }} /></ResizablePanel>
-<ResizablePanel {...panelLayout.handle('chat')}><CanvasChatPanel {...{ chatHistoryLoading, connection, hasOlderMessages, loadOlderMessages, message, messages, setMessage, submitMessage }} participants={mentionParticipants} highlight={chatHighlight} onHighlightVisible={() => { if (chatJumpNote) { comments.dismiss(chatJumpNote); setChatJumpNote(null); } }} /></ResizablePanel>
+<ResizablePanel {...panelLayout.handle('chat')}><CanvasChatPanel canWrite={canWriteCanvas} {...{ chatHistoryLoading, connection, hasOlderMessages, loadOlderMessages, message, messages, setMessage, submitMessage }} participants={mentionParticipants} highlight={chatHighlight} onHighlightVisible={() => { if (chatJumpNote) { comments.dismiss(chatJumpNote); setChatJumpNote(null); } }} /></ResizablePanel>
     </div>}
     {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{ui(toast)}</div>}
     {comments.activeId && <ObjectCommentsPanel comments={comments} participants={mentionParticipants} connection={connection} />}
     <MentionNotifications notifications={comments.notifications} onJump={jumpToMention} onDismiss={comments.dismiss} />
-    {showRuntimeSettings && <RuntimeSettingsDialog canvasId={canvasId} token={token} user={user} initialLanguage={selectedItem?.language || 'cpp'} isRunning={()=>runtimeStore.isRunning()} onClose={()=>setShowRuntimeSettings(false)} />}
+    {showRuntimeSettings && <RuntimeSettingsDialog canManage={canWriteCanvas&&canUseCanvas(capabilities,'execute')} canvasId={canvasId} token={token} user={user} initialLanguage={selectedItem?.language || 'cpp'} isRunning={()=>runtimeStore.isRunning()} onClose={()=>setShowRuntimeSettings(false)} />}
     {showCanvasCode && <CanvasAsCodeDialog api={canvasCodeApi} canvasId={canvasId} onClose={() => setShowCanvasCode(false)} />}
     {showSettings && <SettingsDialog backgroundColor={backgroundColor} setBackgroundColor={setBackgroundColor} favoriteColors={favoriteColors} saveFavoriteColor={saveFavoriteColor} theme={theme} canvasId={canvasId} image={canvas?.image} token={token} onImageSaved={(image) => setCanvas(current => ({ ...current, image }))} settings={settings} pending={settingsPending} onClose={() => setShowSettings(false)} onUpdate={sendSettings} />}
     {showParticipants && <CanvasParticipantsDialog participants={canvasParticipants} token={token} settings={settings} pending={settingsPending} onClose={() => setShowParticipants(false)} onAddParticipant={(nickname, tag) => sendSettings('participant_add', null, { nickname, tag_number: tag })} onRemoveParticipant={(person) => sendSettings('participant_remove', null, { nickname: person.nickname, tag_number: person.tag_number })} />}

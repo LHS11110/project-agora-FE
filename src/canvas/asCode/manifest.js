@@ -13,7 +13,7 @@ import { textSpliceBetween } from '../collaborativeText.js';
 const KINDS = new Set(['text', 'note', 'code', 'math', 'shape', 'table', 'chart', 'image', 'link', 'connector', 'stroke', 'pdf', 'user-group']);
 const NUMBERS = new Set(['shadowBlur', 'shadowOpacity', 'shadowOffsetX', 'shadowOffsetY', 'depth', 'x', 'y', 'width', 'height', 'rotation', 'fontSize', 'strokeWidth', 'bend', 'opacity', 'contentScale', 'contentScaleX', 'contentScaleY', 'bendPointCount', 'headSize', 'vertexCount', 'fillOpacity', 'sketchFillOpacity']);
 const STRINGS = new Set(['kind', 'text', 'code', 'formula', 'format', 'filename', 'language', 'shapeType', 'visualStyle', 'volumeStyle', 'chartType', 'color', 'fill', 'permission', 'groupId', 'src', 'url', 'title', 'mediaType', 'from', 'to', 'fromPort', 'toPort', 'startHead', 'endHead', 'brush', 'embedUrl', 'videoId', 'renderMode', 'label', 'labelMode', 'groupTitle', 'thumbnail', 'cornerStyle', 'runtimeRole']);
-const FIELDS = new Set([...NUMBERS, ...STRINGS, 'points', 'rows', 'columns', 'simulatePressure', 'complete', 'strokeEnabled', 'shadowEnabled', 'imageFrameEnabled', 'bendPoints', 'members', 'textColors', 'runtimeResults']);
+const FIELDS = new Set([...NUMBERS, ...STRINGS, 'points', 'rows', 'columns', 'simulatePressure', 'complete', 'strokeEnabled', 'shadowEnabled', 'locked', 'imageFrameEnabled', 'bendPoints', 'members', 'textColors', 'runtimeResults']);
 export const CANVAS_ITEM_FIELDS = new Set([...FIELDS].filter(field => field !== 'textColors'));
 const unsafeId = id => !id || ['__proto__', 'constructor', 'prototype'].includes(id);
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -56,6 +56,7 @@ function validateItem(id, item) {
   }
   if (item.groupTitle != null && item.groupTitle.length > 80) fail(`${id}.groupTitle: 최대 80자입니다.`);
   if (item.members != null && (!Array.isArray(item.members) || item.members.length > 50 || item.members.some(member => !plain(member) || !Number.isInteger(member.user_id) || member.user_id < 1 || typeof member.nickname !== 'string' || member.nickname.length > 100 || !Number.isInteger(member.tag_number) || member.tag_number < 0 || (member.profile_image && !/^\/api\/users\/profile-images\/\d+$/.test(member.profile_image)) || ['borderColor', 'nameColor'].some(field => member[field] != null && !/^#[0-9a-f]{6}$/i.test(member[field]))))) fail(`${id}.members: 올바른 사용자 프로필 배열이 필요합니다(최대 50명).`);
+  if (item.locked !== undefined && typeof item.locked !== 'boolean') fail(`${id}.locked: 불리언이 필요합니다.`);
   if (item.imageFrameEnabled != null && typeof item.imageFrameEnabled !== 'boolean') fail(`${id}.imageFrameEnabled: 불리언이 필요합니다.`);
   if (item.textColors != null && (item.kind !== 'text' || !Array.isArray(item.textColors) || item.textColors.length > 10000 || item.textColors.some((range, index) => !plain(range) || !Number.isInteger(range.start) || !Number.isInteger(range.end) || range.start < 0 || range.end <= range.start || range.end > String(item.text || '').length || !/^#[0-9a-f]{6}$/i.test(range.color || '') || (index > 0 && item.textColors[index - 1].end > range.start)))) fail(`${id}.textColors: 올바른 글자 색상 범위가 필요합니다.`);
   if (item.shadowEnabled != null && typeof item.shadowEnabled !== 'boolean') fail(`${id}.shadowEnabled: 불리언이 필요합니다.`);

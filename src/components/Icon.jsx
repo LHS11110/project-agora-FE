@@ -13,6 +13,7 @@ const paths = {
   plus: <><path d="M12 5v14M5 12h14"/></>,
   chevron: <path d="m9 18 6-6-6-6"/>,
   back: <><path d="M19 12H5M12 19l-7-7 7-7"/></>,
+  unlock: <><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 7.5-2"/></>,
   lock: <><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 1 1 8 0v3"/></>,
   mail: <><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></>,
   eye: <><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="2.5"/></>,

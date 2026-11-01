@@ -36,7 +36,7 @@ export default function AccountDeleteDialog({ user, token, onClose, onDeleted })
     onCancel={event => { event.preventDefault(); if (!request.current) onClose(); }}>
     <span className="account-delete-symbol"><Icon name="trash" size={24} /></span>
     <h2 id="account-delete-title">{ui("계정을 삭제할까요?")}</h2>
-    <p id="account-delete-description"><strong>{identity}</strong>{" " + ui("계정이 탈퇴 처리되어 더 이상 로그인할 수 없습니다. 닉네임은 익명화됩니다.") + ""}</p>
+    <p id="account-delete-description"><strong>{identity}</strong>{" " + ui("계정의 이메일, 프로필과 인증 정보가 삭제됩니다. 같은 이메일이나 간편 로그인으로 다시 가입할 수 있습니다.") + ""}</p>
     <p className="account-delete-note">{ui("계정 삭제는 캔버스를 자동으로 삭제하지 않습니다. 소유한 캔버스를 삭제하려면 탈퇴 전에 캔버스 목록에서 정리해주세요.")}</p>
     <form onSubmit={remove}>
       <label className="form-field"><span>{ui("확인을 위해 닉네임과 태그를 입력하세요")}</span><input className="plain-input" autoFocus autoComplete="off" spellCheck={false} placeholder={identity} value={confirmation} disabled={busy} onChange={event => setConfirmation(event.target.value)} /></label>

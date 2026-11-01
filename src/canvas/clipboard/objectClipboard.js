@@ -15,6 +15,7 @@ export function captureObjects(items, selectedIds, canvasId, cut = false) {
   for (const [id, item] of Object.entries(items)) {
     if (item.kind === 'connector' && ((ids.has(String(item.from)) && ids.has(String(item.to))) || (cut && (ids.has(String(item.from)) || ids.has(String(item.to)))))) ids.add(id);
   }
+  if (cut && [...ids].some(id => items[id]?.locked === true)) throw new Error('잠긴 객체는 잘라낼 수 없습니다. 복사를 사용해주세요.');
   if (ids.size > MAX_ITEMS) throw new Error('한 번에 최대 1,000개 객체를 복사할 수 있습니다.');
   const chosen = Object.fromEntries([...ids].map(id => [id, items[id]]));
   const bounds = Object.values(chosen).filter(item => item.kind !== 'connector').map(item => objectBounds(item, items, CANVAS_SPACE.width, CANVAS_SPACE.height));

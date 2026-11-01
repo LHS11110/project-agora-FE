@@ -9,6 +9,7 @@ import './vector-editor.css';
 import './cursor-smoothing.css';
 import './chat-compose.css';
 import './image-display.css';
+import './design-system.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

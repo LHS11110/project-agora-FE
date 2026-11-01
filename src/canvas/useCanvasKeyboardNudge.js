@@ -11,7 +11,7 @@ export function canvasNudgeVector(event) {
   return { dx: x * step / CANVAS_SPACE.width, dy: y * step / CANVAS_SPACE.height };
 }
 
-export default function useCanvasKeyboardNudge({ activeTool, editingId, selectedIds, itemsRef, sessionRef, dragRef, moveItems, flushMoves }) {
+export default function useCanvasKeyboardNudge({ canWriteItem = () => true, activeTool, editingId, selectedIds, itemsRef, sessionRef, dragRef, moveItems, flushMoves }) {
   useEffect(() => {
     let moved = false;
     const flush = () => { if (moved) { moved = false; flushMoves(); } };
@@ -21,7 +21,7 @@ export default function useCanvasKeyboardNudge({ activeTool, editingId, selected
       if (!vector) return;
       const ids = [...new Set(selectedIds.map(String))].filter(id => {
         const item = itemsRef.current[id];
-        return item && item.kind !== 'connector' && item.type !== 'chat_room';
+        return item && canWriteItem(item) && item.locked !== true && item.kind !== 'connector' && item.type !== 'chat_room';
       });
       if (!ids.length) return;
       event.preventDefault();

@@ -1,3 +1,4 @@
+import { isObjectLocked, OBJECT_LOCK_MESSAGE } from './locks/objectLock.js';
 import { isLogicGate, nearestLogicPort } from './logicGates.js';
 import { connectorControlFromPointer, connectorPointCount } from './connectors/controlPoints.js';
 import { activateObjectPointer, captureObjectPointer, releaseObjectPointer } from './pointerCapture.js';
@@ -13,7 +14,7 @@ import { inheritConnectorObjectSize } from './connectors/objectMetrics.js';
 
 export function useCanvasObjectInteractions(options) {
   const {
-    activeTool,
+    activeTool, canWriteItem = () => true,
     addItem,
     boardRef,
     boardSize,
@@ -101,6 +102,7 @@ export function useCanvasObjectInteractions(options) {
       ? [...new Set([...selectedObjectIds, ...groupedIds])]
       : groupedIds.length ? groupedIds : [key];
     selectItems(targetIds, key);
+    if (isObjectLocked(itemsRef.current[key]) || !canWriteItem(itemsRef.current[key])) { event.preventDefault(); event.stopPropagation(); focusCanvas(); return; }
     if (!alreadySelected) {
       focusCanvas();
       event.preventDefault(); event.stopPropagation();
@@ -113,7 +115,8 @@ export function useCanvasObjectInteractions(options) {
     event.preventDefault(); event.stopPropagation();
     const start = pointerPosition(event);
     const touchStart = event.pointerType !== 'mouse' ? { x: event.clientX, y: event.clientY } : null;
-    const movableIds = targetIds.filter((targetId) => itemsRef.current[targetId] && !['connector'].includes(itemsRef.current[targetId].kind));
+    const movableIds = targetIds.filter((targetId) => itemsRef.current[targetId] && !isObjectLocked(itemsRef.current[targetId]) && canWriteItem(itemsRef.current[targetId]) && !['connector'].includes(itemsRef.current[targetId].kind));
+    if (!movableIds.length) return;
     if (movableIds.length > 1) {
       const initialItems = Object.fromEntries(movableIds.map((targetId) => [targetId, itemsRef.current[targetId]]));
       const moving=new Set(movableIds);
@@ -127,6 +130,7 @@ export function useCanvasObjectInteractions(options) {
     captureObjectPointer(boardRef.current, dragRef.current, event);
   };
   const startObjectResize = (event, id, item, handle) => {
+    if (isObjectLocked(itemsRef.current[id] || item) || !canWriteItem(itemsRef.current[id] || item)) { event.preventDefault(); event.stopPropagation(); return; }
     if (activeTool !== 'select' || item?.kind === 'connector') return;
     const board = boardRef.current?.getBoundingClientRect();
     if (!board) return;
@@ -149,6 +153,7 @@ export function useCanvasObjectInteractions(options) {
     captureObjectPointer(boardRef.current, dragRef.current, event);
   };
   const startArrowBend = (event, id, item, bendPointIndex = 0) => {
+    if (isObjectLocked(itemsRef.current[id] || item) || !canWriteItem(itemsRef.current[id] || item)) { event.preventDefault(); event.stopPropagation(); return; }
     const isShapeArrow = item?.kind === 'shape' && item.shapeType === 'arrow';
     const isConnectorArrow = item?.kind === 'connector';
     if (event.button !== 0 || activeTool !== 'select' || (!isShapeArrow && !isConnectorArrow)) return;
@@ -165,6 +170,7 @@ export function useCanvasObjectInteractions(options) {
     captureObjectPointer(boardRef.current, dragRef.current, event);
   };
   const startObjectRotation = (event, id, item) => {
+    if (isObjectLocked(itemsRef.current[id] || item) || !canWriteItem(itemsRef.current[id] || item)) { event.preventDefault(); event.stopPropagation(); return; }
     if (activeTool !== 'select' || item?.kind === 'connector') return;
     const key = String(id);
     const initial = itemsRef.current[key] || item;
@@ -194,6 +200,8 @@ export function useCanvasObjectInteractions(options) {
   };
   const moveObject = (event) => {
     if (!dragRef.current || dragRef.current.pointerId !== event.pointerId) return;
+    const movingIds = dragRef.current.ids || [dragRef.current.id];
+    if (movingIds.some(id => isObjectLocked(itemsRef.current[id]) || !canWriteItem(itemsRef.current[id]))) return;
     if (!activateObjectPointer(dragRef.current, event)) return;
     const pendingTouchStart = dragRef.current.touchStart;
     if (pendingTouchStart) {
@@ -297,6 +305,7 @@ export function useCanvasObjectInteractions(options) {
     }
   };
   const startGroupRotation = (event, ids, layout) => {
+    if (ids.some(id => isObjectLocked(itemsRef.current[id]) || !canWriteItem(itemsRef.current[id]))) { event.preventDefault(); event.stopPropagation(); setToast(OBJECT_LOCK_MESSAGE); return; }
     if (event.button !== 0 || activeTool !== 'select' || dragRef.current) return;
     const frame = event.currentTarget.closest('.object-rotation-frame')?.getBoundingClientRect();
     if (!frame || !layout) return;

@@ -1,3 +1,4 @@
+import { isObjectLocked, isLockOnlyOperation } from '../locks/objectLock.js';
 import { loadEncodedDocument } from './documentCache.js';
 import * as Automerge from '@automerge/automerge/slim';
 import { itemSnapshot, changeItems } from '../itemSnapshots.js';
@@ -27,6 +28,7 @@ export class HostCanvasView {
       }
       doc=this.approvedDocs.has(id)?Automerge.clone(this.approvedDocs.get(id)):null;base=this.approvedBases.get(id);
       for(const operation of grouped.get(id)||[]){
+        if(isObjectLocked(item) && !(isLockOnlyOperation(operation) && operation.patch.locked===false))continue;
         if(operation.action==='translate'){if(item)item=translateItem(item,operation.dx,operation.dy);continue;}
         if(operation.action==='delete'){item=null;doc=null;base=null;continue;}
         // A queued patch must not resurrect an authoritative deletion/eviction.

@@ -1,3 +1,4 @@
+import { OBJECT_LOCK_MESSAGE } from '../locks/objectLock.js';
 import { itemSnapshot, changeItems } from '../itemSnapshots.js';
 import { operationIds, translateItem } from '../host/hostOperations.js';
 import { createId } from '../canvasIds.js';
@@ -62,7 +63,8 @@ export class ServerCanvasSession {
         this.queuedBytes -= bytes(last);
         last.dx += operation.dx; last.dy += operation.dy;
         this.queuedBytes += bytes(last);
-      } else if (operation.action === 'patch' && last?.action === 'patch' && operation.id === last.id) {
+      } else if (operation.action === 'patch' && last?.action === 'patch' && operation.id === last.id
+        && !Object.hasOwn(last.patch || {}, 'locked') && !Object.hasOwn(operation.patch || {}, 'locked')) {
         const patch = { ...last.patch, ...operation.patch };
         const unset = new Set([...(last.unset || []), ...(operation.unset || [])]);
         for (const key of operation.unset || []) delete patch[key];
@@ -121,7 +123,7 @@ export class ServerCanvasSession {
       } else {
         const touched = this.flight.operations.flatMap(operationIds);
         this.receipt?.({ status: 'rejected', message: data.code });
-        this.reject(`변경을 저장하지 못했습니다: ${data.code || '오류'}`);
+        this.reject(data.code === 'ITEM_LOCKED' ? OBJECT_LOCK_MESSAGE : `변경을 저장하지 못했습니다: ${data.code || '오류'}`);
         this.flight = null; this.redraw(touched);
       }
       this.notify(); return true;

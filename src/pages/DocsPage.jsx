@@ -178,7 +178,7 @@ function DocsNavLink({ id, children, kind, activeSection, onSelect }) {
 
 
   return <a className={`docs-nav-link${activeSection === id ? ' active' : ''}`} href={`#${id}`} aria-current={activeSection === id ? 'location' : undefined} onClick={() => onSelect(id)}>
-    <span>{children}</span>{kind && <small>{kind}</small>}
+    <span title={typeof children === 'string' ? children : undefined}>{children}</span>{kind && <small>{kind}</small>}
   </a>;
 }
 

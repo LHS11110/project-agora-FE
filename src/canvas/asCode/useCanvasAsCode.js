@@ -1,3 +1,4 @@
+import { isObjectLocked, OBJECT_LOCK_MESSAGE } from '../locks/objectLock.js';
 import { useCallback, useEffect, useRef } from 'react';
 import * as Automerge from '@automerge/automerge/slim';
 import { collaborativeField, encodeBase64, isCollaborativeItem, nextPeerSyncVersion, canPeerAccessItem } from '../collaborativeSync.js';
@@ -11,7 +12,10 @@ export function useCanvasAsCode(options) {
   const plan = useCallback(source => {
     const context = latest.current;
     if (!context.canvasSnapshotLoadedRef.current) throw new Error('캔버스를 불러온 뒤 사용할 수 있습니다.');
-    return planManifest(source, context.itemsRef.current, context.permission);
+    const result = planManifest(source, context.itemsRef.current, context.permission);
+    if((result.creates.length&&context.canWriteCanvas===false)||[...result.updates.map(e=>e.id),...result.deletes].some(id=>context.canWriteItem&&!context.canWriteItem(context.itemsRef.current[id])))throw new Error('이 그룹에는 쓰기 권한이 없습니다.');
+    if ([...result.updates.map(entry=>entry.id),...result.deletes].some(id=>isObjectLocked(context.itemsRef.current[id]))) throw new Error(OBJECT_LOCK_MESSAGE);
+    return result;
   }, []);
   const apply = useCallback(preview => {
     const c = latest.current;
@@ -21,6 +25,8 @@ export function useCanvasAsCode(options) {
     const current = exportManifest(c.itemsRef.current);
     const source = { ...current, mode: 'merge', items: Object.fromEntries([...preview.creates, ...preview.updates].map(({ id, item }) => [id, exportManifest({ [id]: item }).items[id]])), remove: preview.deletes };
     preview = planManifest(source, c.itemsRef.current, c.permission);
+    if ([...preview.updates.map(entry=>entry.id),...preview.deletes].some(id=>isObjectLocked(c.itemsRef.current[id]))) throw new Error(OBJECT_LOCK_MESSAGE);
+    if((preview.creates.length&&c.canWriteCanvas===false)||[...preview.updates.map(e=>e.id),...preview.deletes].some(id=>c.canWriteItem&&!c.canWriteItem(c.itemsRef.current[id])))throw new Error('이 그룹에는 쓰기 권한이 없습니다.');
     const changed = [];
     const creations = [...preview.creates].sort((a, b) => Number(a.item.kind === 'connector') - Number(b.item.kind === 'connector'));
     for (const { id, item } of creations) {

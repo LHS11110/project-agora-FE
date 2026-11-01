@@ -1,3 +1,4 @@
+import ObjectLockControls from '../../canvas/locks/ObjectLockControls.jsx';
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
 import LogicPortControls from './LogicPortControls.jsx';
@@ -69,7 +70,7 @@ export default function CanvasInspectorPanel({
   selectedArrow,
   selectedConnector,
   selectedItem,
-  objectClipboard, clipboardBlocked, deleteItem,
+  objectClipboard, clipboardBlocked, canWriteItem = () => true, canWriteCanvas = true, deleteItem,
   user, token, updateUserGroup,
   selectedObjectIds,
   selectedTable,
@@ -100,7 +101,7 @@ export default function CanvasInspectorPanel({
   toggleGrid,
   updateArrowHead,
   updateConnectorAppearance,
-  updateItemRotation, updateItemDepth, updateItemShadow, updateImageFrame, updateObjectCornerStyle,
+  updateItemRotation, updateItemDepth, updateItemLocked, updateItemShadow, updateImageFrame, updateObjectCornerStyle,
   updateObjectDimensions,
   updateObjectFontSize,
   updateNewConnectorHead,
@@ -111,14 +112,17 @@ export default function CanvasInspectorPanel({
   useUiLocale();
   const shapeToEdit = activeTool === 'select' && selectedItem?.kind === 'shape' && !selectedItem.runtimeRole ? selectedItem : null;
   const selectionSummary=useMemo(()=>{let grouped=false,savedText=false,groupable=0;for(const id of selectedObjectIds){const item=items[id];grouped ||= Boolean(item?.groupId);savedText ||= ['text','code'].includes(item?.kind);if(!['stroke','connector'].includes(item?.kind))groupable++;}return {grouped,savedText,groupable};},[selectedObjectIds,items]);
+  const hasLockedSelection = activeTool === 'select' && selectedObjectIds.some(id => items[id]?.locked === true || !canWriteItem(items[id]));
   return (
       <aside className={`canvas-sidepanel canvas-inspector${activeTool === 'select' ? ' server-settings-mode' : ' tool-settings-mode'}`}><div className="inspector-heading"><div><h2>{activeTool === 'select' ? ui("환경 설정") : ui('{tool} 설정', {tool:ui(({ 'user-group': '사용자 그룹', pen: '드로잉', laser: '레이저 포인터', eraser: '지우개', connect: '연결', shape: '도형', chart: '그래프', text: '텍스트', note: '포스트잇', math: '수식', table: '테이블', code: '코드', link: '동영상·링크' })[activeTool] || ui("도구"))})}</h2></div>{activeTool === 'select' && <button className="icon-button" onClick={() => setShowSettings(true)} aria-label={ui("캔버스 세부 설정")}><Icon name="settings" size={18} /></button>}</div>
-        {activeTool === 'select' && selectedObjectIds.length === 1 && selectedItem && <button type="button" className="inspector-secondary-action" onClick={() => onOpenComments(primarySelectedItemId)}><Icon name="chat" size={14} /><span>{ui('객체 댓글')}</span></button>}
+        {activeTool === 'select' && selectedObjectIds.length > 0 && <ObjectLockControls ids={selectedObjectIds} items={items} disabled={selectedObjectIds.some(id=>!canWriteItem(items[id]))} onChange={updateItemLocked}/>}
+        {activeTool === 'select' && selectedObjectIds.length === 1 && selectedItem && <button type="button" className="inspector-secondary-action" disabled={!canWriteItem(selectedItem)} onClick={() => onOpenComments(primarySelectedItemId)}><Icon name="chat" size={14} /><span>{ui('객체 댓글')}</span></button>}
         {(['executor', 'execution-output', 'code'].includes(activeTool) || selectedItem?.runtimeRole || (isTextContent(selectedItem) && contentMode(selectedItem) === 'code')) && <section className="inspector-section"><strong className="inspector-label">{ui('블루프린트 실행')}</strong><p className="inspector-hint">{ui('실행 객체 → 코드 객체 → 결과 객체 순서로 연결하세요. 실행 객체의 코드 실행 버튼을 눌러 실행합니다.')}</p><p className="inspector-hint">{ui('연결 화살표의 방향을 따릅니다. 결과 객체끼리 연결하면 같은 출력을 여러 곳에서 볼 수 있습니다.')}</p></section>}
-        {activeTool === 'select' && selectedItem?.kind === 'chart' && <ChartControls key={primarySelectedItemId} item={selectedItem} onChange={patch => updateChartItem(primarySelectedItemId, patch)} />}
+        {activeTool === 'select' && selectedItem?.kind === 'chart' && <fieldset className="object-property-fields" disabled={hasLockedSelection}><ChartControls key={primarySelectedItemId} item={selectedItem} onChange={patch => updateChartItem(primarySelectedItemId, patch)} /></fieldset>}
         {activeTool === 'select' && <ObjectRecoveryControls items={items} spatialIndex={spatialIndex} onDelete={deleteItem} />}
         {activeTool === 'select' && <GraphicsQualityControls value={graphicsQuality} onChange={changeGraphicsQuality} />}
         {activeTool === 'select' && <ObjectClipboardControls actions={objectClipboard} selectedCount={selectedObjectIds.length} blocked={clipboardBlocked} />}
+        <fieldset className="object-property-fields" disabled={hasLockedSelection}>
         {activeTool === 'select' && selectedObjectIds.length > 0 && <ObjectDepthControls ids={selectedObjectIds} items={items} onChange={updateItemDepth} />}
         {activeTool === 'select' && selectedObjectIds.length > 0 && <ObjectShadowControls ids={selectedObjectIds} items={items} onChange={updateItemShadow} />}
         {activeTool === 'select' && selectedObjectIds.length === 1 && selectedItem?.kind === 'image' && <ImageFrameControls item={selectedItem} onChange={enabled => updateImageFrame(primarySelectedItemId, enabled)} />}
@@ -137,12 +141,14 @@ export default function CanvasInspectorPanel({
         {isTextContent(selectedItem) && <ContentRenderControls item={selectedItem} onChange={(field, value) => updateContentSetting(primarySelectedItemId, field, value)} />}
         {selectedObjectIds.length === 1 && selectedItem?.kind === 'text' && ['plain', 'markdown'].includes(contentMode(selectedItem)) && <section className="inspector-section"><strong className="inspector-label">{ui('텍스트 색상')}</strong><small className="inspector-hint">{ui('텍스트를 더블 클릭하고 글자를 선택해 색상을 바꾸세요.')}</small></section>}
         {selectedConnector && <ConnectorEndpointInfo connector={selectedConnector} items={items} onNavigate={onNavigateObject} />}
+        </fieldset>
         {activeTool === 'select' && <>
         <section className="inspector-section"><div className="inspector-label">{ui("화면 모드")}</div><div className="theme-switch" role="group" aria-label={ui("테마 선택")}><button className={theme === 'light' ? 'active' : ''} aria-pressed={theme === 'light'} onClick={() => changeTheme('light')}><Icon name="sun" size={16} />{ui("라이트")}</button><button className={theme === 'dark' ? 'active' : ''} aria-pressed={theme === 'dark'} onClick={() => changeTheme('dark')}><Icon name="moon" size={16} />{ui("다크")}</button></div></section>
         <section className="inspector-section coordinate-guide-controls"><div className="inspector-switch-row"><span><strong>{ui("좌표 격자")}</strong></span><button className={`toggle-switch${showGrid ? ' on' : ''}`} role="switch" aria-label={ui("좌표 격자")} aria-checked={showGrid} onClick={toggleGrid}><i /></button></div><div className="inspector-switch-row"><span><strong>{ui("X축 표시")}</strong></span><button className={`toggle-switch${showXAxis ? ' on' : ''}`} role="switch" aria-label={ui("X축 표시")} aria-checked={showXAxis} onClick={toggleXAxis}><i /></button></div><div className="inspector-switch-row"><span><strong>{ui("Y축 표시")}</strong></span><button className={`toggle-switch${showYAxis ? ' on' : ''}`} role="switch" aria-label={ui("Y축 표시")} aria-checked={showYAxis} onClick={toggleYAxis}><i /></button></div></section>
         <section className="inspector-section zoom-sensitivity-section"><div className="zoom-sensitivity-heading"><strong>{ui("줌 감도")}</strong><span>{Math.round(zoomSensitivity * 100)}%</span></div><input type="range" min={MIN_ZOOM_SENSITIVITY} max={MAX_ZOOM_SENSITIVITY} step="0.1" value={zoomSensitivity} onChange={changeZoomSensitivity} aria-label={ui("줌 감도")} /><small>{ui("휠과 확대·축소 버튼 반응 속도")}</small></section>
         {(selectedObjectIds.length > 1 || selectionSummary.grouped) && <section className="inspector-section selection-actions-section"><div className="selection-actions-heading"><strong>{selectedObjectIds.length}{ui("개 오브젝트 선택됨")}</strong><button type="button" onClick={() => selectItems([])}>{ui("선택 해제")}</button></div><small className="inspector-hint">{ui("빈 공간을 드래그해 여러 개를 선택하고, Shift를 누른 채 개별 선택을 더할 수 있어요.")}</small>{selectionSummary.savedText && <small className="inspector-hint">{ui("텍스트와 코드는 Ctrl + S로 저장하며, 포스트잇은 변경 후 자동 저장합니다.")}</small>}<div className="selection-actions-buttons"><button type="button" className="button button-dark" disabled={!selectionIsSingleGroup && selectionSummary.groupable < 2} onClick={() => changeSelectionGroup(!selectionIsSingleGroup)}>{selectionIsSingleGroup ? ui("그룹 해제") : ui("그룹화")}</button></div></section>}
         </>}
+        <fieldset className="object-property-fields" disabled={hasLockedSelection}>
         {activeTool === 'select' && selectedObjectIds.length === 1 && selectedItem && <ObjectNumericControls item={selectedItem} onChange={(field, value) => updateObjectDimensions(primarySelectedItemId, field, value)} onRotationChange={value => updateItemRotation(primarySelectedItemId, value)} />}
         {shapeToEdit && isVolumeShape(shapeToEdit.shapeType) && <section className="inspector-section"><strong className="inspector-label">{ui('입체 표현')}</strong><div className="theme-switch" role="group" aria-label={ui('입체 표현')}><button type="button" className={shapeToEdit.volumeStyle !== 'wireframe' ? 'active' : ''} aria-pressed={shapeToEdit.volumeStyle !== 'wireframe'} onClick={() => updateShapeAppearance(primarySelectedItemId, 'volumeStyle', 'solid')}>{ui('면 표시')}</button><button type="button" className={shapeToEdit.volumeStyle === 'wireframe' ? 'active' : ''} aria-pressed={shapeToEdit.volumeStyle === 'wireframe'} onClick={() => updateShapeAppearance(primarySelectedItemId, 'volumeStyle', 'wireframe')}>{ui('윤곽선')}</button></div></section>}
         {selectedObjectIds.length === 1 && hasIndependentContentSize(selectedItem) && <ObjectSizeControls item={selectedItem} onFontSizeChange={value => updateObjectFontSize(primarySelectedItemId, value)} onDimensionChange={(field, value) => updateObjectDimensions(primarySelectedItemId, field, value)} />}
@@ -162,6 +168,7 @@ export default function CanvasInspectorPanel({
         {activeTool === 'select' && selectedItem && <section className="inspector-section rotation-section"><div className="zoom-sensitivity-heading"><strong>{selectedConnector ? ui("곡선 방향") : ui("객체 회전")}</strong><span>{Math.round(Number(selectedItem.rotation) || 0)}°</span></div>{selectedConnector && <input type="range" min="-180" max="180" step="1" value={Math.round(Number(selectedItem.rotation) || 0)} onChange={(event) => updateItemRotation(primarySelectedItemId, event.target.value)} aria-label={ui("선택한 화살표 곡선 방향")} />}{!selectedConnector && <small className="inspector-hint">{ui("선택 객체 위쪽 핸들을 드래그해 마우스 방향을 따라 회전하세요.")}</small>}<button type="button" className="inspector-secondary-action" onClick={() => updateItemRotation(primarySelectedItemId, 0)}><Icon name="reset" size={13} /><span>{selectedConnector ? ui("방향 초기화") : ui("회전 초기화")}</span></button></section>}
         {(activeTool === 'table' || (activeTool === 'select' && selectedTable)) && <section className="inspector-section"><strong className="inspector-label">{activeTool === 'table' ? ui("새 테이블 설정") : ui("테이블 설정")}</strong><div className="table-config-grid"><label>{ui("행 수")}<input type="number" min="1" max={MAX_TABLE_ROWS} value={activeTool === 'table' ? tableConfig.rows : selectedTable.rows?.length || 1} onChange={(event) => changeTableCount('rows', event)} /></label><label>{ui("열 수")}<input type="number" min="1" max={MAX_TABLE_COLUMNS} value={activeTool === 'table' ? tableConfig.columns : selectedTable.columns?.length || 1} onChange={(event) => changeTableCount('columns', event)} /></label><label>{ui("너비 %")}<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.width : Math.round((selectedTable.width || 0.42) * 100)} onChange={(event) => changeTableSize('width', event)} /></label><label>{ui("높이 %")}<input type="number" min="10" max="100" value={activeTool === 'table' ? tableConfig.height : Math.round((selectedTable.height || 0.32) * 100)} onChange={(event) => changeTableSize('height', event)} /></label></div><small className="inspector-hint">{activeTool === 'table' ? ui("설정 후 캔버스를 클릭해 놓으세요.") : ui("셀이나 컬럼 이름을 두 번 클릭해 Markdown으로 편집하세요.")}</small></section>}
         {(activeTool === 'text' || activeTool === 'code') && <section className="inspector-section"><strong className="inspector-label">{activeTool === 'text' ? ui("내용 작성") : ui("코드 작성")}</strong><small className="inspector-hint">{ui("캔버스를 클릭해 내용을 작성하고, 객체 선택 후 표시 방식을 변경하세요.")}</small></section>}
+        </fieldset>
         {activeTool === 'select' && <>
         <CanvasBackgroundControls {...{ backgroundColor, setBackgroundColor, favoriteColors, saveFavoriteColor, theme }} />
         </>}

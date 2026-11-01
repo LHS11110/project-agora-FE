@@ -1,3 +1,5 @@
+import { assertAccessOperations } from '../permissions/access.js';
+import { assertObjectOperations, isLockOnlyOperation } from '../locks/objectLock.js';
 import { changedItemIds, changeItems } from '../itemSnapshots.js';
 import { HostCanvasView } from '../host/HostCanvasView.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -7,7 +9,7 @@ import { itemOperations, operationIds, validateTranslation } from '../host/hostO
 import { loadEncodedDocument } from '../host/documentCache.js';
 import { collaborativeField, encodeBase64 } from '../collaborativeSync.js';
 
-export function useServerCanvas({ itemsRef, wsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems }) {
+export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems }) {
   const [items, publishItems] = useState({});
   const [status, setStatus] = useState({ ready: false, editable: false, queued: 0, blocked: false, message: '서버에서 최신 캔버스를 불러오고 있습니다.' });
   const [lastReceipt, setLastReceipt] = useState(null);
@@ -37,7 +39,9 @@ export function useServerCanvas({ itemsRef, wsRef, collaborativeDocsRef, collabo
     if (!session.editable) { itemsRef.current = previous; return; }
     try {
       const operations = itemOperations(previous, next, collaborativeDocsRef.current, knownIds || changedItemIds(previous, next));
-      for (const operation of operations) if (operation.doc) {
+      assertAccessOperations(previous, operations, accessRef?.current);
+      assertObjectOperations(previous, operations);
+      for (const operation of operations) if (operation.doc && !isLockOnlyOperation(operation)) {
         const doc = loadEncodedDocument(operation.doc);
         const base = previous[operation.id]?.automerge_snapshot || operation.base || operation.doc;
         operation.patch.automerge_snapshot = base;
@@ -53,7 +57,7 @@ export function useServerCanvas({ itemsRef, wsRef, collaborativeDocsRef, collabo
   const moveItems = useCallback((ids, dx, dy) => {
     if (!dx && !dy) return true;
     const operation = { action: 'translate', ids, dx, dy }, session = sessionRef.current;
-    try { validateTranslation(operation); if (!session.submit([operation])) return false; session.redraw(); return true; }
+    try { assertAccessOperations(working.current, [operation],accessRef?.current); assertObjectOperations(working.current, [operation]); validateTranslation(operation); if (!session.submit([operation])) return false; session.redraw(); return true; }
     catch (error) { callbacks.current.setToast(error.message); return false; }
   }, []);
   const flushMoves = useCallback(() => sessionRef.current.flushMoves(), []);

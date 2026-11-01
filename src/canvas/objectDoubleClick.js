@@ -1,7 +1,7 @@
 import { inspectShareUrl } from '../components/shareMedia.js';
 
 export function handleObjectDoubleClick(event, { id, item, activeTool, editing, onStartEditing, onConnectorDoubleClick }) {
-  if (activeTool !== 'select' || editing) return;
+  if (activeTool !== 'select' || editing || item?.locked === true) return;
   if (event.target.closest?.('button, input, textarea, select, .object-rotation-handle, .resize-handle')) return;
   // Cells handle their own coordinates, including column names.
   if (item.kind === 'table') return;

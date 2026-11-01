@@ -4,7 +4,7 @@ import { useUiLocale } from '../i18n/useUiLocale.js';
 import { useEffect, useState } from 'react';
 import './app-navigation.css';
 import UserAvatar from './account/UserAvatar.jsx';
-import { NavLink, useLocation, useNavigate } from '../routing.jsx';
+import { Link, NavLink, useLocation, useNavigate } from '../routing.jsx';
 import { useAuth } from '../state/AuthContext.jsx';
 import Icon from './Icon.jsx';
 import FreLogBrand from './frelog/FreLogBrand.jsx';
@@ -33,7 +33,7 @@ export default function AppShell({ children }) {
         <nav className="side-nav" aria-label={ui("주요 메뉴")}>
           {navItems.map((item) => <NavLink key={item.to} to={item.to} className={({ isActive }) => `side-link${isActive ? ' active' : ''}`}><Icon name={item.icon} size={19} /><span>{ui(item.label)}</span>{item.to === '/search' && location.pathname.startsWith('/canvases/') && <span className="nav-live-dot" />}</NavLink>)}
         </nav>
-        {!isCanvas && <div className="sidebar-tip"><span className="tip-icon"><Icon name="sparkle" size={18} /></span><p>{ui("좋은 생각은")}<br /><strong>{ui("함께 그릴수록")}</strong><br />{ui("선명해져요.")}</p><div className="tip-art"><span /><span /><span /></div></div>}
+        {!isCanvas && <Link className="sidebar-create-link" to="/search"><Icon name="grid" size={17}/><span>{ui('아이디어에서 코드까지, 하나의 캔버스.')}</span><Icon name="arrow" size={15}/></Link>}
         {!isCanvas && <div className="sidebar-language-control"><LanguageSwitcher /></div>}<div className="sidebar-account">{!isCanvas && <><UserAvatar user={user} token={token} className="avatar-small" /><div className="account-copy"><strong>{user?.nickname || ui("FreLog 사용자")}</strong><small>#{user?.tag_number ?? '—'}</small></div></>}<button className="icon-button logout-button" onClick={() => { logout(); navigate('/'); }} aria-label={ui("로그아웃")} title={ui("로그아웃")}><Icon name="logout" size={18} /></button></div>
       </aside>
       <div className="app-main">      {isCanvas && <button className="app-navigation-toggle" type="button" aria-controls="app-sidebar mobile-app-navigation" aria-expanded={!collapsed}

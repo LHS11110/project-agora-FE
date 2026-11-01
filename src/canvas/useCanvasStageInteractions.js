@@ -23,7 +23,7 @@ import { DEFAULT_SHAPE_ARROW_BEND } from '../components/shapeArrowGeometry.js';
 
 export function useCanvasStageInteractions(options) {
   const {
-    boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth = ERASER_RADIUS * 2, eraserMode,
+    canWriteItem = () => true, canWriteCanvas = true, boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth = ERASER_RADIUS * 2, eraserMode,
     addItem, setToast, setItems, patchItems, refreshSpatialIndex, spatialIndexRef,
     sendStrokeFrameChanges, pendingItemChangesRef, strokeSaveFlushRef,
     lastCursorSentAtRef, peerMeshRef, panRef, zoomHoldRef, zoomPointerPressRef,
@@ -94,7 +94,7 @@ export function useCanvasStageInteractions(options) {
       ? spatialIndexRef.current.query(region).filter(entry=>entry.item?.kind === 'stroke').map(entry=>[entry.id,itemsRef.current[entry.id]])
       : Object.entries(itemsRef.current).filter(([, item]) => item?.kind === 'stroke');
     for (const [id, item] of entries) {
-      if (itemsRef.current[id]?.kind !== 'stroke') continue;
+      if (itemsRef.current[id]?.kind !== 'stroke' || itemsRef.current[id]?.locked === true || !canWriteItem(itemsRef.current[id])) continue;
       const remainingPaths = eraseStrokeWithEraser(item, from, to, boardSize, camera.scale, eraserWidth / 2, eraserMode);
       if (remainingPaths === null) continue;
       const changes={},removed=[];
@@ -364,6 +364,7 @@ export function useCanvasStageInteractions(options) {
     if (boardRef.current?.hasPointerCapture?.(event.pointerId)) boardRef.current.releasePointerCapture(event.pointerId);
   };
   const startDrawing = (event) => {
+    if(!canWriteCanvas&&activeTool!=='laser')return;
     if (drawingRef.current || event.button !== 0 && event.button !== 1) return;
     if (activeTool === 'hand') { startPan(event); return; }
     updateEraserCursor(event);
