@@ -13,6 +13,7 @@ function resolveGraph(items, executorId, codeOnly) {
   for (const [, edge] of Object.entries(items).filter(([, item]) => item?.kind === 'connector').sort(([a], [b]) => a.localeCompare(b))) {
     const from = String(edge.from), to = String(edge.to), source = items[from], target = items[to];
     const allowed = (!codeOnly && (from === executorId || isBlueprintCode(source)) && isBlueprintCode(target))
+      || (source?.runtimeRole === 'output' && isBlueprintCode(target))
       || ((isBlueprintCode(source) || source?.runtimeRole === 'output') && target?.runtimeRole === 'output');
     if (allowed) {
       if (!adjacent.has(from)) adjacent.set(from, new Set());

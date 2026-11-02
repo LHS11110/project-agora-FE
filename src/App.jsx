@@ -1,3 +1,4 @@
+import GlobalYoutubePlayer from './media/GlobalYoutubePlayer.jsx';
 import QrApprovalPage from './pages/QrApprovalPage.jsx';
 import { ui } from './i18n/locale.js';
 import { useUiLocale } from './i18n/useUiLocale.js';
@@ -28,7 +29,7 @@ function CanvasRoute() {
 
 export default function App() {
   useUiLocale();
-  return <Routes>
+  return <><GlobalYoutubePlayer /><Routes>
     <Route path="/" element={<HomePage />} />
     <Route path="/docs" element={<DocsPage />} />
     <Route path="/tutorial" element={<Suspense fallback={<div className="route-loading">{ui("캔버스 체험을 준비하고 있어요.")}</div>}><TutorialPage /></Suspense>} />
@@ -38,5 +39,5 @@ export default function App() {
     <Route path="/search" element={<Protected><SearchPage /></Protected>} />
     <Route path="/canvases/:canvasId" element={<Protected><Suspense fallback={<div className="canvas-app-page canvas-loading-state"><span className="loader" />{" " + ui("캔버스 화면을 불러오고 있어요.") + ""}</div>}><CanvasRoute /></Suspense></Protected>} />
     <Route path="*" element={<Navigate to="/" replace />} />
-  </Routes>;
+  </Routes></>;
 }

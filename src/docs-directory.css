@@ -43,3 +43,6 @@
 
 @media(max-width:1050px){.docs-layout{grid-template-columns:232px minmax(0,1fr);gap:23px}.docs-toc{padding-inline:9px}}
 @media(max-width:820px){.docs-layout{display:block;padding-top:22px}.docs-toc{position:static;display:flex;flex-direction:column;align-items:stretch;max-height:220px;overflow:auto;margin-bottom:20px;padding:10px;border-radius:11px}.docs-toc-heading{margin-bottom:6px}.docs-storage-roles{grid-template-columns:1fr}.docs-storage-roles>a{min-height:0}.docs-subsection-heading h3{font-size:13px}}
+/* Keep expanded directory folders from shrinking over neighbouring SDK links. */
+.docs-toc > *{flex-shrink:0}
+@media(max-width:820px){body .docs-toc{flex-direction:column;align-items:stretch;overflow-x:hidden;overflow-y:auto}body .docs-toc>*{flex-shrink:0;width:100%}}

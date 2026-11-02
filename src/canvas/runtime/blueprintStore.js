@@ -3,10 +3,15 @@ import { runBlueprint } from './runBlueprint.js';
 
 export function createBlueprintStore({ getItems, execute, saveOutput }) {
   const states = new Map(), listeners = new Map();
-  let active = null, disposed = false;
+  let active = null, disposed = false, activity = null;
+  const activityListeners = new Set();
+  const setActivity = value => { activity = value; activityListeners.forEach(listener => listener()); };
   const publish = (id, state) => { states.set(id, state); listeners.get(id)?.forEach(listener => listener()); };
   return {
     isRunning: () => Boolean(active),
+    getActivity: () => activity,
+    dismissActivity() { if (!active) setActivity(null); },
+    subscribeActivity(listener) { activityListeners.add(listener); return () => activityListeners.delete(listener); },
     get: id => states.get(String(id)) || null,
     subscribe(id, listener) {
       id = String(id);
@@ -21,13 +26,15 @@ export function createBlueprintStore({ getItems, execute, saveOutput }) {
       if (active || disposed) return;
       active = id;
       publish(id, { running: true });
+      setActivity({id, startedAt: Date.now(), phase: "reset", status:"running"});
       try {
         const result = await execute({ action: 'reset' });
         if (result?.reset !== true) throw new Error('실행 환경을 초기화하지 못했습니다.');
         // All executor objects share the same canvas environment.
         for (const key of states.keys()) publish(key, null);
         publish(id, { running: false, reset: true });
-      } catch (error) { publish(id, { running: false, error: error.message }); }
+        setActivity({...activity,status:"success",endedAt:Date.now()});
+      } catch (error) { publish(id, { running: false, error: error.message }); setActivity({...activity,status:"error",error:error.message,endedAt:Date.now()}); }
       finally { active = null; }
     },
     runCode(id) { return this.run(id,{codeOnly:true}); },
@@ -36,6 +43,8 @@ export function createBlueprintStore({ getItems, execute, saveOutput }) {
       if (active || disposed) return;
       active = id;
       publish(id, { running: true });
+      const startedAt = Date.now();
+      setActivity({id, startedAt, phase: "run", status:"running", entries:[]});
       try {
         const items = getItems(), output = new Map(), resolve=codeOnly?resolveCode:resolveBlueprint;
         const runId = `${Date.now()}-${id}`;
@@ -52,9 +61,13 @@ export function createBlueprintStore({ getItems, execute, saveOutput }) {
           while (records.length > 32 || new TextEncoder().encode(JSON.stringify(records)).length > 524288) records.shift();
           output.set(outputId, records);
           if (!saveOutput(outputId, records)) throw new Error('실행 결과를 저장하지 못했습니다. 연결을 확인하세요.');
-        },{codeOnly});
+        },{codeOnly,
+          onStep: step => setActivity({id, startedAt, phase:"run", status:"running", ...step, entries:[...(activity?.entries||[]),{...step,status:"running"}]}),
+          onStepResult: result => setActivity({...activity, entries:activity.entries.map(entry=>entry.codeId===result.codeId?{...entry,...result,detail:result.detail?.slice(-800),status:result.failed?"error":"success"}:entry)})
+        });
         publish(id, { running: false, completed: true, failed: outcome.failed, runId });
-      } catch (error) { publish(id, { running: false, error: error.message }); }
+        setActivity({...activity,status:outcome.failed?"error":"success",endedAt:Date.now()});
+      } catch (error) { publish(id, { running: false, error: error.message }); setActivity({...activity,status:"error",error:error.message,endedAt:Date.now()}); }
       finally { active = null; }
     },
   };

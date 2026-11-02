@@ -1,0 +1,10 @@
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import RuntimeActivity from '../../src/canvas/runtime/RuntimeActivity.jsx';
+import BlueprintNode from '../../src/canvas/runtime/BlueprintNode.jsx';
+import {createBlueprintStore} from '../../src/canvas/runtime/blueprintStore.js';
+const items={run:{kind:'shape',runtimeRole:'executor'},code:{kind:'code',language:'python',filename:'example.py',code:'print(1)'},link:{kind:'connector',from:'run',to:'code'}};
+let finish;
+const store=createBlueprintStore({getItems:()=>items,execute:()=>new Promise(resolve=>{finish=resolve;}),saveOutput:()=>true});
+window.finishRuntime=(failed=false)=>finish({exitCode:failed?1:0,output:failed?'Example error':'1'});
+createRoot(document.getElementById('root')).render(<><RuntimeActivity store={store} onFocusCode={id=>{window.focusedCode=id;}}/><div style={{width:320,height:240,background:'#192737',color:'white'}}><BlueprintNode id="run" item={items.run} store={store}/></div><button onClick={()=>store.runCode('code')}>Shortcut run</button></>);

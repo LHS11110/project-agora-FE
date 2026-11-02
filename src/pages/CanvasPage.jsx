@@ -1,3 +1,4 @@
+import RuntimeActivity from '../canvas/runtime/RuntimeActivity.jsx';
 import { canUseItem, canUseCanvas, WRITE_DENIED, EXECUTE_DENIED } from '../canvas/permissions/access.js';
 import { isObjectLocked, OBJECT_LOCK_MESSAGE } from '../canvas/locks/objectLock.js';
 import CanvasAxisTicks from '../canvas/CanvasAxisTicks.jsx';
@@ -1542,6 +1543,7 @@ function CanvasWorkspace() {
     {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{ui(toast)}</div>}
     {comments.activeId && <ObjectCommentsPanel comments={comments} participants={mentionParticipants} connection={connection} />}
     <MentionNotifications notifications={comments.notifications} onJump={jumpToMention} onDismiss={comments.dismiss} />
+    <RuntimeActivity store={runtimeStore} onFocusCode={focusCanvasObject} />
     {showRuntimeSettings && <RuntimeSettingsDialog canManage={canWriteCanvas&&canUseCanvas(capabilities,'execute')} canvasId={canvasId} token={token} user={user} initialLanguage={selectedItem?.language || 'cpp'} isRunning={()=>runtimeStore.isRunning()} onClose={()=>setShowRuntimeSettings(false)} />}
     {showCanvasCode && <CanvasAsCodeDialog api={canvasCodeApi} canvasId={canvasId} onClose={() => setShowCanvasCode(false)} />}
     {showSettings && <SettingsDialog backgroundColor={backgroundColor} setBackgroundColor={setBackgroundColor} favoriteColors={favoriteColors} saveFavoriteColor={saveFavoriteColor} theme={theme} canvasId={canvasId} image={canvas?.image} token={token} onImageSaved={(image) => setCanvas(current => ({ ...current, image }))} settings={settings} pending={settingsPending} onClose={() => setShowSettings(false)} onUpdate={sendSettings} />}

@@ -1,3 +1,4 @@
+import PythonSdkDocs, {sdkSections, botEndpoints} from '../docs/PythonSdkDocs.jsx';
 import LanguageSwitcher from '../i18n/LanguageSwitcher.jsx';
 import { ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
@@ -44,7 +45,7 @@ const internalEndpoints = [
 ];
 
 const publicApiGroups = [
-  { id: 'api-auth', title: '인증', rows: publicEndpoints.slice(0, 4) },
+  { id: 'api-auth', title: '인증', rows: [...publicEndpoints.slice(0, 4), ['GET','/api/auth/me','Bearer JWT · Bot token','현재 인증된 사용자 또는 봇을 조회합니다. 인증이 없으면 401입니다.']] },
   { id: 'api-email', title: '이메일 인증', rows: [
     ['GET', '/api/auth/email/status', '없음', '인증 메일 발송 설정 여부. { available }.'],
     ['POST', '/api/auth/email/request', '없음', 'JSON { email }. 6자리 코드 발송 요청. 202 + challengeId, expiresInSeconds, resendAfterSeconds.'],
@@ -52,6 +53,7 @@ const publicApiGroups = [
   ] },
   { id: 'api-users', title: '사용자·프로필', rows: publicEndpoints.slice(4, 9) },
   { id: 'api-canvases', title: '캔버스', rows: publicEndpoints.slice(9) },
+  { id: 'api-bots', title: '봇 참여자', rows: botEndpoints },
 ];
 
 const internalApiGroups = [
@@ -132,6 +134,7 @@ const projectTree = [
   '├─ spring/                    # REST · JWT · 계정 · 캔버스 권한',
   '├─ cpp/                       # 내부 REST · 실시간 WebSocket 서버',
   '├─ nginx/                     # HTTPS 정적 파일 · /api · /wss 프록시',
+  '├─ sdk/python/                # Python SDK · examples · tests',
   '├─ API_SPEC.md                # 백엔드 REST · WebSocket 상세 명세',
   '├─ THIRD_PARTY_LICENSES.md    # C++ 포함 의존성 라이선스',
   '└─ LICENSE                    # 프로젝트 라이선스',
@@ -204,7 +207,7 @@ export default function DocsPage() {
       ...canvasDocumentFields.map(([field]) => schemaRowId('es', field)),
       ...redisDocumentFields.map(([path]) => schemaRowId('redis', path)),
     ];
-    const ids = ['overview', 'structure', 'public-api', 'api-auth', 'api-users', 'api-canvases', 'internal-api', 'api-infra', 'api-debug', 'api-cpp', 'websocket', 'webrtc-signaling', 'database', 'db-sql', 'db-es', 'db-redis', 'rules', ...endpointIds, ...socketIds, ...schemaIds];
+    const ids = ['overview', 'structure', 'public-api', 'api-auth', 'api-users', 'api-canvases', 'internal-api', 'api-infra', 'api-debug', 'api-cpp', 'websocket', 'webrtc-signaling', 'database', 'db-sql', 'db-es', 'db-redis', 'rules', 'api-bots', ...sdkSections.map(([id])=>id), ...endpointIds, ...socketIds, ...schemaIds];
     const targets = ids.map((id) => document.getElementById(id)).filter(Boolean);
     const observer = new IntersectionObserver((entries) => {
       const current = entries.filter((entry) => entry.isIntersecting)
@@ -245,6 +248,9 @@ export default function DocsPage() {
             <DocsNavLink id="webrtc-signaling" kind="P2P" activeSection={activeSection} onSelect={setActiveSection}>WebRTC · P2P</DocsNavLink>
           </DocsNavFolder>
         </DocsNavFolder>
+        <DocsNavFolder title="Python SDK">
+          {sdkSections.map(([id,title])=><DocsNavLink key={id} id={id} kind="SDK" activeSection={activeSection} onSelect={setActiveSection}>{ui(title)}</DocsNavLink>)}
+        </DocsNavFolder>
         <DocsNavFolder title={ui("데이터 레퍼런스")}>
           <DocsNavLink id="database" activeSection={activeSection} onSelect={setActiveSection}>{ui("저장소 구성")}</DocsNavLink>
           <DocsNavFolder title="SQL Server" nested>
@@ -270,6 +276,7 @@ export default function DocsPage() {
           <div className="docs-role-grid"><div><span>FRONTEND</span><h3>{ui("한 화면에서 함께 만들기")}</h3><p>{ui("PixiJS가 보이는 벡터만 그리고, 공간 B-tree로 화면 밖 객체를 제외합니다. 커서·레이저와 Automerge 편집은 인증된 브로커로 동기화하며 텍스트·코드는 Ctrl + S, 포스트잇은 변경 후 자동 저장합니다.")}</p></div><div><span>SPRING BOOT</span><h3>{ui("인증과 권한의 기준점")}</h3><p>{ui("사용자 JWT, 캔버스 메타데이터, 접속 토큰 발급, C++ 서버 할당을 관리합니다.")}</p></div><div><span>C++ REALTIME</span><h3>{ui("신호와 영속 저장")}</h3><p>{ui("브로커가 위임한 저장 요청을 검증하고 객체·채팅을 저장합니다. 브로커는 커서·레이저·문서 변경을 인증된 사용자에게 전달하고 통화 신호를 지정 사용자에게 라우팅합니다.")}</p></div></div>
         </section>
         <section className="docs-section" id="public-api"><SectionTitle eyebrow="02 / CLIENT API" title={ui("외부에 공개된 API")}>{ui("브라우저에서 사용하는 HTTPS API입니다. 보호된 API에는 access token을 Bearer 헤더로 전달합니다.")}</SectionTitle><div className="docs-callout"><Icon name="lock" size={18} /><p><strong>{ui("인증 헤더")}</strong><code>Authorization: Bearer &lt;accessToken&gt;</code> · <code>POST /api/auth/me</code>{"" + ui("는 본문에") + " "}<code>{'{ token }'}</code>{ui("을 받습니다. 사용자 목록 조회는 비인증 경로입니다. 캔버스 접속 토큰은 로그인 JWT와 별개이며 WebSocket에만 사용합니다.")}</p></div><div className="docs-api-groups">{publicApiGroups.map((group, index) => <section className="docs-api-group" id={group.id} key={group.id}><div className="docs-subsection-heading"><span>REST / {String(index + 1).padStart(2, '0')}</span><h3>{ui(group.title)}</h3></div><EndpointTable rows={group.rows} /></section>)}</div><div className="docs-note"><strong>{ui("UserResponse 참고")}</strong><p><code>last_login_at</code>{"" + ui("은 로그인 시각이") + " "}<code>user_sessions</code>{"" + ui("로 이동해 현재 응답에서") + " "}<code>null</code>{"" + ui("입니다. 비밀번호 변경 시각은 호환성을 위해") + " "}<code>password_chaged_at</code>{" " + ui("표기와") + " "}<code>password_changed_at</code>{" " + ui("필드를 함께 반환합니다.") + ""}</p></div><div className="docs-note"><strong>{ui("이미지 응답 참고")}</strong><p>{"" + ui("요약 DTO의") + " "}<code>image</code>{"" + ui("는") + " "}<code>/api/canvases/:canvasId/image</code>{" " + ui("URL을 반환합니다. 이 경로는 이미지 바이너리를 제공하며 다른 캔버스 API와 같이 Bearer 인증이 필요합니다. 브라우저의 일반") + " "}<code>&lt;img&gt;</code>{" " + ui("요청에는 인증 헤더를 넣을 수 없으므로 앱에서 토큰을 포함해 가져와 표시합니다.") + ""}</p></div><div className="docs-payload-card"><div><span className="section-kicker">CANVAS ACCESS FLOW</span><h3>{ui("캔버스 접속 순서")}</h3><p>{ui("REST에서 로그인·비밀번호를 확인한 다음, 전용 접속 토큰으로 두 WebSocket을 엽니다. 참여 여부는 WebSocket에서 다시 확인합니다.")}</p></div><pre><code>{'POST /api/canvases/42/access\nAuthorization: Bearer <accessToken>\n\n{ "password": "optional" }\n→ { "server_id": 5, "ws_port": "8002",\n    "canvas_access_token": "<canvas-jwt>" }\n\nWSS /wss/port/8002/canvas/42?token=<canvas_access_token>\nWSS /wss/port/8002/rtc/canvas/42?token=<canvas_access_token>'}</code></pre></div><div className="docs-note"><strong>{ui("캔버스 설정 변경")}</strong><p>{ui("비활성 캔버스는 REST PATCH로 변경합니다. 활성 캔버스의 REST 변경은 409 CANVAS_006으로 거절되므로 WebSocket 설정 이벤트를 사용합니다. 다른 캔버스에 활성 접속 중이면 /access가 409 CANVAS_003을 반환합니다.")}</p></div></section>
+        <PythonSdkDocs />
         <section className="docs-section" id="internal-api"><SectionTitle eyebrow="03 / PRIVATE OPERATIONS" title={ui("내부·운영 전용 API")}>{ui("운영 상태와 서버 제어용 경로입니다. 관리자 전용 Spring API와 내부 C++ REST 경로를 지정된 인증 범위에 맞춰 사용하세요.")}</SectionTitle><div className="docs-callout warning"><Icon name="lock" size={18} /><p><strong>{ui("접근 범위")}</strong>{" " + ui("서버·저장소 할당과 DB 주소,") + " "}<code>/api/test/cpp-canvas-count</code>{"" + ui("는 ROLE_ADMIN이 필요합니다.") + " "}<code>/api/test/cpp-active-canvases</code>{"" + ui("만 로그인 사용자에게 허용됩니다. 이전") + " "}<code>/api/test/cpp-access</code>·<code>cpp-disconnect</code>{" " + ui("프록시와 C++") + " "}<code>/api/access</code>{" " + ui("경로는 제거됐습니다. C++ REST는 내부 포트(기본 8000)에 두고 Nginx에서 외부 공개하지 않습니다.") + ""}</p></div><div className="docs-api-groups">{internalApiGroups.map((group, index) => <section className="docs-api-group" id={group.id} key={group.id}><div className="docs-subsection-heading"><span>PRIVATE / {String(index + 1).padStart(2, '0')}</span><h3>{ui(group.title)}</h3></div><EndpointTable rows={group.rows} internal /></section>)}</div><div className="docs-note"><strong>{ui("네트워크 경계")}</strong><p>{"" + ui("브라우저용 WebSocket은 Nginx의") + " "}<code>/wss/port/:wsPort/canvas/:canvasId</code>{" " + ui("및") + " "}<code>/wss/port/:wsPort/rtc/canvas/:canvasId</code>{" " + ui("경로를 사용합니다. 내부 REST 제어 API, DB·Redis 포트는 외부에 직접 열지 않습니다. 테스트베드의 활성 캔버스 목록은 C++ 프록시가 아니라 DB") + " "}<code>user_sessions</code>{ui("에서 계산합니다.")}</p></div></section>
         <section className="docs-section" id="websocket">
           <SectionTitle eyebrow="04 / REALTIME PROTOCOL" title={ui("캔버스·RTC WebSocket 명세")}>{ui("Spring 접속 API가 발급한 캔버스 전용 토큰으로 캔버스 이벤트와 RTC 신호용 소켓을 각각 엽니다.")}</SectionTitle>

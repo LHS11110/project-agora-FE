@@ -55,3 +55,31 @@ test('reset shares the run lock, clears executor status, and preserves stored ou
   finish({exitCode:0,output:'ok'});await running;
   assert.equal(store.get('run').completed,true);
 });
+
+test('activity reports pending code and preserves terminal outcomes until dismissed', async()=>{
+ const items=graph();let finish;const changes=[];
+ const store=createBlueprintStore({getItems:()=>items,execute:()=>new Promise(resolve=>{finish=resolve;}),saveOutput:()=>true});
+ const unsubscribe=store.subscribeActivity(()=>changes.push(store.getActivity()));
+ const pending=store.runCode('code');
+ assert.equal(store.getActivity().language,'python');
+ assert.equal(store.getActivity().current,1);
+ assert.equal(store.getActivity().total,1);
+ assert.equal(store.getActivity().phase,'run');
+ finish({exitCode:0,output:'ok'});await pending;assert.equal(store.getActivity().status,'success');assert.equal(store.getActivity().entries[0].exitCode,0);assert.equal(store.isRunning(),false);store.dismissActivity();assert.equal(store.getActivity(),null);
+ const reset=store.reset('run');assert.equal(store.getActivity().phase,'reset');
+ finish({reset:false});await reset;assert.equal(store.getActivity().status,'error');assert.ok(store.get('run').error);store.dismissActivity();assert.equal(store.getActivity(),null);
+ unsubscribe();assert.ok(changes.length>=4);
+});
+
+test('activity names the failing code, retains each step outcome and stops remaining execution',async()=>{
+ const items=graph();items.code.filename='prepare.py';items.next={kind:'code',filename:'consume.cpp',language:'cpp',code:'consume'};items.link={kind:'connector',from:'out',to:'next'};
+ let calls=0;const store=createBlueprintStore({getItems:()=>items,execute:async()=>++calls===1?{exitCode:0,output:'1\n'}:{exitCode:2,output:'missing input'},saveOutput:()=>true});
+ await store.run('run');const a=store.getActivity();
+ assert.equal(a.status,'error');assert.equal(a.codeName,'consume.cpp');assert.equal(a.current,2);assert.equal(a.total,2);assert.ok(a.endedAt>=a.startedAt);
+ assert.deepEqual(a.entries.map(e=>[e.codeName,e.status,e.exitCode]),[['prepare.py','success',0],['consume.cpp','error',2]]);assert.equal(a.entries[1].detail,'missing input');
+});
+test('running activity cannot be dismissed and timeout is distinguishable from normal failure',async()=>{
+ const items=graph();let finish;const store=createBlueprintStore({getItems:()=>items,execute:()=>new Promise(resolve=>{finish=resolve;}),saveOutput:()=>true});
+ const running=store.run('run');store.dismissActivity();assert.equal(store.getActivity().status,'running');finish({exitCode:1,timedOut:true,output:''});await running;
+ assert.equal(store.getActivity().status,'error');assert.equal(store.getActivity().entries[0].timedOut,true);
+});

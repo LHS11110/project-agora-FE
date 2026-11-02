@@ -1,0 +1,9 @@
+# Blueprint standard input
+
+Connect an output object to a code object to use its output as that code's standard input. The graph accepts `executor -> code -> output -> code -> output`; cycles remain invalid. Direct Shift+Enter uses the same input resolution. Upstream producers reachable from the selected executor run first. Inputs from an external output object use its saved result records. Fresh results from this run replace old records for input purposes.
+
+Within an output object, records are consumed in their displayed array order, top to bottom. When multiple output objects feed the same code, objects are sorted by Y, then X, then ID. Text is preserved; each nonempty record without a final newline gets a newline boundary. IDs, timestamps, exit codes and UI placeholder text are not input. An empty connected output supplies empty stdin. With no input edge, the request omits stdin and the normal EOF behavior remains (Python input() raises EOFError; native cin/scanf report stream failure according to the program).
+
+Input is bounded to 64 KiB of UTF-8, validated in FE, Spring, the host manager and the guest. It travels as data, never interpolated into user source code. The guest supervisor prepares a per-language memory-backed input file and rewinds it before every execution while the kernel is frozen. Workers reset input streams and EOF state per cell without resetting declarations, functions, compiled caches or global state. Shell input is redirected separately from its control channel. There is no interactive waiting or cross-run unread-input carryover.
+
+Checks include graph regression tests, runtime validation, Spring authorization/forwarding, real worker container tests (Python, C, Clang 19/21, GCC, Java, Node and Shell), and reserved-VM integration through the runtime manager. These tests own no user canvas or VM.
