@@ -123,7 +123,7 @@ export class ServerCanvasSession {
       } else {
         const touched = this.flight.operations.flatMap(operationIds);
         this.receipt?.({ status: 'rejected', message: data.code });
-        this.reject(data.code === 'ITEM_LOCKED' ? OBJECT_LOCK_MESSAGE : `변경을 저장하지 못했습니다: ${data.code || '오류'}`);
+        this.reject(data.code==='QUESTION_GRADING_STALE'?'답안이 변경되어 채점을 저장하지 않았습니다. 최신 답안을 확인하고 다시 채점하세요.':data.code === 'ITEM_LOCKED' ? OBJECT_LOCK_MESSAGE : `변경을 저장하지 못했습니다: ${data.code || '오류'}`);
         this.flight = null; this.redraw(touched);
       }
       this.notify(); return true;

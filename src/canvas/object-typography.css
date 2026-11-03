@@ -1,0 +1,9 @@
+/* Rich object typography scales independently of the object's dimensions. */
+.canvas-stage .image-object .object-caption{font-size:calc(8px * var(--object-font-factor,1));line-height:1.5;white-space:normal;overflow-wrap:anywhere}
+.canvas-stage .image-object .image-object-fallback{font-size:calc(10px * var(--object-font-factor,1));line-height:1.5}
+.canvas-stage .media-link-object .shared-media-header{font-size:calc(8px * var(--object-font-factor,1));min-height:calc(21px * var(--object-font-factor,1));flex-basis:calc(21px * var(--object-font-factor,1))}
+.canvas-stage .media-link-object .shared-media-invalid{font-size:calc(9px * var(--object-font-factor,1))}
+.canvas-stage .media-link-object .shared-media-activate{font-size:calc(11px * var(--object-font-factor,1))}
+.canvas-stage .media-link-object .shared-link-copy strong{font-size:calc(9px * var(--object-font-factor,1))}
+
+.canvas-stage .media-link-object .shared-link-copy small{font-size:calc(7px * var(--object-font-factor,1))}

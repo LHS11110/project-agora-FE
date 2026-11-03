@@ -1,5 +1,4 @@
 import { creationGroupPermission } from '../canvas/permissions/creationGroups.js';
-import RuntimeActivity from '../canvas/runtime/RuntimeActivity.jsx';
 import { canUseItem, canUseCanvas, WRITE_DENIED, EXECUTE_DENIED } from '../canvas/permissions/access.js';
 import { isObjectLocked, OBJECT_LOCK_MESSAGE } from '../canvas/locks/objectLock.js';
 import CanvasAxisTicks from '../canvas/CanvasAxisTicks.jsx';
@@ -54,7 +53,7 @@ import { uniqueCanvasParticipants } from '../canvas/canvasParticipants.js';
 import { useCanvasAsCode } from '../canvas/asCode/useCanvasAsCode.js';
 import { isInternalEditorPointer } from '../canvas/editorInteraction.js';
 import { usePenStyle } from '../canvas/usePenStyle.js';
-import { isObjectFontSize, hasIndependentContentSize } from '../canvas/objectSize.js';
+import { isObjectFontSize, supportsObjectFontSize } from '../canvas/objectSize.js';
 import { canvasGridStyle } from '../canvas/canvasGrid.js';
 import { useEraserSize } from '../canvas/useEraserSize.js';
 import { useCanvasPalette } from '../canvas/useCanvasPalette.js';
@@ -479,7 +478,7 @@ function CanvasWorkspace() {
     const key = String(id);
     const item = itemsRef.current[key];
     const nextValue = field === 'groupId' ? String(value || '') : String(value ?? '');
-    const validField = field === 'fontSize' ? item?.kind === 'text' && isObjectFontSize(value) : field === 'groupId'
+    const validField = field === 'fontSize' ? supportsObjectFontSize(item) && isObjectFontSize(value) : field === 'groupId'
       ? isCollaborativeItem(item) && nextValue.length <= 128
       : field === 'color'
       ? (item?.kind === 'note' && /^#[0-9a-f]{6}$/i.test(nextValue)) || (item?.kind === 'text' && (nextValue === '' || /^#[0-9a-f]{6}$/i.test(nextValue)))
@@ -543,7 +542,7 @@ function CanvasWorkspace() {
   const updateTableItem = useCallback((id, update) => {
     const key = String(id);
     const previous = itemsRef.current[key];
-    if (!['table', 'chart'].includes(previous?.kind)) return false;
+    if (!['table', 'chart', 'question'].includes(previous?.kind)) return false;
     const nextItem = typeof update === 'function' ? update(previous) : { ...previous, ...update };
     if (!nextItem || nextItem === previous) return false;
     itemsRef.current = { ...itemsRef.current, [key]: nextItem };
@@ -553,7 +552,7 @@ function CanvasWorkspace() {
       itemsRef.current = { ...itemsRef.current, [key]: previous };
       setItems((current) => ({ ...current, [key]: previous }));
       refreshSpatialIndex();
-      setToast(previous.kind === 'chart' ? '연결이 복구되면 그래프를 다시 편집해주세요.' : '연결이 복구되면 테이블을 다시 편집해주세요.');
+      setToast(previous.kind === 'question'?'연결이 복구되면 문제를 다시 편집해주세요.':previous.kind === 'chart' ? '연결이 복구되면 그래프를 다시 편집해주세요.' : '연결이 복구되면 테이블을 다시 편집해주세요.');
       return false;
     }
     return true;
@@ -576,8 +575,8 @@ function CanvasWorkspace() {
   const updateObjectSize = (id, field, value) => {
     const key = String(id);
     const previous = itemsRef.current[key];
-    if (!previous || !hostSessionRef.current.editable) return;
-    const patch = field === 'fontSize' ? (hasIndependentContentSize(previous) && isObjectFontSize(value) ? { fontSize: value } : null) : numericObjectPatch(previous, field, value);
+    if (!previous || !hostSessionRef.current.editable || isObjectLocked(previous) || !canWriteItem(previous)) return;
+    const patch = field === 'fontSize' ? (supportsObjectFontSize(previous) && isObjectFontSize(value) ? { fontSize: value } : null) : numericObjectPatch(previous, field, value);
     if (!patch) return;
     const nextItem = { ...previous, ...patch };
     itemsRef.current = { ...itemsRef.current, [key]: nextItem };
@@ -1426,7 +1425,7 @@ function CanvasWorkspace() {
     onUndo:id=>undo({itemId:String(id),textOnly:true}), onStartEditing:startEditing, onTextChange:updateCollaborativeText, onTextColorChange:updateTextColor,
     onMetadataChange:(id,field,value)=>['renderMode','filename','language'].includes(field)
       ? updateContentSetting(id,field,value) : updateCollaborativeMetadata(id,field,value),
-    onFormulaChange:updateFormulaItem, onTableChange:updateTableItem, onStopEditing:stopEditing,
+    onFormulaChange:updateFormulaItem, onTableChange:updateTableItem, onQuestionChange:updateTableItem, onStopEditing:stopEditing,
     onSave:saveCollaborativeItem, onPointerDown:startObjectDrag, onResizeStart:startObjectResize,
     onArrowBendStart:startArrowBend, onPointerMove:moveObject, onPointerUp:stopObjectDrag,
     onCopy:value=>navigator.clipboard?.writeText(value), onConnectorDoubleClick:focusConnectorTarget,
@@ -1574,7 +1573,6 @@ function CanvasWorkspace() {
     {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{ui(toast)}</div>}
     {comments.activeId && <ObjectCommentsPanel comments={comments} participants={mentionParticipants} connection={connection} />}
     <MentionNotifications notifications={comments.notifications} onJump={jumpToMention} onDismiss={comments.dismiss} />
-    <RuntimeActivity store={runtimeStore} onFocusCode={focusCanvasObject} />
     {showRuntimeSettings && <RuntimeSettingsDialog canManage={canWriteCanvas&&canUseCanvas(capabilities,'execute')} canvasId={canvasId} token={token} user={user} initialLanguage={selectedItem?.language || 'cpp'} isRunning={()=>runtimeStore.isRunning()} onClose={()=>setShowRuntimeSettings(false)} />}
     {showCanvasCode && <CanvasAsCodeDialog api={canvasCodeApi} canvasId={canvasId} onClose={() => setShowCanvasCode(false)} />}
     {showSettings && <SettingsDialog backgroundColor={backgroundColor} setBackgroundColor={setBackgroundColor} favoriteColors={favoriteColors} saveFavoriteColor={saveFavoriteColor} theme={theme} canvasId={canvasId} image={canvas?.image} token={token} onImageSaved={(image) => setCanvas(current => ({ ...current, image }))} settings={settings} pending={settingsPending} onClose={() => setShowSettings(false)} onUpdate={sendSettings} onRequest={requestSettings} />}

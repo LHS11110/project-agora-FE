@@ -3,7 +3,7 @@ import { canvasPasswordGrantKey, readCanvasPasswordGrant } from '../canvasAccess
 
 export function executeCanvasCode({ canvasId, token, user, language, code, stdin, action }) {
   const passwordGrant = readCanvasPasswordGrant(canvasPasswordGrantKey(canvasId, user));
-  return api(`/api/canvases/${encodeURIComponent(canvasId)}/runtime/${action === 'reset' ? 'reset' : 'execute'}`, {
+  return api(`/api/canvases/${encodeURIComponent(canvasId)}/runtime/${action === 'reset' ? 'reset' : action === 'build' ? 'build' : 'execute'}`, {
     method: 'POST', token, body: action === 'reset' ? { passwordGrant } : { language, code, ...(typeof stdin === 'string' ? {stdin} : {}), passwordGrant },
   });
 }

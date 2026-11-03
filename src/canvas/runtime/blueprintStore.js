@@ -1,4 +1,5 @@
 import { resolveBlueprint, resolveCode } from './blueprintGraph.js';
+import { contentSource } from '../content/contentPresentation.js';
 import { runBlueprint } from './runBlueprint.js';
 
 export function createBlueprintStore({ getItems, execute, saveOutput }) {
@@ -38,16 +39,22 @@ export function createBlueprintStore({ getItems, execute, saveOutput }) {
       finally { active = null; }
     },
     runCode(id) { return this.run(id,{codeOnly:true}); },
-    async run(id, {codeOnly=false}={}) {
+    build(id) { return this.run(id,{buildOnly:true}); },
+    buildCode(id) { return this.run(id,{codeOnly:true,buildOnly:true}); },
+    async run(id, {codeOnly=false,buildOnly=false}={}) {
       id = String(id);
       if (active || disposed) return;
       active = id;
-      publish(id, { running: true });
+      publish(id, { running: true, building: buildOnly });
       const startedAt = Date.now();
-      setActivity({id, startedAt, phase: "run", status:"running", entries:[]});
+      const phase=buildOnly?"build":"run";
+      let steps=[];
+      setActivity({id, startedAt, phase: buildOnly?"build":"run", status:"running", entries:[]});
       try {
         const items = getItems(), output = new Map(), resolve=codeOnly?resolveCode:resolveBlueprint;
         const runId = `${Date.now()}-${id}`;
+        steps=resolve(items,id);
+        for(const step of steps) publish(step.codeId,{running:false,status:'queued',phase,source:contentSource(items[step.codeId]),language:items[step.codeId].language||'javascript'});
         const outcome = await runBlueprint(items, id, async request => {
           if (disposed || !getItems()[id]) throw new Error(codeOnly?'코드 객체가 없어 실행을 중지했습니다.':'실행 객체가 없어 실행을 중지했습니다.');
           return execute(request);
@@ -61,13 +68,27 @@ export function createBlueprintStore({ getItems, execute, saveOutput }) {
           while (records.length > 32 || new TextEncoder().encode(JSON.stringify(records)).length > 524288) records.shift();
           output.set(outputId, records);
           if (!saveOutput(outputId, records)) throw new Error('실행 결과를 저장하지 못했습니다. 연결을 확인하세요.');
-        },{codeOnly,
-          onStep: step => setActivity({id, startedAt, phase:"run", status:"running", ...step, entries:[...(activity?.entries||[]),{...step,status:"running"}]}),
-          onStepResult: result => setActivity({...activity, entries:activity.entries.map(entry=>entry.codeId===result.codeId?{...entry,...result,detail:result.detail?.slice(-800),status:result.failed?"error":"success"}:entry)})
+        },{codeOnly,buildOnly,
+          onStep: step => {
+            publish(step.codeId,{...states.get(step.codeId),running:true,status:'running'});
+            setActivity({id, startedAt, phase, status:"running", ...step, entries:[...(activity?.entries||[]),{...step,status:"running"}]});
+          },
+          onStepResult: result => {
+            publish(result.codeId,{...states.get(result.codeId),...result,running:false,completed:true,status:result.failed?'error':'success',detail:result.detail?.slice(-12000)});
+            setActivity({...activity, entries:activity.entries.map(entry=>entry.codeId===result.codeId?{...entry,...result,detail:result.detail?.slice(-800),status:result.failed?"error":"success"}:entry)});
+          }
         });
-        publish(id, { running: false, completed: true, failed: outcome.failed, runId });
+        for(const step of steps) if(states.get(step.codeId)?.status==='queued') publish(step.codeId,{...states.get(step.codeId),status:'skipped'});
+        publish(id, { ...states.get(id), running: false, status:outcome.failed?'error':'success', completed: true, built: buildOnly, failed: outcome.failed, runId });
         setActivity({...activity,status:outcome.failed?"error":"success",endedAt:Date.now()});
-      } catch (error) { publish(id, { running: false, error: error.message }); setActivity({...activity,status:"error",error:error.message,endedAt:Date.now()}); }
+      } catch (error) {
+        for(const step of steps){
+          const state=states.get(step.codeId);
+          if(state?.status==='queued'||state?.status==='running')publish(step.codeId,{...state,running:false,status:state.status==='running'?'error':'skipped',detail:state.status==='running'?error.message:undefined});
+        }
+        publish(id, { ...states.get(id), ...(codeOnly&&getItems()[id]?{source:contentSource(getItems()[id]),language:getItems()[id].language||'javascript',phase}:{}), running: false, status:'error', error: error.message });
+        setActivity({...activity,status:"error",error:error.message,endedAt:Date.now()});
+      }
       finally { active = null; }
     },
   };

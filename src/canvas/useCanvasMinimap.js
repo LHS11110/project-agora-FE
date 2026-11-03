@@ -8,7 +8,7 @@ import { objectBounds } from '../components/CanvasSpatialBTree.js';
 const MINIMAP_ASPECT = 1.6;
 const MINIMAP_OVERVIEW_SCALE = 1.5;
 const MINIMAP_POSITION_KEY = 'agora_canvas_minimap_position';
-const MINIMAP_ITEM_KINDS = new Set(['image', 'link', 'code', 'note', 'table', 'shape', 'text', 'math', 'stroke', 'connector', 'pdf', 'user-group']);
+const MINIMAP_ITEM_KINDS = new Set(['image', 'link', 'code', 'note', 'table', 'shape', 'text', 'math', 'stroke', 'connector', 'pdf', 'user-group', 'question']);
 const MINIMAP_ITEM_COLORS = {
   'user-group': '#8a75aa',
   pdf: '#b47768', image: '#c58b68', link: '#cf876b', code: '#708d78', note: '#d1ae62', table: '#7587a6',

@@ -1,5 +1,5 @@
 import { changedItemIds } from './itemSnapshots.js';
-const kinds=new Set(['image','link','code','note','table','shape','text','math','stroke','connector','pdf','user-group']);
+const kinds=new Set(['image','link','code','note','table','shape','text','math','stroke','connector','pdf','user-group','question']);
 export default class MinimapMarkers {
   update(entries,items,width,height,index){
     const changed=changedItemIds(this.items,items),reset=this.entries!==entries||this.width!==width||this.height!==height||changed===null;

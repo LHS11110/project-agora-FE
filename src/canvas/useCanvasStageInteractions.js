@@ -1,6 +1,7 @@
 import { hasPolygonVertices } from './shapeAppearance.js';
 import { groupMember } from './userGroups/userGroupModel.js';
 import { shapeCreationSize } from './shapeCatalog.js';
+import { newQuestion } from './questions/questionData.js';
 import { newChartData } from './charts/chartData.js';
 import { cursorDeadline, cursorIsDue, CURSOR_INTERVAL_MS } from './cursorSchedule.js';
 import { useEffect, useRef } from 'react';
@@ -350,7 +351,7 @@ export function useCanvasStageInteractions(options) {
         || Object.entries(itemsRef.current).map(([id,item])=>({id,item,bounds:objectBounds(item,itemsRef.current,boardSize.width,boardSize.height)}));
       const contains = bounds => bounds && bounds.minX >= marquee.minX && bounds.maxX <= marquee.maxX
         && bounds.minY >= marquee.minY && bounds.maxY <= marquee.maxY;
-      const hits = candidates.filter(({item,bounds}) => item && ['image','link','code','note','table','shape','text','math','stroke','pdf','user-group'].includes(item.kind) && contains(bounds)).map(({id})=>id);
+      const hits = candidates.filter(({item,bounds}) => item && ['image','link','code','note','table','shape','text','math','stroke','pdf','user-group','question'].includes(item.kind) && contains(bounds)).map(({id})=>id);
       const expanded = new Set([...selection.baseIds, ...hits]);
       const selectedGroups = new Set([...expanded].map((id) => itemsRef.current[id]?.groupId).filter(Boolean));
       if (selectedGroups.size) {
@@ -406,6 +407,14 @@ export function useCanvasStageInteractions(options) {
       const item = { kind: 'table', ...createTableData(tableConfig.rows, tableConfig.columns), x: point.x - width / 2, y: point.y - height / 2, width, height, permission };
       if (!addItem(id, item)) setToast('실시간 서버에 연결된 뒤 테이블을 놓을 수 있어요.');
       else setActiveTool('select');
+      return;
+    }
+    if (activeTool === 'question') {
+      event.preventDefault();
+      const point=pointerPosition(event),id=createId(),width=.28,height=.4;
+      const item={kind:'question',...newQuestion(),x:point.x-width/2,y:point.y-height/2,width,height,permission};
+      if(!addItem(id,item))setToast('연결이 복구되면 문제를 다시 추가해주세요.');
+      else{setActiveTool('select');selectItems([id]);}
       return;
     }
     if (activeTool === 'chart') {

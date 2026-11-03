@@ -5,6 +5,8 @@ import EditingSurface from './content/EditingSurface.jsx';
 import { ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
 import { canvasObjectPropsEqual } from './canvasRenderEquality.js';
+import { objectFontStyle } from './objectSize.js';
+import './object-typography.css';
 import { objectShadowStyle } from './objectShadow.js';
 import { strokeSelectionGeometry } from './strokeSelection.js';
 import './object-shadow.css';
@@ -13,6 +15,7 @@ import UserGroupContent from './userGroups/UserGroupContent.jsx';
 import ConnectorBendHandles from '../components/canvas/ConnectorBendHandles.jsx';
 import UnifiedTextContent from './content/UnifiedTextContent.jsx';
 import BlueprintNode from './runtime/BlueprintNode.jsx';
+import RuntimeCodeFrame from './runtime/RuntimeCodeFrame.jsx';
 import { contentMode, isTextContent } from './content/contentPresentation.js';
 import ConnectorLabel from '../components/canvas/ConnectorLabel.jsx';
 import ConnectorSelectionEffect from '../components/canvas/ConnectorSelectionEffect.jsx';
@@ -26,6 +29,7 @@ import Icon from '../components/Icon.jsx';
 import MarkdownText from '../components/MarkdownText.jsx';
 import EditableTable from '../components/EditableTable.jsx';
 import ChartView from './charts/ChartView.jsx';
+import QuestionCard from './questions/QuestionCard.jsx';
 import SharedMediaContent from '../components/SharedMediaContent.jsx';
 import ResizeHandles from '../components/ResizeHandles.jsx';
 import ConnectorArrowheads from '../components/canvas/ConnectorArrowheads.jsx';
@@ -36,7 +40,7 @@ import { updateTableValue } from '../components/tableModel.js';
 import { stickyNoteColors } from './canvasConstants.js';
 import { moveTextPosition, textSpliceBetween } from './collaborativeText.js';
 
-function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, token, runtimeStore, onUndo, onStartEditing, onTextChange, onTextColorChange, onMetadataChange, onFormulaChange, onTableChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
+function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, token, runtimeStore, onUndo, onStartEditing, onTextChange, onTextColorChange, onMetadataChange, onFormulaChange, onTableChange, onQuestionChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
   useUiLocale();
   const collaborativeValue = String(item.kind === 'code' ? item.code || '' : item.text || '');
   const geometryElementRef = useRef(null);
@@ -101,7 +105,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
   });
   const width = Number(item.width) || ({ image: 0.3, code: 0.32, shape: 0.14, math: 0.2, text: 0.22, note: 0.22, table: 0.42, link: 0.3 }[item.kind] || 0.2);
   const height = Number(item.height) || ({ shape: 0.12, math: 0.09, text: 0.12, note: 0.15, table: 0.32, link: 0.15 }[item.kind] || 0.2);
-  const style = { ...objectShadowStyle(item), left: `${(Number(item.x) || 0) * 100}%`, top: `${(Number(item.y) || 0) * 100}%`, width: `${width * 100}%`, '--object-color': item.color || '#617d68', '--object-rotation': `${Number(item.rotation) || 0}deg` };
+  const style = { ...objectFontStyle(item), ...objectShadowStyle(item), left: `${(Number(item.x) || 0) * 100}%`, top: `${(Number(item.y) || 0) * 100}%`, width: `${width * 100}%`, '--object-color': item.color || '#617d68', '--object-rotation': `${Number(item.rotation) || 0}deg` };
   if (item.height) style.height = `${height * 100}%`;
   const movable = activeTool === 'select' && selected && !item.locked && !readOnly;
   const classes = `canvas-object canvas-object-${item.kind}${movable ? ' movable' : ''}${selected ? ' selected' : ''}${connectionStartId === id ? ' connection-source' : ''}${item.height ? ' has-custom-height' : ''}`;
@@ -133,9 +137,11 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
     ? <ResizeHandles onPointerDown={(event, handle) => onResizeStart(event, id, item, handle)} />
     : null;
   // Keep content mounted when selection adds controls, preserving double-click targets.
-  const withResizeHandles = (element) => scaleObjectElement(cloneElement(element,
+  const withResizeHandles = (element) => { const framed=scaleObjectElement(cloneElement(element,
     { ref: node => { geometryElementRef.current = node; editingBoundary.ref.current = node; }, className: `${element.props.className}${item.locked ? ' object-locked' : ''}${resizeHandles ? ' resizeable' : ''}` },
     <>{element.props.children}{selected && item.locked && <span className="object-lock-badge" title={ui("잠긴 객체")}><Icon name="lock" size={12}/></span>}{resizeHandles && <button type="button" className="object-move-handle" aria-label={ui("선택한 객체 이동")} title={ui("잡고 끌어 객체 이동")} onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onPointerDown(event, id, item); }}><Icon name="move" size={16} /></button>}{resizeHandles}</>), item);
+    return isTextContent(item)&&contentMode(item)==='code'?<RuntimeCodeFrame id={id} item={item} store={runtimeStore}>{framed}</RuntimeCodeFrame>:framed;
+  };
 
 
   if (item.kind === 'shape' && ['executor', 'output'].includes(item.runtimeRole)) return withResizeHandles(<div className={`${classes} blueprint-object${item.runtimeRole==='executor'?' blueprint-executor-object':''}`} style={style} {...handlers}><BlueprintNode id={id} item={item} store={runtimeStore} selected={selected} canExecute={canExecute} canReset={canExecute&&!readOnly} /></div>);
@@ -178,7 +184,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
     const mode = contentMode(item);
     const textColor = item.kind === 'text' && mode !== 'code' && /^#[0-9a-f]{6}$/i.test(item.color || '') ? item.color : undefined;
     return withResizeHandles(<div key={id} className={`${classes} unified-content-object ${mode === 'code' ? 'code-object' : 'text-object'}${mode === 'markdown' ? ' markdown-text-object' : ''}`} style={{ ...style, color: textColor, '--text-color': textColor }} {...handlers}>
-      <UnifiedTextContent {...{ id, item, editing, dirty, remoteEditorLabel, onUndo, onTextChange, onTextColorChange, onFormulaChange, onMetadataChange, onSave, onStopEditing, runtimeStore }} />
+      <UnifiedTextContent {...{ id, item, editing, dirty, remoteEditorLabel, onUndo, onTextChange, onTextColorChange, onFormulaChange, onMetadataChange, onSave, onStopEditing, runtimeStore, canExecute }} />
     </div>);
   }
   if (item.kind === 'note') return withResizeHandles(<div key={id} className={`${classes} sticky-note-object`} style={{ ...style, '--sticky-note-color': item.color || stickyNoteColors[0], '--sticky-note-rotation': `${Number(item.rotation) || -1}deg` }} data-item-id={id} {...handlers} onBlur={editingBoundary.onBlur} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}>
@@ -188,6 +194,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
     </EditingSurface>
   </div>);
   if (item.kind === 'table') return withResizeHandles(<div key={id} className={`${classes} canvas-table-object`} style={style} data-item-id={id} {...handlers}><EditableTable item={item} editingActive={editing} enabled={activeTool === 'select' && selected && !item.locked && !readOnly} onStartEditing={() => onStartEditing(id)} onStopEditing={() => onStopEditing(id)} onChange={(location, value) => onTableChange(id, (current) => updateTableValue(current, location, value))} /></div>);
+  if (item.kind === 'question') return withResizeHandles(<div className={`${classes} canvas-question-object`} style={style} {...handlers}><QuestionCard id={id} item={item} readOnly={readOnly||item.locked||activeTool!=='select'} onChange={onQuestionChange} /></div>);
   if (item.kind === 'chart') return withResizeHandles(<div key={id} className={`${classes} canvas-chart-object`} style={style} data-item-id={id} {...handlers}><ChartView item={item} /></div>);
   if (item.kind === 'shape') {
     const arrowGeometry = item.shapeType === 'arrow' ? shapeArrowGeometry(width * viewSize.width, height * viewSize.height, item.bend, item.startHead, item.endHead, item) : null;

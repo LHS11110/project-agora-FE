@@ -1,3 +1,4 @@
+import { validQuestion } from '../questions/questionData.js';
 import { validRuntimeResults } from '../runtime/runtimeResults.js';
 import { logicPorts } from '../logicGates.js';
 import { validShapeAppearance } from '../shapeAppearance.js';
@@ -10,10 +11,10 @@ import { textColorRanges, colorRangesFromDoc } from '../content/textColors.js';
 import { loadItemDoc } from '../host/hostOperations.js';
 import { textSpliceBetween } from '../collaborativeText.js';
 
-const KINDS = new Set(['text', 'note', 'code', 'math', 'shape', 'table', 'chart', 'image', 'link', 'connector', 'stroke', 'pdf', 'user-group']);
-const NUMBERS = new Set(['shadowBlur', 'shadowOpacity', 'shadowOffsetX', 'shadowOffsetY', 'depth', 'x', 'y', 'width', 'height', 'rotation', 'fontSize', 'strokeWidth', 'bend', 'opacity', 'contentScale', 'contentScaleX', 'contentScaleY', 'bendPointCount', 'headSize', 'vertexCount', 'fillOpacity', 'sketchFillOpacity']);
-const STRINGS = new Set(['kind', 'text', 'code', 'formula', 'format', 'filename', 'language', 'shapeType', 'visualStyle', 'volumeStyle', 'chartType', 'color', 'fill', 'groupId', 'src', 'url', 'title', 'mediaType', 'from', 'to', 'fromPort', 'toPort', 'startHead', 'endHead', 'brush', 'embedUrl', 'videoId', 'renderMode', 'label', 'labelMode', 'groupTitle', 'thumbnail', 'cornerStyle', 'runtimeRole']);
-const FIELDS = new Set([...NUMBERS, ...STRINGS, 'permission', 'points', 'rows', 'columns', 'simulatePressure', 'complete', 'strokeEnabled', 'shadowEnabled', 'locked', 'imageFrameEnabled', 'bendPoints', 'members', 'textColors', 'runtimeResults']);
+const KINDS = new Set(['text', 'note', 'code', 'math', 'shape', 'table', 'chart', 'question', 'image', 'link', 'connector', 'stroke', 'pdf', 'user-group']);
+const NUMBERS = new Set(['questionMaxScore', 'questionScore', 'shadowBlur', 'shadowOpacity', 'shadowOffsetX', 'shadowOffsetY', 'depth', 'x', 'y', 'width', 'height', 'rotation', 'fontSize', 'strokeWidth', 'bend', 'opacity', 'contentScale', 'contentScaleX', 'contentScaleY', 'bendPointCount', 'headSize', 'vertexCount', 'fillOpacity', 'sketchFillOpacity']);
+const STRINGS = new Set(['questionType', 'questionPrompt', 'questionAnswer', 'questionFeedback', 'questionVersion', 'questionGradedVersion', 'kind', 'text', 'code', 'formula', 'format', 'filename', 'language', 'shapeType', 'visualStyle', 'volumeStyle', 'chartType', 'color', 'fill', 'groupId', 'src', 'url', 'title', 'mediaType', 'from', 'to', 'fromPort', 'toPort', 'startHead', 'endHead', 'brush', 'embedUrl', 'videoId', 'renderMode', 'label', 'labelMode', 'groupTitle', 'thumbnail', 'cornerStyle', 'runtimeRole']);
+const FIELDS = new Set([...NUMBERS, ...STRINGS, 'permission', 'points', 'rows', 'columns', 'simulatePressure', 'complete', 'strokeEnabled', 'shadowEnabled', 'locked', 'imageFrameEnabled', 'bendPoints', 'members', 'textColors', 'runtimeResults', 'questionOptions', 'questionSubmitted']);
 export const CANVAS_ITEM_FIELDS = new Set([...FIELDS].filter(field => field !== 'textColors'));
 const unsafeId = id => !id || ['__proto__', 'constructor', 'prototype'].includes(id);
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -69,6 +70,7 @@ function validateItem(id, item) {
   if (item.volumeStyle != null && !['solid', 'wireframe'].includes(item.volumeStyle)) fail(`${id}.volumeStyle: solid 또는 wireframe이 필요합니다.`);
   if (item.runtimeResults != null && (item.runtimeRole !== 'output' || !validRuntimeResults(item.runtimeResults))) fail(`${id}.runtimeResults: 올바른 실행 결과 배열이 필요합니다.`);
   if (item.runtimeRole != null && (item.kind !== 'shape' || !['executor', 'output'].includes(item.runtimeRole))) fail(`${id}.runtimeRole: 도형에서 executor 또는 output을 선택해주세요.`);
+  if (item.kind === 'question' && !validQuestion(item)) fail(`${id}: 올바른 문제·답안·수동 채점 데이터가 필요합니다.`);
   if (item.kind === 'chart') {
     if (!CHART_TYPES.includes(item.chartType)) fail(`${id}.chartType: 지원하는 그래프 종류가 필요합니다.`);
     if (item.title != null && item.title.length > 120) fail(`${id}.title: 최대 120자입니다.`);

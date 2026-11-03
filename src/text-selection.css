@@ -1,0 +1,19 @@
+/* Interface copy is not draggable/selectable; actual editors keep native and
+   custom selection, including controls rendered in portals outside the app. */
+body{
+  -webkit-user-select:none;
+  user-select:none;
+}
+input:not([readonly]):not(:disabled),
+textarea:not([readonly]):not(:disabled),
+[contenteditable="true"],
+[contenteditable="plaintext-only"],
+.monaco-editor{
+  -webkit-user-select:text;
+  user-select:text;
+}
+[contenteditable="false"],
+input[readonly],textarea[readonly]{
+  -webkit-user-select:none;
+  user-select:none;
+}

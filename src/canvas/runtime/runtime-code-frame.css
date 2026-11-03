@@ -1,0 +1,16 @@
+/* A separate overlay survives scalable-frame shadow/border resets and preserves
+   the existing selection outline, rounded corners, editor and resize handles. */
+.canvas-stage .code-object[data-runtime-state]{--runtime-state-color:#a3a9b5}
+.canvas-stage .code-object[data-runtime-state="running"]{--runtime-state-color:#7e8cff}
+.canvas-stage .code-object[data-runtime-state="success"]{--runtime-state-color:#35bb83}
+.canvas-stage .code-object[data-runtime-state="error"]{--runtime-state-color:#f16b7b}
+.runtime-code-border{position:absolute;inset:0;z-index:5;border:2px solid var(--runtime-state-color);border-radius:var(--object-corner-radius,12px);pointer-events:none}
+[data-runtime-state="queued"]>.runtime-code-border,[data-runtime-state="skipped"]>.runtime-code-border{border-style:dashed;opacity:.65}
+[data-runtime-state="running"]>.runtime-code-border{animation:runtime-code-pulse 1.2s ease-in-out infinite}
+.runtime-code-status{position:absolute;left:10px;bottom:calc(100% + 5px);z-index:6;color:var(--runtime-state-color);font:500 11px/1.4 var(--display);pointer-events:auto;max-width:calc(100% - 20px)}
+.runtime-code-status>span,.canvas-stage .code-object .runtime-code-status>button{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;margin:0;width:auto;height:auto;min-height:22px;padding:2px 7px;border:1px solid color-mix(in srgb,var(--runtime-state-color) 40%,transparent);border-radius:6px;background:#192233;color:inherit;font:inherit;box-shadow:none}
+.runtime-code-status i{font-style:normal}
+.runtime-code-status>button{cursor:pointer}
+.canvas-stage .code-object .runtime-code-status .runtime-code-diagnostic{position:absolute;top:100%;left:0;min-width:240px;width:max-content;max-width:min(480px,65vw);max-height:200px;overflow:auto;margin:5px 0 0;padding:10px;border:1px solid #b95668;border-radius:8px;background:#192233;color:#f4c7cc;font:11px/1.6 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;box-shadow:0 8px 24px #0003}
+@keyframes runtime-code-pulse{50%{opacity:.45}}
+@media(prefers-reduced-motion:reduce){[data-runtime-state="running"]>.runtime-code-border{animation:none}}

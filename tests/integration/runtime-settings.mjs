@@ -58,6 +58,10 @@ try{
  assert.equal(await page.getByRole('dialog').getByLabel('언어 표준',{exact:true}).inputValue(),'c++20');
  await page.getByRole('dialog').getByLabel('컴파일러 / 인터프리터',{exact:true}).selectOption('gcc14');
  await page.getByText('독립 프로그램 모드: main이 필요하며 코드 객체 사이에 메모리를 공유하지 않습니다.',{exact:true}).waitFor();
+ await dialog.getByLabel('실행 방식',{exact:true}).selectOption('precompiled');
+ await page.getByText('사전 빌드 버튼으로 준비한 결과물만 실행합니다. 코드나 옵션 변경 후에는 다시 빌드하세요. 코드 객체는 독립 프로그램으로 실행되어 변수를 공유하지 않습니다.',{exact:true}).waitFor();
+ await dialog.getByRole('button',{name:'이 언어에 적용',exact:true}).click();await dialog.getByRole('status').waitFor();
+ assert.equal(writes.at(-1).config.executionMode,'precompiled');
  assert.deepEqual(errors,[]);
  console.log('PASS: disk growth selection/no-shrink/reload, VM template apply/reload, compiler/standard/optimization, JDK release constraints, settings persistence, GCC mode explanation');
 }finally{await browser.close()}

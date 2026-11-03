@@ -1,6 +1,6 @@
 import { isContentMode, isTextContent } from './content/contentPresentation.js';
 import { isPenStyle } from './penStyles.js';
-import { isObjectFontSize, hasIndependentContentSize } from './objectSize.js';
+import { isObjectFontSize, supportsObjectFontSize } from './objectSize.js';
 import { MIN_CONTENT_SCALE, MAX_CONTENT_SCALE } from './objectContentScale.js';
 import { isCodeLanguage } from './codeLanguages.js';
 import { useCallback } from 'react';
@@ -339,7 +339,7 @@ export function useCanvasPeerEvents(options) {
       if (version && compareSyncVersions(version, itemSyncVersionsRef.current.get(key) || INITIAL_SYNC_VERSION) <= 0) return;
       if (typeof data.value !== 'string') return;
       const value = data.value;
-      const validMetadata = data.field === 'fontSize' ? item.kind === 'text' && isObjectFontSize(value) : data.field === 'groupId'
+      const validMetadata = data.field === 'fontSize' ? supportsObjectFontSize(item) && isObjectFontSize(value) : data.field === 'groupId'
         ? value.length <= 128
         : data.field === 'color' ? (item.kind === 'note' && /^#[0-9a-f]{6}$/i.test(value)) || (item.kind === 'text' && (value === '' || /^#[0-9a-f]{6}$/i.test(value)))
           : data.field === 'renderMode' ? isTextContent(item) && isContentMode(value)
@@ -388,7 +388,7 @@ export function useCanvasPeerEvents(options) {
       const safeRotation = Number.isFinite(rotation) ? Math.max(-180, Math.min(180, rotation)) : item.rotation;
       const width = data.width == null ? item.width : Number(data.width);
       const height = data.height == null ? item.height : Number(data.height);
-      if (data.fontSize != null && (!hasIndependentContentSize(item) || !isObjectFontSize(data.fontSize))) return;
+      if (data.fontSize != null && (!supportsObjectFontSize(item) || !isObjectFontSize(data.fontSize))) return;
       const contentScale = data.contentScale == null ? item.contentScale : Number(data.contentScale);
       if (data.contentScale != null && (!Number.isFinite(contentScale) || contentScale < MIN_CONTENT_SCALE || contentScale > MAX_CONTENT_SCALE)) return;
       const axisScales = {};
