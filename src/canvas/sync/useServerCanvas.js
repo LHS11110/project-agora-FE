@@ -1,3 +1,5 @@
+import { TEXT_COLOR_MARK } from '../content/textColors.js';
+import { CanvasUndoHistory } from './CanvasUndoHistory.js';
 import { assertAccessOperations } from '../permissions/access.js';
 import { assertObjectOperations, isLockOnlyOperation } from '../locks/objectLock.js';
 import { changedItemIds, changeItems } from '../itemSnapshots.js';
@@ -5,11 +7,13 @@ import { HostCanvasView } from '../host/HostCanvasView.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Automerge from '@automerge/automerge/slim';
 import { ServerCanvasSession } from './ServerCanvasSession.js';
-import { itemOperations, operationIds, validateTranslation } from '../host/hostOperations.js';
+import { itemOperations, operationIds, validateTranslation, loadItemDoc } from '../host/hostOperations.js';
 import { loadEncodedDocument } from '../host/documentCache.js';
 import { collaborativeField, encodeBase64 } from '../collaborativeSync.js';
 
 export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems }) {
+  const history=useRef(new CanvasUndoHistory()), undoing=useRef(false);
+  const [undoCount,setUndoCount]=useState(0);
   const [items, publishItems] = useState({});
   const [status, setStatus] = useState({ ready: false, editable: false, queued: 0, blocked: false, message: '서버에서 최신 캔버스를 불러오고 있습니다.' });
   const [lastReceipt, setLastReceipt] = useState(null);
@@ -36,7 +40,7 @@ export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsR
   const setItems = useCallback((update, knownIds = null) => {
     const session = sessionRef.current, previous = working.current;
     const next = typeof update === 'function' ? update(previous) : update;
-    if (!session.editable) { itemsRef.current = previous; return; }
+    if (!session.editable) { itemsRef.current = previous; return false; }
     try {
       const operations = itemOperations(previous, next, collaborativeDocsRef.current, knownIds || changedItemIds(previous, next));
       assertAccessOperations(previous, operations, accessRef?.current);
@@ -47,9 +51,10 @@ export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsR
         operation.patch.automerge_snapshot = base;
         operation.patch.automerge_changes = Automerge.getChanges(loadEncodedDocument(base), doc).map(change => ({ field: collaborativeField(next[operation.id]), change: encodeBase64(change) }));
       }
-      if (!operations.length || session.submit(operations)) { working.current = next; itemsRef.current = next; if (operations.length) session.redraw(); }
-      else itemsRef.current = previous;
-    } catch (error) { itemsRef.current = previous; callbacks.current.setToast(error.message); }
+      if (!operations.length || session.submit(operations)) { working.current = next; itemsRef.current = next; if (operations.length) { session.redraw(); if(!undoing.current){ history.current.record(previous,working.current,operations.flatMap(operationIds));setUndoCount(history.current.entries.length); } } }
+      else { itemsRef.current = previous; return false; }
+    return true;
+    } catch (error) { itemsRef.current = previous; callbacks.current.setToast(error.message); return false; }
   }, []);
   const patchItems = useCallback((changes, removed = []) => {
     setItems(previous => changeItems(previous, changes, removed), [...new Set([...(changes instanceof Map ? changes.keys() : Object.keys(changes || {})), ...removed])]);
@@ -57,13 +62,51 @@ export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsR
   const moveItems = useCallback((ids, dx, dy) => {
     if (!dx && !dy) return true;
     const operation = { action: 'translate', ids, dx, dy }, session = sessionRef.current;
-    try { assertAccessOperations(working.current, [operation],accessRef?.current); assertObjectOperations(working.current, [operation]); validateTranslation(operation); if (!session.submit([operation])) return false; session.redraw(); return true; }
+    try { assertAccessOperations(working.current, [operation],accessRef?.current); assertObjectOperations(working.current, [operation]); validateTranslation(operation); const before=working.current; if (!session.submit([operation])) return false; session.redraw(); history.current.record(before,working.current,ids);setUndoCount(history.current.entries.length);return true; }
     catch (error) { callbacks.current.setToast(error.message); return false; }
   }, []);
+  const undo=useCallback((options={})=>{
+    if(!sessionRef.current.editable)return false;
+    const oldDocs=new Map();
+    const restoreDocs=()=>{for(const [id,doc] of oldDocs)if(doc)collaborativeDocsRef.current.set(id,doc);else collaborativeDocsRef.current.delete(id);};
+    try {
+      sessionRef.current.flushMoves();
+      const restored=history.current.restore(working.current,options);if(!restored)return false;
+      for(const id of restored.ids){
+        const item=restored.items[id];if(!item || !['text','note','code'].includes(item.kind))continue;
+        const field=collaborativeField(item),current=working.current[id];
+        oldDocs.set(id,collaborativeDocsRef.current.get(id));
+        if(restored.documents.has(id)){collaborativeDocsRef.current.set(id,restored.documents.get(id));continue;}
+        const doc=Automerge.clone(collaborativeDocsRef.current.get(id)||loadItemDoc(current||item));
+        collaborativeDocsRef.current.set(id,Automerge.change(doc,draft=>{
+          if(draft.content!==(item[field]||''))Automerge.splice(draft,['content'],0,draft.content.length,item[field]||'');
+          const ranges=restored.textColors.get(id);
+          if(ranges){
+            if(draft.content.length)Automerge.unmark(draft,['content'],{start:0,end:draft.content.length,expand:'none'},TEXT_COLOR_MARK);
+            for(const range of ranges)Automerge.mark(draft,['content'],{start:range.start,end:range.end,expand:'none'},TEXT_COLOR_MARK,range.color);
+          }
+        }));
+      }
+      undoing.current=true;
+      const accepted=setItems(restored.items,restored.ids);
+      undoing.current=false;
+      if(accepted){history.current.pop(restored);setUndoCount(history.current.entries.length);return true;}
+      restoreDocs();
+      return false;
+    }catch(error){undoing.current=false;restoreDocs();callbacks.current.setToast(error.message);return false;}
+  },[setItems]);
+  useEffect(()=>{
+    const seal=()=>history.current.seal(),begin=()=>history.current.begin(),end=()=>queueMicrotask(seal);
+    const keyStart=event=>{if(!event.repeat && ['Delete','Backspace','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key))begin();};
+    const keyEnd=event=>{if(['Delete','Backspace','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key))seal();};
+    window.addEventListener('keydown',keyStart,true);window.addEventListener('keyup',keyEnd);
+    window.addEventListener('pointerdown',begin,true);window.addEventListener('pointerup',end,true);window.addEventListener('pointercancel',end,true);
+    return()=>{window.removeEventListener('keydown',keyStart,true);window.removeEventListener('keyup',keyEnd);window.removeEventListener('pointerdown',begin,true);window.removeEventListener('pointerup',end,true);window.removeEventListener('pointercancel',end,true);};
+  },[]);
   const flushMoves = useCallback(() => sessionRef.current.flushMoves(), []);
   const receiveServerItems = useCallback((serverItems, data) => sessionRef.current.seed(serverItems, data), []);
   const receiveServerEvent = useCallback(data => sessionRef.current.receiveServer(data), []);
   const retryRejected = useCallback(() => sessionRef.current.retryRejected(), []);
   useEffect(() => { const timer = setInterval(() => sessionRef.current.tick(), 10); return () => clearInterval(timer); }, []);
-  return { items, setItems, patchItems, moveItems, flushMoves, committedItemsRef, viewRef: view, status, lastReceipt, retryRejected, sessionRef, receiveServerItems, receiveServerEvent };
+  return { undo, undoCount, items, setItems, patchItems, moveItems, flushMoves, committedItemsRef, viewRef: view, status, lastReceipt, retryRejected, sessionRef, receiveServerItems, receiveServerEvent };
 }

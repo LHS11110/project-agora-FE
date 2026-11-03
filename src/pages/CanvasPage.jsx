@@ -298,8 +298,11 @@ function CanvasWorkspace() {
   const [showSettings, setShowSettings] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
   const [settingsPending, setSettingsPending] = useState(false);
+  const settingsRequestsRef=useRef(new Map());
+  const canvasSettingsRef=useRef(null);canvasSettingsRef.current=settings;
+  useEffect(()=>()=>{for(const request of settingsRequestsRef.current.values()){clearTimeout(request.timer);request.reject(new Error('캔버스 연결이 종료되었습니다.'));}settingsRequestsRef.current.clear();},[]);
   const [toast, setToast] = useState('');
-  const { items, setItems, patchItems, moveItems, flushMoves, committedItemsRef, status: hostStatus, sessionRef: hostSessionRef, receiveServerItems, receiveServerEvent } = useServerCanvas({
+  const { undo, undoCount, items, setItems, patchItems, moveItems, flushMoves, committedItemsRef, status: hostStatus, sessionRef: hostSessionRef, receiveServerItems, receiveServerEvent } = useServerCanvas({
     accessRef, itemsRef, peerMeshRef, wsRef, rtcWsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems, reconnectRequestRef,
   });
   saveBlueprintOutputRef.current = (id, records) => {
@@ -951,6 +954,7 @@ function CanvasWorkspace() {
       setRemoteEditors,
       setSettings,
       setSettingsPending,
+      settingsRequestsRef,
       setToast
     },
     actions: {
@@ -1136,12 +1140,17 @@ function CanvasWorkspace() {
   const focusConnectorTarget = (connectorId, connector) => {
     if (activeTool === 'select') focusCanvasObject(connector.to);
   };
-  const sendSettings = (field, value, participant) => {
-    if (!settings || settingsPending) return;
-    const payload = { type: 'canvas_settings_update', request_id: createId(), expected_revision: settings.settings_revision ?? 0, field };
-    if (participant) Object.assign(payload, participant); else payload.value = value;
-    if (sendRaw(payload)) setSettingsPending(true);
-  };
+  const requestSettings = (field, value, participant) => new Promise((resolve,reject) => {
+    const current=canvasSettingsRef.current;
+    if(!current||settingsRequestsRef.current.size){reject(new Error('설정 변경을 처리 중입니다. 잠시 후 다시 시도하세요.'));return;}
+    const request_id=createId(),payload={type:'canvas_settings_update',request_id,expected_revision:current.settings_revision??0,field};
+    if(participant)Object.assign(payload,participant);else payload.value=value;
+    const timer=setTimeout(()=>{settingsRequestsRef.current.delete(request_id);setSettingsPending(false);reject(new Error('설정 응답을 확인하지 못했습니다. 최신 상태를 확인하세요.'));},20000);
+    settingsRequestsRef.current.set(request_id,{resolve,reject,timer});
+    if(sendRaw(payload))setSettingsPending(true);else{clearTimeout(timer);settingsRequestsRef.current.delete(request_id);reject(new Error('캔버스 연결을 확인하세요.'));}
+  });
+  const sendSettings = (field,value,participant) => {requestSettings(field,value,participant).catch(()=>{});};
+
   const { cancelStageGesture, pointerPosition, startPan, cancelPanInertia, centeredItemPosition, hideCursor, sendCursorPosition, startZoomHold, stopZoomHold, cancelZoomHold, clickZoom, startDrawing, moveDrawing, stopDrawing } = useCanvasStageInteractions({ canWriteItem, canWriteCanvas,
     boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth, eraserMode,
     addItem, setToast, setItems, patchItems, refreshSpatialIndex, spatialIndexRef,
@@ -1285,7 +1294,29 @@ function CanvasWorkspace() {
     }
     if (selectedTable) updateTableItem(primarySelectedItemId, { [field]: nextSize / 100 });
   };
-  useCodeExecutionShortcut({selectedIds:selectedObjectIds,selectedIdsRef,itemsRef,editingId,editingIdRef,sessionRef:hostSessionRef,dragRef,store:runtimeStore,onMessage:setToast});
+  useEffect(()=>{
+    const editingTarget=event=>{
+      const id=editingIdRef.current,target=event.target;
+      return id!=null && isCollaborativeItem(itemsRef.current[id])
+        && target.closest?.('.canvas-object')?.dataset.itemId===String(id)
+        && target.closest?.('.inline-content-input,.sticky-note-input,.canvas-code-editor') ? String(id) : null;
+    };
+    const onUndo=event=>{
+      if(event.isComposing || !(event.ctrlKey||event.metaKey)||event.altKey||event.shiftKey||event.key.toLowerCase()!=='z')return;
+      const id=editingTarget(event);
+      if(id!==null){event.preventDefault();event.stopImmediatePropagation();if(!event.repeat)undo({itemId:id,textOnly:true});return;}
+      if(editingIdRef.current!=null || dragRef.current || event.target.closest?.('input,textarea,select,[contenteditable="true"],.monaco-editor,[role="dialog"],.canvas-management-dialog,.canvas-as-code-overlay'))return;
+      event.preventDefault();if(!event.repeat)undo();
+    };
+    const onNativeUndo=event=>{
+      if(event.inputType!=='historyUndo'||event.isComposing)return;
+      const id=editingTarget(event);if(id===null)return;
+      event.preventDefault();event.stopImmediatePropagation();undo({itemId:id,textOnly:true});
+    };
+    window.addEventListener('keydown',onUndo,true);window.addEventListener('beforeinput',onNativeUndo,true);
+    return()=>{window.removeEventListener('keydown',onUndo,true);window.removeEventListener('beforeinput',onNativeUndo,true);};
+  },[undo]);
+  useCodeExecutionShortcut({canExecuteItem,selectedIds:selectedObjectIds,selectedIdsRef,itemsRef,editingId,editingIdRef,sessionRef:hostSessionRef,dragRef,store:runtimeStore,onMessage:setToast});
   useCanvasKeyboardNudge({ canWriteItem, activeTool, editingId, selectedIds: selectedObjectIds, itemsRef, sessionRef: hostSessionRef, dragRef, moveItems, flushMoves });
   useEffect(() => {
     const isEditableTarget = (target) => target instanceof HTMLElement
@@ -1392,7 +1423,7 @@ function CanvasWorkspace() {
   };
   const objectActionsRef = useRef(null);
   objectActionsRef.current = {
-    onStartEditing:startEditing, onTextChange:updateCollaborativeText, onTextColorChange:updateTextColor,
+    onUndo:id=>undo({itemId:String(id),textOnly:true}), onStartEditing:startEditing, onTextChange:updateCollaborativeText, onTextColorChange:updateTextColor,
     onMetadataChange:(id,field,value)=>['renderMode','filename','language'].includes(field)
       ? updateContentSetting(id,field,value) : updateCollaborativeMetadata(id,field,value),
     onFormulaChange:updateFormulaItem, onTableChange:updateTableItem, onStopEditing:stopEditing,
@@ -1417,7 +1448,7 @@ function CanvasWorkspace() {
     </header>
     {error ? <div className="canvas-error-state"><div className="error-art"><Icon name="grid" size={30} /></div><span className="section-kicker">CANVAS CONNECTION</span><h1>{ui("캔버스를 열 수 없어요.")}</h1><p>{error}</p><div><button className="button button-dark" onClick={() => window.location.reload()}>{ui("다시 연결하기")}</button><Link className="button button-outline" to="/search">{ui("캔버스 목록")}</Link></div></div> : <div className="canvas-workspace resizable-workspace" ref={panelLayout.ref} style={panelLayout.style}>
       <ResizablePanel {...panelLayout.handle('tools')}><CanvasToolPanel activeTool={activeTool} onSelectTool={selectCanvasTool} color={color} onColorChange={setColor} onUploadPdf={uploadPdf} onUploadImage={uploadImage} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} /></ResizablePanel>
-      <CanvasQuickDock canWrite={canWriteCanvas} activeTool={activeTool} onSelectTool={selectCanvasTool} onUploadImage={uploadImage}
+      <CanvasQuickDock undoCount={undoCount} onUndo={undo} canUndo={hostStatus.editable && editingId == null} canWrite={canWriteCanvas} activeTool={activeTool} onSelectTool={selectCanvasTool} onUploadImage={uploadImage}
         toolsExpanded={!panelLayout.handle('tools').collapsed} onToggleTools={panelLayout.handle('tools').onToggle} />
       <main className="board-region"><div className="board-topline"><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(true); }}><Icon name="code" size={15} />{ui("캔버스 코드")}</button><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={()=>setShowRuntimeSettings(true)}><Icon name="settings" size={15}/>{ui("실행 환경")}</button><button className="zoom-button" aria-label={ui("확대")} title={ui("클릭: 한 단계 확대 · 길게 누르기: 계속 확대")} onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label={ui("축소")} title={ui("클릭: 한 단계 축소 · 길게 누르기: 계속 축소")} onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>{ui("맞춤")}</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />{"" + ui("격자") + " "}{showGrid ? ui("켜짐") : ui("꺼짐")}</button></div></div>
         <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ ...canvasGridStyle(camera), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ touchNavigation, activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion: cancelPanInertia, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, sendCursorPosition, pickVector: (event,doubleClick = false,capture = false) => {
@@ -1546,7 +1577,7 @@ function CanvasWorkspace() {
     <RuntimeActivity store={runtimeStore} onFocusCode={focusCanvasObject} />
     {showRuntimeSettings && <RuntimeSettingsDialog canManage={canWriteCanvas&&canUseCanvas(capabilities,'execute')} canvasId={canvasId} token={token} user={user} initialLanguage={selectedItem?.language || 'cpp'} isRunning={()=>runtimeStore.isRunning()} onClose={()=>setShowRuntimeSettings(false)} />}
     {showCanvasCode && <CanvasAsCodeDialog api={canvasCodeApi} canvasId={canvasId} onClose={() => setShowCanvasCode(false)} />}
-    {showSettings && <SettingsDialog backgroundColor={backgroundColor} setBackgroundColor={setBackgroundColor} favoriteColors={favoriteColors} saveFavoriteColor={saveFavoriteColor} theme={theme} canvasId={canvasId} image={canvas?.image} token={token} onImageSaved={(image) => setCanvas(current => ({ ...current, image }))} settings={settings} pending={settingsPending} onClose={() => setShowSettings(false)} onUpdate={sendSettings} />}
+    {showSettings && <SettingsDialog backgroundColor={backgroundColor} setBackgroundColor={setBackgroundColor} favoriteColors={favoriteColors} saveFavoriteColor={saveFavoriteColor} theme={theme} canvasId={canvasId} image={canvas?.image} token={token} onImageSaved={(image) => setCanvas(current => ({ ...current, image }))} settings={settings} pending={settingsPending} onClose={() => setShowSettings(false)} onUpdate={sendSettings} onRequest={requestSettings} />}
     {showParticipants && <CanvasParticipantsDialog participants={canvasParticipants} token={token} settings={settings} pending={settingsPending} onClose={() => setShowParticipants(false)} onAddParticipant={(nickname, tag) => sendSettings('participant_add', null, { nickname, tag_number: tag })} onRemoveParticipant={(person) => sendSettings('participant_remove', null, { nickname: person.nickname, tag_number: person.tag_number })} />}
     </div>
     {!error && !hostStatus.editable && <CanvasLoadingStatus overlay message={hostStatus.message} />}

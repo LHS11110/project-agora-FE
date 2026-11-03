@@ -27,3 +27,13 @@ test('single code uses the same run/reset lock and rechecks output links after e
  const pending=store.runCode('a');await store.runCode('a');await store.run('run');await store.reset('run');assert.equal(calls,1);
  delete scene.m;finish({exitCode:0,output:'done'});await pending;assert.deepEqual(writes,['out']);
 });
+
+
+test('executor shortcut selects runnable nodes without stealing input and excludes output nodes',()=>{
+ const scene=items();scene.run={kind:'shape',runtimeRole:'executor'};
+ assert.equal(selectedCodeForShortcut(key,['run'],scene),'run');assert.equal(selectedCodeForShortcut(key,['out'],scene),null);
+ assert.equal(selectedCodeForShortcut(key,['run'],scene,'a'),null);
+ const target={closest:selector=>selector.includes('input,textarea')?{}:null};assert.equal(selectedCodeForShortcut({...key,target},['run'],scene),null);
+ const button={closest:selector=>selector==='[data-item-id]'?{dataset:{itemId:'run'}}:null};
+ assert.equal(selectedCodeForShortcut({...key,target:{closest:selector=>selector==='[data-blueprint-run]'?button:null}},['run'],scene),'run');
+});

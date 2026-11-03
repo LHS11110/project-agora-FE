@@ -18,5 +18,8 @@ try{
  await page.evaluate(()=>window.shortcutFixture.syncSelection(['b']));await page.keyboard.press('Shift+Enter');
  await page.waitForFunction(()=>window.shortcutFixture.calls.length===3&&!window.shortcutFixture.store.isRunning());
  assert.equal(await page.evaluate(()=>window.shortcutFixture.calls.at(-1).code),'other','immediate selection is read before a React rerender');
+ await page.evaluate(()=>{window.shortcutFixture.edit(null);window.shortcutFixture.select(['run']);});await page.locator('.canvas-code-editor').waitFor({state:'detached'});await page.locator('.background').click();await page.keyboard.press('Shift+Enter');
+ await page.waitForFunction(()=>window.shortcutFixture.calls.length===5&&!window.shortcutFixture.store.isRunning());assert.deepEqual(await page.evaluate(()=>window.shortcutFixture.calls.slice(-2).map(r=>r.code)),['print(9)','other']);
+ await page.evaluate(()=>window.shortcutFixture.allow(false));await page.keyboard.press('Shift+Enter');assert.equal(await page.evaluate(()=>window.shortcutFixture.calls.length),5);assert.match(await page.getByRole('status').innerText(),/실행 권한/);
  assert.deepEqual(errors,[]);console.log('PASS real Monaco edited source, no newline, selected-only execution, repeated-key suppression, chat/dialog/multi-selection exclusion and immediate selection refs');
 }finally{await browser.close()}

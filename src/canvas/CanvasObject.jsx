@@ -1,5 +1,5 @@
 import CanvasImageContent from './CanvasImageContent.jsx';
-import { supportsObjectCorners } from './objectCorners.js';
+import { supportsObjectCorners, objectCornerStyle } from './objectCorners.js';
 import './object-corners.css';
 import EditingSurface from './content/EditingSurface.jsx';
 import { ui } from '../i18n/locale.js';
@@ -36,7 +36,7 @@ import { updateTableValue } from '../components/tableModel.js';
 import { stickyNoteColors } from './canvasConstants.js';
 import { moveTextPosition, textSpliceBetween } from './collaborativeText.js';
 
-function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, token, runtimeStore, onStartEditing, onTextChange, onTextColorChange, onMetadataChange, onFormulaChange, onTableChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
+function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, token, runtimeStore, onUndo, onStartEditing, onTextChange, onTextColorChange, onMetadataChange, onFormulaChange, onTableChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
   useUiLocale();
   const collaborativeValue = String(item.kind === 'code' ? item.code || '' : item.text || '');
   const geometryElementRef = useRef(null);
@@ -106,7 +106,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
   const movable = activeTool === 'select' && selected && !item.locked && !readOnly;
   const classes = `canvas-object canvas-object-${item.kind}${movable ? ' movable' : ''}${selected ? ' selected' : ''}${connectionStartId === id ? ' connection-source' : ''}${item.height ? ' has-custom-height' : ''}`;
   const handlers = {
-    ...(supportsObjectCorners(item) && item.cornerStyle ? { 'data-corner-style': item.cornerStyle } : {}),
+    ...(supportsObjectCorners(item) ? { 'data-corner-style': objectCornerStyle(item) } : {}),
     ref: editingBoundary.ref,
     'data-item-id': id,
     onDoubleClickCapture: (event) => handleObjectDoubleClick(event, { id, item, activeTool, editing, onStartEditing, onConnectorDoubleClick }),
@@ -138,7 +138,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
     <>{element.props.children}{selected && item.locked && <span className="object-lock-badge" title={ui("잠긴 객체")}><Icon name="lock" size={12}/></span>}{resizeHandles && <button type="button" className="object-move-handle" aria-label={ui("선택한 객체 이동")} title={ui("잡고 끌어 객체 이동")} onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onPointerDown(event, id, item); }}><Icon name="move" size={16} /></button>}{resizeHandles}</>), item);
 
 
-  if (item.kind === 'shape' && ['executor', 'output'].includes(item.runtimeRole)) return withResizeHandles(<div className={`${classes} blueprint-object`} style={style} {...handlers}><BlueprintNode id={id} item={item} store={runtimeStore} selected={selected} canExecute={canExecute} canReset={canExecute&&!readOnly} /></div>);
+  if (item.kind === 'shape' && ['executor', 'output'].includes(item.runtimeRole)) return withResizeHandles(<div className={`${classes} blueprint-object${item.runtimeRole==='executor'?' blueprint-executor-object':''}`} style={style} {...handlers}><BlueprintNode id={id} item={item} store={runtimeStore} selected={selected} canExecute={canExecute} canReset={canExecute&&!readOnly} /></div>);
   if (item.kind === 'pdf') return withResizeHandles(<div className={`${classes} pdf-object`} style={style} {...handlers}><PdfDocumentContent item={item} token={token} interactive={selected && activeTool === 'select'} /></div>);
   if (item.kind === 'user-group') return withResizeHandles(<div className={`${classes} user-group-object`} style={style} {...handlers}><UserGroupContent item={item} token={token} /></div>);
   if (item.kind === 'stroke') {
@@ -178,7 +178,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
     const mode = contentMode(item);
     const textColor = item.kind === 'text' && mode !== 'code' && /^#[0-9a-f]{6}$/i.test(item.color || '') ? item.color : undefined;
     return withResizeHandles(<div key={id} className={`${classes} unified-content-object ${mode === 'code' ? 'code-object' : 'text-object'}${mode === 'markdown' ? ' markdown-text-object' : ''}`} style={{ ...style, color: textColor, '--text-color': textColor }} {...handlers}>
-      <UnifiedTextContent {...{ id, item, editing, dirty, remoteEditorLabel, onTextChange, onTextColorChange, onFormulaChange, onMetadataChange, onSave, onStopEditing, runtimeStore }} />
+      <UnifiedTextContent {...{ id, item, editing, dirty, remoteEditorLabel, onUndo, onTextChange, onTextColorChange, onFormulaChange, onMetadataChange, onSave, onStopEditing, runtimeStore }} />
     </div>);
   }
   if (item.kind === 'note') return withResizeHandles(<div key={id} className={`${classes} sticky-note-object`} style={{ ...style, '--sticky-note-color': item.color || stickyNoteColors[0], '--sticky-note-rotation': `${Number(item.rotation) || -1}deg` }} data-item-id={id} {...handlers} onBlur={editingBoundary.onBlur} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}>

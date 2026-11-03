@@ -7,15 +7,15 @@ import './canvas-code-editor.css';
 import './code-completions.css';
 
 /** One model per open block; remote updates preserve selections and view state. */
-export default function CanvasCodeEditor({ value = '', language = 'javascript', inline = false, onChange, onSave, onStopEditing }) {
+export default function CanvasCodeEditor({ value = '', language = 'javascript', inline = false, onChange, onUndo, onSave, onStopEditing }) {
   useUiLocale();
   const boundary = useEditingBoundary(true, onStopEditing, { pointerOnly: true });
   const hostRef = useRef(null);
   const editorRef = useRef(null);
   const runtimeRef = useRef(null);
   const applyingRemoteRef = useRef(false);
-  const latest = useRef({ value, language, onChange, onSave, onStopEditing });
-  latest.current = { value, language, onChange, onSave, onStopEditing };
+  const latest = useRef({ value, language, onChange, onUndo, onSave, onStopEditing });
+  latest.current = { value, language, onChange, onUndo, onSave, onStopEditing };
   const [status, setStatus] = useState('loading');
 
   useEffect(() => {
@@ -66,6 +66,7 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
         if (!applyingRemoteRef.current) latest.current.onChange?.(model.getValue());
       }));
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => latest.current.onSave?.());
+      if(latest.current.onUndo)subscriptions.push(editor.addAction({id:'undo',label:ui('실행 취소'),contextMenuGroupId:'9_cutcopypaste',contextMenuOrder:0.5,keybindings:[monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyZ],run:()=>latest.current.onUndo?.()}));
       // Monaco measures CSS pixels. Observing the host handles object resizing
       // without rebuilding the editor or discarding the undo stack.
       observer = new ResizeObserver(() => editor.layout());

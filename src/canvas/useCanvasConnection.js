@@ -76,6 +76,7 @@ export function useCanvasConnection(options) {
       setRemoteEditors,
       setSettings,
       setSettingsPending,
+      settingsRequestsRef,
       setToast
     },
     actions: {
@@ -358,6 +359,8 @@ export function useCanvasConnection(options) {
             return;
           }
           if (data.type === 'canvas_settings_result') {
+            const request=settingsRequestsRef?.current.get(data.request_id);
+            if(request){clearTimeout(request.timer);settingsRequestsRef.current.delete(data.request_id);if(data.ok)request.resolve(data.settings);else{const error=new Error(data.code||'SETTINGS_INVALID_INPUT');error.code=data.code;request.reject(error);}}
             setSettingsPending(false);
             if (data.settings) setSettings(data.settings);
             setToast(data.ok ? '설정이 업데이트되었습니다.' : data.code === 'SETTINGS_CONFLICT' ? '다른 변경사항이 먼저 저장되어 최신 정보를 불러왔어요.' : `설정 변경 실패: ${data.code || '오류'}`);

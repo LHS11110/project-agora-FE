@@ -1,5 +1,5 @@
 import { isObjectLocked, isLockOnlyOperation } from '../locks/objectLock.js';
-import { loadEncodedDocument } from './documentCache.js';
+import { loadEncodedDocument, rememberItemDocument } from './documentCache.js';
 import * as Automerge from '@automerge/automerge/slim';
 import { itemSnapshot, changeItems } from '../itemSnapshots.js';
 import { loadItemDoc, operationIds, translateItem } from './hostOperations.js';
@@ -40,7 +40,7 @@ export class HostCanvasView {
           if(!base)base=loadEncodedDocument(operation.base||operation.doc);
         }catch{ /* The coordinator rejects malformed proposals. */ }
       }
-      if(doc && item)item={...item,[collaborativeField(item)]:doc.content};
+      if(doc && item){item={...item,[collaborativeField(item)]:doc.content};rememberItemDocument(item,doc);}
       // Published documents are editable branches, not the cached approved base.
       if(doc){if(!this.actors.has(id))this.actors.set(id,createActorId());this.docs.set(id,Automerge.clone(doc,{actor:this.actors.get(id)}));}else{this.docs.delete(id);if(!item)this.actors.delete(id);}
       if(base)this.bases.set(id,base);else this.bases.delete(id);
