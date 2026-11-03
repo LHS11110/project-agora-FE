@@ -9,7 +9,7 @@ const user={...owner,email:'owner@example.invalid',role:'ROLE_USER',status:'ACTI
 const token='eyJhbGciOiJIUzI1NiJ9.'+Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+600})).toString('base64url')+'.fixture';
 await context.addInitScript(({user,token})=>{localStorage.setItem('agora_user',JSON.stringify(user));localStorage.setItem('agora_token',token);},{user,token});
 let settings={canvas_id:999004,canvas_name:'Groups and bots',description:'',settings_revision:0,visibility:'private',password_protected:false,participants:[owner,viewer],owner,can_manage:true,groups:{'admin-group':[owner],default:[owner,viewer]},initial_group:'default',group_permissions:{'admin-group':{read:true,write:true,execute:true},default:{read:true,write:true,execute:true}}};
-let bots=[],rotations=0;const updates=[],errors=[];
+let canvasSocket;let bots=[],rotations=0;const updates=[],errors=[];
 await context.route(url=>url.pathname.startsWith('/api/'),async route=>{
  const req=route.request(),path=new URL(req.url()).pathname;let data={canvas_id:999004,canvas_name:'Groups and bots'};
  if(path==='/api/auth/me')data=user;
@@ -23,7 +23,7 @@ await context.route(url=>url.pathname.startsWith('/api/'),async route=>{
  await route.fulfill({json:data});
 });
 await context.routeWebSocket(/\/wss\/port\//,ws=>{
- const rtc=ws.url().includes('/rtc/');setTimeout(()=>ws.send(JSON.stringify(rtc?{type:'rtc_ready'}:{type:'init_items',items:{},groups:['admin-group','default'],write_groups:['admin-group','default'],execute_groups:['admin-group','default'],is_admin:true,sync_protocol:2,sync_user_id:1,revision:0,accepted_count:0,rtc_canvas_connection_id:'fixture',rtc_canvas_connection_hash:'proof'})),100);
+ const rtc=ws.url().includes('/rtc/');if(!rtc)canvasSocket=ws;setTimeout(()=>ws.send(JSON.stringify(rtc?{type:'rtc_ready'}:{type:'init_items',items:{},groups:['admin-group','default'],write_groups:['admin-group','default'],execute_groups:['admin-group','default'],is_admin:true,sync_protocol:2,sync_user_id:1,revision:0,accepted_count:0,rtc_canvas_connection_id:'fixture',rtc_canvas_connection_hash:'proof'})),100);
  ws.onMessage(raw=>{
   const event=JSON.parse(String(raw));
   if(event.type==='rtc_join')ws.send(JSON.stringify({type:'rtc_peers',self_peer_id:'peer',peers:[]}));
@@ -32,6 +32,7 @@ await context.routeWebSocket(/\/wss\/port\//,ws=>{
   updates.push(event);const v=event.value;
   if(event.field==='group_create'){settings.groups[v.name]=[];settings.group_permissions[v.name]={read:true,write:false,execute:false};}
   if(event.field==='group_members')settings.groups[v.name]=v.members;
+  if(event.field==='participant_groups'){const p=settings.participants.find(p=>p.nickname===v.nickname&&p.tag_number===v.tag_number);for(const group of Object.keys(settings.groups)){settings.groups[group]=settings.groups[group].filter(m=>m.nickname!==p.nickname||m.tag_number!==p.tag_number);if(v.groups.includes(group))settings.groups[group].push(p);}}
   if(event.field==='group_initial')settings.initial_group=v.name;
   if(event.field==='group_rename'){settings.groups[v.new_name]=settings.groups[v.name];settings.group_permissions[v.new_name]=settings.group_permissions[v.name];delete settings.groups[v.name];delete settings.group_permissions[v.name];if(settings.initial_group===v.name)settings.initial_group=v.new_name;}
   if(event.field==='group_delete'){delete settings.groups[v.name];delete settings.group_permissions[v.name];}
@@ -52,5 +53,17 @@ try{
  const downloadPromise=page.waitForEvent('download');await dialog.getByRole('button',{name:'자격 증명 저장',exact:true}).click();const downloaded=await downloadPromise;const saved=JSON.parse(await readFile(await downloaded.path(),'utf8'));assert.equal(saved.bot.canvas_id,999004);assert.equal(saved.token,'agora_bot_9.'+'a'.repeat(43));await dialog.getByRole('button',{name:'확인 완료',exact:true}).click();
  await dialog.getByRole('button',{name:'토큰 교체',exact:true}).click();await page.waitForFunction(()=>document.querySelector('input[aria-label="봇 접속 토큰"]')?.value.endsWith('b'.repeat(43)));assert.equal(rotations,1);await dialog.getByRole('button',{name:'확인 완료',exact:true}).click();
  await dialog.getByRole('button',{name:'봇 폐기',exact:true}).click();await dialog.getByRole('button',{name:'봇 폐기 확인',exact:true}).click();await dialog.getByText('폐기된 봇',{exact:true}).waitFor();assert.ok(updates.some(e=>e.field==='participant_remove'));
- await page.setViewportSize({width:390,height:844});assert.ok(await dialog.evaluate(el=>el.getBoundingClientRect().width<=innerWidth));assert.deepEqual(errors,[]);console.log('PASS canvas group create/rename/members/default/delete, bot enrolment/token download/rotation/revocation and mobile dialog');
+ await dialog.locator('.settings-dialog-footer').getByRole('button',{name:'완료',exact:true}).click();await page.locator('.presence-stack-trigger').click();await page.getByRole('button',{name:'참여자 관리',exact:true}).click();
+ const roles=page.getByRole('region',{name:'참여자 역할',exact:true});await roles.getByRole('button',{name:'Viewer#1의 research 역할 제거',exact:true}).click();await roles.getByRole('button',{name:'Viewer#1의 research 역할 제거',exact:true}).waitFor({state:'detached'});await roles.getByRole('button',{name:'Viewer#1 역할 지정',exact:true}).click();
+ await roles.getByLabel('역할 검색',{exact:true}).fill('research');await roles.getByLabel('Viewer#1 research 역할',{exact:true}).click();await roles.getByRole('button',{name:'Viewer#1의 research 역할 제거',exact:true}).waitFor();
+ assert.ok(updates.some(e=>e.field==='participant_groups'&&e.value.nickname==='Viewer'&&e.value.groups.includes('research')&&e.value.groups.includes('default')));
+ await roles.getByRole('button',{name:'Viewer#1의 research 역할 제거',exact:true}).click();await roles.getByRole('button',{name:'Viewer#1의 research 역할 제거',exact:true}).waitFor({state:'detached'});
+ await roles.getByRole('button',{name:'Owner#1 역할 지정',exact:true}).click();assert.ok(await roles.getByLabel('Owner#1 admin-group 역할',{exact:true}).isDisabled());
+ await roles.getByLabel('참여자 검색',{exact:true}).fill('Viewer');assert.equal(await roles.locator('.participant-role-row').count(),1);await roles.getByLabel('참여자 검색',{exact:true}).fill('');
+ await page.screenshot({path:'/tmp/agora-role-picker-desktop.png'});
+ await page.setViewportSize({width:390,height:844});assert.ok(await dialog.evaluate(el=>el.getBoundingClientRect().width<=innerWidth));assert.ok(await roles.evaluate(el=>el.scrollWidth<=el.clientWidth));await page.screenshot({path:'/tmp/agora-role-picker-mobile.png'});await page.setViewportSize({width:1440,height:1000});await dialog.locator('.settings-dialog-footer').getByRole('button',{name:'완료',exact:true}).click();await page.getByRole('button',{name:'설정',exact:true}).click();
+ for(let i=Object.keys(settings.groups).length;i<64;i++){settings.groups['limit-'+i]=[];settings.group_permissions['limit-'+i]={read:true,write:false,execute:false};}
+ canvasSocket.send(JSON.stringify({type:'canvas_settings_snapshot',settings}));await dialog.getByLabel('새 그룹 이름',{exact:true}).fill('overflow');assert.ok(await dialog.getByRole('button',{name:'그룹 추가',exact:true}).isDisabled());
+ const beforeLimit=updates.length;await dialog.getByLabel('새 그룹 이름',{exact:true}).press('Enter');await page.waitForTimeout(80);assert.equal(updates.length,beforeLimit);assert.ok(await dialog.locator('.canvas-role-count').innerText().then(text=>text.includes('64 / 64')));
+ assert.deepEqual(errors,[]);console.log('PASS canvas group create/rename/members/default/delete, bot enrolment/token download/rotation/revocation and mobile dialog');
 }finally{await browser.close();}

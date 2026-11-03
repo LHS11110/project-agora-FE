@@ -25,6 +25,12 @@ await page.waitForFunction(()=>window.frelogCanvas.read().items.undo_box);await 
 await page.locator('.canvas-stage').focus();await page.keyboard.press('Control+z');await page.waitForFunction(()=>!window.frelogCanvas.read().items.undo_box);await page.waitForTimeout(120);assert.equal(latest.undo_box,undefined);assert.ok(await undo.isDisabled());
 await page.evaluate(()=>{const api=window.frelogCanvas;api.apply(api.plan({version:1,items:{box:{fill:'#ffaa55'}}}));});await page.waitForTimeout(120);
 await undo.click();await page.waitForFunction(()=>window.frelogCanvas.read().items.box.fill==='#eee9fb');await page.waitForTimeout(120);assert.equal(latest.box.fill,'#eee9fb');
+const beforeTools=writes;await page.locator('.canvas-stage').focus();
+for(const key of ['1','2','3','4','5','6','7','8','9','0','Shift+1']){
+ await page.keyboard.press('Control+'+key);
+ await page.waitForFunction(shortcut=>document.querySelector('.canvas-quick-dock [aria-keyshortcuts~="'+shortcut+'"]')?.getAttribute('aria-pressed')==='true','Control+'+key);
+}
+await page.keyboard.press('Control+1');assert.equal(writes,beforeTools,'switching tools does not create or edit objects');
 await page.screenshot({path:'/tmp/agora-undo-canvas.png'});
 for(const width of [390,320]){await page.setViewportSize({width,height:844});assert.ok(await page.locator('.canvas-quick-dock button').evaluateAll(buttons=>buttons.every(b=>{const r=b.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth;})),'mobile dock buttons stay inside viewport');}
 assert.deepEqual(errors,[]);console.log('PASS full canvas Ctrl+Z and dock undo persist through broker commits');await context.close();}}finally{await browser.close()}

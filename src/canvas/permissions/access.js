@@ -4,7 +4,7 @@ export const EXECUTE_DENIED='이 그룹에는 실행 권한이 없습니다.';
 export function canUseItem(item,identity,capability='write'){
  if(!identity)return true; // Isolated/legacy callers; live connections always install explicit capabilities.
  const groups=identity[capability==='write'?'write_groups':capability==='execute'?'execute_groups':'groups']||[];
- return canPeerAccessItem(item,{groups,is_admin:identity.is_admin===true});
+ return canPeerAccessItem(item,{groups,is_admin:identity.is_admin===true,group_bits:identity.group_bits});
 }
 export function canUseCanvas(identity,capability='write'){
  return !identity||identity.is_admin===true||(identity[capability==='write'?'write_groups':capability==='execute'?'execute_groups':'groups']||[]).length>0;

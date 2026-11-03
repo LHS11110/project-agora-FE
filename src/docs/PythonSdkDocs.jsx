@@ -53,7 +53,7 @@ with AgoraClient(token=os.environ["AGORA_USER_TOKEN"]) as client:
         item_id = canvas.create({
             "kind": "shape", "shapeType": "rectangle",
             "x": 0.2, "y": 0.2, "width": 0.15, "height": 0.12,
-            "fill": "#ddd5ff", "permission": "default",
+            "fill": "#ddd5ff",
         })
         canvas.patch(item_id, {"fill": "#b5e5d0"})
         canvas.move([item_id], 0.01, 0)
@@ -93,8 +93,8 @@ export default function PythonSdkDocs(){return <section className="docs-section 
   <div className="docs-section-title"><span className="section-kicker">PYTHON / AUTOMATION</span><h2>Python SDK</h2><p>{ui('기존 HTTPS API와 WSS 브로커를 이용해 캔버스를 자동화합니다. 익명 접속이나 DB·내부 포트 접근 없이 사용자 또는 봇의 권한으로 작업합니다.')}</p></div>
   <Heading id="sdk-install">{ui('설치와 연결')}</Heading>
   <p>{ui('Python 3.10 이상이 필요합니다. 패키지는 아직 PyPI에 게시하지 않았으므로 wheel을 내려받거나 백엔드 저장소의 sdk/python 경로에서 설치하세요.')}</p>
-  <a className="button button-outline sdk-download" href="/downloads/agora_canvas-0.1.0-py3-none-any.whl" download>{ui('Python 모듈 다운로드')} <span>0.1.0 · MIT</span></a>
-  <Code>{'python -m pip install ./agora_canvas-0.1.0-py3-none-any.whl\n\n# Or install from the cloned backend repository:\npython -m pip install ./project-agora-BE/sdk/python'}</Code>
+  <a className="button button-outline sdk-download" href="/downloads/agora_canvas-0.1.2-py3-none-any.whl" download>{ui('Python 모듈 다운로드')} <span>0.1.2 · MIT</span></a>
+  <Code>{'python -m pip install ./agora_canvas-0.1.2-py3-none-any.whl\n\n# Or install from the cloned backend repository:\npython -m pip install ./project-agora-BE/sdk/python'}</Code>
   <p>{ui('외부 주소는 https://frelog.p-e.kr입니다. TLS 인증서 검증은 항상 활성화되며 내부 CA가 필요한 환경에서는 ca_file을 지정합니다. with 블록이 끝나면 연결을 정리합니다.')}</p>
   <Heading id="sdk-auth">{ui('사용자 인증과 MFA')}</Heading>
   <p>{ui('이메일·비밀번호 로그인은 MFA를 그대로 적용합니다. OAuth·패스키 로그인으로 받은 기존 사용자 토큰은 AgoraClient(token=...)에 전달합니다. 사용자 토큰은 발급받은 네트워크의 IP에 묶입니다.')}</p>
@@ -106,6 +106,8 @@ export default function PythonSdkDocs(){return <section className="docs-section 
   <div className="docs-note"><strong>{ui('토큰 보관과 회수')}</strong><p>{ui('봇 토큰은 생성·교체 응답에서 한 번만 공개됩니다. 서버에는 해시만 저장하므로 토큰을 비밀 저장소에 보관하고 객체·채팅·Git에 넣지 마세요. CanvasSession.revoke_bot()은 참여자 제거와 토큰 폐기를 처리합니다. HTTP 폐기만 호출하면 기존 WSS는 최대 60초 후 종료되며 SDK는 정상 임대를 자동 갱신합니다.')}</p></div>
   <Heading id="sdk-objects">{ui('객체 생성·편집·삭제')}</Heading>
   <p>{ui('객체 필드는 기존 캔버스 문서 스키마를 사용하고 좌표는 정규화 좌표입니다. 예제의 캔버스 42와 환경 변수는 실제 접근 권한이 있는 값으로 바꿔 사용하세요.')}</p>
+  <p>{ui('permission을 생략하면 모든 소속 그룹에 공유됩니다. 읽기 전용 그룹도 포함되며, 편집 권한은 별도로 검사합니다.')}</p>
+  <p>{ui('그룹은 최대 64개입니다. capabilities.group_bits는 고정 비트 번호, group_masks는 권한별 16진 마스크입니다. Python에서는 int(mask, 16)으로 변환하세요.')}</p>
   <Code>{objectCode}</Code>
   <div className="docs-table-scroll"><table className="docs-api-table sdk-method-table"><thead><tr><th>{ui('메서드')}</th><th>{ui('동작 / 데이터')}</th></tr></thead><tbody>{methods.map(([method,description])=><tr key={method}><td><code>{method}</code></td><td>{ui(description)}</td></tr>)}</tbody></table></div>
   <Heading id="sdk-sync">{ui('실시간 동기화와 오류 처리')}</Heading>

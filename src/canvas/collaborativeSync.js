@@ -1,3 +1,4 @@
+import { canAccessGroupBits } from './permissions/groupBits.js';
 import * as Automerge from '@automerge/automerge/slim';
 import { REALTIME_STROKE_BATCH_SIZE } from './canvasConstants.js';
 
@@ -107,6 +108,7 @@ export function takePendingPeerEvents(eventsRef, sizeRef, itemId) {
 }
 
 export function canPeerAccessItem(item, peer) {
+  const bits=canAccessGroupBits(item,peer);if(bits!==null)return bits;
   if (peer?.is_admin) return true;
   const allowedGroups = new Set(Array.isArray(peer?.groups) ? peer.groups : []);
   const permission = item?.permission;

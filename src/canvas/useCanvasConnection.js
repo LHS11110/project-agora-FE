@@ -1,3 +1,4 @@
+import { registerGroupLayout } from './permissions/groupBits.js';
 import { RtcMembershipRecovery } from './RtcMembershipRecovery.js';
 import { useEffect } from 'react';
 import { retryableConnectionError } from './connectionRetry.js';
@@ -341,9 +342,10 @@ export function useCanvasConnection(options) {
             reconnectAttemptsRef.current = 0;
             setConnection('connected');
             const currentGroups = Array.isArray(data.groups) ? data.groups : [];
+            registerGroupLayout(currentGroups,data.group_bits);
             groupsRef.current = currentGroups;
             setGroups(currentGroups);
-            setCapabilities?.({groups:currentGroups,write_groups:Array.isArray(data.write_groups)?data.write_groups:currentGroups,execute_groups:Array.isArray(data.execute_groups)?data.execute_groups:currentGroups,is_admin:data.is_admin===true});
+            setCapabilities?.({group_bits:data.group_bits,group_masks:data.group_masks,groups:currentGroups,member_groups:Array.isArray(data.member_groups)?data.member_groups:currentGroups,write_groups:Array.isArray(data.write_groups)?data.write_groups:currentGroups,execute_groups:Array.isArray(data.execute_groups)?data.execute_groups:currentGroups,is_admin:data.is_admin===true});
             setCanvas((current) => ({ ...current, canvas_name: data.canvas_name || current?.canvas_name }));
             canvasConnectionId = data.rtc_canvas_connection_id == null ? '' : String(data.rtc_canvas_connection_id);
             canvasConnectionHash = typeof data.rtc_canvas_connection_hash === 'string' ? data.rtc_canvas_connection_hash : '';

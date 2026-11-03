@@ -3,7 +3,7 @@ const messages={
  GROUP_NAME_INVALID:'그룹 이름은 마침표·제어 문자 없이 UTF-8 80바이트 이하여야 합니다.',
  GROUP_ALREADY_EXISTS:'같은 이름의 그룹이 이미 있습니다.',
  GROUP_NOT_FOUND:'그룹이 없어졌습니다. 최신 목록을 확인하세요.',
- GROUP_LIMIT:'그룹은 최대 128개까지 생성할 수 있습니다.',
+ GROUP_LIMIT:'그룹은 최대 64개까지 생성할 수 있습니다.',
  GROUP_IN_USE:'객체가 사용 중인 그룹입니다. 객체의 권한 그룹을 먼저 변경하세요.',
  GROUP_IS_INITIAL:'초기 참여 그룹을 먼저 다른 그룹으로 변경하세요.',
  GROUP_READ_REQUIRED:'읽기 권한이 있는 일반 그룹을 선택하세요.',

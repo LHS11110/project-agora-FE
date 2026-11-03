@@ -122,8 +122,9 @@ export function useCanvasPeerEvents(options) {
       const key = `${peer.peer_id}:${strokeId}`;
       const remoteStrokes = remoteDrawingStrokesRef.current;
       if (phase === 'start') {
-        if (sequence !== 0 || points.length !== 1 || typeof data.permission !== 'string'
-          || !data.permission || data.permission.length > 128
+        if (sequence !== 0 || points.length !== 1 || (!Array.isArray(data.permission) && typeof data.permission !== 'string')
+          || !data.permission?.length || data.permission.length > (Array.isArray(data.permission)?64:128)
+          || (Array.isArray(data.permission) && data.permission.some(group=>typeof group!=='string'||!group.length||group.length>128))
           || typeof data.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(data.color)
           || typeof data.stroke_width !== 'number' || !Number.isFinite(data.stroke_width)) return;
         const strokeItem = { kind: 'stroke', permission: data.permission };
