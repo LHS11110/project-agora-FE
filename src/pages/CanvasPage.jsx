@@ -1162,6 +1162,15 @@ function CanvasWorkspace() {
     drawingRef, drawingSessionRef, draftRef, vectorDraftRef,
   });
   cancelCameraMotionRef.current = cancelPanInertia;
+  const stopUndoGestureRef = useRef(cancelStageGesture);
+  stopUndoGestureRef.current = cancelStageGesture;
+  const undoCanvas = useCallback((options) => {
+    // Finish and flush live ink first; otherwise the next pointer frame can
+    // recreate a stroke that Ctrl+Z has just removed.
+    if (drawingRef.current || eraserRef.current) stopUndoGestureRef.current({});
+    strokeSaveFlushRef.current?.({ force: true });
+    return undo(options);
+  }, [undo]);
   const placeSharedLink = (shared) => {
     if (!sharePosition) return;
     const isVideo = shared.mediaType === 'youtube' || shared.mediaType === 'video';
@@ -1305,7 +1314,7 @@ function CanvasWorkspace() {
       const id=editingTarget(event);
       if(id!==null){event.preventDefault();event.stopImmediatePropagation();if(!event.repeat)undo({itemId:id,textOnly:true});return;}
       if(editingIdRef.current!=null || dragRef.current || event.target.closest?.('input,textarea,select,[contenteditable="true"],.monaco-editor,[role="dialog"],.canvas-management-dialog,.canvas-as-code-overlay'))return;
-      event.preventDefault();if(!event.repeat)undo();
+      event.preventDefault();if(!event.repeat)undoCanvas();
     };
     const onNativeUndo=event=>{
       if(event.inputType!=='historyUndo'||event.isComposing)return;
@@ -1314,7 +1323,7 @@ function CanvasWorkspace() {
     };
     window.addEventListener('keydown',onUndo,true);window.addEventListener('beforeinput',onNativeUndo,true);
     return()=>{window.removeEventListener('keydown',onUndo,true);window.removeEventListener('beforeinput',onNativeUndo,true);};
-  },[undo]);
+  },[undo,undoCanvas]);
   useCodeExecutionShortcut({canExecuteItem,selectedIds:selectedObjectIds,selectedIdsRef,itemsRef,editingId,editingIdRef,sessionRef:hostSessionRef,dragRef,store:runtimeStore,onMessage:setToast});
   useCanvasKeyboardNudge({ canWriteItem, activeTool, editingId, selectedIds: selectedObjectIds, itemsRef, sessionRef: hostSessionRef, dragRef, moveItems, flushMoves });
   useEffect(() => {
@@ -1447,7 +1456,7 @@ function CanvasWorkspace() {
     </header>
     {error ? <div className="canvas-error-state"><div className="error-art"><Icon name="grid" size={30} /></div><span className="section-kicker">CANVAS CONNECTION</span><h1>{ui("캔버스를 열 수 없어요.")}</h1><p>{error}</p><div><button className="button button-dark" onClick={() => window.location.reload()}>{ui("다시 연결하기")}</button><Link className="button button-outline" to="/search">{ui("캔버스 목록")}</Link></div></div> : <div className="canvas-workspace resizable-workspace" ref={panelLayout.ref} style={panelLayout.style}>
       <ResizablePanel {...panelLayout.handle('tools')}><CanvasToolPanel activeTool={activeTool} onSelectTool={selectCanvasTool} color={color} onColorChange={setColor} onUploadPdf={uploadPdf} onUploadImage={uploadImage} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} /></ResizablePanel>
-      <CanvasQuickDock shortcutGuard={()=>hostSessionRef.current.editable && editingIdRef.current==null && !dragRef.current && !drawingRef.current && !panRef.current && !selectionRef.current} undoCount={undoCount} onUndo={undo} canUndo={hostStatus.editable && editingId == null} canWrite={canWriteCanvas} activeTool={activeTool} onSelectTool={selectCanvasTool} onUploadImage={uploadImage}
+      <CanvasQuickDock shortcutGuard={()=>hostSessionRef.current.editable && editingIdRef.current==null && !dragRef.current && !drawingRef.current && !panRef.current && !selectionRef.current} undoCount={undoCount} onUndo={undoCanvas} canUndo={hostStatus.editable && editingId == null} canWrite={canWriteCanvas} activeTool={activeTool} onSelectTool={selectCanvasTool} onUploadImage={uploadImage}
         toolsExpanded={!panelLayout.handle('tools').collapsed} onToggleTools={panelLayout.handle('tools').onToggle} />
       <main className="board-region"><div className="board-topline"><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(true); }}><Icon name="code" size={15} />{ui("캔버스 코드")}</button><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={()=>setShowRuntimeSettings(true)}><Icon name="settings" size={15}/>{ui("실행 환경")}</button><button className="zoom-button" aria-label={ui("확대")} title={ui("클릭: 한 단계 확대 · 길게 누르기: 계속 확대")} onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label={ui("축소")} title={ui("클릭: 한 단계 축소 · 길게 누르기: 계속 축소")} onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>{ui("맞춤")}</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />{"" + ui("격자") + " "}{showGrid ? ui("켜짐") : ui("꺼짐")}</button></div></div>
         <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ ...canvasGridStyle(camera), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ touchNavigation, activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion: cancelPanInertia, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, sendCursorPosition, pickVector: (event,doubleClick = false,capture = false) => {

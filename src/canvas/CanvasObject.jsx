@@ -153,7 +153,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
     const strokeStyle = { ...style, left: `${geometry.x / viewSize.width * 100}%`, top: `${geometry.y / viewSize.height * 100}%`, width: `${geometry.width / viewSize.width * 100}%`, height: `${geometry.height / viewSize.height * 100}%` };
     const point = geometry.points[0];
     return withResizeHandles(<div className={classes} style={strokeStyle} {...handlers} aria-label={ui("드로잉 객체")}>
-      <svg className="stroke-selection-path" viewBox={`0 0 ${geometry.width} ${geometry.height}`} preserveAspectRatio="none" aria-hidden="true">
+      <svg className="stroke-selection-path" fill="none" stroke="transparent" viewBox={`0 0 ${geometry.width} ${geometry.height}`} preserveAspectRatio="none" aria-hidden="true">
         {geometry.points.length === 1 ? <circle cx={point.x} cy={point.y} r=".1" strokeWidth={geometry.hitWidth} />
           : <polyline points={geometry.points.map(p => `${p.x},${p.y}`).join(' ')} strokeWidth={geometry.hitWidth} />}
       </svg>

@@ -381,7 +381,7 @@ export function useCanvasStageInteractions(options) {
       event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);
       const point = pointerPosition(event);
-      eraserRef.current = point;
+      eraserRef.current = { ...point, pointerId: event.pointerId };
       eraseStrokesBetween(point, point);
       return;
     }
@@ -516,7 +516,7 @@ export function useCanvasStageInteractions(options) {
     if (eraserRef.current) {
       const point = pointerPosition(event);
       eraseStrokesBetween(eraserRef.current, point);
-      eraserRef.current = point;
+      eraserRef.current = { ...point, pointerId: event.pointerId };
       return;
     }
     if (laserDrawingRef.current) {
@@ -655,7 +655,7 @@ export function useCanvasStageInteractions(options) {
   };
   const cancelStageGesture = point => {
     const stage = boardRef.current;
-    const pointerId = drawingSessionRef.current?.pointerId ?? panRef.current?.pointerId ?? selectionRef.current?.pointerId ?? point.pointerId;
+    const pointerId = drawingSessionRef.current?.pointerId ?? eraserRef.current?.pointerId ?? panRef.current?.pointerId ?? selectionRef.current?.pointerId ?? point.pointerId;
     stopDrawing({ ...point, pointerId, type: 'pointercancel', currentTarget: stage, target: stage });
   };
   return {

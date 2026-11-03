@@ -355,6 +355,33 @@ export function useCanvasConnection(options) {
             requestChatHistory();
             return;
           }
+          if (data.type === 'canvas_access_revoked') {
+            cancelled = true;
+            autoReconnectRef.current = false;
+            if (reconnectTimer !== null) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+            groupsRef.current = [];
+            setGroups([]);
+            setCapabilities?.({groups:[],member_groups:[],write_groups:[],execute_groups:[],is_admin:false});
+            replacePersistedItems({});
+            pendingItemChangesRef.current = [];
+            setItems({});
+            resetPeerMesh();
+            setConnection('error');
+            setError('캔버스 접근 권한이 회수되었습니다. 관리자에게 초대를 요청하세요.');
+            rtcSocket?.close();
+            socket.close();
+            return;
+          }
+          if (data.type === 'canvas_access_changed') {
+            const currentGroups = Array.isArray(data.groups) ? data.groups : [];
+            registerGroupLayout(currentGroups, data.group_bits);
+            groupsRef.current = currentGroups;
+            setGroups(currentGroups);
+            setCapabilities?.({group_bits:data.group_bits,group_masks:data.group_masks,groups:currentGroups,member_groups:data.member_groups||[],write_groups:data.write_groups||[],execute_groups:data.execute_groups||[],is_admin:data.is_admin===true});
+            setSettings(data.settings);
+            setCanvas(current => ({...current,canvas_name:data.settings?.canvas_name||current?.canvas_name,description:data.settings?.description??current?.description}));
+            return;
+          }
           if (data.type === 'canvas_settings_snapshot' || data.type === 'canvas_settings_changed') {
             setSettings(data.settings);
             setCanvas((current) => ({ ...current, canvas_name: data.settings?.canvas_name || current?.canvas_name, description: data.settings?.description ?? current?.description }));

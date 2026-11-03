@@ -17,7 +17,7 @@ export default function BlueprintNode({ id, item, store, selected = false, canEx
         {state?.reset && <p role="status">{ui('변수와 함수를 초기화했습니다. 파일은 유지됩니다.')}</p>}
         {state?.error && <p role="alert">{ui(state.error)}</p>}
         {state?.completed && <p role="status">{ui(state.failed ? '실행 실패 · 연결된 결과 객체를 확인하세요.' : state?.built?'빌드 완료':'실행 완료')}</p>}</>
-        : item.runtimeResults?.length ? <div className="blueprint-results" role="region" aria-label={ui('실행 결과')} aria-live="polite">{item.runtimeResults.map((entry, index) => <section key={`${entry.runId}-${entry.codeId}-${index}`}><div className="blueprint-result-meta"><span>{entry.codeId}</span><span>{entry.error ? ui('실행 실패') : entry.timedOut ? ui('시간 제한으로 종료됨') : `${ui('종료 코드')}: ${entry.exitCode}`}{entry.truncated ? ` · ${ui('출력 일부 생략')}` : ''}</span></div><pre>{entry.error || entry.output || ui('출력 없음')}</pre></section>)}</div>
+        : item.runtimeResults?.length ? <div className="blueprint-results" role="region" aria-label={ui('실행 결과')} aria-live="polite">{item.runtimeResults.map((entry, index) => <section key={`${entry.runId}-${entry.codeId}-${index}`}><div className="blueprint-result-meta"><span>{entry.codeId}</span><span>{entry.error ? ui('실행 실패') : entry.timedOut ? ui('시간 제한으로 종료됨') : entry.exitCode == null ? ui('실행 중') : `${ui('종료 코드')}: ${entry.exitCode}`}{entry.truncated ? ` · ${ui('출력 일부 생략')}` : ''}</span></div><pre>{entry.error || entry.output || ui('출력 없음')}</pre></section>)}</div>
           : <p>{ui('코드 객체 또는 다른 결과 객체를 연결하면 실행 결과가 표시됩니다.')}</p>}
     </div>
     <footer>{executor?<><span>{ui('선택 후 실행')}</span><span className="executor-shortcut"><kbd>Shift</kbd><span>+</span><kbd>Enter</kbd></span></>:ui('결과 → 코드 연결은 출력을 표준 입력으로 전달합니다.')}</footer>

@@ -96,12 +96,19 @@ export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsR
     }catch(error){undoing.current=false;restoreDocs();callbacks.current.setToast(error.message);return false;}
   },[setItems]);
   useEffect(()=>{
-    const seal=()=>history.current.seal(),begin=()=>history.current.begin(),end=()=>queueMicrotask(seal);
+    let endTimer = null;
+    const cancelEnd = () => { if (endTimer !== null) { clearTimeout(endTimer); endTimer = null; } };
+    const seal = () => { cancelEnd(); history.current.seal(); };
+    const begin = () => { cancelEnd(); history.current.begin(); };
+    // A microtask from window's capture listener runs before React's pointerup
+    // handler. Seal after that handler has committed the final ink/eraser frame.
+    // A new gesture cancels this timer so an old pointerup cannot split it.
+    const end = () => { cancelEnd(); endTimer = setTimeout(seal, 0); };
     const keyStart=event=>{if(!event.repeat && ['Delete','Backspace','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key))begin();};
     const keyEnd=event=>{if(['Delete','Backspace','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key))seal();};
     window.addEventListener('keydown',keyStart,true);window.addEventListener('keyup',keyEnd);
     window.addEventListener('pointerdown',begin,true);window.addEventListener('pointerup',end,true);window.addEventListener('pointercancel',end,true);
-    return()=>{window.removeEventListener('keydown',keyStart,true);window.removeEventListener('keyup',keyEnd);window.removeEventListener('pointerdown',begin,true);window.removeEventListener('pointerup',end,true);window.removeEventListener('pointercancel',end,true);};
+    return()=>{cancelEnd();window.removeEventListener('keydown',keyStart,true);window.removeEventListener('keyup',keyEnd);window.removeEventListener('pointerdown',begin,true);window.removeEventListener('pointerup',end,true);window.removeEventListener('pointercancel',end,true);};
   },[]);
   const flushMoves = useCallback(() => sessionRef.current.flushMoves(), []);
   const receiveServerItems = useCallback((serverItems, data) => sessionRef.current.seed(serverItems, data), []);

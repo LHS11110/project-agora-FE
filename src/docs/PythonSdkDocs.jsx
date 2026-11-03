@@ -93,8 +93,8 @@ export default function PythonSdkDocs(){return <section className="docs-section 
   <div className="docs-section-title"><span className="section-kicker">PYTHON / AUTOMATION</span><h2>Python SDK</h2><p>{ui('기존 HTTPS API와 WSS 브로커를 이용해 캔버스를 자동화합니다. 익명 접속이나 DB·내부 포트 접근 없이 사용자 또는 봇의 권한으로 작업합니다.')}</p></div>
   <Heading id="sdk-install">{ui('설치와 연결')}</Heading>
   <p>{ui('Python 3.10 이상이 필요합니다. 패키지는 아직 PyPI에 게시하지 않았으므로 wheel을 내려받거나 백엔드 저장소의 sdk/python 경로에서 설치하세요.')}</p>
-  <a className="button button-outline sdk-download" href="/downloads/agora_canvas-0.1.2-py3-none-any.whl" download>{ui('Python 모듈 다운로드')} <span>0.1.2 · MIT</span></a>
-  <Code>{'python -m pip install ./agora_canvas-0.1.2-py3-none-any.whl\n\n# Or install from the cloned backend repository:\npython -m pip install ./project-agora-BE/sdk/python'}</Code>
+  <a className="button button-outline sdk-download" href="/downloads/agora_canvas-0.1.3-py3-none-any.whl" download>{ui('Python 모듈 다운로드')} <span>0.1.3 · MIT</span></a>
+  <Code>{'python -m pip install ./agora_canvas-0.1.3-py3-none-any.whl\n\n# Or install from the cloned backend repository:\npython -m pip install ./project-agora-BE/sdk/python'}</Code>
   <p>{ui('외부 주소는 https://frelog.p-e.kr입니다. TLS 인증서 검증은 항상 활성화되며 내부 CA가 필요한 환경에서는 ca_file을 지정합니다. with 블록이 끝나면 연결을 정리합니다.')}</p>
   <Heading id="sdk-auth">{ui('사용자 인증과 MFA')}</Heading>
   <p>{ui('이메일·비밀번호 로그인은 MFA를 그대로 적용합니다. OAuth·패스키 로그인으로 받은 기존 사용자 토큰은 AgoraClient(token=...)에 전달합니다. 사용자 토큰은 발급받은 네트워크의 IP에 묶입니다.')}</p>

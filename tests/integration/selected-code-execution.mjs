@@ -12,7 +12,7 @@ try{
  for(let i=0;i<2;i++){
   const context=await browser.newContext({locale:'ko-KR',viewport:{width:1920,height:1200}});
   await context.addInitScript(({token,user})=>{localStorage.setItem('agora_token',token);localStorage.setItem('agora_user',JSON.stringify(user));},state);
-  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().endsWith('/runtime/execute'))executions++;});
+  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().endsWith('/runtime/execute')||r.url().endsWith('/runtime/execute/stream'))executions++;});
   await page.goto(`${origin}/canvases/${state.canvas_id}`);await page.waitForFunction(()=>window.frelogCanvas&&document.querySelector('.connection-pill.connected')&&!document.querySelector('.canvas-loading-status.is-overlay'),null,{timeout:60000});pages.push(page);
  }
  const [page,observer]=pages;

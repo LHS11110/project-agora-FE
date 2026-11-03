@@ -13,7 +13,7 @@ test('shortcut requires exactly one code selection and Shift+Enter outside compo
 test('selected code executes alone and publishes only to its connected output chain',async()=>{
  const scene=items(),calls=[],writes=[];
  const store=createBlueprintStore({getItems:()=>scene,execute:async request=>{calls.push(request);return {exitCode:0,output:'ok'};},saveOutput:(id,records)=>{writes.push([id,records]);return true;}});
- await store.runCode('a');assert.deepEqual(calls,[{language:'python',code:'selected'}]);assert.deepEqual(writes.map(([id])=>id),['out','mirror']);assert.equal(store.get('a').completed,true);
+ await store.runCode('a');assert.equal(typeof calls[0].onOutput,'function');assert.deepEqual(calls.map(({onOutput,...request})=>request),[{language:'python',code:'selected'}]);assert.deepEqual(writes.map(([id])=>id),['out','mirror']);assert.equal(store.get('a').completed,true);
 });
 test('single code runs without executor or output and reads the latest edited source',async()=>{
  const scene={a:items().a};let source;

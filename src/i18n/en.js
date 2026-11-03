@@ -1,5 +1,6 @@
 // UI messages only. User-authored content is never translated.
 export default {
+  "캔버스 접근 권한이 회수되었습니다. 관리자에게 초대를 요청하세요.": "Canvas access was revoked. Ask an administrator for an invitation.",
   "그룹은 최대 64개입니다. capabilities.group_bits는 고정 비트 번호, group_masks는 권한별 16진 마스크입니다. Python에서는 int(mask, 16)으로 변환하세요.": "A canvas supports up to 64 groups. capabilities.group_bits contains fixed bit positions; group_masks contains hexadecimal capability masks. Use int(mask, 16) in Python.",
   "permission을 생략하면 모든 소속 그룹에 공유됩니다. 읽기 전용 그룹도 포함되며, 편집 권한은 별도로 검사합니다.": "Omit permission to share with all your groups, including read-only roles. Editing rights are checked separately.",
   "참여자 역할": "Participant roles",
@@ -423,7 +424,7 @@ export default {
   "비공개": "Private",
   "로그인한 사용자가 검색하고 참여할 수 있습니다.": "Signed-in users can find and join this canvas.",
   "소유자와 초대된 참가자만 검색하고 참여할 수 있습니다.": "Only the owner and invited participants can find and join this canvas.",
-  "공개 캔버스에는 비밀번호를 설정할 수 없습니다.": "Public canvases cannot have a password.",
+  "비공개 캔버스에는 비밀번호를 설정할 수 없습니다.": "Private canvases cannot have a password.",
   "공개로 변경하려면 먼저 비밀번호를 해제하세요.": "Remove the password before making the canvas public.",
   "비밀번호 해제": "Remove password",
   "선택한 글자 색상": "Selected text color",

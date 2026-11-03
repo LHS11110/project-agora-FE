@@ -55,16 +55,19 @@ export function createBlueprintStore({ getItems, execute, saveOutput }) {
         const runId = `${Date.now()}-${id}`;
         steps=resolve(items,id);
         for(const step of steps) publish(step.codeId,{running:false,status:'queued',phase,source:contentSource(items[step.codeId]),language:items[step.codeId].language||'javascript'});
-        const outcome = await runBlueprint(items, id, async request => {
+        const outcome = await runBlueprint(items, id, async (request, onOutput) => {
           if (disposed || !getItems()[id]) throw new Error(codeOnly?'코드 객체가 없어 실행을 중지했습니다.':'실행 객체가 없어 실행을 중지했습니다.');
-          return execute(request);
+          return execute(typeof onOutput==='function'?{...request,onOutput}:request);
         }, (outputId, entry) => {
           if (disposed) return;
           // Connections may be edited while the VM is running. Only outputs still
           // connected to this source receive the snapshot's result.
           const current = getItems();
           if (!resolve(current, id).find(step => step.codeId === entry.codeId)?.outputIds.includes(outputId)) return;
-          const records = [...(output.get(outputId) || []), { runId, codeId: entry.codeId, createdAt: Date.now(), ...entry.result }];
+          const previous = output.get(outputId) || [];
+          const existing = previous.find(record => record.runId === runId && record.codeId === entry.codeId);
+          const record = {runId, codeId:entry.codeId, createdAt:existing?.createdAt??Date.now(), ...entry.result};
+          const records = existing ? previous.map(value => value===existing?record:value) : [...previous,record];
           while (records.length > 32 || new TextEncoder().encode(JSON.stringify(records)).length > 524288) records.shift();
           output.set(outputId, records);
           if (!saveOutput(outputId, records)) throw new Error('실행 결과를 저장하지 못했습니다. 연결을 확인하세요.');
