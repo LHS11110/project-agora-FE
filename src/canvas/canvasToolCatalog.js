@@ -19,6 +19,9 @@ export const canvasToolCategories = [
     { id: 'note', label: '포스트잇', icon: 'sticky' },
   ] },
   { id: 'structure', label: '자료·계산', tools: [
+    { id: 'continuous-value', label: '연속 값', description: '실수 슬라이더와 수치 입력', icon: 'settings' },
+    { id: 'discrete-value', label: '이산 값', description: '정수·버튼·선택·문자 입력', icon: 'table' },
+    { id: 'notebook', label: '주피터 노트북', description: '셀 편집과 표·그래프·이미지 출력', icon: 'document' },
     { id: 'terminal', label: '터미널', description: '캔버스 VM 셸', icon: 'code' },
     { id: 'executor', label: '실행 객체', description: '연결된 코드 실행', icon: 'code' },
     { id: 'code', label: '코드 객체', description: '블루프린트 코드 편집', icon: 'code' },

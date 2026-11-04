@@ -1,3 +1,4 @@
+import NotebookObject from './notebook/NotebookObject.jsx';
 import CanvasImageContent from './CanvasImageContent.jsx';
 import { supportsObjectCorners, objectCornerStyle } from './objectCorners.js';
 import './object-corners.css';
@@ -30,6 +31,7 @@ import Icon from '../components/Icon.jsx';
 import MarkdownText from '../components/MarkdownText.jsx';
 import EditableTable from '../components/EditableTable.jsx';
 import ChartView from './charts/ChartView.jsx';
+import ValueObject from './values/ValueObject.jsx';
 import QuestionCard from './questions/QuestionCard.jsx';
 import SharedMediaContent from '../components/SharedMediaContent.jsx';
 import ResizeHandles from '../components/ResizeHandles.jsx';
@@ -145,9 +147,10 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
   };
 
 
+  if (item.kind === 'shape' && item.runtimeRole==='notebook') return withResizeHandles(<div className={`${classes} notebook-object`} style={style} {...handlers}><NotebookObject id={id} item={item} store={runtimeStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} canExecute={canExecute} onChange={onQuestionChange}/></div>);
   if (item.kind === 'shape' && item.runtimeRole==='terminal') return withResizeHandles(<div className={`${classes} terminal-object`} style={style} {...handlers}><TerminalObject id={id} item={item} store={runtimeStore} selected={selected && activeTool==='select'} canExecute={canExecute}/></div>);
   if (item.kind === 'shape' && ['executor', 'output'].includes(item.runtimeRole)) return withResizeHandles(<div className={`${classes} blueprint-object${item.runtimeRole==='executor'?' blueprint-executor-object':''}`} style={style} {...handlers}><BlueprintNode id={id} item={item} store={runtimeStore} selected={selected} canExecute={canExecute} canReset={canExecute&&!readOnly} /></div>);
-  if (item.kind === 'pdf') return withResizeHandles(<div className={`${classes} pdf-object`} style={style} {...handlers}><PdfDocumentContent item={item} token={token} interactive={selected && activeTool === 'select'} /></div>);
+  if (item.kind === 'pdf') return withResizeHandles(<div className={`${classes} pdf-object`} style={style} {...handlers}><PdfDocumentContent item={item} token={token} interactive={selected && activeTool === 'select'} canChangePage={!readOnly&&!item.locked} onPageChange={pdfPage=>onQuestionChange(id,{pdfPage})}/></div>);
   if (item.kind === 'user-group') return withResizeHandles(<div className={`${classes} user-group-object`} style={style} {...handlers}><UserGroupContent item={item} token={token} /></div>);
   if (item.kind === 'stroke') {
     const geometry = strokeSelectionGeometry(item, viewSize);
@@ -180,7 +183,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
     <div className="shared-media-header"><span className="shared-media-drag-handle" title={ui("여기를 끌어 자료를 이동하세요")}><Icon name={item.mediaType === 'link' ? 'link' : 'image'} size={13} />{item.mediaType === 'youtube' ? `YouTube · ${item.title || ui("동영상")}` : item.mediaType === 'video' ? ui("동영상 · {v0}", {
   v0: item.title || ui("재생")
 }) : ui("링크")}</span></div>
-    <SharedMediaContent item={item} interactive={editing} />
+    <SharedMediaContent item={item} interactive={editing} writable={!readOnly&&!item.locked} onChange={patch=>onQuestionChange(id,patch)} />
   </div>);
   if (isTextContent(item)) {
     const mode = contentMode(item);
@@ -196,6 +199,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
     </EditingSurface>
   </div>);
   if (item.kind === 'table') return withResizeHandles(<div key={id} className={`${classes} canvas-table-object`} style={style} data-item-id={id} {...handlers}><EditableTable item={item} editingActive={editing} enabled={activeTool === 'select' && selected && !item.locked && !readOnly} onStartEditing={() => onStartEditing(id)} onStopEditing={() => onStopEditing(id)} onChange={(location, value) => onTableChange(id, (current) => updateTableValue(current, location, value))} /></div>);
+  if (item.kind === 'value') return withResizeHandles(<div className={`${classes} canvas-value-frame`} style={style} {...handlers}><ValueObject id={id} item={item} readOnly={readOnly||item.locked||activeTool!=='select'} onChange={onQuestionChange}/></div>);
   if (item.kind === 'question') return withResizeHandles(<div className={`${classes} canvas-question-object`} style={style} {...handlers}><QuestionCard id={id} item={item} readOnly={readOnly||item.locked||activeTool!=='select'} onChange={onQuestionChange} /></div>);
   if (item.kind === 'chart') return withResizeHandles(<div key={id} className={`${classes} canvas-chart-object`} style={style} data-item-id={id} {...handlers}><ChartView item={item} /></div>);
   if (item.kind === 'shape') {

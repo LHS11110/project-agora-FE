@@ -3,7 +3,7 @@ export const MIN_OBJECT_FONT_SIZE = 2;
 export const MAX_OBJECT_FONT_SIZE = 256;
 export const supportsObjectFontSize = item => Boolean(item?.kind && item.kind !== 'host-tombstone');
 export const hasIndependentContentSize = item => ['text', 'note', 'table', 'math', 'code'].includes(item?.kind);
-export const objectBaseFontSize = item => ({ text: 13, code: 13, note: 10, table: 9, math: 16, question: 12, chart: 9, connector: 12, shape: 12, image: 8, link: 8, pdf: 12, 'user-group': 12 }[item?.kind] || 13);
+export const objectBaseFontSize = item => ({ value: 12, text: 13, code: 13, note: 10, table: 9, math: 16, question: 12, chart: 9, connector: 12, shape: 12, image: 8, link: 8, pdf: 12, 'user-group': 12 }[item?.kind] || 13);
 export function objectFontSize(item) {
   const saved = Number(item?.fontSize);
   return Number.isFinite(saved) && saved > 0 ? saved

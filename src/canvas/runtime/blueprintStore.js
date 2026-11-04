@@ -2,18 +2,18 @@ import { resolveBlueprint, resolveCode } from './blueprintGraph.js';
 import { contentSource } from '../content/contentPresentation.js';
 import { runBlueprint } from './runBlueprint.js';
 
-export function createBlueprintStore({ getItems, execute, saveOutput }) {
+export function createBlueprintStore({ getItems, execute, saveOutput, saveState }) {
   const states = new Map(), listeners = new Map();
   let active = null, disposed = false, activity = null;
   const activityListeners = new Set();
   const setActivity = value => { activity = value; activityListeners.forEach(listener => listener()); };
-  const publish = (id, state) => { states.set(id, state); listeners.get(id)?.forEach(listener => listener()); };
+  const publish = (id, state) => { states.set(id, state); if(saveState&&!disposed)saveState(id,state); listeners.get(id)?.forEach(listener => listener()); };
   return {
     isRunning: () => Boolean(active),
     getActivity: () => activity,
     dismissActivity() { if (!active) setActivity(null); },
     subscribeActivity(listener) { activityListeners.add(listener); return () => activityListeners.delete(listener); },
-    get: id => states.get(String(id)) || null,
+    get: id => Object.hasOwn(getItems()[String(id)]||{},'runtimeState') ? getItems()[String(id)].runtimeState : states.get(String(id)) || null,
     subscribe(id, listener) {
       id = String(id);
       if (!listeners.has(id)) listeners.set(id, new Set());
@@ -43,7 +43,8 @@ export function createBlueprintStore({ getItems, execute, saveOutput }) {
     buildCode(id) { return this.run(id,{codeOnly:true,buildOnly:true}); },
     async run(id, {codeOnly=false,buildOnly=false}={}) {
       id = String(id);
-      if (active || disposed) return;
+      const remote=getItems()[id]?.runtimeState;
+      if (active || disposed || remote?.running&&Date.now()-(remote.updatedAt||0)<120000) return;
       active = id;
       publish(id, { running: true, building: buildOnly });
       const startedAt = Date.now();
@@ -74,6 +75,7 @@ export function createBlueprintStore({ getItems, execute, saveOutput }) {
         },{codeOnly,buildOnly,
           onStep: step => {
             publish(step.codeId,{...states.get(step.codeId),running:true,status:'running'});
+            if(!codeOnly)publish(id,{running:true,status:'running',phase,runId});
             setActivity({id, startedAt, phase, status:"running", ...step, entries:[...(activity?.entries||[]),{...step,status:"running"}]});
           },
           onStepResult: result => {

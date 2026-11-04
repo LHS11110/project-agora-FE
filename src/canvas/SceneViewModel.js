@@ -1,10 +1,10 @@
+import { isDrawableCanvasItem } from './drawableItems.js';
 import { itemSnapshot,changeItems,changedItemIds } from './itemSnapshots.js';
 import { itemDepth } from './itemDepth.js';
 import { isRasterText } from './plainTextRaster.js';
 import { isOverviewProxy,overviewProxy } from './sceneRepresentation.js';
 import { needsVectorDom } from './vectorHitTest.js';
 import { connectorGeometry } from '../components/connectorGeometry.js';
-const kinds=new Set(['image','link','code','note','table','chart','shape','text','math','stroke','connector','pdf','user-group','question']);
 
 // Scene membership and static vector maps survive text/draft content updates.
 // Only affected entries change; edit controls are a separate small DOM list.
@@ -16,7 +16,7 @@ export default class SceneViewModel {
     const changed=reset?null:changedItemIds(this.items,items);
     if(reset || changed===null){
       this.layers=new Map([[0,{depth:0,objects:[],domObjects:[],vectors:itemSnapshot({}),inkItems:itemSnapshot({})}]]);this.byId=new Map();this.connectorIds=new Set();
-      this.sorted=entries.filter(e=>kinds.has((items[e.id]||e.item)?.kind)).sort((a,b)=>a.bounds.minY-b.bounds.minY).map(e=>this.entry(e,items,world));
+      this.sorted=entries.filter(e=>isDrawableCanvasItem(items[e.id]||e.item)).sort((a,b)=>a.bounds.minY-b.bounds.minY).map(e=>this.entry(e,items,world));
       const maps=new Map();
       for(const tuple of this.sorted){const [id,item]=tuple,depth=itemDepth(item);if(!this.layers.has(depth))this.layers.set(depth,{depth,objects:[],domObjects:[]});
         if(!maps.has(depth))maps.set(depth,{vectors:{},inkItems:{}});const layer=this.layers.get(depth);layer.objects.push(tuple);this.byId.set(id,{depth,tuple});if(item.kind==='connector')this.connectorIds.add(id);

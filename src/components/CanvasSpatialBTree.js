@@ -1,3 +1,4 @@
+import { isDrawableCanvasItem } from '../canvas/drawableItems.js';
 import { shapeStrokeWidth } from '../canvas/shapeAppearance.js';
 import { changedItemIds } from '../canvas/itemSnapshots.js';
 import RBush from 'rbush';
@@ -170,7 +171,7 @@ export default class CanvasSpatialBTree {
     const ids = incremental ? [...new Set(changedIds.map(String))] : Object.keys(items);
     let obstaclesChanged = resized || remeasured;
     const removals = incremental ? ids.map(id=>[id,this.entries.get(id)]).filter(([,entry])=>entry) : this.entries;
-    for (const [id,entry] of removals) if (!Object.hasOwn(items,id) || !items[id] || items[id].type === 'chat_room') {
+    for (const [id,entry] of removals) if (!Object.hasOwn(items,id) || !isDrawableCanvasItem(items[id])) {
       this.tree.remove(entry); this.entries.delete(id); this.stats.removed++;
       this.connectorIds.delete(id);
       if (entry.item.kind !== 'connector') obstaclesChanged = true;
@@ -200,12 +201,12 @@ export default class CanvasSpatialBTree {
     };
     for (const id of ids) {
       const item=items[id];
-      if(item?.kind==='connector')this.connectorIds.add(id);else this.connectorIds.delete(id);
-      if (!item || item.type === 'chat_room' || item.kind === 'connector') continue;
+      if(isDrawableCanvasItem(item) && item.kind==='connector')this.connectorIds.add(id);else this.connectorIds.delete(id);
+      if (!isDrawableCanvasItem(item) || item.kind === 'connector') continue;
       if (updateEntry(id,item,resized||remeasured)) obstaclesChanged = true;
     }
     // Routing depends on obstacles, so invalidate connectors only on geometry changes.
-    for (const id of obstaclesChanged ? this.connectorIds : ids) if (items[id]?.kind === 'connector') updateEntry(id,items[id],obstaclesChanged);
+    for (const id of obstaclesChanged ? this.connectorIds : ids) if (isDrawableCanvasItem(items[id]) && items[id].kind === 'connector') updateEntry(id,items[id],obstaclesChanged);
     if (initial || pending.length > this.entries.size / 4) this.tree.load(pending);
     else for (const entry of pending) this.tree.insert(entry);
     this.items = items; this.width = width; this.height = height; this.revision = revision;

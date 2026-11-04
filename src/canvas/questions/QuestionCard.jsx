@@ -1,7 +1,7 @@
 import {useEffect,useId,useState} from 'react';
 import {ui} from '../../i18n/locale.js';
 import {useUiLocale} from '../../i18n/useUiLocale.js';
-import {validQuestion,questionDefinitionPatch,questionSubmissionPatch,questionGradePatch} from './questionData.js';
+import {validQuestion,questionDefinitionPatch,questionSubmissionPatch,questionDraftPatch,questionGradePatch} from './questionData.js';
 import './question-card.css';
 
 export default function QuestionCard({id,item,readOnly,onChange}){
@@ -34,7 +34,7 @@ export default function QuestionCard({id,item,readOnly,onChange}){
    </div>:<>
     <p className="question-prompt">{item.questionPrompt||ui('문제 수정에서 내용을 작성하세요.')}</p>
     {mode==='grade'&&!readOnly?<div className="question-form"><div className="question-answer-review"><small>{ui('제출된 공동 답안')}</small><p>{item.questionType==='choice'?item.questionOptions[Number(item.questionAnswer)]:item.questionAnswer}</p></div><label>{ui('점수')}<input aria-label={ui('점수')} type="number" min={0} max={item.questionMaxScore} step="any" value={score} onChange={event=>setScore(event.target.value)}/></label><label>{ui('채점 피드백')}<textarea aria-label={ui('채점 피드백')} maxLength={2000} rows={3} value={feedback} onChange={event=>setFeedback(event.target.value)}/></label><button type="button" className="question-primary" onClick={()=>{if(score===''){setError('점수를 입력하세요.');return;}if(!Number.isFinite(Number(score))||Number(score)<0||Number(score)>item.questionMaxScore){setError('점수는 0점부터 배점 사이로 입력하세요.');return;}if(change(questionGradePatch(item,score,feedback)))setMode('answer');}}>{ui('채점 저장')}</button></div>
-    :<div className="question-form">{item.questionType==='choice'?<fieldset className="question-options" disabled={readOnly||!canAnswer}>{item.questionOptions.map((option,index)=><label key={index}><input type="radio" name={group} value={String(index)} checked={answer===String(index)} onChange={event=>setAnswer(event.target.value)}/><span>{option||ui('보기를 입력하세요.')}</span></label>)}</fieldset>:<label>{ui('공동 답안')}<textarea aria-label={ui('주관식 답안')} rows={4} maxLength={8000} value={answer} readOnly={readOnly} disabled={!canAnswer} onChange={event=>setAnswer(event.target.value)}/></label>}
+    :<div className="question-form">{item.questionType==='choice'?<fieldset className="question-options" disabled={readOnly||!canAnswer}>{item.questionOptions.map((option,index)=><label key={index}><input type="radio" name={group} value={String(index)} checked={answer===String(index)} onChange={event=>{setAnswer(event.target.value);change(questionDraftPatch(event.target.value));}}/><span>{option||ui('보기를 입력하세요.')}</span></label>)}</fieldset>:<label>{ui('공동 답안')}<textarea aria-label={ui('주관식 답안')} rows={4} maxLength={8000} value={answer} readOnly={readOnly} disabled={!canAnswer} onChange={event=>{setAnswer(event.target.value);change(questionDraftPatch(event.target.value));}}/></label>}
      {!readOnly&&<button type="button" className="question-primary" disabled={!canAnswer||!answer.trim()} onClick={()=>change(questionSubmissionPatch(answer))}>{ui(item.questionSubmitted?'답안 다시 제출':'답안 제출')}</button>}
      <p className="question-hint" role="status">{ui(item.questionType==='choice'&&item.questionPrompt.trim()&&!canAnswer?'객관식 보기를 작성한 뒤 답안을 제출할 수 있습니다.':item.questionScore>=0?'채점 완료':item.questionSubmitted?'제출 완료 · 채점 대기':'공동 답안 · 참가자들과 공유됩니다.')}</p>
      {item.questionScore>=0&&<div className="question-grade"><strong>{item.questionScore} / {item.questionMaxScore} {ui('점')}</strong>{item.questionFeedback&&<p>{item.questionFeedback}</p>}</div>}

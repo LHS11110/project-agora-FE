@@ -1,3 +1,4 @@
+import { isDrawableCanvasItem } from '../canvas/drawableItems.js';
 import {researchSymbolUsesFrameAnchors} from '../canvas/researchSymbols.js';
 import { isLogicGate } from '../canvas/logicGates.js';
 import { logicConnectorGeometry } from '../canvas/connectors/logicConnectorGeometry.js';
@@ -10,6 +11,7 @@ import { arrowPathGeometry } from './arrowheadGeometry.js';
 import { shapeOutlinePaths } from '../canvas/shapeGeometry.js';
 
 export const OBJECT_SIZES = {
+  value: [0.28,0.21],
   pdf: [0.3, 0.48],
   'user-group': [0.3, 0.2],
   image: [0.3, 0.2],
@@ -98,7 +100,7 @@ function bezierPoint(points, t) {
 function calculateConnectorGeometry(item, items, width, height) {
   const fromItem = items?.[item?.from];
   const toItem = items?.[item?.to];
-  if (!fromItem || !toItem) return null;
+  if (!isDrawableCanvasItem(fromItem) || !isDrawableCanvasItem(toItem)) return null;
 
   if (String(item.from) === String(item.to)) return null;
   // Pin routing needs only its endpoints. It must not depend on unrelated
@@ -106,7 +108,7 @@ function calculateConnectorGeometry(item, items, width, height) {
   if (isLogicGate(fromItem.shapeType) || isLogicGate(toItem.shapeType)) {
     return logicConnectorGeometry(item, fromItem, toItem, objectRect(fromItem, width, height), objectRect(toItem, width, height), { width, height }, distanceToEdge);
   }
-  const rectangles = Object.entries(items).filter(([, candidate]) => candidate && candidate.kind !== 'connector').map(([id, candidate]) => ({ id, ...objectRect(candidate, width, height) }));
+  const rectangles = Object.entries(items).filter(([, candidate]) => isDrawableCanvasItem(candidate) && candidate.kind !== 'connector').map(([id, candidate]) => ({ id, ...objectRect(candidate, width, height) }));
   const from = rectangles.find(rect => rect.id === String(item.from));
   const to = rectangles.find(rect => rect.id === String(item.to));
   if (!from || !to) return null;

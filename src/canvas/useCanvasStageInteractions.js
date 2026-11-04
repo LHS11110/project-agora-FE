@@ -1,3 +1,5 @@
+import {notebookCell} from './notebook/notebookData.js';
+import { createValue } from './values/valueData.js';
 import { hasPolygonVertices } from './shapeAppearance.js';
 import { groupMember } from './userGroups/userGroupModel.js';
 import { shapeCreationSize } from './shapeCatalog.js';
@@ -351,7 +353,7 @@ export function useCanvasStageInteractions(options) {
         || Object.entries(itemsRef.current).map(([id,item])=>({id,item,bounds:objectBounds(item,itemsRef.current,boardSize.width,boardSize.height)}));
       const contains = bounds => bounds && bounds.minX >= marquee.minX && bounds.maxX <= marquee.maxX
         && bounds.minY >= marquee.minY && bounds.maxY <= marquee.maxY;
-      const hits = candidates.filter(({item,bounds}) => item && ['image','link','code','note','table','shape','text','math','stroke','pdf','user-group','question'].includes(item.kind) && contains(bounds)).map(({id})=>id);
+      const hits = candidates.filter(({item,bounds}) => item && ['image','link','code','note','table','shape','text','math','stroke','pdf','user-group','question','value'].includes(item.kind) && contains(bounds)).map(({id})=>id);
       const expanded = new Set([...selection.baseIds, ...hits]);
       const selectedGroups = new Set([...expanded].map((id) => itemsRef.current[id]?.groupId).filter(Boolean));
       if (selectedGroups.size) {
@@ -426,10 +428,15 @@ export function useCanvasStageInteractions(options) {
       else { setActiveTool('select'); selectItems([id]); }
       return;
     }
-    if (activeTool === 'terminal' || activeTool === 'executor' || activeTool === 'execution-output') {
+    if (activeTool === 'continuous-value' || activeTool === 'discrete-value') {
+      event.preventDefault();const point=pointerPosition(event),id=createId(),value=createValue(activeTool==='continuous-value'?'real':'integer');
+      if(addItem(id,{...value,x:point.x-value.width/2,y:point.y-value.height/2,permission})){setActiveTool('select');selectItems([id]);}
+      return;
+    }
+    if (activeTool === 'notebook' || activeTool === 'terminal' || activeTool === 'executor' || activeTool === 'execution-output') {
       event.preventDefault();
-      const point = pointerPosition(event), id = createId(), width = activeTool === 'terminal' ? .42 : .24, height = activeTool === 'terminal' ? .4 : activeTool === 'executor' ? .22 : .24;
-      const item = { kind: 'shape', shapeType: 'rectangle', runtimeRole: activeTool === 'terminal' ? 'terminal' : activeTool === 'executor' ? 'executor' : 'output',
+      const point = pointerPosition(event), id = createId(), width = activeTool === 'notebook' ? .48 : activeTool === 'terminal' ? .42 : .24, height = activeTool === 'notebook' ? .64 : activeTool === 'terminal' ? .4 : activeTool === 'executor' ? .22 : .24;
+      const item = { kind: 'shape', shapeType: 'rectangle', ...(activeTool==='notebook'?{notebookCells:[notebookCell()],notebookResults:{}}:{}), runtimeRole: activeTool === 'notebook' ? 'notebook' : activeTool === 'terminal' ? 'terminal' : activeTool === 'executor' ? 'executor' : 'output',
         x: point.x - width / 2, y: point.y - height / 2, width, height, permission };
       if (!addItem(id, item)) setToast('실시간 서버에 연결된 뒤 캔버스를 수정할 수 있어요.');
       else { setActiveTool('select'); selectItems([id]); }

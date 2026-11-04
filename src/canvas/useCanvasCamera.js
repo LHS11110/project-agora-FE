@@ -22,7 +22,7 @@ export function useCanvasCamera(boardRef,sceneRef) {
     const {width,height}=work.current.size;
     for(const layer of scene.querySelectorAll('.canvas-world-layer'))layer.style.transform=`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`;
     const grid=stage.querySelector('.canvas-grid-surface');
-    if(grid)grid.style.transform=gridProjection(camera).transform;
+    if(grid)grid.style.transform=gridProjection(camera,Number(stage.dataset.gridSpacing)||undefined).transform;
     const axes=stage.querySelector('.coordinate-plane');
     if(axes){
       const x=CANVAS_SPACE.width*camera.scale/2+camera.x,y=CANVAS_SPACE.height*camera.scale/2+camera.y;

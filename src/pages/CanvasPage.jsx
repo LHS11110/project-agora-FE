@@ -1,3 +1,6 @@
+import {api} from '../api/client.js';
+import {canvasPasswordGrantKey,readCanvasPasswordGrant} from '../canvas/canvasAccess.js';
+import {gridInterval, snapNewItem} from '../canvas/gridPlacement.js';
 import { creationGroupPermission } from '../canvas/permissions/creationGroups.js';
 import { canUseItem, canUseCanvas, WRITE_DENIED, EXECUTE_DENIED } from '../canvas/permissions/access.js';
 import { isObjectLocked, OBJECT_LOCK_MESSAGE } from '../canvas/locks/objectLock.js';
@@ -137,8 +140,9 @@ function CanvasWorkspace() {
     return executeCanvasCode({ ...request, canvasId, token, user });
   };
   const saveBlueprintOutputRef = useRef(() => false);
+  const saveRuntimeStateRef = useRef(() => false);
   const runtimeStore = useMemo(() => createBlueprintStore({ getItems: () => itemsRef.current,
-    execute: request => runtimeRequestRef.current(request), saveOutput: (id, records) => saveBlueprintOutputRef.current(id, records) }), []);
+    execute: request => runtimeRequestRef.current(request), saveOutput: (id, records) => saveBlueprintOutputRef.current(id, records), saveState:(id,state)=>saveRuntimeStateRef.current(id,state) }), []);
   useEffect(() => { runtimeStore.resume(); return () => runtimeStore.dispose(); }, [runtimeStore]);
   const navigate = useNavigate();
   const boardRef = useRef(null);
@@ -260,6 +264,10 @@ function CanvasWorkspace() {
     localStorage.setItem(GRAPHICS_QUALITY_KEY, next);
   };
   const [showGrid, setShowGrid] = useState(() => localStorage.getItem('agora_canvas_grid') !== 'false');
+  const [gridSpacing,setGridSpacing]=useState(()=>gridInterval(localStorage.getItem('agora_canvas_grid_spacing')??20));
+  const [snapToGrid,setSnapToGrid]=useState(()=>localStorage.getItem('agora_canvas_snap_grid')==='true');
+  const changeGridSpacing=value=>{const next=gridInterval(value);setGridSpacing(next);localStorage.setItem('agora_canvas_grid_spacing',String(next));};
+  const toggleSnapToGrid=()=>setSnapToGrid(current=>{localStorage.setItem('agora_canvas_snap_grid',String(!current));return !current;});
   const [showXAxis, setShowXAxis] = useState(() => localStorage.getItem('agora_canvas_x_axis') !== 'false');
   const [showYAxis, setShowYAxis] = useState(() => localStorage.getItem('agora_canvas_y_axis') !== 'false');
   const [shapeType, setShapeType] = useState('rectangle');
@@ -543,7 +551,7 @@ function CanvasWorkspace() {
   const updateTableItem = useCallback((id, update) => {
     const key = String(id);
     const previous = itemsRef.current[key];
-    if (!['table', 'chart', 'question'].includes(previous?.kind)) return false;
+    if (!(['table', 'chart', 'question', 'value', 'pdf', 'link'].includes(previous?.kind)||previous?.runtimeRole==='notebook') || !hostSessionRef.current.editable || isObjectLocked(previous) || !canWriteItem(previous)) return false;
     const nextItem = typeof update === 'function' ? update(previous) : { ...previous, ...update };
     if (!nextItem || nextItem === previous) return false;
     itemsRef.current = { ...itemsRef.current, [key]: nextItem };
@@ -558,6 +566,15 @@ function CanvasWorkspace() {
     }
     return true;
   }, [refreshSpatialIndex, sendItemChange]);
+  saveRuntimeStateRef.current=(id,state)=>{
+    const previous=itemsRef.current[id];if(!previous||!canExecuteItem(previous))return false;
+    const fields=['running','building','status','phase','completed','failed','built','reset','runId','source','language','detail','error'];
+    const shared=state?Object.fromEntries(fields.filter(key=>state[key]!==undefined).map(key=>[key,state[key]])):null;
+    if(shared)shared.updatedAt=Date.now();
+    const next={...previous,runtimeState:shared};
+    if(!hostSessionRef.current.editable)return false;
+    return patchItems({[id]:next},[],{history:false});
+  };
   const updateFormulaItem = useCallback((id, formula) => {
     const key = String(id);
     const previous = itemsRef.current[key];
@@ -784,6 +801,7 @@ function CanvasWorkspace() {
     }
   };
   const addItem = useCallback((id, item) => {
+    if(snapToGrid)item=snapNewItem(item,gridSpacing,boardSize);
     if (!canvasSnapshotLoadedRef.current) return false;
     if(!canWriteItem(item)){setToast(WRITE_DENIED);return false;}
     if (item?.kind === 'connector' && !connectorGeometry(item, itemsRef.current, boardSize.width, boardSize.height)) { setToast('객체가 겹쳐 연결을 만들 수 없습니다. 객체를 옮긴 뒤 다시 연결해주세요.'); return false; }
@@ -810,7 +828,7 @@ function CanvasWorkspace() {
     setItems((current) => ({ ...current, [id]: sharedItem }));
     refreshSpatialIndex();
     return true;
-  }, [boardSize, markItemDirty, refreshSpatialIndex, selectItems, sendItemChange]);
+  }, [boardSize, markItemDirty, refreshSpatialIndex, selectItems, sendItemChange, snapToGrid, gridSpacing]);
   const deleteItem = useCallback((id) => {
     const previous = itemsRef.current[id];
     if(previous&&!canWriteItem(previous)){setToast(WRITE_DENIED);return false;}
@@ -1225,7 +1243,7 @@ function CanvasWorkspace() {
     moveObject,
     stopObjectDrag,
     startGroupRotation,
-  } = useCanvasObjectInteractions({ canWriteItem,
+  } = useCanvasObjectInteractions({ canWriteItem, snapToGrid, gridSpacing,
     moveItems, flushMoves,
     activeTool,
     spatialIndexRef,
@@ -1417,6 +1435,23 @@ function CanvasWorkspace() {
     canPaste: canWriteCanvas, uploadImage, uploadPdf,
     isInteracting: () => Boolean(dragRef.current || panRef.current || drawingRef.current || selectionRef.current || eraserRef.current),
     selectItems, setActiveTool, setConnectionStartId, setToast, blocked: clipboardBlocked });
+  runtimeStore.notebook=async(id,{operation,code,cellId})=>{
+    const previous=itemsRef.current[id];if(!previous||previous.runtimeRole!=='notebook'||!canExecuteItem(previous)||!hostSessionRef.current.editable)throw Error(ui('이 그룹에는 실행 권한이 없습니다.'));
+    const active=previous.runtimeState;if(active?.running&&Date.now()-active.updatedAt<240000)throw Error(ui('노트북 실행 중…'));
+    saveRuntimeStateRef.current(id,{running:true,status:'running',phase:operation,language:'python'});
+    try{
+      const result=await api(`/api/canvases/${canvasId}/runtime/notebook`,{method:'POST',token,body:{objectId:id,operation,code,passwordGrant:readCanvasPasswordGrant(canvasPasswordGrantKey(canvasId,user))}});
+      const current=itemsRef.current[id];
+      if(current&&canExecuteItem(current)&&cellId){
+        const entry={outputs:result.outputs||[],executionCount:result.executionCount??null,exitCode:result.exitCode??1,...(result.error?{error:result.error}:{}),...(result.truncated?{truncated:true}:{})};
+        const notebookResults={...(current.notebookResults||{}),[cellId]:entry};
+        if(JSON.stringify(notebookResults).length>524288)throw Error(ui('노트북 출력이 너무 큽니다. 출력 일부를 지운 뒤 다시 실행하세요.'));
+        patchItems({[id]:{...current,notebookResults}},[],{history:false});
+      }
+      saveRuntimeStateRef.current(id,{running:false,status:result.exitCode?'error':'success',failed:Boolean(result.exitCode),completed:true,language:'python',...(result.error?{error:result.error}:{})});
+      return result;
+    }catch(error){saveRuntimeStateRef.current(id,{running:false,status:'error',failed:true,error:error.message});throw error;}
+  };
   runtimeStore.connectTerminal = (objectId, request) => openTerminalSocket({canvasId,token,user,objectId,...request});
   const panelLayout = usePanelLayout();
   const canvasParticipants = useParticipantProfiles(settings?.participants, token, user);
@@ -1464,7 +1499,7 @@ function CanvasWorkspace() {
       <CanvasQuickDock shortcutGuard={()=>hostSessionRef.current.editable && editingIdRef.current==null && !dragRef.current && !drawingRef.current && !panRef.current && !selectionRef.current} undoCount={undoCount} onUndo={undoCanvas} canUndo={hostStatus.editable && editingId == null} canWrite={canWriteCanvas} activeTool={activeTool} onSelectTool={selectCanvasTool} onUploadImage={uploadImage}
         toolsExpanded={!panelLayout.handle('tools').collapsed} onToggleTools={panelLayout.handle('tools').onToggle} />
       <main className="board-region"><div className="board-topline"><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(true); }}><Icon name="code" size={15} />{ui("캔버스 코드")}</button><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={()=>setShowRuntimeSettings(true)}><Icon name="settings" size={15}/>{ui("실행 환경")}</button><button className="zoom-button" aria-label={ui("확대")} title={ui("클릭: 한 단계 확대 · 길게 누르기: 계속 확대")} onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label={ui("축소")} title={ui("클릭: 한 단계 축소 · 길게 누르기: 계속 축소")} onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>{ui("맞춤")}</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />{"" + ui("격자") + " "}{showGrid ? ui("켜짐") : ui("꺼짐")}</button></div></div>
-        <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} style={{ ...canvasGridStyle(camera), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ touchNavigation, activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion: cancelPanInertia, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, sendCursorPosition, pickVector: (event,doubleClick = false,capture = false) => {
+        <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} data-grid-spacing={gridSpacing} style={{ ...canvasGridStyle(camera,gridSpacing), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ touchNavigation, activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion: cancelPanInertia, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, sendCursorPosition, pickVector: (event,doubleClick = false,capture = false) => {
             if (!['select', 'connect'].includes(activeTool) || event.button !== 0 || event.target.closest?.('.canvas-minimap, .stage-label, button, input, textarea')) return false;
             const target=event.target.closest?.('.canvas-object');
             if(capture !== Boolean(target))return false;
@@ -1566,7 +1601,7 @@ function CanvasWorkspace() {
         connectorVisualStyle, setConnectorVisualStyle,
         setShapeFillColor: changeShapeFillColor,
         updateShapeFill,
-        showGrid, showXAxis, showYAxis, toggleXAxis, toggleYAxis,
+        showGrid, gridSpacing, changeGridSpacing, snapToGrid, toggleSnapToGrid, showXAxis, showYAxis, toggleXAxis, toggleYAxis,
         strokeWidth,
         penBrush, penOpacity, changePenBrush, changePenOpacity,
         tableConfig,

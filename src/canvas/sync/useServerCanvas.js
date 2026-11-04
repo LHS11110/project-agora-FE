@@ -37,7 +37,7 @@ export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsR
       publishItems(draft);
     },
   });
-  const setItems = useCallback((update, knownIds = null) => {
+  const setItems = useCallback((update, knownIds = null, options = {}) => {
     const session = sessionRef.current, previous = working.current;
     const next = typeof update === 'function' ? update(previous) : update;
     if (!session.editable) { itemsRef.current = previous; return false; }
@@ -51,13 +51,13 @@ export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsR
         operation.patch.automerge_snapshot = base;
         operation.patch.automerge_changes = Automerge.getChanges(loadEncodedDocument(base), doc).map(change => ({ field: collaborativeField(next[operation.id]), change: encodeBase64(change) }));
       }
-      if (!operations.length || session.submit(operations)) { working.current = next; itemsRef.current = next; if (operations.length) { session.redraw(); if(!undoing.current){ history.current.record(previous,working.current,operations.flatMap(operationIds));setUndoCount(history.current.entries.length); } } }
+      if (!operations.length || session.submit(operations)) { working.current = next; itemsRef.current = next; if (operations.length) { session.redraw(); if(!undoing.current && options.history !== false){ history.current.record(previous,working.current,operations.flatMap(operationIds));setUndoCount(history.current.entries.length); } } }
       else { itemsRef.current = previous; return false; }
     return true;
     } catch (error) { itemsRef.current = previous; callbacks.current.setToast(error.message); return false; }
   }, []);
-  const patchItems = useCallback((changes, removed = []) => {
-    setItems(previous => changeItems(previous, changes, removed), [...new Set([...(changes instanceof Map ? changes.keys() : Object.keys(changes || {})), ...removed])]);
+  const patchItems = useCallback((changes, removed = [], options = {}) => {
+    return setItems(previous => changeItems(previous, changes, removed), [...new Set([...(changes instanceof Map ? changes.keys() : Object.keys(changes || {})), ...removed])], options);
   }, [setItems]);
   const moveItems = useCallback((ids, dx, dy) => {
     if (!dx && !dy) return true;

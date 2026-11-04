@@ -1,3 +1,4 @@
+import {useObjectRuntimeState} from './useObjectRuntimeState.js';
 import {cloneElement,useCallback,useEffect,useState,useSyncExternalStore} from 'react';
 import {contentSource} from '../content/contentPresentation.js';
 import {ui} from '../../i18n/locale.js';
@@ -5,9 +6,7 @@ import './runtime-code-frame.css';
 
 /** Subscribe only the affected code block; never rerender the canvas per step. */
 export default function RuntimeCodeFrame({id,item,store,children}) {
-  const subscribe=useCallback(listener=>store?store.subscribe(id,listener):()=>{},[store,id]);
-  const snapshot=useCallback(()=>store?.get(id)||null,[store,id]);
-  const state=useSyncExternalStore(subscribe,snapshot,()=>null);
+  const state=useObjectRuntimeState(id,item,store);
   const [expanded,setExpanded]=useState(false);
   const current=state&&state.source===contentSource(item)&&state.language===(item.language||'javascript');
   const status=current?state.status:null;

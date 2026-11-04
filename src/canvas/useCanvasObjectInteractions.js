@@ -1,3 +1,4 @@
+import {snapPosition, snappedTranslation} from './gridPlacement.js';
 import { isObjectLocked, OBJECT_LOCK_MESSAGE } from './locks/objectLock.js';
 import { isLogicGate, nearestLogicPort } from './logicGates.js';
 import { connectorControlFromPointer, connectorPointCount } from './connectors/controlPoints.js';
@@ -14,7 +15,7 @@ import { inheritConnectorObjectSize } from './connectors/objectMetrics.js';
 
 export function useCanvasObjectInteractions(options) {
   const {
-    activeTool, canWriteItem = () => true,
+    activeTool, canWriteItem = () => true, snapToGrid=false, gridSpacing=20,
     addItem,
     boardRef,
     boardSize,
@@ -220,8 +221,9 @@ export function useCanvasObjectInteractions(options) {
     if (mode === 'multi-move') {
       const { ids, initialItems, startPoint } = dragRef.current;
       const point = pointerPosition(event);
-      const dx = point.x - startPoint.x;
-      const dy = point.y - startPoint.y;
+      const rawDx=point.x-startPoint.x,rawDy=point.y-startPoint.y;
+      const first=initialItems[ids[0]],anchor=first?.kind==='stroke'?first.points[0]:first;
+      const {dx,dy}=snapToGrid&&anchor?snappedTranslation(anchor,rawDx,rawDy,gridSpacing,boardSize):{dx:rawDx,dy:rawDy};
       const previous=dragRef.current.lastMove;
       if(moveItems(ids,dx-previous.dx,dy-previous.dy))dragRef.current.lastMove={dx,dy};
       return;
@@ -242,11 +244,15 @@ export function useCanvasObjectInteractions(options) {
       return;
     }
     const point = pointerPosition(event);
-    const next = mode === 'resize'
+    let next = mode === 'resize'
       ? resizeItemAtPointer(initial, resize, point, viewport)
       : initial.kind === 'stroke'
         ? { ...initial, points: initial.points.map((part) => ({ ...part, x: part.x + point.x - startX, y: part.y + point.y - startY })) }
         : { ...initial, x: point.x - offsetX, y: point.y - offsetY };
+    if(snapToGrid&&mode!=='resize'){
+      if(initial.kind==='stroke'){const anchor=initial.points[0],delta=snappedTranslation(anchor,point.x-startX,point.y-startY,gridSpacing,boardSize);next={...initial,points:initial.points.map(p=>({...p,x:p.x+delta.dx,y:p.y+delta.dy}))};}
+      else next={...next,...snapPosition(next,gridSpacing,boardSize)};
+    }
     commitGeometry({ ...itemsRef.current, [id]: next },[id]);
     sendRealtimePeerItemGeometry(id, next);
   };

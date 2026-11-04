@@ -16,5 +16,6 @@ const ungrade=()=>({questionScore:-1,questionFeedback:'',questionGradedVersion:'
 export function questionDefinitionPatch(draft){
  return {questionType:draft.questionType,questionPrompt:draft.questionPrompt.trim(),questionOptions:draft.questionOptions.map(s=>s.trim()),questionMaxScore:Number(draft.questionMaxScore),questionAnswer:'',questionSubmitted:false,...ungrade()};
 }
+export const questionDraftPatch=answer=>({questionAnswer:answer,questionSubmitted:false,...ungrade()});
 export const questionSubmissionPatch=answer=>({questionAnswer:answer,questionSubmitted:true,...ungrade()});
 export function questionGradePatch(item,score,feedback){return {questionScore:Number(score),questionFeedback:feedback,questionGradedVersion:item.questionVersion};}

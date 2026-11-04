@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { apiUrl } from '../../api/client.js';
 import './pdf-object.css';
 
-export default function PdfDocumentContent({ item, token, interactive }) {
+export default function PdfDocumentContent({ item, token, interactive, canChangePage=true, onPageChange }) {
   useUiLocale();
-  const [pdf, setPdf] = useState(null), [pageNumber, setPageNumber] = useState(1);
+  const [pdf, setPdf] = useState(null);
+  const pageNumber=Math.max(1,Math.min(Number(item.pdfPage)||1,pdf?.numPages||1000000));
   const [error, setError] = useState(''), [rendering, setRendering] = useState(false), [reload, setReload] = useState(0);
   const [size, setSize] = useState({ width: 1, height: 1 });
   const host = useRef(null), canvas = useRef(null), downloadPending = useRef(false);
@@ -21,7 +22,7 @@ export default function PdfDocumentContent({ item, token, interactive }) {
   }, []);
   useEffect(() => {
     let active = true, task;
-    setPdf(null); setError(''); setPageNumber(1);
+    setPdf(null); setError('');
     import('./pdfRuntime.js').then(runtime => {
       if (!active) return;
       task = runtime.loadCanvasPdf(item.src, token);
@@ -74,9 +75,9 @@ export default function PdfDocumentContent({ item, token, interactive }) {
       {error ? <div className="pdf-status" role="alert">{error}<button data-object-action disabled={!interactive} onClick={() => setReload(value => value + 1)}>{ui("다시 불러오기")}</button></div> : (!pdf || rendering) && <div className="pdf-status" role="status">{ui("PDF를 불러오는 중…")}</div>}
     </div>
     <div className="pdf-document-actions" data-object-action onPointerDown={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}>
-      <button disabled={!interactive || !pdf || pageNumber <= 1} onClick={() => setPageNumber(value => value - 1)} aria-label={ui("PDF 이전 페이지")}>‹</button>
+      <button disabled={!interactive || !canChangePage || !pdf || pageNumber <= 1} onClick={() => onPageChange?.(pageNumber-1)} aria-label={ui("PDF 이전 페이지")}>‹</button>
       <span>{pageNumber} / {pdf?.numPages || '—'}</span>
-      <button disabled={!interactive || !pdf || pageNumber >= pdf.numPages} onClick={() => setPageNumber(value => value + 1)} aria-label={ui("PDF 다음 페이지")}>›</button>
+      <button disabled={!interactive || !canChangePage || !pdf || pageNumber >= pdf.numPages} onClick={() => onPageChange?.(pageNumber+1)} aria-label={ui("PDF 다음 페이지")}>›</button>
       <button className="pdf-download" disabled={!interactive || !pdf} onClick={download}>{ui("원본 저장")}</button>
     </div>
   </div>;

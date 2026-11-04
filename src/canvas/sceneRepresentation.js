@@ -1,7 +1,7 @@
 import { contentSource } from './content/contentPresentation.js';
 import { objectFontSize } from './objectSize.js';
-const richKinds=new Set(['text','code','math','note','table','chart','question','image','link','pdf','user-group']);
-const colors={text:'#e1e9e2',code:'#dce9df',math:'#e7def2',note:'#f3ebce',table:'#dfe6ef',chart:'#e6e1f4',question:'#eae3f8',image:'#eaded4',link:'#eaded4',pdf:'#eeded7','user-group':'#e7def2'};
+const richKinds=new Set(['text','code','math','note','table','chart','value','question','image','link','pdf','user-group']);
+const colors={value:'#e4def7',text:'#e1e9e2',code:'#dce9df',math:'#e7def2',note:'#f3ebce',table:'#dfe6ef',chart:'#e6e1f4',question:'#eae3f8',image:'#eaded4',link:'#eaded4',pdf:'#eeded7','user-group':'#e7def2'};
 // Small rich objects use overview rendering. Selecting or zooming restores
 // their full renderer; persisted objects are never replaced.
 export function isOverviewProxy(item,world,scale){
