@@ -34,6 +34,7 @@ import { useCanvasBackground } from '../canvas/background/useCanvasBackground.js
 import { useParticipantProfiles } from '../canvas/useParticipantProfiles.js';
 import ResizablePanel from '../canvas/panels/ResizablePanel.jsx';
 import { usePanelLayout } from '../canvas/panels/usePanelLayout.js';
+import { openTerminalSocket } from '../canvas/runtime/terminalApi.js';
 import { useObjectClipboard } from '../canvas/clipboard/useObjectClipboard.js';
 import { MAX_BEND_POINTS, connectorBendPatch, resizeConnectorControls } from '../canvas/connectors/controlPoints.js';
 import { isContentMode, isTextContent } from '../canvas/content/contentPresentation.js';
@@ -1196,7 +1197,7 @@ function CanvasWorkspace() {
     setActiveTool('select');
   };
   const uploadPdf = usePdfUpload({ canvasId, token, permission, addItem, centeredItemPosition, createId, setActiveTool, selectItems, setToast });
-  const uploadImage = async (event) => {
+  const uploadImage = async (event, options = {}) => {
     const file = event.target.files?.[0]; event.target.value = '';
     if (!file) return;
     if (!file.type.startsWith('image/')) { setToast('이미지 파일만 올릴 수 있어요.'); return; }
@@ -1204,9 +1205,10 @@ function CanvasWorkspace() {
     try {
       const src = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
       const id = createId();
-      const position = centeredItemPosition(0.3, 0.2);
+      if (options.canInsert?.() === false) return;
+      const position = options.position ? {x:options.position.x-.15,y:options.position.y-.1} : centeredItemPosition(0.3, 0.2);
       if (!addItem(id, { kind: 'image', src, filename: file.name, ...position, width: 0.3, permission })) { setToast('실시간 서버에 연결된 뒤 이미지를 공유할 수 있어요.'); return; }
-      setActiveTool('select');
+      setActiveTool('select'); selectItems([id]); return id;
     } catch { setToast('이미지를 읽지 못했습니다.'); }
   };
   const submitMessage = (event) => {
@@ -1412,8 +1414,10 @@ function CanvasWorkspace() {
   const clipboardBlocked = !hostStatus.editable || editingId != null || showSettings || showParticipants || showCanvasCode || sharePosition != null;
   const objectClipboard = useObjectClipboard({ canvasId, boardRef, itemsRef, selectedIds: selectedObjectIds,
     permission, pointerPosition, canvasSnapshotLoadedRef: hostReadyRef, addItem, deleteItem, saveCollaborativeItem,
-    isInteracting: () => Boolean(dragRef.current || panRef.current || drawingRef.current),
+    canPaste: canWriteCanvas, uploadImage, uploadPdf,
+    isInteracting: () => Boolean(dragRef.current || panRef.current || drawingRef.current || selectionRef.current || eraserRef.current),
     selectItems, setActiveTool, setConnectionStartId, setToast, blocked: clipboardBlocked });
+  runtimeStore.connectTerminal = (objectId, request) => openTerminalSocket({canvasId,token,user,objectId,...request});
   const panelLayout = usePanelLayout();
   const canvasParticipants = useParticipantProfiles(settings?.participants, token, user);
   const { backgroundColor, setBackgroundColor, backgroundStyle } = useCanvasBackground(canvasId);
@@ -1448,11 +1452,12 @@ function CanvasWorkspace() {
   return <div className="canvas-app-page" data-theme={theme} data-info-collapsed={chrome.collapsed.info}>
     <div style={{ display: 'contents' }} inert={!hostStatus.editable && !error ? '' : undefined}>
     <header className={`canvas-topbar${chrome.collapsed.info?' is-collapsed':''}`}>
+      <ChromeToggle label={ui("캔버스 정보")} collapsed={chrome.collapsed.info} onToggle={()=>chrome.toggle('info')} controls="canvas-info-content" />
       {chrome.collapsed.info && <span className="canvas-chrome-label">{ui("캔버스 정보")}</span>}
       <div id="canvas-info-content" className="canvas-info-content" hidden={chrome.collapsed.info}>
       <div className="canvas-title-group"><div className="canvas-title-copy"><h1 title={canvas?.canvas_name}>{canvas?.canvas_name || ui('캔버스 {id}',{id:canvasId})}</h1></div></div>
       <div className="canvas-header-right"><div className="canvas-top-right"><LanguageSwitcher /><span className={`connection-pill ${connection}`} role="status" aria-live="polite" title={connection === 'connecting' ? ui("다시 연결하는 중입니다. 캔버스 편집은 계속할 수 있고 변경 사항은 연결 후 저장됩니다.") : connection === 'connected' ? ui("서버에 연결되어 변경 사항을 동기화하고 있습니다.") : ui("서버 연결이 해제되었습니다.")}><i />{connection === 'connected' ? ui("연결됨") : connection === 'connecting' ? ui("연결 중") : ui("연결 해제")}</span><CanvasPresenceStack participants={onlineParticipants} token={token} onManage={() => { setShowSettings(false); setShowParticipants(true); }} /><button className="button button-outline canvas-settings-button" onClick={() => { setShowParticipants(false); setShowSettings(true); }}><Icon name="settings" size={17} /><span>{ui("설정")}</span></button></div></div>
-      </div>{chrome.collapsed.info && <div className="canvas-folded-language"><LanguageSwitcher /></div>}<ChromeToggle label={ui("캔버스 정보")} collapsed={chrome.collapsed.info} onToggle={()=>chrome.toggle('info')} controls="canvas-info-content" />
+      </div>{chrome.collapsed.info && <div className="canvas-folded-language"><LanguageSwitcher /></div>}
     </header>
     {error ? <div className="canvas-error-state"><div className="error-art"><Icon name="grid" size={30} /></div><span className="section-kicker">CANVAS CONNECTION</span><h1>{ui("캔버스를 열 수 없어요.")}</h1><p>{error}</p><div><button className="button button-dark" onClick={() => window.location.reload()}>{ui("다시 연결하기")}</button><Link className="button button-outline" to="/search">{ui("캔버스 목록")}</Link></div></div> : <div className="canvas-workspace resizable-workspace" ref={panelLayout.ref} style={panelLayout.style}>
       <ResizablePanel {...panelLayout.handle('tools')}><CanvasToolPanel activeTool={activeTool} onSelectTool={selectCanvasTool} color={color} onColorChange={setColor} onUploadPdf={uploadPdf} onUploadImage={uploadImage} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} /></ResizablePanel>

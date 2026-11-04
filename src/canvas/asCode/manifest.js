@@ -69,7 +69,7 @@ function validateItem(id, item) {
   if (item.visualStyle != null && !['standard', 'sketch'].includes(item.visualStyle)) fail(`${id}.visualStyle: standard 또는 sketch가 필요합니다.`);
   if (item.volumeStyle != null && !['solid', 'wireframe'].includes(item.volumeStyle)) fail(`${id}.volumeStyle: solid 또는 wireframe이 필요합니다.`);
   if (item.runtimeResults != null && (item.runtimeRole !== 'output' || !validRuntimeResults(item.runtimeResults))) fail(`${id}.runtimeResults: 올바른 실행 결과 배열이 필요합니다.`);
-  if (item.runtimeRole != null && (item.kind !== 'shape' || !['executor', 'output'].includes(item.runtimeRole))) fail(`${id}.runtimeRole: 도형에서 executor 또는 output을 선택해주세요.`);
+  if (item.runtimeRole != null && (item.kind !== 'shape' || !['executor', 'output', 'terminal'].includes(item.runtimeRole))) fail(`${id}.runtimeRole: 도형에서 executor 또는 output을 선택해주세요.`);
   if (item.kind === 'question' && !validQuestion(item)) fail(`${id}: 올바른 문제·답안·수동 채점 데이터가 필요합니다.`);
   if (item.kind === 'chart') {
     if (!CHART_TYPES.includes(item.chartType)) fail(`${id}.chartType: 지원하는 그래프 종류가 필요합니다.`);

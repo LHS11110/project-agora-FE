@@ -76,13 +76,14 @@ with AgoraClient(token=os.environ["AGORA_USER_TOKEN"]) as client:
         event = canvas.next_event(timeout=5)
         latest = canvas.refresh()`;
 const methods = [
+  ['canvas.peers · peer_id · presence_connected · send_cursor(x,y) · send_laser(...) · set_editing(id)', '접속자 목록과 연결 상태를 조회하고 커서·레이저·객체 편집 상태를 주고받습니다.'],
   ['client.me() · client.canvases(name) · client.create_canvas(name)','계정 조회와 캔버스 검색·생성. 봇은 캔버스 검색·생성이 제한됩니다.'],
   ['canvas.create(item) · patch(id, fields) · delete(*ids)','서버가 지원하는 도형·메모·텍스트·코드·이미지·표·드로잉·연결선 등의 객체를 생성·변경·삭제합니다.'],
   ['canvas.apply(operations) · move(ids, dx, dy) · lock(id, locked)','일괄 작업, 상대 이동과 잠금. 한 배치는 최대 512개 작업·8MiB이며 연결선은 객체 삭제 시 함께 제거합니다.'],
   ['canvas.set_text(id, text, code=False)','본문 전체를 교체하며 이전 Automerge 문서를 제거합니다. 문자 단위 협업 병합이 아니므로 동시 편집 중에는 주의하세요.'],
   ['canvas.settings() · update_settings(field, value=...)','설정 조회·변경. 변경은 관리자 전용이며 expected_revision 충돌 검사를 적용합니다.'],
   ['canvas.invite(nickname, tag_number) · remove_participant(...)','관리자가 기존 참여자 API로 사용자를 초대하거나 제외합니다.'],
-  ['canvas.refresh() · canvas.items · next_event(timeout=5)','최신 스냅샷, 백그라운드 수신 상태의 복사본과 이벤트 수신. 이벤트 큐는 최근 256개로 제한됩니다.'],
+  ['canvas.refresh() · canvas.items · next_event(timeout=5)','최신 스냅샷과 이벤트를 수신합니다. 객체 이벤트는 최근 256개, 커서는 참여자별 최신 위치를 유지하며 누락은 event_overflow로 알립니다.'],
   ['canvas.execute(language, code, stdin=None)','기존 런타임 API로 코드를 실행하고 결과를 반환합니다. 블루프린트 자동 순회와 결과 객체 갱신은 별도 구현이 필요합니다.'],
   ['canvas.send_event(event) · publish(event)','기존 브로커의 채팅·댓글·멘션 등 요청과 커서 같은 일방향 이벤트를 전달합니다. 서버 권한 검증은 동일합니다.'],
   ['client.request(method, path, raw=True)','기존 HTTP API를 호출합니다. raw=True 응답의 content로 파일을 읽고 files= 인자로 multipart 업로드를 요청할 수 있습니다.'],
@@ -93,8 +94,8 @@ export default function PythonSdkDocs(){return <section className="docs-section 
   <div className="docs-section-title"><span className="section-kicker">PYTHON / AUTOMATION</span><h2>Python SDK</h2><p>{ui('기존 HTTPS API와 WSS 브로커를 이용해 캔버스를 자동화합니다. 익명 접속이나 DB·내부 포트 접근 없이 사용자 또는 봇의 권한으로 작업합니다.')}</p></div>
   <Heading id="sdk-install">{ui('설치와 연결')}</Heading>
   <p>{ui('Python 3.10 이상이 필요합니다. 패키지는 아직 PyPI에 게시하지 않았으므로 wheel을 내려받거나 백엔드 저장소의 sdk/python 경로에서 설치하세요.')}</p>
-  <a className="button button-outline sdk-download" href="/downloads/agora_canvas-0.1.3-py3-none-any.whl" download>{ui('Python 모듈 다운로드')} <span>0.1.3 · MIT</span></a>
-  <Code>{'python -m pip install ./agora_canvas-0.1.3-py3-none-any.whl\n\n# Or install from the cloned backend repository:\npython -m pip install ./project-agora-BE/sdk/python'}</Code>
+  <a className="button button-outline sdk-download" href="/downloads/agora_canvas-0.1.4-py3-none-any.whl" download>{ui('Python 모듈 다운로드')} <span>0.1.4 · MIT</span></a>
+  <Code>{'python -m pip install ./agora_canvas-0.1.4-py3-none-any.whl\n\n# Or install from the cloned backend repository:\npython -m pip install ./project-agora-BE/sdk/python'}</Code>
   <p>{ui('외부 주소는 https://frelog.p-e.kr입니다. TLS 인증서 검증은 항상 활성화되며 내부 CA가 필요한 환경에서는 ca_file을 지정합니다. with 블록이 끝나면 연결을 정리합니다.')}</p>
   <Heading id="sdk-auth">{ui('사용자 인증과 MFA')}</Heading>
   <p>{ui('이메일·비밀번호 로그인은 MFA를 그대로 적용합니다. OAuth·패스키 로그인으로 받은 기존 사용자 토큰은 AgoraClient(token=...)에 전달합니다. 사용자 토큰은 발급받은 네트워크의 IP에 묶입니다.')}</p>
@@ -110,6 +111,10 @@ export default function PythonSdkDocs(){return <section className="docs-section 
   <p>{ui('그룹은 최대 64개입니다. capabilities.group_bits는 고정 비트 번호, group_masks는 권한별 16진 마스크입니다. Python에서는 int(mask, 16)으로 변환하세요.')}</p>
   <Code>{objectCode}</Code>
   <div className="docs-table-scroll"><table className="docs-api-table sdk-method-table"><thead><tr><th>{ui('메서드')}</th><th>{ui('동작 / 데이터')}</th></tr></thead><tbody>{methods.map(([method,description])=><tr key={method}><td><code>{method}</code></td><td>{ui(description)}</td></tr>)}</tbody></table></div>
+  <Heading id="sdk-presence">{ui('일반 사용자처럼 실시간 참여')}</Heading>
+  <p>{ui('사용자와 봇 모두 객체 채널과 참여 채널에 함께 접속하며 접속자 목록에 표시됩니다. 객체 변경·채팅·댓글은 next_event(), 커서·레이저·편집 상태는 canvas_relay 이벤트로 받습니다. 통화나 P2P 연결은 자동으로 시작하지 않습니다.')}</p>
+  <Code>{"with client.canvas(canvas_id) as canvas:\n    canvas.send_cursor(.25, .3)\n    while True:\n        event = canvas.next_event(timeout=5)\n        if event and event[\"type\"] == \"canvas_relay\":\n            print(event[\"peer\"][\"nickname\"], event[\"payload\"])\n        elif event and event[\"type\"] == \"canvas_commit\":\n            print(event[\"changed_ids\"], event.get(\"author_id\"))"}</Code>
+  <p>{ui('연결이 끊기거나 토큰이 만료되면 두 채널을 새 인증으로 복구합니다. 객체별 그룹 권한은 그대로 적용되며 커서 같은 일시적 이벤트는 재전송하지 않습니다.')}</p>
   <Heading id="sdk-sync">{ui('실시간 동기화와 오류 처리')}</Heading>
   <p>{ui('객체 변경은 저장 커밋 또는 저장 영수증을 확인한 스냅샷을 받은 뒤 반환합니다. 단순 ACK는 성공으로 처리하지 않습니다. 재연결 시 동일한 client_id·request_id·request_count·내용을 재전송하고 revision 누락은 스냅샷으로 복구합니다.')}</p>
   <Code>{syncCode}</Code>

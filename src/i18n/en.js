@@ -1,5 +1,32 @@
 // UI messages only. User-authored content is never translated.
 export default {
+  "터미널 연결이 종료되었습니다. 다시 연결해주세요.": "The terminal disconnected. Reconnect to continue.",
+  "VM 터미널": "VM terminal",
+  "터미널": "Terminal",
+  "캔버스 VM 셸": "Canvas VM shell",
+  "터미널 세션이 만료되었습니다. 다시 연결해주세요.": "The terminal session expired. Reconnect to continue.",
+  "이전 출력 일부가 생략되었습니다.": "Some earlier output was skipped.",
+  "입력이 너무 많습니다. 잠시 후 다시 입력해주세요.": "Too much input. Wait briefly before typing again.",
+  "연결하면 캔버스 VM의 셸이 열립니다.": "Connect to open a shell in this canvas VM.",
+  "터미널을 사용하려면 실행 권한이 필요합니다.": "Execution permission is required to use the terminal.",
+  "개인 셸 · /workspace 공유 · Ctrl+C로 명령 중단": "Private shell \u00b7 shared /workspace \u00b7 Ctrl+C interrupts commands",
+  "종료됨": "Exited",
+  "연결 오류": "Connection error",
+
+  "붙여넣을 텍스트는 UTF-8 기준 64KiB 이하여야 합니다.": "Pasted text must be no larger than 64 KiB in UTF-8.",
+  "한 번에 최대 32개 자료를 붙여넣을 수 있습니다.": "Paste up to 32 resources at a time.",
+  "자료 {count}개를 객체로 붙여넣었습니다.": "Pasted {count} resources as objects.",
+  "일부 자료는 형식이나 크기 제한으로 제외했습니다.": "Some resources were skipped because of their format or size.",
+  "붙여넣을 자료가 없거나 지원하지 않는 형식입니다. 이미지·PDF·텍스트·HTTPS 링크를 사용해주세요.": "No supported content to paste. Use images, PDFs, text or HTTPS links.",
+
+  "재생 중": "Now playing",
+  "재생 대기 중": "Playback paused",
+  "최신 스냅샷과 이벤트를 수신합니다. 객체 이벤트는 최근 256개, 커서는 참여자별 최신 위치를 유지하며 누락은 event_overflow로 알립니다.": "Receive snapshots and events. The last 256 document events are retained; cursors keep the latest position per participant. event_overflow reports skipped document events.",
+  "접속자 목록과 연결 상태를 조회하고 커서·레이저·객체 편집 상태를 주고받습니다.": "Inspect participants and connection status, and exchange cursor, laser and object editing presence.",
+  "일반 사용자처럼 실시간 참여": "Join as a real-time participant",
+  "사용자와 봇 모두 객체 채널과 참여 채널에 함께 접속하며 접속자 목록에 표시됩니다. 객체 변경·채팅·댓글은 next_event(), 커서·레이저·편집 상태는 canvas_relay 이벤트로 받습니다. 통화나 P2P 연결은 자동으로 시작하지 않습니다.": "Users and bots join both document and presence channels and appear in the participant list. next_event() receives document changes, chat and comments; canvas_relay carries cursor, laser and editing presence. Media calls and P2P connections are not started automatically.",
+  "연결이 끊기거나 토큰이 만료되면 두 채널을 새 인증으로 복구합니다. 객체별 그룹 권한은 그대로 적용되며 커서 같은 일시적 이벤트는 재전송하지 않습니다.": "Both channels recover with fresh authentication after disconnection or token expiry. Object group permissions still apply; transient events such as cursor positions are not replayed.",
+
   "캔버스 접근 권한이 회수되었습니다. 관리자에게 초대를 요청하세요.": "Canvas access was revoked. Ask an administrator for an invitation.",
   "그룹은 최대 64개입니다. capabilities.group_bits는 고정 비트 번호, group_masks는 권한별 16진 마스크입니다. Python에서는 int(mask, 16)으로 변환하세요.": "A canvas supports up to 64 groups. capabilities.group_bits contains fixed bit positions; group_masks contains hexadecimal capability masks. Use int(mask, 16) in Python.",
   "permission을 생략하면 모든 소속 그룹에 공유됩니다. 읽기 전용 그룹도 포함되며, 편집 권한은 별도로 검사합니다.": "Omit permission to share with all your groups, including read-only roles. Editing rights are checked separately.",

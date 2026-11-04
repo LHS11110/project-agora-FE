@@ -14,6 +14,7 @@ import PdfDocumentContent from './pdf/PdfDocumentContent.jsx';
 import UserGroupContent from './userGroups/UserGroupContent.jsx';
 import ConnectorBendHandles from '../components/canvas/ConnectorBendHandles.jsx';
 import UnifiedTextContent from './content/UnifiedTextContent.jsx';
+import TerminalObject from './runtime/TerminalObject.jsx';
 import BlueprintNode from './runtime/BlueprintNode.jsx';
 import RuntimeCodeFrame from './runtime/RuntimeCodeFrame.jsx';
 import { contentMode, isTextContent } from './content/contentPresentation.js';
@@ -144,6 +145,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
   };
 
 
+  if (item.kind === 'shape' && item.runtimeRole==='terminal') return withResizeHandles(<div className={`${classes} terminal-object`} style={style} {...handlers}><TerminalObject id={id} item={item} store={runtimeStore} selected={selected && activeTool==='select'} canExecute={canExecute}/></div>);
   if (item.kind === 'shape' && ['executor', 'output'].includes(item.runtimeRole)) return withResizeHandles(<div className={`${classes} blueprint-object${item.runtimeRole==='executor'?' blueprint-executor-object':''}`} style={style} {...handlers}><BlueprintNode id={id} item={item} store={runtimeStore} selected={selected} canExecute={canExecute} canReset={canExecute&&!readOnly} /></div>);
   if (item.kind === 'pdf') return withResizeHandles(<div className={`${classes} pdf-object`} style={style} {...handlers}><PdfDocumentContent item={item} token={token} interactive={selected && activeTool === 'select'} /></div>);
   if (item.kind === 'user-group') return withResizeHandles(<div className={`${classes} user-group-object`} style={style} {...handlers}><UserGroupContent item={item} token={token} /></div>);
