@@ -16,12 +16,12 @@ export function readPanelSizes() {
 export function panelLimits(mode, key, bounds, sizes) {
   if (mode === 'mobile') {
     if (key === 'tools') return { min: 72, max: Math.max(72, Math.min(180, bounds.height * .22)) };
-    if (key === 'chat') return { min: 120, max: Math.max(120, Math.min(300, bounds.height * .3)) };
+    if (key === 'chat') return { min: 220, max: Math.max(220, Math.min(360, bounds.height * .4)) };
     return { min: 120, max: Math.max(120, Math.min(420, bounds.height - sizes.tools - sizes.chat - 202)) };
   }
   if (key === 'tools') return { min: 104, max: Math.max(104, Math.min(320, bounds.width - sizes.inspector - 240)) };
   if (key === 'inspector') return { min: 220, max: Math.max(220, Math.min(600, bounds.width - sizes.tools - 240)) };
-  const min = Math.min(140, bounds.height * .3);
+  const min = Math.min(220, bounds.height * .4);
   return { min, max: Math.max(min, Math.min(600, bounds.height - Math.min(220, bounds.height * .55))) };
 }
 export function fitPanelSizes(raw, mode, bounds, collapsed = {}) {

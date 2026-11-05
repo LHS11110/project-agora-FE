@@ -40,10 +40,11 @@ export function usePanelLayout() {
     setCollapsed(next);
     try { localStorage.setItem(PANEL_VISIBILITY_KEY, JSON.stringify(next)); } catch {}
   };
+  const expandedChatHeight=fitPanelSizes(raw[mode],mode,bounds,{...effectiveCollapsed,chat:false}).chat;
   const reset = key => { change(key, PANEL_DEFAULTS[latest.current.mode][key]); persist(); };
   return {
     ref: setNode, mobile,
-    style: { '--tools-width': `${sizes.tools}px`, '--inspector-width': `${sizes.inspector}px`, '--chat-height': `${sizes.chat}px`, '--tools-height': `${sizes.tools}px`, '--inspector-height': `${sizes.inspector}px` },
+    style: { '--tools-width': `${sizes.tools}px`, '--inspector-width': `${sizes.inspector}px`, '--chat-height': `${sizes.chat}px`, '--chat-expanded-height': `${expandedChatHeight}px`, '--tools-height': `${sizes.tools}px`, '--inspector-height': `${sizes.inspector}px` },
     handle: key => ({ panel: key, collapsed: effectiveCollapsed[key], onToggle: () => toggle(key), mobile, value: sizes[key], limits: panelLimits(mode, key, bounds, sizes), onChange: value => change(key, value), onFinish: persist, onReset: () => reset(key) }),
   };
 }

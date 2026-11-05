@@ -9,7 +9,7 @@ import './comments.css';
 export default function ObjectCommentsPanel({ comments, participants, connection }) {
   const locale = useUiLocale(), panel = useRef(null),list=useRef(null);
   const thread = comments.threads[comments.activeId] || {};
-  useLatestMessages(list,thread.entries,comments.activeId,comments.highlight,comments.markVisible);
+  useLatestMessages(list,thread.entries,comments.activeId,comments.highlight,comments.markVisible,{onHighlightExpired:comments.clearHighlight});
   return <aside ref={panel} className="object-comments-panel" aria-label={ui('객체 댓글')}>
     <header><div><strong>{ui('객체 댓글')}</strong><small title={comments.activeId}>{comments.activeId}</small></div><button type="button" aria-label={ui('댓글 닫기')} onClick={() => comments.setActiveId(null)}>×</button></header>
     {thread.hasMore && <button className="comments-older" disabled={thread.loading} onClick={() => comments.requestHistory(comments.activeId, thread.nextToSequence)}>{ui('이전 댓글')}</button>}

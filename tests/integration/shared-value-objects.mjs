@@ -36,8 +36,22 @@ await card(page,'select').getByLabel('선택 값',{exact:true}).selectOption('2'
 await card(page,'text').getByLabel('입력 값',{exact:true}).fill('shared input');await observer.waitForFunction(()=>window.frelogCanvas.read().items.text?.valueText==='shared input');
 await card(page,'real').getByRole('button',{name:'값 객체 설정'}).click();await card(page,'real').getByLabel('최댓값',{exact:true}).fill('0.2');await card(page,'real').getByRole('button',{name:'설정 저장'}).click();await observer.waitForFunction(()=>window.frelogCanvas.read().items.real.valueMax===.2&&window.frelogCanvas.read().items.real.valueNumber===.2);
 await page.locator('[data-item-id="pdf"]').click({position:{x:20,y:10}});await page.getByRole('button',{name:'PDF 다음 페이지'}).click();await observer.waitForFunction(()=>window.frelogCanvas.read().items.pdf.pdfPage===2);await observer.getByLabel('PDF 2페이지').waitFor();
-await page.locator('[data-item-id="video"]').dblclick({position:{x:100,y:70}});await page.getByRole('button',{name:'공유 재생',exact:true}).click();await observer.waitForFunction(()=>window.frelogCanvas.read().items.video.mediaState?.paused===false);
+await page.getByRole('button',{name:'공유 재생',exact:true}).click();await observer.waitForFunction(()=>window.frelogCanvas.read().items.video.mediaState?.paused===false);
 await page.getByLabel('공유 재생 위치').evaluate(node=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(node,'42');node.dispatchEvent(new Event('input',{bubbles:true}));});await observer.waitForFunction(()=>window.frelogCanvas.read().items.video.mediaState?.time===42);await page.getByRole('button',{name:'공유 일시정지',exact:true}).click();await observer.waitForFunction(()=>window.frelogCanvas.read().items.video.mediaState?.paused===true);
+// A native iframe seek is still shared after its immediate event was suppressed.
+const frame=page.frames().find(f=>f.url().includes('youtube-nocookie.com/embed/'));
+await page.locator('[data-item-id="video"] iframe').evaluate(n=>n.focus());
+await frame.evaluate(()=>{mockMedia.time=67;report();});
+await observer.waitForFunction(()=>window.frelogCanvas.read().items.video.mediaState?.time===67);
+// Check the receiver's player, not just its saved object.
+const remoteFrame=observer.frames().find(f=>f.url().includes('youtube-nocookie.com/embed/'));
+await remoteFrame.waitForFunction(()=>mockMedia.time===67&&mockMedia.state===2);
+await page.getByRole('button',{name:'공유 재생',exact:true}).click();
+await remoteFrame.waitForFunction(()=>mockMedia.state===1);
+await remoteFrame.evaluate(()=>{mockMedia.time=5;report();});
+await remoteFrame.waitForFunction(()=>mockMedia.time>60);
+await page.getByRole('button',{name:'공유 일시정지',exact:true}).click();
+await observer.waitForFunction(()=>window.frelogCanvas.read().items.video.mediaState?.paused===true);
 await page.locator('.canvas-stage').click({position:{x:700,y:600}});await page.locator('[data-item-id="exec"]').getByRole('button',{name:'코드 실행',exact:true}).click();await observer.waitForFunction(()=>window.frelogCanvas.read().items.code.runtimeState?.status==='running');await observer.waitForFunction(()=>window.frelogCanvas.read().items.code.runtimeState?.status==='success');assert.equal(executions,1);
 await observer.reload();await observer.waitForFunction(()=>window.frelogCanvas?.read().items.text?.valueText==='shared input'&&window.frelogCanvas.read().items.pdf.pdfPage===2&&window.frelogCanvas.read().items.video.mediaState.paused===true&&window.frelogCanvas.read().items.code.runtimeState.status==='success');
 await page.screenshot({path:'/tmp/shared-value-objects.png'});assert.deepEqual(errors,[]);await context.close();}console.log('PASS two browsers share real/discrete values, range settings, PDF page, YouTube playback, execution state and reconnect persistence');}finally{await browser.close();}

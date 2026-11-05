@@ -129,11 +129,6 @@ html[data-panel-resizing=vertical] * { cursor:row-resize!important; }
 .canvas-app-page[data-theme="dark"] .canvas-topbar,
 .canvas-app-page[data-theme="dark"] .canvas-panel-slot,
 .canvas-app-page[data-theme="dark"] .board-topline { box-shadow:0 10px 30px #00000040; }
-@media(min-width:651px) {
-  .canvas-panel-slot-tools.is-collapsed .canvas-panel-toggle,.canvas-panel-slot-inspector.is-collapsed .canvas-panel-toggle { height:100%; flex:1; flex-direction:column; padding:10px 0; gap:9px; border:0; border-radius:15px; }
-  .canvas-panel-slot-tools.is-collapsed .canvas-panel-toggle>span:not(.canvas-panel-toggle-mark),.canvas-panel-slot-inspector.is-collapsed .canvas-panel-toggle>span:not(.canvas-panel-toggle-mark) { writing-mode:vertical-rl; }
-  .canvas-panel-slot.is-collapsed .canvas-panel-toggle-mark { margin-left:0; }
-}
 @media(max-width:1050px) { .canvas-app-page .board-section-label { display:none; } }
 @media(max-width:820px) {
   .canvas-app-page { --canvas-panel-top:128px; }
@@ -169,13 +164,4 @@ html[data-panel-resizing=vertical] * { cursor:row-resize!important; }
   .canvas-panel-resize-tools,.canvas-panel-resize-inspector { left:0; right:0; width:auto; bottom:-8px; height:17px; }
 }
 
-/* Collapsed controls use a single centered icon, independent of header styles. */
-.canvas-app-page .canvas-panel-slot.is-collapsed .canvas-panel-toggle{box-sizing:border-box;flex:1 1 auto;height:100%;min-height:0;border:0;border-radius:inherit;line-height:1}
-.canvas-app-page .canvas-panel-slot.canvas-panel-slot-tools.is-collapsed .canvas-panel-toggle,.canvas-app-page .canvas-panel-slot.canvas-panel-slot-inspector.is-collapsed .canvas-panel-toggle{display:flex;flex-direction:row;align-items:center;justify-content:center;gap:0;padding:0}
-.canvas-app-page .canvas-panel-slot-tools.is-collapsed .canvas-panel-toggle>span,.canvas-app-page .canvas-panel-slot-inspector.is-collapsed .canvas-panel-toggle>span{display:none}
 .canvas-app-page .canvas-panel-toggle>svg{display:block;flex:none;margin:0}
-@media(max-width:650px){
- .canvas-app-page .canvas-panel-slot.canvas-panel-slot-chat.is-collapsed{width:42px;height:42px}
- .canvas-app-page .canvas-panel-slot.canvas-panel-slot-chat.is-collapsed .canvas-panel-toggle{display:flex;align-items:center;justify-content:center;padding:0;gap:0}
- .canvas-app-page .canvas-panel-slot.canvas-panel-slot-chat.is-collapsed .canvas-panel-toggle>span{display:none}
-}

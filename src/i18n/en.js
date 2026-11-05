@@ -1,5 +1,9 @@
 // UI messages only. User-authored content is never translated.
 export default {
+ '통화 다시 연결 중…':'Reconnecting call…', '다시 연결 중':'Reconnecting', '연결 다시 시도':'Retry connection', '{name} 볼륨':'Volume for {name}', '음성 연결을 복구하지 못했습니다. 다시 시도해 주세요.':'Voice recovery failed. Please retry.', '연결 복구 시간이 초과되어 통화를 종료했습니다. 다시 참여해 주세요.':'The call ended after the recovery timeout. Please rejoin.',
+
+ '채팅 · 통화':'Chat & voice', '대화 방식':'Conversation mode', '통화':'Call', '채팅으로 전환하거나 패널을 접어도 통화는 계속됩니다.':'Your call continues while chatting or when this panel is collapsed.',
+
  '이전 메시지 10개 불러오기':'Load 10 older messages',
 
  '캔버스에 입장하려면 비밀번호를 입력해 주세요.':'Enter the password to join this canvas.', '캔버스 비밀번호 입력':'Enter canvas password', '캔버스 입장':'Join canvas', '비밀번호가 올바르지 않습니다. 다시 입력해주세요.':'Incorrect password. Please try again.',

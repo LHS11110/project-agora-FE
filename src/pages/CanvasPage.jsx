@@ -1,6 +1,6 @@
 import {useCanvasPasswordPrompt} from '../canvas/useCanvasPasswordPrompt.js';
 import CanvasPasswordDialog from '../components/canvas/CanvasPasswordDialog.jsx';
-import CanvasVoicePanel,{useCanvasVoiceCall} from '../canvas/voice/CanvasVoicePanel.jsx';
+import {useCanvasVoiceCall} from '../canvas/voice/CanvasVoicePanel.jsx';
 import {objectContentCacheStats} from '../canvas/objectContentCache.js';
 import {CanvasGraphicsContext} from '../canvas/CanvasGraphicsContext.jsx';
 import '../canvas/graphics-quality.css';
@@ -34,7 +34,6 @@ import { useCanvasCamera } from '../canvas/useCanvasCamera.js';
 import { isRasterContent as isRasterText } from '../canvas/plainTextRaster.js';
 import CanvasLayerObjects from '../canvas/CanvasLayerObjects.jsx';
 import { buildDepthLayers, itemDepth } from '../canvas/itemDepth.js';
-import CanvasMinimapObjects from '../canvas/CanvasMinimapObjects.jsx';
 import { hitTestVector } from '../canvas/vectorHitTest.js';
 import { renderWindow } from '../canvas/renderWindow.js';
 import { handleObjectDoubleClick } from '../canvas/objectDoubleClick.js';
@@ -116,7 +115,6 @@ import { useCanvasObjectInteractions } from '../canvas/useCanvasObjectInteractio
 import { useCanvasConnection } from '../canvas/useCanvasConnection.js';
 import { formatCanvasZoom, CANVAS_SPACE, fitCanvasCamera } from '../canvas/canvasSpace.js';
 import { useCanvasViewport } from '../canvas/useCanvasViewport.js';
-import { useCanvasMinimap } from '../canvas/useCanvasMinimap.js';
 import { useCanvasServerChangeQueue } from '../canvas/useCanvasServerChangeQueue.js';
 import { connectorGeometry } from '../components/connectorGeometry.js';
 import { DEFAULT_ARROW_END_HEAD, DEFAULT_ARROW_START_HEAD, normalizeArrowHead } from '../components/arrowheadGeometry.js';
@@ -364,9 +362,8 @@ function CanvasWorkspace() {
     return rtcSendBudgetRef.current.send(socket,request);
   }, []);
   const passwordPrompt = useCanvasPasswordPrompt();
-  const voice = useCanvasVoiceCall(canvasId, sendRtcRaw);
-  const [showVoicePanel,setShowVoicePanel]=useState(false);
-  const closeVoicePanel=useCallback(()=>setShowVoicePanel(false),[]);
+  const voice = useCanvasVoiceCall(canvasId, sendRtcRaw, user?.email||user?.user_id||`${user?.nickname}#${user?.tag_number}`);
+  const [communicationTab,setCommunicationTab]=useState('chat');
   const requestChatHistory = useCallback((toSequence, aroundSequence) => {
     if (chatHistoryRequestRef.current) return false;
     const requestId = createId();
@@ -1039,19 +1036,12 @@ function CanvasWorkspace() {
     spatialDirtyIds.current=new Set();
     return spatialIndexRef.current.update(items,boardSize,spatialRevision,spatialIndexRef.current.revision!==spatialRevision && dirty!==null?[...dirty]:null);
   }, [items, spatialRevision, boardSize]);
-  const {
-    visibleBounds,
-    minimap,
-    minimapItemColors,
-    minimapPosition,
-    minimapWidgetRef,
-    startMinimapWidgetMove,
-    moveMinimapWidget,
-    stopMinimapWidgetMove,
-    startMinimapPan,
-    moveMinimapPan,
-    stopMinimapPan,
-  } = useCanvasMinimap({ collapsed:chrome.collapsed.minimap, boardRef, boardSize, viewportSize, camera, setCamera, items, spatialIndex, spatialRevision, cancelCameraMotion: () => cancelCameraMotionRef.current() });
+  const visibleBounds=useMemo(()=>{
+    const scale=camera.scale,worldWidth=Math.max(1,boardSize.width),worldHeight=Math.max(1,boardSize.height);
+    return {minX:-camera.x/scale/worldWidth,minY:-camera.y/scale/worldHeight,
+      maxX:(Math.max(1,viewportSize.width)-camera.x)/scale/worldWidth,
+      maxY:(Math.max(1,viewportSize.height)-camera.y)/scale/worldHeight};
+  },[camera,boardSize,viewportSize]);
   const activePeerIds = useMemo(() => peerList.filter((peer) => peer.connected).map((peer) => peer.peer_id).sort().join('\n'), [peerList]);
   const axisOriginX = boardSize.width * camera.scale / 2 + camera.x;
   const axisOriginY = boardSize.height * camera.scale / 2 + camera.y;
@@ -1490,6 +1480,7 @@ function CanvasWorkspace() {
     else {
       const chat = panelLayout.handle('chat');
       if (chat.collapsed) chat.onToggle();
+      setCommunicationTab('chat');
       setChatHighlight(note.id);
       requestedChatMention.current = null;
       setChatJumpNote(note);
@@ -1518,8 +1509,8 @@ function CanvasWorkspace() {
       {chrome.collapsed.info && <span className="canvas-chrome-label">{ui("캔버스 정보")}</span>}
       <div id="canvas-info-content" className="canvas-info-content" hidden={chrome.collapsed.info}>
       <div className="canvas-title-group"><div className="canvas-title-copy"><h1 title={canvas?.canvas_name}>{canvas?.canvas_name || ui('캔버스 {id}',{id:canvasId})}</h1></div></div>
-      <div className="canvas-header-right"><div className="canvas-top-right"><LanguageSwitcher />{!chrome.collapsed.info&&<button type="button" className={`canvas-voice-trigger${voice.state.active?' is-active':''}`} title={ui(voice.state.active?'통화 중':'음성 통화')} aria-label={ui(voice.state.active?'통화 중':'음성 통화')} aria-expanded={showVoicePanel} aria-haspopup="dialog" onClick={()=>setShowVoicePanel(open=>!open)}><Icon name="microphone" size={16}/><span>{ui(voice.state.active?'통화 중':'음성 통화')}</span>{voice.state.active&&<i aria-hidden="true"/>}</button>}<span className={`connection-pill ${connection}`} role="status" aria-live="polite" title={connection === 'connecting' ? ui("다시 연결하는 중입니다. 캔버스 편집은 계속할 수 있고 변경 사항은 연결 후 저장됩니다.") : connection === 'connected' ? ui("서버에 연결되어 변경 사항을 동기화하고 있습니다.") : ui("서버 연결이 해제되었습니다.")}><i />{connection === 'connected' ? ui("연결됨") : connection === 'connecting' ? ui("연결 중") : ui("연결 해제")}</span><CanvasPresenceStack participants={onlineParticipants} token={token} onManage={() => { setShowSettings(false); setShowParticipants(true); }} /><button className="button button-outline canvas-settings-button" onClick={() => { setShowParticipants(false); setShowSettings(true); }}><Icon name="settings" size={17} /><span>{ui("설정")}</span></button></div></div>
-      </div>{chrome.collapsed.info && <div className="canvas-folded-language"><LanguageSwitcher /><button type="button" className={`canvas-voice-trigger${voice.state.active?' is-active':''}`} aria-label={ui(voice.state.active?'통화 중':'음성 통화')} aria-expanded={showVoicePanel} aria-haspopup="dialog" onClick={()=>setShowVoicePanel(open=>!open)}><Icon name="microphone" size={16}/>{voice.state.active&&<i aria-hidden="true"/>}</button></div>}
+      <div className="canvas-header-right"><div className="canvas-top-right"><LanguageSwitcher />{!chrome.collapsed.info&&<button type="button" className={`canvas-voice-trigger${voice.state.active?' is-active':''}`} title={ui(voice.state.active?'통화 중':'음성 통화')} aria-label={ui(voice.state.active?'통화 중':'음성 통화')} aria-expanded={!panelLayout.handle('chat').collapsed&&communicationTab==='voice'} aria-controls="canvas-communication-panel" onClick={()=>{const panel=panelLayout.handle('chat');if(!panel.collapsed&&communicationTab==='voice')panel.onToggle();else{setCommunicationTab('voice');if(panel.collapsed)panel.onToggle();}}}><Icon name="microphone" size={16}/><span>{ui(voice.state.active?'통화 중':'음성 통화')}</span>{voice.state.active&&<i aria-hidden="true"/>}</button>}<span className={`connection-pill ${connection}`} role="status" aria-live="polite" title={connection === 'connecting' ? ui("다시 연결하는 중입니다. 캔버스 편집은 계속할 수 있고 변경 사항은 연결 후 저장됩니다.") : connection === 'connected' ? ui("서버에 연결되어 변경 사항을 동기화하고 있습니다.") : ui("서버 연결이 해제되었습니다.")}><i />{connection === 'connected' ? ui("연결됨") : connection === 'connecting' ? ui("연결 중") : ui("연결 해제")}</span><CanvasPresenceStack participants={onlineParticipants} token={token} onManage={() => { setShowSettings(false); setShowParticipants(true); }} /><button className="button button-outline canvas-settings-button" onClick={() => { setShowParticipants(false); setShowSettings(true); }}><Icon name="settings" size={17} /><span>{ui("설정")}</span></button></div></div>
+      </div>{chrome.collapsed.info && <div className="canvas-folded-language"><LanguageSwitcher /><button type="button" className={`canvas-voice-trigger${voice.state.active?' is-active':''}`} aria-label={ui(voice.state.active?'통화 중':'음성 통화')} aria-expanded={!panelLayout.handle('chat').collapsed&&communicationTab==='voice'} aria-controls="canvas-communication-panel" onClick={()=>{const panel=panelLayout.handle('chat');if(!panel.collapsed&&communicationTab==='voice')panel.onToggle();else{setCommunicationTab('voice');if(panel.collapsed)panel.onToggle();}}}><Icon name="microphone" size={16}/>{voice.state.active&&<i aria-hidden="true"/>}</button></div>}
     </header>
     {error ? <div className="canvas-error-state"><div className="error-art"><Icon name="grid" size={30} /></div><span className="section-kicker">CANVAS CONNECTION</span><h1>{ui("캔버스를 열 수 없어요.")}</h1><p>{error}</p><div><button className="button button-dark" onClick={() => window.location.reload()}>{ui("다시 연결하기")}</button><Link className="button button-outline" to="/search">{ui("캔버스 목록")}</Link></div></div> : <div className="canvas-workspace resizable-workspace" ref={panelLayout.ref} style={panelLayout.style}>
       <ResizablePanel {...panelLayout.handle('tools')}><CanvasToolPanel activeTool={activeTool} onSelectTool={selectCanvasTool} color={color} onColorChange={setColor} onUploadPdf={uploadPdf} onUploadImage={uploadImage} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} /></ResizablePanel>
@@ -1527,7 +1518,7 @@ function CanvasWorkspace() {
         toolsExpanded={!panelLayout.handle('tools').collapsed} onToggleTools={panelLayout.handle('tools').onToggle} />
       <main className="board-region"><div className="board-topline"><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(true); }}><Icon name="code" size={15} />{ui("캔버스 코드")}</button><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={()=>setShowRuntimeSettings(true)}><Icon name="settings" size={15}/>{ui("실행 환경")}</button><button className="zoom-button" aria-label={ui("확대")} title={ui("클릭: 한 단계 확대 · 길게 누르기: 계속 확대")} onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label={ui("축소")} title={ui("클릭: 한 단계 축소 · 길게 누르기: 계속 축소")} onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>{ui("맞춤")}</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />{"" + ui("격자") + " "}{showGrid ? ui("켜짐") : ui("꺼짐")}</button></div></div>
         <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} data-grid-spacing={gridSpacing.x} data-grid-spacing-x={gridSpacing.x} data-grid-spacing-y={gridSpacing.y} style={{ ...canvasGridStyle(camera,gridSpacing), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ touchNavigation, activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion: cancelPanInertia, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, sendCursorPosition, pickVector: (event,doubleClick = false,capture = false) => {
-            if (!['select', 'connect'].includes(activeTool) || event.button !== 0 || event.target.closest?.('.canvas-minimap, .stage-label, button, input, textarea')) return false;
+            if (!['select', 'connect'].includes(activeTool) || event.button !== 0 || event.target.closest?.('.stage-label, button, input, textarea')) return false;
             const target=event.target.closest?.('.canvas-object');
             if(capture !== Boolean(target))return false;
             const hit = hitTestVector(spatialIndex, pointerPosition(event), boardSize, camera.scale, vectorHitOrder, representationScale);
@@ -1558,17 +1549,6 @@ function CanvasWorkspace() {
           </div>
           <LaserLayer strokes={laserStrokes} width={viewportSize.width} height={viewportSize.height} worldSize={boardSize} camera={camera} />
           {selectionBox && <div className="canvas-selection-marquee" style={{ left: selectionBox.left, top: selectionBox.top, width: selectionBox.width, height: selectionBox.height }} aria-hidden="true" />}
-          <div className={`canvas-minimap${chrome.collapsed.minimap?' is-collapsed':''}`} ref={minimapWidgetRef} style={minimapPosition ? { left: `${minimapPosition.left}px`, top: `${minimapPosition.top}px`, right: 'auto', bottom: 'auto' } : undefined} role="group" aria-label={ui("캔버스 미니맵")}>
-            <div className="canvas-minimap-heading" onPointerDown={startMinimapWidgetMove} onPointerMove={moveMinimapWidget} onPointerUp={stopMinimapWidgetMove} onPointerCancel={stopMinimapWidgetMove} onLostPointerCapture={stopMinimapWidgetMove}><strong>{ui("미니맵")}</strong><ChromeToggle label={ui("미니맵")} collapsed={chrome.collapsed.minimap} onToggle={()=>chrome.toggle('minimap')} controls="canvas-minimap-content" /></div>
-            <div id="canvas-minimap-content" className="canvas-minimap-map" hidden={chrome.collapsed.minimap} title={ui("클릭해 해당 위치로 이동 · 안쪽을 드래그해도 캔버스는 움직이지 않습니다")} onPointerDown={startMinimapPan} onPointerMove={moveMinimapPan} onPointerUp={stopMinimapPan} onPointerCancel={stopMinimapPan} onLostPointerCapture={stopMinimapPan}>
-              {!chrome.collapsed.minimap && <CanvasMinimapObjects minimap={minimap} colors={minimapItemColors} selected={selectedObjectIdSet} />}
-              <svg className="canvas-minimap-svg" viewBox={`${minimap.bounds.minX} ${minimap.bounds.minY} ${minimap.bounds.width} ${minimap.bounds.height}`} preserveAspectRatio="none" aria-label={ui("현재 화면을 중심으로 한 주변 객체")}>
-                {showYAxis && <line className="canvas-minimap-axis" x1={boardSize.width / 2} y1={minimap.bounds.minY} x2={boardSize.width / 2} y2={minimap.bounds.maxY} />}
-                {showXAxis && <line className="canvas-minimap-axis" x1={minimap.bounds.minX} y1={boardSize.height / 2} x2={minimap.bounds.maxX} y2={boardSize.height / 2} />}
-                <rect className="canvas-minimap-viewport" x={minimap.viewport.minX} y={minimap.viewport.minY} width={minimap.viewport.maxX - minimap.viewport.minX} height={minimap.viewport.maxY - minimap.viewport.minY} rx="2" />
-              </svg>
-            </div>
-          </div>
           {activeTool === 'eraser' && <div className="eraser-cursor" ref={eraserCursorRef} style={{ width: `${eraserWidth}px`, height: `${eraserWidth}px` }} aria-hidden="true" />}
           {sharePosition && <ShareComposer onCancel={() => { setSharePosition(null); setActiveTool('select'); }} onSubmit={placeSharedLink} />}
           {activeTool === 'laser' && <div className="draw-cursor-label laser-cursor-label"><Icon name="laser" size={13} />{" " + ui("가리키는 중 · 1.6초 후 사라짐") + ""}</div>}{activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} />{" " + ui("그리는 중") + ""}</div>}{activeTool === 'eraser' && <div className="draw-cursor-label"><Icon name="eraser" size={13} />{" " + ui("드로잉을 드래그해 지우기") + ""}</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? ui("도착 오브젝트 선택") : ui("시작 오브젝트 선택")}</div>}{activeTool === 'link' && !sharePosition && <div className="draw-cursor-label"><Icon name="link" size={13} />{" " + ui("공유 자료를 놓을 위치 선택") + ""}</div>}
@@ -1644,10 +1624,9 @@ function CanvasWorkspace() {
         updateShapeArrowBend,
         zoomSensitivity
       }} /></ResizablePanel>
-<ResizablePanel {...panelLayout.handle('chat')}><CanvasChatPanel canWrite={canWriteCanvas} {...{ chatHistoryLoading, connection, hasOlderMessages, loadOlderMessages, message, messages, setMessage, submitMessage, chatMessageTotal }} participants={mentionParticipants} highlight={chatHighlight} onHighlightVisible={() => { if (chatJumpNote) { comments.dismiss(chatJumpNote); setChatJumpNote(null); } }} /></ResizablePanel>
+<ResizablePanel {...panelLayout.handle('chat')} title={ui('채팅 · 통화')} callActive={voice.state.active}><CanvasChatPanel voice={voice} tab={communicationTab} onTabChange={setCommunicationTab} canWrite={canWriteCanvas} {...{ chatHistoryLoading, connection, hasOlderMessages, loadOlderMessages, message, messages, setMessage, submitMessage, chatMessageTotal }} participants={mentionParticipants} highlight={chatHighlight} onHighlightExpired={() => setChatHighlight(null)} onHighlightVisible={() => { if (chatJumpNote) { comments.dismiss(chatJumpNote); setChatJumpNote(null); } }} /></ResizablePanel>
     </div>}
     {passwordPrompt.prompt&&<CanvasPasswordDialog prompt={passwordPrompt.prompt} theme={theme}/>}
-    {showVoicePanel&&<CanvasVoicePanel voice={voice} onClose={closeVoicePanel}/>}
     {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{ui(toast)}</div>}
     {comments.activeId && <ObjectCommentsPanel comments={comments} participants={mentionParticipants} connection={connection} />}
     <MentionNotifications notifications={comments.notifications} onJump={jumpToMention} onDismiss={comments.dismiss} />

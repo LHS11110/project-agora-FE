@@ -115,7 +115,7 @@ export class ServerCanvasSession {
       }
       this.redraw([...changes.keys()]); return true;
     }
-    if (data.type === 'canvas_result' || (data.type === 'error' && data.request_id === this.flight?.request_id)) {
+    if (data.type === 'canvas_result' || (data.type === 'error' && this.flight && typeof data.request_id === 'string' && data.request_id === this.flight.request_id)) {
       if (!this.flight || data.request_id !== this.flight.request_id) return true;
       if (data.ok) {
         // ACK alone never removes the local draft: wait for its commit/snapshot.

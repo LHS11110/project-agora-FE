@@ -13,7 +13,7 @@ export function handleObjectDoubleClick(event, { id, item, activeTool, editing, 
     onConnectorDoubleClick(id, item);
   } else if (item.kind === 'link') {
     const media = inspectShareUrl(item.url);
-    if (!media) return;
+    if (!media || media.mediaType === 'youtube') return;
     event.preventDefault(); event.stopPropagation();
     if (media.mediaType === 'link') window.open(media.url, '_blank', 'noopener,noreferrer');
     else onStartEditing(id);

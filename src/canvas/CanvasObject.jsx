@@ -207,7 +207,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
     <div className="shared-media-header"><span className="shared-media-drag-handle" title={ui("여기를 끌어 자료를 이동하세요")}><Icon name={item.mediaType === 'link' ? 'link' : 'image'} size={13} />{item.mediaType === 'youtube' ? `YouTube · ${item.title || ui("동영상")}` : item.mediaType === 'video' ? ui("동영상 · {v0}", {
   v0: item.title || ui("재생")
 }) : ui("링크")}</span></div>
-    <SharedMediaContent item={item} interactive={editing} writable={!readOnly&&!item.locked} onChange={contentActions.change} />
+    <SharedMediaContent item={item} interactive={editing || (item.mediaType === 'youtube' && activeTool === 'select')} writable={!readOnly&&!item.locked} onChange={contentActions.change} />
   </div>);
   if (isTextContent(item)) {
     const mode = contentMode(item);

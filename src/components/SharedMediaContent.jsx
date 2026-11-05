@@ -7,48 +7,66 @@ import './shared-playback.css';
 export function playbackTime(state,now=Date.now()){return Math.max(0,(state?.time||0)+(state&&!state.paused?Math.max(0,now-state.updatedAt)/1000:0));}
 export default function SharedMediaContent({ item, interactive = true, writable=true, onChange }) {
   useUiLocale();
-  const media = inspectShareUrl(item?.url),frame=useRef(null),video=useRef(null),actor=useRef(globalThis.crypto?.randomUUID?.()||String(Math.random())),until=useRef(0),latest=useRef(null),observed=useRef(null),playerReady=useRef(false);
+  const media = inspectShareUrl(item?.url),frame=useRef(null),video=useRef(null),actor=useRef(globalThis.crypto?.randomUUID?.()||String(Math.random())),until=useRef(0),latest=useRef(null),observed=useRef(null),playerReady=useRef(false),reportedState=useRef(null),lastPublished=useRef(null),seekTimer=useRef(null),pendingSeek=useRef(0);
   const [position,setPosition]=useState(0),[duration,setDuration]=useState(0),[blocked,setBlocked]=useState(false);
   latest.current={item,writable,interactive,onChange};
   const command=(func,args=[])=>frame.current?.contentWindow?.postMessage(JSON.stringify({event:'command',func,args}),'https://www.youtube-nocookie.com');
   const publish=(paused,time)=>{
    const c=latest.current;if(!c.writable||!c.onChange||!Number.isFinite(time))return;
-   c.onChange({mediaState:{paused,time:Math.max(0,time),updatedAt:Date.now(),actor:actor.current}});
+   const state={paused,time:Math.max(0,time),updatedAt:Date.now(),actor:actor.current};
+   lastPublished.current=state;
+   c.onChange({mediaState:state});
   };
   const apply=()=>{
    const state=latest.current.item.mediaState;if(!state)return;
+   clearTimeout(seekTimer.current);seekTimer.current=null;
    until.current=Date.now()+1200;if(state.paused)setBlocked(false);const target=playbackTime(state);setPosition(target);
    if(video.current){const node=video.current;if(Math.abs(node.currentTime-target)>.75)node.currentTime=Number.isFinite(node.duration)?Math.min(target,node.duration):target;if(state.paused)node.pause();else node.play().then(()=>setBlocked(false)).catch(()=>setBlocked(true));}
    if(frame.current){command('seekTo',[target,true]);command(state.paused?'pauseVideo':'playVideo');}
   };
   useEffect(()=>{if(item.mediaState?.actor!==actor.current)apply();},[item.mediaState,item.url]);
+  useEffect(()=>()=>clearTimeout(seekTimer.current),[item.url]);
+  const seek=time=>{
+   setPosition(time);until.current=Date.now()+800;
+   if(video.current)video.current.currentTime=time;else command('seekTo',[time,true]);
+   pendingSeek.current=time;
+   // Share at most ten updates per second, including the final drag position.
+   if(!seekTimer.current)seekTimer.current=setTimeout(()=>{seekTimer.current=null;publish(latest.current.item.mediaState?.paused??true,pendingSeek.current);},100);
+  };
   useEffect(()=>{
    if(media?.mediaType!=='youtube')return;
-   playerReady.current=false;
+   playerReady.current=false;observed.current=null;reportedState.current=null;lastPublished.current=null;
+   const handshake=()=>{if(playerReady.current)return;frame.current?.contentWindow?.postMessage(JSON.stringify({event:'listening',id:actor.current}),'https://www.youtube-nocookie.com');command('addEventListener',['onReady']);command('addEventListener',['onStateChange']);command('addEventListener',['onAutoplayBlocked']);};
+   handshake();const retry=setInterval(handshake,500);
    const receive=event=>{
     if(event.origin!=='https://www.youtube-nocookie.com'||event.source!==frame.current?.contentWindow)return;
     let data;try{data=typeof event.data==='string'?JSON.parse(event.data):event.data;}catch{return;}
-    if(data.event==='onReady'){playerReady.current=true;apply();return;}
+    if(data.event==='onReady'){if(!playerReady.current){playerReady.current=true;apply();}return;}
     if(!playerReady.current&&['infoDelivery','initialDelivery'].includes(data.event)){playerReady.current=true;apply();}
     if(data.event==='onAutoplayBlocked'){setBlocked(true);return;}
     const info=data.info||{};
+    const stateCode=data.event==='onStateChange'?data.info:info.playerState;
+    if([0,1,2].includes(stateCode))reportedState.current=stateCode;
+    if(stateCode===1)setBlocked(false);
     if(Number.isFinite(info.duration))setDuration(info.duration);
     if(Number.isFinite(info.currentTime)){
-     setPosition(info.currentTime);const before=observed.current;observed.current={time:info.currentTime,at:Date.now()};
-     const c=latest.current,state=c.item.mediaState;
-     if(Date.now()>until.current&&c.interactive&&document.activeElement===frame.current&&before){const expected=before.time+(state&&!state.paused?(Date.now()-before.at)/1000:0);if(Math.abs(info.currentTime-expected)>1.5&&Math.abs(info.currentTime-playbackTime(state))>1)publish(state?.paused??true,info.currentTime);}
+     setPosition(info.currentTime);observed.current={time:info.currentTime,at:Date.now()};
+     const c=latest.current,state=lastPublished.current?.updatedAt>=(c.item.mediaState?.updatedAt||0)?lastPublished.current:c.item.mediaState;
+     if(Date.now()>until.current&&c.interactive&&document.activeElement===frame.current){if(Math.abs(info.currentTime-playbackTime(state))>1.5)publish(reportedState.current===null?(state?.paused??true):reportedState.current!==1,info.currentTime);}
     }
-    const stateCode=data.event==='onStateChange'?data.info:info.playerState;
-    if([0,1,2].includes(stateCode)&&Date.now()>until.current&&latest.current.interactive&&document.activeElement===frame.current){const paused=stateCode!==1;if(paused!==(latest.current.item.mediaState?.paused??true))publish(paused,observed.current?.time||0);}
+    // Followers recover from buffering/background throttling without broadcasting echoes.
+    const shared=latest.current.item.mediaState;
+    if(shared&&Number.isFinite(info.currentTime)&&Date.now()>until.current&&document.activeElement!==frame.current&&reportedState.current===1&&!shared.paused&&Math.abs(info.currentTime-playbackTime(shared))>2.5)apply();
+    if([0,1,2].includes(stateCode)&&Date.now()>until.current&&latest.current.interactive&&document.activeElement===frame.current){const paused=stateCode!==1;const current=lastPublished.current?.updatedAt>=(latest.current.item.mediaState?.updatedAt||0)?lastPublished.current:latest.current.item.mediaState;if(paused!==(current?.paused??true))publish(paused,observed.current?.time??playbackTime(current));}
    };
-   window.addEventListener('message',receive);return()=>window.removeEventListener('message',receive);
+   window.addEventListener('message',receive);return()=>{clearInterval(retry);window.removeEventListener('message',receive);};
   },[item.url]);
   if (!media) return <div className="shared-media-invalid">{ui('올바른 주소가 아닙니다.')}</div>;
-  const player = content => <div className="shared-playback" data-playback-paused={item.mediaState?.paused!==false}>
+  const player = content => <div className="shared-playback" data-object-action={interactive && media.mediaType === 'youtube' ? 'playback' : undefined} onPointerDown={interactive && media.mediaType === 'youtube' ? e=>e.stopPropagation() : undefined} data-playback-paused={item.mediaState?.paused!==false}>
    {interactive?content:<div className="shared-media-preview">{content}<div className="shared-media-activate" aria-hidden="true">{ui('두 번 클릭해 재생 조작')}</div></div>}
    {interactive&&writable&&onChange&&<div className="shared-playback-controls" data-object-action="playback" onPointerDown={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()}>
-    <button aria-label={ui(item.mediaState?.paused===false?'공유 일시정지':'공유 재생')} onClick={()=>{const paused=item.mediaState?.paused===false;const time=position;until.current=Date.now()+500;publish(paused,time);if(video.current){if(paused)video.current.pause();else video.current.play().catch(()=>setBlocked(true));}else command(paused?'pauseVideo':'playVideo');}}>{ui(item.mediaState?.paused===false?'일시정지':'재생')}</button>
-    <input aria-label={ui('공유 재생 위치')} type="range" min={0} max={Math.max(1,duration,position)} step={.1} value={position} onChange={e=>{const time=Number(e.target.value);setPosition(time);until.current=Date.now()+800;publish(item.mediaState?.paused??true,time);if(video.current)video.current.currentTime=time;else command('seekTo',[time,true]);}}/><span>{Math.floor(position)}s</span>
+    <button aria-label={ui(item.mediaState?.paused===false?'공유 일시정지':'공유 재생')} onClick={()=>{clearTimeout(seekTimer.current);seekTimer.current=null;const paused=(lastPublished.current?.updatedAt>=(item.mediaState?.updatedAt||0)?lastPublished.current:item.mediaState)?.paused===false;const time=position;until.current=Date.now()+500;publish(paused,time);if(video.current){if(paused)video.current.pause();else video.current.play().catch(()=>setBlocked(true));}else command(paused?'pauseVideo':'playVideo');}}>{ui(item.mediaState?.paused===false?'일시정지':'재생')}</button>
+    <input aria-label={ui('공유 재생 위치')} type="range" min={0} max={Math.max(1,duration,position)} step={.1} value={position} onChange={e=>seek(Number(e.target.value))}/><span>{Math.floor(position)}s</span>
    </div>}
    {blocked&&<button className="shared-playback-unlock" data-object-action="playback" onPointerDown={e=>e.stopPropagation()} onClick={()=>{apply();setBlocked(false);}}>{ui('브라우저에서 공유 재생 허용')}</button>}
   </div>;

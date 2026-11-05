@@ -205,3 +205,57 @@
 /* Folding keeps the same 50px title card; retain the navigation slot offsets. */
 .app-shell.is-canvas-shell .sidebar-account {margin-top:auto;justify-content:flex-end;}
 .canvas-app-page .settings-dialog-footer,.canvas-app-page .participants-dialog .settings-dialog-footer {justify-content:flex-end;}
+
+/* Every fold control keeps its outer-edge anchor as its panel expands. */
+.canvas-app-page .canvas-panel-slot .canvas-panel-heading{display:flex;align-items:center;flex:0 0 42px;height:42px;min-height:42px;border-bottom:1px solid var(--line);border-radius:15px 15px 0 0;overflow:hidden}
+.canvas-app-page .canvas-panel-slot .canvas-panel-toggle{display:grid;place-items:center;flex:0 0 42px;width:42px;height:42px;min-height:42px;padding:0;margin:0;border:0;border-radius:12px;background:transparent}
+.canvas-app-page .canvas-panel-slot .canvas-panel-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 10px var(--display);color:var(--ink-muted);padding:0 8px}
+.canvas-app-page .canvas-panel-slot.is-collapsed .canvas-panel-heading{border-bottom:0;border-radius:15px}
+.canvas-app-page .canvas-panel-slot.is-collapsed .canvas-panel-title{display:none}
+.canvas-app-page .canvas-panel-slot-inspector .canvas-panel-heading{flex-direction:row-reverse}
+.canvas-app-page .canvas-panel-slot-tools,.canvas-app-page .canvas-panel-slot-inspector{top:var(--canvas-panel-top)}
+.canvas-app-page .canvas-panel-slot-tools{left:12px}
+.canvas-app-page .canvas-panel-slot-tools.is-collapsed{left:12px;right:auto;width:44px;height:44px}
+.canvas-app-page .canvas-panel-slot-inspector.is-collapsed{right:12px;left:auto;width:44px;height:44px}
+.canvas-app-page .canvas-panel-slot-inspector{right:12px}
+.canvas-app-page .canvas-panel-slot-chat{top:calc(100% - var(--studio-panel-bottom) - var(--chat-expanded-height));bottom:auto;left:calc(var(--tools-width) + 28px);right:calc(var(--inspector-width) + 28px);height:var(--chat-expanded-height)}
+.canvas-app-page .canvas-panel-slot-chat.is-collapsed{top:calc(100% - var(--studio-panel-bottom) - var(--chat-expanded-height));bottom:auto;left:calc(var(--tools-width) + 28px);right:auto;width:44px;height:44px}
+.canvas-app-page .canvas-topbar:not(.is-collapsed)>.canvas-chrome-toggle{margin-top:0}
+/* Preserve the map's footprint while folding, but pass clicks through its hidden body. */
+.canvas-app-page .canvas-minimap.is-collapsed{width:180px;border-color:transparent;background:transparent;box-shadow:none;backdrop-filter:none;pointer-events:none}
+.canvas-app-page .canvas-minimap .canvas-minimap-heading{height:34px;box-sizing:border-box;margin:0 0 6px;padding:0;border:1px solid transparent;border-radius:8px;flex-wrap:nowrap;pointer-events:auto}
+.canvas-app-page .canvas-minimap .canvas-minimap-heading .canvas-chrome-toggle{margin:0;flex:0 0 26px}
+.canvas-app-page .canvas-minimap.is-collapsed .canvas-minimap-heading{margin:0 0 6px;background:var(--surface);border-color:var(--line);box-shadow:var(--studio-shadow)}
+.canvas-app-page .canvas-minimap.is-collapsed .canvas-minimap-map[hidden]{display:block;visibility:hidden;pointer-events:none}
+@media(max-width:650px){
+ .canvas-app-page .canvas-panel-slot-chat,.canvas-app-page .canvas-panel-slot-chat.is-collapsed{left:12px}
+ .canvas-app-page .canvas-panel-slot-chat:not(.is-collapsed){right:12px}
+ .canvas-app-page .canvas-panel-slot-inspector,.canvas-app-page .canvas-panel-slot-inspector.is-collapsed{top:var(--canvas-panel-top);right:12px}
+ .canvas-app-page .canvas-minimap,.canvas-app-page .canvas-minimap.is-collapsed{width:110px;max-width:calc(100% - 24px)}
+}
+/* Canvas navigation overlays the stage instead of moving its own toggle. */
+body .app-shell.is-canvas-shell{display:block}
+body .app-shell.is-canvas-shell .app-main{padding-top:0;width:100%;min-width:0}
+body .app-shell.is-canvas-shell .mobile-app-header{display:none}
+body .app-shell.is-canvas-shell .canvas-app-page{height:100dvh}
+body .app-shell.is-canvas-shell .app-navigation-toggle{position:fixed;left:24px;top:25px}
+body .app-shell.is-canvas-shell:not(.is-navigation-collapsed) .app-sidebar{display:flex;position:fixed;inset:0 auto 0 0;width:224px;height:100dvh;min-height:0;padding:80px 14px 16px;box-sizing:border-box;z-index:55;align-items:stretch;overflow:auto;box-shadow:12px 0 35px #17223b18}
+body .app-shell.is-canvas-shell .app-sidebar .side-link>span:not(.nav-live-dot),body .app-shell.is-canvas-shell .app-sidebar .sidebar-section-label{display:block}
+body .app-shell.is-canvas-shell .app-sidebar .logout-button{display:inline-grid}
+@media(max-width:650px){body .app-shell.is-canvas-shell .app-navigation-toggle{left:18px;top:19px}}
+.canvas-app-page .canvas-topbar.is-collapsed>.canvas-chrome-toggle{left:43px}
+body .app-shell.is-canvas-shell:not(.is-navigation-collapsed) .app-sidebar{flex-direction:column;justify-content:flex-start}
+body .app-shell.is-canvas-shell .app-sidebar .side-nav{display:flex;flex-direction:column;align-items:stretch;width:100%;gap:4px}
+body .app-shell.is-canvas-shell .app-sidebar .side-link{display:flex;justify-content:flex-start;align-items:center;flex:0 0 42px;width:100%;height:42px;min-height:42px;padding:0 12px;gap:11px;white-space:nowrap}
+body .app-shell.is-canvas-shell .app-sidebar .side-link>svg{flex-shrink:0}
+body .app-shell.is-canvas-shell .app-sidebar .side-link>span:not(.nav-live-dot){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body .app-shell.is-canvas-shell .app-sidebar>.brand-lockup{padding:0;margin:0 10px 28px}
+body .app-shell.is-canvas-shell .app-sidebar>.brand-lockup>.frelog-wordmark{display:block}
+
+/* Communication opens above the toolbar; its launcher stays in the corner. */
+.canvas-app-page .canvas-panel-slot.canvas-panel-slot-chat{top:auto;left:12px;right:auto;bottom:20px;width:min(380px,calc(100% - 24px));height:calc(var(--chat-expanded-height) + var(--studio-panel-bottom) - 20px);border:0;background:transparent;box-shadow:none;pointer-events:none;overflow:visible}
+.canvas-app-page .canvas-panel-slot.canvas-panel-slot-chat.is-collapsed{top:auto;left:12px;right:auto;bottom:20px;width:44px;height:44px}
+.canvas-app-page .canvas-panel-slot-chat .canvas-panel-heading{position:absolute;bottom:0;left:0;box-sizing:border-box;flex:none;width:44px;height:44px;min-height:44px;border:1px solid var(--line);border-radius:14px;background:var(--surface);box-shadow:var(--studio-shadow);pointer-events:auto}
+.canvas-app-page .canvas-panel-slot-chat .canvas-panel-title{display:none}
+.canvas-app-page .canvas-panel-slot-chat .canvas-panel-content{position:absolute;left:0;right:0;top:0;bottom:auto;height:var(--chat-expanded-height);box-sizing:border-box;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--studio-shadow);pointer-events:auto}
+.canvas-app-page .canvas-panel-slot-chat .canvas-panel-resize-chat{pointer-events:auto}

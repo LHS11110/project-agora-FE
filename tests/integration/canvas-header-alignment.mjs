@@ -31,13 +31,15 @@ const page=await context.newPage();page.on('pageerror',error=>errors.push(error.
 for(const width of [1440,768,650,390,320]){
  await page.setViewportSize({width,height:900});await page.waitForTimeout(100);
  for(const expanded of [false,true]){
-  const navigation=page.locator('.app-navigation-toggle');if((await navigation.getAttribute('aria-expanded')==='true')!==expanded)await navigation.click();
+  const navigation=page.locator('.app-navigation-toggle');if(await navigation.getAttribute('aria-expanded')==='true')await navigation.click();
   const collapse=page.getByRole('button',{name:'캔버스 정보 접기',exact:true});if(await collapse.count())await collapse.click();
+  if(expanded)await navigation.click();
   await page.waitForTimeout(100);
   const metrics=await page.evaluate(()=>{const box=s=>document.querySelector(s).getBoundingClientRect(),n=box('.app-navigation-toggle svg'),t=box('.canvas-topbar>.canvas-chrome-toggle svg'),h=box('.canvas-topbar');return {nav:n.y+n.height/2,toggle:t.y+t.height/2,header:h.y+h.height/2};});
   console.log(width,expanded,metrics);
   if(width===390&&!expanded)await page.screenshot({path:'/tmp/canvas-header-aligned.png'});
   if(!process.env.AGORA_CAPTURE_BASELINE){assert.ok(Math.abs(metrics.nav-metrics.toggle)<=1,'navigation and info controls align');assert.ok(Math.abs(metrics.nav-metrics.header)<=1,'navigation icon centers inside the folded card');}
+  if(expanded)await navigation.click();
   await page.getByRole('button',{name:'캔버스 정보 펼치기',exact:true}).click();
  }
 }

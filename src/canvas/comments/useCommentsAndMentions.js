@@ -114,5 +114,5 @@ export function useCommentsAndMentions({ sendRaw, connection, user, canvasId }) 
   }, [activeId, draft, sendRaw]);
   const open = useCallback((objectId, messageId = null, sequence = null, notification = null) => { setActiveId(String(objectId)); setHighlight(messageId); setJumpSequence(sequence); setJumpNotification(notification); setDraft(''); setError(''); }, []);
   const markVisible = useCallback(() => { if (jumpNotification) { dismiss(jumpNotification); setJumpNotification(null); } }, [jumpNotification, dismiss]);
-  return { refreshMentions, receiveMentions, receiveMentionRead, markVisible, activeId, setActiveId, threads, notifications, dismiss, notify, receiveHistory, receiveComment, receiveError, receiveAck, requestHistory, draft, setDraft, error, sendComment, open, highlight };
+  return { refreshMentions, receiveMentions, receiveMentionRead, markVisible, activeId, setActiveId, threads, notifications, dismiss, notify, receiveHistory, receiveComment, receiveError, receiveAck, requestHistory, draft, setDraft, error, sendComment, open, highlight, clearHighlight: () => setHighlight(null) };
 }

@@ -15,6 +15,7 @@ import { createId } from './canvasIds.js';
 
 export function useCanvasConnection(options) {
   const verifiedEntryRef = useRef(null);
+  const rtcMembershipRetryRef = useRef(0);
   const {
     identity: {
       canvasId,
@@ -164,8 +165,8 @@ export function useCanvasConnection(options) {
       }));
       joinedCanvasConnectionId = canvasConnectionId;
     };
-    const resetPeerMesh = () => {
-      voiceCallRef?.current?.suspend();
+    const resetPeerMesh = (recoverable=false) => {
+      if(recoverable)voiceCallRef?.current?.reconnect();else voiceCallRef?.current?.suspend();
       if (peerMeshRef.current) peerMeshRef.current.close();
       peerMeshRef.current = null;
       syncedPeersRef.current.clear();
@@ -256,6 +257,7 @@ export function useCanvasConnection(options) {
         rtcSocket = installSocketCodec(new WebSocket(canvasCodecUrl(rtcSocketUrl(canvasId, access.ws_port, access.canvas_access_token))));
         rtcWsRef.current = rtcSocket;
         const handleRtcMessage = (event) => {
+          if(cancelled||rtcWsRef.current!==rtcSocket)return;
           let data;
           try { data = typeof event.data==='string'?JSON.parse(event.data):event.data; } catch { return; }
           voiceCallRef?.current?.handle(data);
@@ -270,6 +272,7 @@ export function useCanvasConnection(options) {
             return;
           }
           if (data.type === 'rtc_peers') {
+            rtcMembershipRetryRef.current=0;
             let mesh = peerMeshRef.current;
             if (!mesh) {
               mesh = new CanvasBrokerPeers({
@@ -308,6 +311,10 @@ export function useCanvasConnection(options) {
             if (!autoReconnectRef.current || !canvasSnapshotLoadedRef.current) resetPeerMesh();
             return;
           }
+          if(data.type==='error'&&canvasSnapshotLoadedRef.current&&['RTC_CANVAS_CONNECTION_INVALID','RTC_ALREADY_JOINED','SESSION_NOT_FOUND'].includes(data.code)){
+            const attempt=Math.min(rtcMembershipRetryRef.current++,5);
+            voiceCallRef?.current?.reconnect();requestServerReconnect({retry_after_ms:Math.min(500*2**attempt,15000)});return;
+          }
           if (rtcMembershipRecovery.handle(data, hostSessionRef.current.term)) return;
           if (data.type === 'error' && (data.code?.startsWith('RTC_') || data.code?.startsWith('CANVAS_RELAY_') || ['HOST_FENCED', 'ITEM_ACCESS_DENIED', 'RATE_LIMITED'].includes(data.code))) {
             if (!autoReconnectRef.current) setToast(`브로커 연결 오류: ${data.code}`);
@@ -319,12 +326,17 @@ export function useCanvasConnection(options) {
           if (!cancelled && canvasSnapshotLoadedRef.current) requestServerReconnect({ retry_after_ms: 500 });
           if (!cancelled && !autoReconnectRef.current && wsRef.current?.readyState === WebSocket.OPEN) setToast('캔버스 브로커에 연결할 수 없습니다.');
         };
-        rtcSocket.onclose = () => {
-          voiceCallRef?.current?.suspend();
-          if (rtcWsRef.current === rtcSocket) rtcWsRef.current = null;
-          if (!cancelled && canvasSnapshotLoadedRef.current && wsRef.current?.readyState === WebSocket.OPEN) requestServerReconnect({ retry_after_ms: 500 });
-          if (!autoReconnectRef.current || !canvasSnapshotLoadedRef.current) resetPeerMesh();
-          if (!cancelled && !autoReconnectRef.current && wsRef.current?.readyState === WebSocket.OPEN) setToast('캔버스 브로커 연결이 종료되었습니다.');
+        rtcSocket.onclose = (event) => {
+          if(cancelled||rtcWsRef.current!==rtcSocket)return;
+          const recoverable=event.code!==1008&&canvasSnapshotLoadedRef.current;
+          if(recoverable){voiceCallRef?.current?.reconnect();requestServerReconnect({retry_after_ms:500});}
+          else{
+            voiceCallRef?.current?.suspend();
+            if(event.code===1008){autoReconnectRef.current=false;serverReconnectRequestedRef.current=false;if(reconnectTimer!==null){clearTimeout(reconnectTimer);reconnectTimer=null;}}
+          }
+          rtcWsRef.current = null;
+          if (!autoReconnectRef.current || !canvasSnapshotLoadedRef.current) resetPeerMesh(recoverable);
+          if (!autoReconnectRef.current && wsRef.current?.readyState === WebSocket.OPEN) setToast('캔버스 브로커 연결이 종료되었습니다.');
         };
         socket.onopen = () => {
           if (cancelled) return;
@@ -332,6 +344,7 @@ export function useCanvasConnection(options) {
           setError('');
         };
         socket.onmessage = (event) => {
+          if(cancelled||wsRef.current!==socket)return;
           let data;
           try { data = typeof event.data==='string'?JSON.parse(event.data):event.data; } catch { return; }
           if (receiveServerEvent(data)) return;
@@ -534,6 +547,8 @@ export function useCanvasConnection(options) {
           }
         };
         socket.onclose = (event) => {
+          if(cancelled||wsRef.current!==socket)return;
+          if(event.code===1008){autoReconnectRef.current=false;serverReconnectRequestedRef.current=false;if(reconnectTimer!==null){clearTimeout(reconnectTimer);reconnectTimer=null;}}
           if (wsRef.current === socket) wsRef.current = null;
           if (!cancelled && event.code === 1012) requestServerReconnect({ retry_after_ms: 0 });
           if(!cancelled && !canvasSnapshotLoadedRef.current && event.code!==1008 && !autoReconnectRef.current)requestServerReconnect({retry_after_ms:nextReconnectDelay()});
@@ -556,7 +571,7 @@ export function useCanvasConnection(options) {
               rtcSocket.onmessage = null;
               rtcSocket.onerror = null;
               rtcSocket.onclose = null;
-          voiceCallRef?.current?.suspend();
+              voiceCallRef?.current?.reconnect();
             }
             rtcSocket.close();
           }
@@ -576,6 +591,7 @@ export function useCanvasConnection(options) {
         };
       } catch (err) {
         if(!cancelled && [401,403,404].includes(err.status)){
+          voiceCallRef?.current?.suspend();
           autoReconnectRef.current=false;serverReconnectRequestedRef.current=false;
           setConnection('disconnected');setError(err.message);
         } else if(!cancelled && retryableConnectionError(err)){
@@ -601,14 +617,15 @@ export function useCanvasConnection(options) {
       canvasConnectionId = '';
       canvasConnectionHash = '';
       joinedCanvasConnectionId = '';
-      if (!preservePeerMesh) resetPeerMesh();
+      voiceCallRef?.current?.reconnect();
+      if (!preservePeerMesh) resetPeerMesh(true);
       if (rtcSocket && rtcSocket.readyState !== WebSocket.CLOSED) {
         if (preservePeerMesh) {
           rtcSocket.onopen = null;
           rtcSocket.onmessage = null;
           rtcSocket.onerror = null;
           rtcSocket.onclose = null;
-          voiceCallRef?.current?.suspend();
+          voiceCallRef?.current?.reconnect();
         }
         rtcSocket.close();
       }

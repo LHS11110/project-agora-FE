@@ -5,7 +5,7 @@ import { useEffect, useRef, useId } from 'react';
 import './resizable-panels.css';
 
 const labels = { tools: '툴 패널', inspector: '설정 패널', chat: '채팅 패널' };
-export default function ResizablePanel({ children, panel, mobile, value, limits, onChange, onFinish, onReset, collapsed, onToggle }) {
+export default function ResizablePanel({ children, panel, mobile, value, limits, onChange, onFinish, onReset, collapsed, onToggle, title, callActive=false }) {
   useUiLocale();
   const contentId = useId();
   const gesture = useRef(null), frame = useRef(0), latest = useRef(null);
@@ -36,13 +36,13 @@ export default function ResizablePanel({ children, panel, mobile, value, limits,
     return () => window.removeEventListener('blur', blur);
   }, []);
   useEffect(() => { cancelDrag.current(); }, [mobile, collapsed]);
-  return <div className={`canvas-panel-slot canvas-panel-slot-${panel}${collapsed ? ' is-collapsed' : ''}`}>
-    <button className="canvas-panel-toggle" type="button" onClick={onToggle}
+  return <div className={`canvas-panel-slot canvas-panel-slot-${panel}${collapsed ? ' is-collapsed' : ''}`} data-call-active={callActive}>
+    <div className="canvas-panel-heading"><button className="canvas-panel-toggle" type="button" onClick={onToggle}
       aria-expanded={!collapsed} aria-controls={contentId} aria-label={`${ui(labels[panel])} ${collapsed ? ui("펼치기") : ui("접기")}`}
       title={`${ui(labels[panel])} ${collapsed ? ui("펼치기") : ui("접기")}`}>
-      <Icon name={panel === 'chat' ? 'chat' : panel === 'tools' ? 'grid' : 'settings'} size={14} />
-      <span>{ui(labels[panel])}</span><span className="canvas-panel-toggle-mark" aria-hidden="true">{collapsed ? '+' : '−'}</span>
-    </button>
+      {callActive&&<i className="canvas-panel-call-dot" aria-hidden="true"/>}
+      <Icon name={collapsed ? panel === 'chat' ? 'chat' : panel === 'tools' ? 'grid' : 'settings' : 'minus'} size={16} />
+    </button><span className="canvas-panel-title">{title||ui(labels[panel])}</span></div>
     <div id={contentId} className="canvas-panel-content" hidden={collapsed}>{children}</div>
     {!collapsed && <div className={`canvas-panel-resize canvas-panel-resize-${panel}`} role="separator" tabIndex={0}
       aria-label={ui("{v0} {v1} 조절", {

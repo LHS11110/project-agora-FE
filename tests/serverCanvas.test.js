@@ -127,3 +127,10 @@ test('cancelled drags never enter the durable queue',()=>{
  const {session,sent}=client();session.beginMove(['box']);session.previewMove(2,3);session.finishMove(true);session.tick();
  assert.equal(sent.length,0);assert.equal(session.items.box.x,0);assert.equal(session.movePreview,null);
 });
+test('unrelated/requestless RTC errors reach their own recovery handler without affecting canvas saves',()=>{
+ const {session,sent}=client();assert.equal(session.receiveServer({type:'error',code:'RTC_CANVAS_CONNECTION_INVALID'}),false);
+ session.submit([{action:'patch',id:'box',patch:{x:2}}]);session.tick();const flight=session.flight;
+ assert.equal(session.receiveServer({type:'error',code:'RTC_CANVAS_CONNECTION_INVALID'}),false);
+ assert.equal(session.receiveServer({type:'error',code:'RTC_ALREADY_JOINED',request_id:'rtc-membership'}),false);assert.equal(session.flight,flight);
+ assert.equal(session.receiveServer({type:'error',request_id:sent[0].request_id,code:'ITEM_ACCESS_DENIED'}),true);assert.equal(session.flight,null);
+});
