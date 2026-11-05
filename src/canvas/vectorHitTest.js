@@ -1,10 +1,11 @@
+import {isRasterCode,codePreviewHeight} from './codePreviewMetrics.js';
 import { shapeStrokeWidth } from './shapeAppearance.js';
 import { shapeOutlinePaths } from './shapeGeometry.js';
 import { shapeArrowGeometry } from '../components/shapeArrowGeometry.js';
 import { itemDepth } from './itemDepth.js';
 import { connectorGeometry } from '../components/connectorGeometry.js';
 import { strokeSelectionGeometry } from './strokeSelection.js';
-import { isRasterText } from './plainTextRaster.js';
+import { isRasterContent as isRasterText } from './plainTextRaster.js';
 import { isOverviewProxy } from './sceneRepresentation.js';
 
 export const isVectorItem = item => !item?.runtimeRole && (['shape', 'stroke', 'connector'].includes(item?.kind) || isRasterText(item));
@@ -43,7 +44,7 @@ export function hitTestVector(index, point, world, scale = 1, order = new Map(),
       return geometry.points.some((p,i,points)=>distance(local,i?points[i-1]:p,p)<=Math.max(pad,geometry.hitWidth/2));
     }
     const x=(Number(item.x)||0)*world.width,y=(Number(item.y)||0)*world.height;
-    const w=(Number(item.width)||.14)*world.width,h=(Number(item.height)||.12)*world.height;
+    const w=(Number(item.width)||.14)*world.width,h=isRasterCode(item)?codePreviewHeight(item,world.height):(Number(item.height)||.12)*world.height;
     const local=unrotate(pixel,x+w/2,y+h/2,item.rotation);
     if (item.kind === 'shape' && item.shapeType === 'arrow') {
       const geometry = shapeArrowGeometry(w, h, item.bend, item.startHead, item.endHead, item);

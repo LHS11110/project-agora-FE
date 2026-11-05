@@ -62,3 +62,14 @@ test('result wheel scroll stays inside the result even at either boundary',()=>{
  assert.equal(editorCanScroll({target,deltaY:120,ctrlKey:true}),false);
  assert.equal(editorCanScroll({target:{closest:selector=>selector==='.blueprint-node-body'?{}:null},deltaY:120}),false,'unselected result navigates canvas');
 });
+
+test('selected overflowing content keeps wheel scrolling at both ends; unselected content navigates',()=>{
+ const previous=globalThis.getComputedStyle;
+ const object={parentElement:null},area={parentElement:object,scrollHeight:400,clientHeight:100,scrollWidth:100,clientWidth:100,matches:()=>false,closest:selector=>selector==='.canvas-object.selected'?object:null};
+ globalThis.getComputedStyle=()=>({overflowY:'auto',overflowX:'hidden'});
+ try{
+  for(const deltaY of [-120,120])assert.equal(editorCanScroll({target:area,deltaY,deltaX:0}),true);
+  assert.equal(editorCanScroll({target:area,deltaY:120,deltaX:0,ctrlKey:true}),false);
+  area.closest=()=>null;assert.equal(editorCanScroll({target:area,deltaY:120,deltaX:0}),false);
+ }finally{if(previous)globalThis.getComputedStyle=previous;else delete globalThis.getComputedStyle;}
+});

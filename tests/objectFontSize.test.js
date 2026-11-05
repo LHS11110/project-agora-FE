@@ -18,3 +18,14 @@ test('legacy text scaling remains single and rich geometry notices font changes'
  for(const value of [0,-1,257,Infinity,NaN])assert.equal(isObjectFontSize(value),false);assert.equal(isObjectFontSize(24),true);
  const q={kind:'shape',shapeType:'rectangle',fontSize:24,x:0,y:0,width:.2,height:.2};assert.equal(planManifest(exportManifest({q}),{}).creates[0].item.fontSize,24);
 });
+
+test('terminal uses its shell base size and scales chrome consistently across the saved range',()=>{
+ const terminal={kind:'shape',runtimeRole:'terminal'};
+ assert.equal(objectFontSize(terminal),13);
+ for(const size of [2,8,26,64,256]){
+  const item={...terminal,fontSize:size};
+  assert.equal(objectFontSize(item),size);
+  assert.equal(objectFontStyle(item)['--object-font-factor'],size/13);
+ }
+ assert.equal(objectBaseFontSize({kind:'shape',runtimeRole:'notebook'}),12);
+});

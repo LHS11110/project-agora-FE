@@ -22,3 +22,16 @@ test('higher graphics quality increases detail even on a standard-DPI screen whi
   assert.ok(GRAPHICS_PROFILES.low.scenePixelBudget < GRAPHICS_PROFILES.medium.scenePixelBudget);
   assert.ok(GRAPHICS_PROFILES.medium.scenePixelBudget < GRAPHICS_PROFILES.high.scenePixelBudget);
 });
+
+import {graphicsDocumentRatio,graphicsRasterItem} from '../src/canvas/graphicsQuality.js';
+test('document canvases and image previews follow increasing but bounded quality budgets',()=>{
+ let previous=0;
+ for(const quality of ['low','medium','high']){
+  const ratio=graphicsDocumentRatio(quality,600,800,2);assert.ok(ratio>previous);previous=ratio;
+  const large=graphicsDocumentRatio(quality,10000,10000,4);assert.ok(10000*10000*large*large<=GRAPHICS_PROFILES[quality].documentPixelBudget+1);
+ }
+ assert.ok(GRAPHICS_PROFILES.low.imagePreviewSize<GRAPHICS_PROFILES.high.imagePreviewSize);
+ const source={kind:'shape',shadowEnabled:true,shadowBlur:8};
+ assert.equal(graphicsRasterItem(source,'low').shadowEnabled,false);assert.equal(source.shadowEnabled,true);
+ assert.equal(graphicsRasterItem(source,'high'),source);
+});

@@ -1,8 +1,10 @@
 /** Project an overscan bitmap into the current viewport without repainting it. */
-export function cachedCameraProjection(cached,camera,width,height,margin=256) {
+export function cachedCameraProjection(cached,camera,width,height,margin=256,paintedBounds=null) {
   if(!cached || !(cached.scale>0) || !(camera.scale>0))return null;
   const scale=camera.scale/cached.scale;
   const x=camera.x-(cached.x+margin)*scale,y=camera.y-(cached.y+margin)*scale;
-  if(![scale,x,y].every(Number.isFinite) || x>0 || y>0 || x+(width+margin*2)*scale<width || y+(height+margin*2)*scale<height)return null;
+  if(![scale,x,y].every(Number.isFinite))return null;
+  const complete=paintedBounds && paintedBounds.minX*cached.scale+cached.x>=-margin && paintedBounds.minY*cached.scale+cached.y>=-margin && paintedBounds.maxX*cached.scale+cached.x<=width+margin && paintedBounds.maxY*cached.scale+cached.y<=height+margin;
+  if(!complete && (x>0 || y>0 || x+(width+margin*2)*scale<width || y+(height+margin*2)*scale<height))return null;
   return {x,y,scale};
 }

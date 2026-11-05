@@ -1,8 +1,8 @@
 export const GRAPHICS_QUALITY_KEY = 'agora_canvas_graphics_quality';
 export const GRAPHICS_PROFILES = Object.freeze({
-  low: Object.freeze({ label: '낮음', description: '속도 우선 · 대량 객체에 권장', maxDpr: 1, rasterMultiplier: 1, maxRasterRatio: 1.5, scenePixelBudget: 8_000_000 }),
-  medium: Object.freeze({ label: '보통', description: '속도와 선명도의 균형', maxDpr: 1.5, rasterMultiplier: 1.5, maxRasterRatio: 2, scenePixelBudget: 16_000_000 }),
-  high: Object.freeze({ label: '높음', description: '선명도 우선 · GPU와 메모리 사용 증가', maxDpr: 2, rasterMultiplier: 2, maxRasterRatio: 3, scenePixelBudget: 32_000_000 }),
+  low: Object.freeze({ label: '낮음', description: '속도 우선 · 그림자 생략 · 대량 객체에 권장', maxDpr: 1, rasterMultiplier: 1, maxRasterRatio: 1.5, imagePreviewSize:96,documentPixelBudget:1_000_000,scenePixelBudget: 8_000_000 }),
+  medium: Object.freeze({ label: '보통', description: '속도와 선명도의 균형', maxDpr: 1.5, rasterMultiplier: 1.5, maxRasterRatio: 2, imagePreviewSize:192,documentPixelBudget:2_000_000,scenePixelBudget: 16_000_000 }),
+  high: Object.freeze({ label: '높음', description: '선명도 우선 · GPU와 메모리 사용 증가', maxDpr: 2, rasterMultiplier: 2, maxRasterRatio: 3, imagePreviewSize:384,documentPixelBudget:4_000_000,scenePixelBudget: 32_000_000 }),
 });
 export function normalizeGraphicsQuality(value) {
   return Object.hasOwn(GRAPHICS_PROFILES, value) ? value : 'low';
@@ -15,3 +15,9 @@ export function graphicsRasterRatio(quality, scale, deviceRatio = 1) {
   const zoomRatio = scale > 1.25 ? 1.5 : scale < .5 ? .5 : 1;
   return Math.min(profile.maxRasterRatio, zoomRatio * profile.rasterMultiplier * graphicsResolution(quality, deviceRatio));
 }
+
+export function graphicsDocumentRatio(quality,width,height,deviceRatio=1){
+ const profile=GRAPHICS_PROFILES[normalizeGraphicsQuality(quality)];
+ return Math.min(graphicsRasterRatio(quality,1,deviceRatio),4096/Math.max(1,width,height),Math.sqrt(profile.documentPixelBudget/Math.max(1,width*height)));
+}
+export function graphicsRasterItem(item,quality){return normalizeGraphicsQuality(quality)==='low'&&item.shadowEnabled!==false?{...item,shadowEnabled:false}:item;}

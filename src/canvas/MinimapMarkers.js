@@ -3,7 +3,11 @@ const kinds=new Set(['image','link','code','note','table','shape','text','math',
 export default class MinimapMarkers {
   update(entries,items,width,height,index){
     const changed=changedItemIds(this.items,items),reset=this.entries!==entries||this.width!==width||this.height!==height||changed===null;
-    if(reset){
+    const delta=entries.sceneDelta;
+    if(this.entries!==entries&&delta&&delta.previous.deref()===this.entries&&!delta.removed.length&&this.width===width&&this.height===height){
+      this.value=this.value.slice();for(const entry of delta.updated){const at=this.positions.get(entry.id);if(at!==undefined)this.value[at]=this.marker(entry,items,width,height);}
+      for(const entry of delta.added){this.positions.set(entry.id,this.value.length);this.value.push(this.marker(entry,items,width,height));}
+    }else if(reset){
       this.value=entries.filter(e=>kinds.has((items[e.id]||e.item)?.kind)).map(e=>this.marker(e,items,width,height));
       this.positions=new Map(this.value.map((entry,i)=>[entry.id,i]));
     }else{

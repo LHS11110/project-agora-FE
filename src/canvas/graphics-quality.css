@@ -1,0 +1,8 @@
+/* Native HTML/SVG stays crisp at every quality; low omits costly object effects.
+   Raster layers and PDF canvases use the matching profile's pixel budget. */
+.canvas-app-page[data-graphics-quality="low"] .canvas-scene .canvas-object,
+.canvas-app-page[data-graphics-quality="low"] .canvas-scene .scalable-object-content{--object-shadow-box:none!important;--object-shadow-filter:none!important}
+.canvas-app-page[data-graphics-quality="low"] .canvas-scene .scalable-object-content{filter:none}
+.canvas-app-page[data-graphics-quality="low"] .canvas-scene .canvas-object.image-object,
+.canvas-app-page[data-graphics-quality="low"] .canvas-scene .canvas-object.canvas-chart-object,
+.canvas-app-page[data-graphics-quality="low"] .canvas-scene .canvas-object.canvas-table-object{box-shadow:none}

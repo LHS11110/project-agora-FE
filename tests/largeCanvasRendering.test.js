@@ -188,3 +188,10 @@ test('minimap bitmap zoom preserves world positions and identifies uncovered nei
   }
   assert.equal(minimapBitmapProjection(old,{...old,minX:10000},180,120).covers,false);
 });
+
+
+test('zooming out reuses a bitmap containing every painted object, but rejects clipped content',()=>{
+ const cached={x:0,y:0,scale:1},camera={x:200,y:120,scale:.1};
+ assert.ok(cachedCameraProjection(cached,camera,1000,600,256,{minX:0,minY:0,maxX:900,maxY:500}));
+ assert.equal(cachedCameraProjection(cached,camera,1000,600,256,{minX:0,minY:0,maxX:2000,maxY:500}),null);
+});

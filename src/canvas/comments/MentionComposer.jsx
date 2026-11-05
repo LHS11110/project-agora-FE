@@ -5,6 +5,7 @@ import { mentionSuggestions, mentionToken } from './mentions.js';
 export default function MentionComposer({ value, onChange, onSubmit, participants, disabled, placeholder, label }) {
   const input = useRef(null);
   const pendingPosition = useRef(null);
+  const composing = useRef(false);
   const [cursor, setCursor] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const [selected, setSelected] = useState(0);
@@ -22,11 +23,16 @@ export default function MentionComposer({ value, onChange, onSubmit, participant
     pendingPosition.current = position;
     onChange(next); setCursor(position); setDismissed(true); setSelected(0);
   };
-  return <form className="mention-composer" onSubmit={event => { event.preventDefault(); onSubmit(); }}>
+  return <form className="mention-composer" onSubmit={event => { event.preventDefault(); if(!disabled&&!composing.current&&value.trim())onSubmit(); }}>
     <div className="mention-input-wrap"><textarea ref={input} rows="2" aria-label={ui(label)} placeholder={ui(placeholder)} value={value} disabled={disabled}
+      onCompositionStart={()=>{composing.current=true;}}
+      onCompositionEnd={()=>{composing.current=false;}}
       onChange={event => { onChange(event.target.value); setCursor(event.target.selectionStart); setDismissed(false); setSelected(0); }}
       onSelect={event => setCursor(event.target.selectionStart)}
       onKeyDown={event => {
+        // IME Enter confirms a syllable/candidate; it must not send or choose a mention.
+        if(composing.current||event.nativeEvent.isComposing||event.nativeEvent.keyCode===229||event.keyCode===229)return;
+        if(event.repeat&&event.key==='Enter'){event.preventDefault();return;}
         if (suggestions && event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setDismissed(true); }
         else if (suggestions && ['ArrowDown', 'ArrowUp'].includes(event.key)) { event.preventDefault(); setSelected(current => (current + (event.key === 'ArrowDown' ? 1 : -1) + suggestions.matches.length) % suggestions.matches.length); }
         else if (suggestions && (event.key === 'Enter' || event.key === 'Tab')) { event.preventDefault(); choose(suggestions.matches[selected % suggestions.matches.length]); }

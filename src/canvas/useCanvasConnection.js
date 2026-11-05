@@ -1,6 +1,7 @@
+import {canvasCodecUrl,installSocketCodec} from './sync/socketCodec.js';
 import { registerGroupLayout } from './permissions/groupBits.js';
 import { RtcMembershipRecovery } from './RtcMembershipRecovery.js';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { retryableConnectionError } from './connectionRetry.js';
 import CanvasBrokerPeers from '../components/CanvasBrokerPeers.js';
 import { api, canvasSocketUrl, rtcSocketUrl } from '../api/client.js';
@@ -13,6 +14,7 @@ import {
 import { createId } from './canvasIds.js';
 
 export function useCanvasConnection(options) {
+  const verifiedEntryRef = useRef(null);
   const {
     identity: {
       canvasId,
@@ -28,6 +30,7 @@ export function useCanvasConnection(options) {
       chatHistoryPageRef,
       chatHistoryRequestRef,
       chatEventsRef,
+      voiceCallRef,
       collaborativeBaseDocsRef,
       collaborativeDocsRef,
       deletedItemSyncVersionsRef,
@@ -71,6 +74,7 @@ export function useCanvasConnection(options) {
       setItems,
       setLaserStrokes,
       setMessages,
+      setChatMessageTotal,
       setPeerList,
       setReconnectEpoch,
       setRemoteDrawingStrokes,
@@ -94,6 +98,7 @@ export function useCanvasConnection(options) {
       rejectServerChange,
       replacePersistedItems,
       requestChatHistory,
+      requestPassword,
       sendItemChange,
       sendStrokeFrameChanges,
       sendRaw,
@@ -103,6 +108,7 @@ export function useCanvasConnection(options) {
 
   useEffect(() => {
     let cancelled = false;
+    const passwordAbort = new AbortController();
     const rtcMembershipRecovery = new RtcMembershipRecovery(sendRtcRaw);
     let socket;
     let rtcSocket;
@@ -159,6 +165,7 @@ export function useCanvasConnection(options) {
       joinedCanvasConnectionId = canvasConnectionId;
     };
     const resetPeerMesh = () => {
+      voiceCallRef?.current?.suspend();
       if (peerMeshRef.current) peerMeshRef.current.close();
       peerMeshRef.current = null;
       syncedPeersRef.current.clear();
@@ -171,6 +178,7 @@ export function useCanvasConnection(options) {
       if (!canvasSnapshotLoadedRef.current) {
         setConnection('connecting');
         setMessages([]);
+        setChatMessageTotal(0);
         setHasOlderMessages(false);
         setChatHistoryLoading(false);
         chatHistoryRequestRef.current = null;
@@ -186,15 +194,19 @@ export function useCanvasConnection(options) {
         setSettings(canvasSettings);
 
         const passwordGrantKey = canvasPasswordGrantKey(canvasId, user);
-        let passwordGrant = canvasSettings.password_protected
+        let passwordGrant = canvasSettings.password_protected && verifiedEntryRef.current === passwordGrantKey
           ? readCanvasPasswordGrant(passwordGrantKey)
           : null;
-        if (!canvasSettings.password_protected) saveCanvasPasswordGrant(passwordGrantKey, null);
+        if (!canvasSettings.password_protected || verifiedEntryRef.current !== passwordGrantKey) {
+          saveCanvasPasswordGrant(passwordGrantKey, null);
+          verifiedEntryRef.current = null;
+        }
 
         let password;
         if (canvasSettings.password_protected) {
           if (!passwordGrant) {
-            password = window.prompt('이 캔버스의 비밀번호를 입력해주세요.');
+            password = await requestPassword({canvasName:summary.canvas_name,signal:passwordAbort.signal});
+            if(cancelled)return;
             if (password === null) { navigate('/search'); return; }
           }
         }
@@ -212,6 +224,7 @@ export function useCanvasConnection(options) {
             });
             serverAccessRetry = 0;
             if (canvasSettings.password_protected) {
+              verifiedEntryRef.current = passwordGrantKey;
               saveCanvasPasswordGrant(passwordGrantKey, access.canvas_password_token);
             }
           } catch (err) {
@@ -228,22 +241,24 @@ export function useCanvasConnection(options) {
               passwordGrant = null;
               saveCanvasPasswordGrant(passwordGrantKey, null);
             }
-            const prompt = err.code === 'CANVAS_005'
+            const passwordError = err.code === 'CANVAS_005'
               && !usingPasswordGrant
               ? '비밀번호가 올바르지 않습니다. 다시 입력해주세요.'
-              : '이 캔버스의 비밀번호를 입력해주세요.';
-            password = window.prompt(prompt);
+              : '';
+            password = await requestPassword({canvasName:summary.canvas_name,error:passwordError,signal:passwordAbort.signal});
+            if(cancelled)return;
             if (password === null) { navigate('/search'); return; }
           }
         }
         if (cancelled) return;
-        socket = new WebSocket(`${canvasSocketUrl(canvasId, access.ws_port, access.canvas_access_token)}&client_id=${encodeURIComponent(hostSessionRef.current.clientId)}`);
+        socket = installSocketCodec(new WebSocket(canvasCodecUrl(`${canvasSocketUrl(canvasId, access.ws_port, access.canvas_access_token)}&client_id=${encodeURIComponent(hostSessionRef.current.clientId)}`)));
         wsRef.current = socket;
-        rtcSocket = new WebSocket(rtcSocketUrl(canvasId, access.ws_port, access.canvas_access_token));
+        rtcSocket = installSocketCodec(new WebSocket(canvasCodecUrl(rtcSocketUrl(canvasId, access.ws_port, access.canvas_access_token))));
         rtcWsRef.current = rtcSocket;
         const handleRtcMessage = (event) => {
           let data;
-          try { data = JSON.parse(event.data); } catch { return; }
+          try { data = typeof event.data==='string'?JSON.parse(event.data):event.data; } catch { return; }
+          voiceCallRef?.current?.handle(data);
           if (receiveServerEvent(data)) return;
           if (data.type === 'server_reconnect') {
             requestServerReconnect(data);
@@ -305,6 +320,7 @@ export function useCanvasConnection(options) {
           if (!cancelled && !autoReconnectRef.current && wsRef.current?.readyState === WebSocket.OPEN) setToast('캔버스 브로커에 연결할 수 없습니다.');
         };
         rtcSocket.onclose = () => {
+          voiceCallRef?.current?.suspend();
           if (rtcWsRef.current === rtcSocket) rtcWsRef.current = null;
           if (!cancelled && canvasSnapshotLoadedRef.current && wsRef.current?.readyState === WebSocket.OPEN) requestServerReconnect({ retry_after_ms: 500 });
           if (!autoReconnectRef.current || !canvasSnapshotLoadedRef.current) resetPeerMesh();
@@ -317,7 +333,7 @@ export function useCanvasConnection(options) {
         };
         socket.onmessage = (event) => {
           let data;
-          try { data = JSON.parse(event.data); } catch { return; }
+          try { data = typeof event.data==='string'?JSON.parse(event.data):event.data; } catch { return; }
           if (receiveServerEvent(data)) return;
           if (data.type === 'server_reconnect') {
             requestServerReconnect(data);
@@ -357,6 +373,7 @@ export function useCanvasConnection(options) {
           }
           if (data.type === 'canvas_access_revoked') {
             cancelled = true;
+            passwordAbort.abort();
             autoReconnectRef.current = false;
             if (reconnectTimer !== null) { clearTimeout(reconnectTimer); reconnectTimer = null; }
             groupsRef.current = [];
@@ -406,15 +423,25 @@ export function useCanvasConnection(options) {
             setChatHistoryLoading(false);
             const entries = Array.isArray(data.messages) ? data.messages.map((entry) => toChatEntry(entry, user)) : [];
             setMessages((current) => mergeChatEntries(current, entries));
+            const previousPage = chatHistoryPageRef.current;
+            const total = Math.max(previousPage.total || 0, Number(data.total) || 0, entries.length);
+            const lastSequence = Math.max(previousPage.lastSequence || 0, ...entries.map(entry => entry.sequence || 0));
+            setChatMessageTotal(total);
             const nextToSequence = Number(data.next_to_sequence);
             const hasMore = Boolean(data.has_more) && Number.isFinite(nextToSequence) && nextToSequence > 0;
-            chatHistoryPageRef.current = { hasMore, nextToSequence: hasMore ? nextToSequence : null };
+            chatHistoryPageRef.current = { hasMore, nextToSequence: hasMore ? nextToSequence : null, total, lastSequence };
             setHasOlderMessages(hasMore);
             return;
           }
           if (data.type === 'chat') {
             if (data.object_id) { chatEventsRef.current?.receiveComment(data); return; }
             const entry = toChatEntry(data, user);
+            const page = chatHistoryPageRef.current;
+            if (entry.sequence && entry.sequence > (page.lastSequence || 0)) {
+              page.lastSequence = entry.sequence;
+              page.total = (page.total || 0) + 1;
+              setChatMessageTotal(page.total);
+            }
             setMessages((current) => mergeChatEntries(current, [entry]));
             chatEventsRef.current?.notify(entry);
             return;
@@ -529,6 +556,7 @@ export function useCanvasConnection(options) {
               rtcSocket.onmessage = null;
               rtcSocket.onerror = null;
               rtcSocket.onclose = null;
+          voiceCallRef?.current?.suspend();
             }
             rtcSocket.close();
           }
@@ -565,6 +593,7 @@ export function useCanvasConnection(options) {
     return () => {
       strokeSaveFlushRef.current?.({ force: true });
       cancelled = true;
+      passwordAbort.abort();
       rtcMembershipRecovery.dispose();
       const preservePeerMesh = autoReconnectRef.current && canvasSnapshotLoadedRef.current && reconnectTimer === null;
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
@@ -579,6 +608,7 @@ export function useCanvasConnection(options) {
           rtcSocket.onmessage = null;
           rtcSocket.onerror = null;
           rtcSocket.onclose = null;
+          voiceCallRef?.current?.suspend();
         }
         rtcSocket.close();
       }
@@ -592,5 +622,5 @@ export function useCanvasConnection(options) {
       }
       if (wsRef.current === socket) wsRef.current = null;
     };
-  }, [acknowledgeServerChange, broadcastEditorPresence, broadcastPeerItemState, canvasId, getCollaborativeDoc, getPendingServerChanges, markItemDirty, navigate, receiveLaser, receivePeerData, reconnectEpoch, refreshSpatialIndex, rejectServerChange, replacePersistedItems, requestChatHistory, sendItemChange, sendStrokeFrameChanges, sendRaw, sendRtcRaw, token, user]);
+  }, [acknowledgeServerChange, broadcastEditorPresence, broadcastPeerItemState, canvasId, getCollaborativeDoc, getPendingServerChanges, markItemDirty, navigate, receiveLaser, receivePeerData, reconnectEpoch, refreshSpatialIndex, rejectServerChange, replacePersistedItems, requestChatHistory, requestPassword, sendItemChange, sendStrokeFrameChanges, sendRaw, sendRtcRaw, token, user]);
 }

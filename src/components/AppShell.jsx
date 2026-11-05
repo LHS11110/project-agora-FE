@@ -38,7 +38,7 @@ export default function AppShell({ children }) {
       </aside>
       <div className="app-main">      {isCanvas && <button className="app-navigation-toggle" type="button" aria-controls="app-sidebar mobile-app-navigation" aria-expanded={!collapsed}
         aria-label={ui('캔버스 탐색 창 {action}',{action:ui(collapsed?'펼치기':'접기')})} title={ui('캔버스 탐색 창 {action}',{action:ui(collapsed?'펼치기':'접기')})}
-        onClick={()=>setNavigationCollapsed(value=>!value)}><Icon name={collapsed?'search':'back'} size={15} /></button>}<header id="mobile-app-navigation" className="mobile-app-header"><FreLogBrand /><div className="mobile-header-actions"><LanguageSwitcher /><button className="icon-button" onClick={() => navigate('/search')} aria-label={ui("캔버스 탐색")}><Icon name="search" size={19} /></button><button className="avatar avatar-small" onClick={() => navigate('/profile')} aria-label={ui("프로필")}>{isCanvas ? <Icon name="user" size={19} /> : <UserAvatar user={user} token={token} className="avatar-small" />}</button></div></header>{children}</div>
+        onClick={()=>setNavigationCollapsed(value=>!value)}><Icon name={collapsed?'search':'back'} size={15} /></button>}<header id="mobile-app-navigation" className="mobile-app-header"><FreLogBrand /><div className="mobile-header-actions"><LanguageSwitcher /><button className="icon-button" onClick={() => navigate('/search')} aria-label={ui("캔버스 탐색")}><Icon name="search" size={19} /></button><button className="mobile-profile-button" onClick={() => navigate('/profile')} aria-label={ui("프로필")}>{isCanvas ? <Icon name="user" size={19} /> : <UserAvatar user={user} token={token} className="avatar-small" />}</button></div></header>{children}</div>
     </div>
   );
 }

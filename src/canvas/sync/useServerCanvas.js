@@ -7,7 +7,7 @@ import { HostCanvasView } from '../host/HostCanvasView.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Automerge from '@automerge/automerge/slim';
 import { ServerCanvasSession } from './ServerCanvasSession.js';
-import { itemOperations, operationIds, validateTranslation, loadItemDoc } from '../host/hostOperations.js';
+import { itemOperations, operationIds, validateTranslation, loadItemDoc, translateItem } from '../host/hostOperations.js';
 import { loadEncodedDocument } from '../host/documentCache.js';
 import { collaborativeField, encodeBase64 } from '../collaborativeSync.js';
 
@@ -24,12 +24,12 @@ export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsR
     available: () => wsRef.current?.readyState === 1,
     send: message => {
       const socket = wsRef.current;
-      if (socket?.readyState !== 1 || socket.bufferedAmount >= 256 * 1024) return false;
-      try { socket.send(JSON.stringify(message.type === 'canvas_ops' ? { ...message, operations: message.operations.map(({ doc, base, ...operation }) => operation) } : message)); return true; } catch { return false; }
+      if (socket?.readyState !== 1 || socket.bufferedAmount+(socket.pendingCodecBytes?.()||0) >= 256 * 1024) return false;
+      try { const {wireBytes,...rest}=message;const payload=message.type==='canvas_ops'?{...rest,operations:message.operations.map(({doc,base,...operation})=>operation)}:rest;if(socket.sendObject)return socket.sendObject(payload,wireBytes);socket.send(JSON.stringify(payload));return true; }catch{return false;}
     },
     reject: message => callbacks.current.setToast(message), status: setStatus, receipt: setLastReceipt,
     publish: (committed, touched) => {
-      const draft = view.current.rebase(committed, touched, sessionRef.current.pendingOperations);
+      const draft = view.current.rebase(committed, touched, sessionRef.current.viewOperations);
       collaborativeDocsRef.current = view.current.docs; collaborativeBaseDocsRef.current = view.current.bases;
       working.current = draft; itemsRef.current = draft; committedItemsRef.current = committed;
       const pendingIds = new Set(sessionRef.current.pendingOperations.flatMap(operationIds));
@@ -65,6 +65,23 @@ export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsR
     try { assertAccessOperations(working.current, [operation],accessRef?.current); assertObjectOperations(working.current, [operation]); validateTranslation(operation); const before=working.current; if (!session.submit([operation])) return false; session.redraw(); history.current.record(before,working.current,ids);setUndoCount(history.current.entries.length);return true; }
     catch (error) { callbacks.current.setToast(error.message); return false; }
   }, []);
+  const moveBefore=useRef(null);
+  const beginObjectMove=useCallback(ids=>{
+    try {const operation={action:'translate',ids,dx:0,dy:0};assertAccessOperations(working.current,[operation],accessRef?.current);assertObjectOperations(working.current,[operation]);validateTranslation(operation);moveBefore.current=working.current;const first=working.current[ids[0]],anchor=first?.kind==='stroke'?first.points[0]:first;sessionRef.current.beginMove(ids,{x:Number(anchor?.x)||0,y:Number(anchor?.y)||0});return true;}
+    catch(error){callbacks.current.setToast(error.message);return false;}
+  },[]);
+  const previewObjectMove=useCallback((dx,dy)=>{
+    const session=sessionRef.current,operation={...session.movePreview,dx,dy};
+    try{validateTranslation(operation);assertAccessOperations(working.current,[operation],accessRef?.current);assertObjectOperations(working.current,[operation]);return session.previewMove(dx,dy);}
+    catch{return false;}
+  },[]);
+  const finishObjectMove=useCallback((cancel=false)=>{
+    const session=sessionRef.current,move=session.movePreview,before=moveBefore.current;
+    if(move&&!cancel)try{assertAccessOperations(working.current,[move],accessRef?.current);assertObjectOperations(working.current,[move]);}catch{cancel=true;}
+    const accepted=session.finishMove(cancel);moveBefore.current=null;
+    if(accepted&&!cancel&&move&&(move.dx||move.dy)&&before){const inverse=Object.fromEntries(move.ids.filter(id=>working.current[id]).map(id=>[id,translateItem(working.current[id],-move.dx,-move.dy)]));const undoBefore=changeItems(working.current,inverse);history.current.record(undoBefore,working.current,move.ids);history.current.seal();setUndoCount(history.current.entries.length);}
+    return accepted;
+  },[]);
   const undo=useCallback((options={})=>{
     if(!sessionRef.current.editable)return false;
     const oldDocs=new Map();
@@ -115,5 +132,5 @@ export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsR
   const receiveServerEvent = useCallback(data => sessionRef.current.receiveServer(data), []);
   const retryRejected = useCallback(() => sessionRef.current.retryRejected(), []);
   useEffect(() => { const timer = setInterval(() => sessionRef.current.tick(), 10); return () => clearInterval(timer); }, []);
-  return { undo, undoCount, items, setItems, patchItems, moveItems, flushMoves, committedItemsRef, viewRef: view, status, lastReceipt, retryRejected, sessionRef, receiveServerItems, receiveServerEvent };
+  return { beginObjectMove, previewObjectMove, finishObjectMove, undo, undoCount, items, setItems, patchItems, moveItems, flushMoves, committedItemsRef, viewRef: view, status, lastReceipt, retryRejected, sessionRef, receiveServerItems, receiveServerEvent };
 }

@@ -30,7 +30,7 @@ export function useCanvasObjectInteractions(options) {
     itemsRef,
     spatialIndexRef,
     markItemDirty,
-    moveItems, flushMoves,
+    moveItems, flushMoves, beginObjectMove, previewObjectMove, finishObjectMove,
     permission,
     pointerPosition,
     refreshSpatialIndex,
@@ -117,7 +117,7 @@ export function useCanvasObjectInteractions(options) {
     const start = pointerPosition(event);
     const touchStart = event.pointerType !== 'mouse' ? { x: event.clientX, y: event.clientY } : null;
     const movableIds = targetIds.filter((targetId) => itemsRef.current[targetId] && !isObjectLocked(itemsRef.current[targetId]) && canWriteItem(itemsRef.current[targetId]) && !['connector'].includes(itemsRef.current[targetId].kind));
-    if (!movableIds.length) return;
+    if (!movableIds.length || !beginObjectMove(movableIds)) return;
     if (movableIds.length > 1) {
       const initialItems = Object.fromEntries(movableIds.map((targetId) => [targetId, itemsRef.current[targetId]]));
       const moving=new Set(movableIds);
@@ -224,8 +224,7 @@ export function useCanvasObjectInteractions(options) {
       const rawDx=point.x-startPoint.x,rawDy=point.y-startPoint.y;
       const first=initialItems[ids[0]],anchor=first?.kind==='stroke'?first.points[0]:first;
       const {dx,dy}=snapToGrid&&anchor?snappedTranslation(anchor,rawDx,rawDy,gridSpacing,boardSize):{dx:rawDx,dy:rawDy};
-      const previous=dragRef.current.lastMove;
-      if(moveItems(ids,dx-previous.dx,dy-previous.dy))dragRef.current.lastMove={dx,dy};
+      if(previewObjectMove(dx,dy))dragRef.current.lastMove={dx,dy};
       return;
     }
     if (mode === 'bend') {
@@ -244,6 +243,12 @@ export function useCanvasObjectInteractions(options) {
       return;
     }
     const point = pointerPosition(event);
+    if(mode==='move'){
+      const anchor=initial.kind==='stroke'?initial.points[0]:initial;
+      const raw={dx:point.x-startX,dy:point.y-startY};
+      const delta=snapToGrid?snappedTranslation(anchor,raw.dx,raw.dy,gridSpacing,boardSize):raw;
+      previewObjectMove(delta.dx,delta.dy);return;
+    }
     let next = mode === 'resize'
       ? resizeItemAtPointer(initial, resize, point, viewport)
       : initial.kind === 'stroke'
@@ -260,13 +265,13 @@ export function useCanvasObjectInteractions(options) {
     if (!dragRef.current) return;
     if (event && dragRef.current.pointerId !== event.pointerId) return;
     if (event?.type === 'lostpointercapture' && event.target !== dragRef.current.captureElement) return;
-    if(event?.type==='pointerup' && dragRef.current.mode==='multi-move')moveObject(event);
+    if(event?.type==='pointerup' && ['move','multi-move'].includes(dragRef.current.mode))moveObject(event);
     const drag = dragRef.current;
     dragRef.current = null;
     releaseObjectPointer(drag);
-    if(drag.mode==='multi-move'){
-      drag.elements.forEach(element=>element.classList.remove('object-dragging','multi-object-dragging'));
-      flushMoves();return;
+    if(['move','multi-move'].includes(drag.mode)){
+      for(const element of drag.elements||[drag.element])element?.classList.remove('object-dragging','multi-object-dragging');
+      finishObjectMove(event?.type==='pointercancel');refreshSpatialIndex();return;
     }
     if (drag.mode === 'multi-move' || drag.mode === 'multi-rotate') {
       drag.elements.forEach((element) => element.classList.remove('object-dragging', 'multi-object-dragging', 'object-rotating'));

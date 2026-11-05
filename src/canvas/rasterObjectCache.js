@@ -1,3 +1,7 @@
+import {connectorGeometry} from '../components/connectorGeometry.js';
+import {contentSource as contentSourceForCode} from './content/contentPresentation.js';
+import {isRasterCode,codePreviewHeight} from './codePreviewMetrics.js';
+import {drawCodePreview} from './codePreviewRaster.js';
 import { shapeStrokeWidth } from './shapeAppearance.js';
 import { drawImagePreview } from './ImagePreviewCache.js';
 import { objectBounds } from '../components/CanvasSpatialBTree.js';
@@ -9,20 +13,21 @@ import { drawPlainText } from './plainTextRaster.js';
 import { objectFontSize } from './objectSize.js';
 import { textColorRanges } from './content/textColors.js';
 
-const fields = ['__imagePreview','imageFrameEnabled','kind','shapeType','volumeStyle','vertexCount','cornerStyle','fillOpacity','sketchFillOpacity','width','height','color','fill','strokeEnabled','visualStyle','strokeWidth','startHead','endHead','headSize','bend','bendPoints','bendPointCount','from','to','fromPort','toPort','brush','opacity','simulatePressure','complete','text','fontSize','contentScale','contentScaleX','contentScaleY'];
-const renderFields = [...fields,'x','y','rotation','points','shadowEnabled','shadowBlur','shadowOpacity','shadowOffsetX','shadowOffsetY','__selectionOutline'];
-export const sameRasterInput = (a,b) => a === b || (a && b && !(a.kind === 'text' && (a.automerge_snapshot !== b.automerge_snapshot || a.automerge_changes !== b.automerge_changes) && JSON.stringify(textColorRanges(a)) !== JSON.stringify(textColorRanges(b))) && renderFields.every(field => a[field] === b[field]));
+const fields = ['__codeStatus','renderMode','code','filename','language','__imagePreview','imageFrameEnabled','kind','shapeType','volumeStyle','vertexCount','cornerStyle','fillOpacity','sketchFillOpacity','width','height','color','fill','strokeEnabled','visualStyle','strokeWidth','startHead','endHead','headSize','bend','bendPoints','bendPointCount','from','to','fromPort','toPort','brush','opacity','simulatePressure','complete','text','fontSize','contentScale','contentScaleX','contentScaleY'];
+const renderFields = [...fields,'runtimeState','x','y','rotation','points','shadowEnabled','shadowBlur','shadowOpacity','shadowOffsetX','shadowOffsetY','__selectionOutline'];
+export const sameRasterInput = (a,b) => a === b || (a && b && !(!isRasterCode(a) && a.kind === 'text' && (a.automerge_snapshot !== b.automerge_snapshot || a.automerge_changes !== b.automerge_changes) && JSON.stringify(textColorRanges(a)) !== JSON.stringify(textColorRanges(b))) && renderFields.every(field => a[field] === b[field]));
 export function rasterDescriptor(id, item, world, referenceItems, routeKey = '') {
   const local = Object.fromEntries(fields.filter(field => item[field] !== undefined).map(field => [field, item[field]]));
-  if (item.kind === 'text') { const ranges = textColorRanges(item); if (ranges.length) local.__textColorRanges = ranges; }
+  if(isRasterCode(item)){local.height=codePreviewHeight(item,world.height)/world.height;local.__codeStatus=item.runtimeState?.source===contentSourceForCode(item)?item.runtimeState?.status:undefined;}
+  if (item.kind === 'text'&&!isRasterCode(item)) { const ranges = textColorRanges(item); if (ranges.length) local.__textColorRanges = ranges; }
   let x = 0, y = 0, centerX = 0, centerY = 0;
   const rotation = item.kind === 'connector' ? 0 : Number(item.rotation) || 0;
-  if (item.kind === 'shape' || item.kind === 'text') {
+  if (item.kind === 'shape' || item.kind === 'text' || item.kind==='code') {
     x = (Number(item.x) || 0) * world.width; y = (Number(item.y) || 0) * world.height;
     local.x = 0; local.y = 0;
     centerX = (Number(item.width) || .14) * world.width / 2;
-    centerY = (Number(item.height) || .12) * world.height / 2;
-    if(item.kind==='text')local.fontSize=objectFontSize(item);
+    centerY = (Number(local.height) || .12) * world.height / 2;
+    if(item.kind==='text'||item.kind==='code')local.fontSize=objectFontSize(item);
   } else if (item.kind === 'stroke') {
     const points = (item.points || []).filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
     if (!points.length) return null;
@@ -42,7 +47,8 @@ export function rasterDescriptor(id, item, world, referenceItems, routeKey = '')
   // Inline uploads can contain megabytes of base64. The layer's scoped image
   // version identifies decoded pixels without copying source bytes into keys.
   const appearance = local.__imagePreview ? { ...local, __imagePreview: true } : local;
-  const key = JSON.stringify([seed, appearance, shadow, world.width, world.height, ['connector','text'].includes(item.kind) || item.__imagePreview ? routeKey : '']);
+  const appearanceRoute=item.kind==='connector'?connectorGeometry(item,referenceItems,world.width,world.height)?.points:routeKey;
+  const key = JSON.stringify([seed, appearance, shadow, world.width, world.height, ['connector','text','code'].includes(item.kind) || item.__imagePreview ? appearanceRoute : '']);
   return { key, local, shadow, x, y, centerX, centerY, rotation };
 }
 
@@ -58,8 +64,10 @@ export function rasterizeObject(id, descriptor, world, referenceItems, preferred
   const raw = document.createElement('canvas');
   raw.width = Math.max(1,Math.ceil(width*ratio)); raw.height = Math.max(1,Math.ceil(height*ratio));
   const context = raw.getContext('2d');
+  context.imageSmoothingQuality=textAppearance.smoothingQuality||'low';
   context.setTransform(ratio,0,0,ratio,-left*ratio,-top*ratio);
   if (descriptor.local.__imagePreview) drawImagePreview(context, descriptor.local, world, textAppearance.imagePreview);
+  else if(isRasterCode(descriptor.local))drawCodePreview(context,descriptor.local,world,textAppearance.codeFont);
   else if (descriptor.local.kind === 'text') drawPlainText(context,descriptor.local,world,textAppearance.font || 'serif',textAppearance.color || '#3c5144');
   else if (descriptor.local.kind === 'stroke') drawStroke(context,descriptor.local,world.width,world.height);
   else drawVectorItems(canvasGraphics(context),{[id]:descriptor.local},world.width,world.height,null,referenceItems);

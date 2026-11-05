@@ -1,5 +1,13 @@
 import { textColorRanges } from './content/textColors.js';
-export function renderValueEqual(a, b) {
+const equalPairs=new WeakMap();
+export function renderValueEqual(a,b){
+ if(a===b)return true;
+ if(!a||!b||typeof a!=='object'||typeof b!=='object')return false;
+ const previous=equalPairs.get(a);if(previous?.has(b))return previous.get(b);
+ const equal=compareRenderValue(a,b);
+ let pairs=previous;if(!pairs){pairs=new WeakMap();equalPairs.set(a,pairs);}pairs.set(b,equal);return equal;
+}
+function compareRenderValue(a, b) {
   if (a === b) return true;
   if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
   if (a.kind === 'text' && b.kind === 'text' && (a.automerge_snapshot !== b.automerge_snapshot || a.automerge_changes !== b.automerge_changes)

@@ -1,3 +1,10 @@
+import {useCanvasPasswordPrompt} from '../canvas/useCanvasPasswordPrompt.js';
+import CanvasPasswordDialog from '../components/canvas/CanvasPasswordDialog.jsx';
+import CanvasVoicePanel,{useCanvasVoiceCall} from '../canvas/voice/CanvasVoicePanel.jsx';
+import {objectContentCacheStats} from '../canvas/objectContentCache.js';
+import {CanvasGraphicsContext} from '../canvas/CanvasGraphicsContext.jsx';
+import '../canvas/graphics-quality.css';
+import {runtimeStateTtl} from '../canvas/runtime/useObjectRuntimeState.js';
 import {api} from '../api/client.js';
 import {canvasPasswordGrantKey,readCanvasPasswordGrant} from '../canvas/canvasAccess.js';
 import {gridInterval, snapNewItem} from '../canvas/gridPlacement.js';
@@ -24,7 +31,7 @@ import { numericObjectPatch } from '../canvas/objectNumericGeometry.js';
 import SceneViewModel from '../canvas/SceneViewModel.js';
 import { itemCount } from '../canvas/itemSnapshots.js';
 import { useCanvasCamera } from '../canvas/useCanvasCamera.js';
-import { isRasterText } from '../canvas/plainTextRaster.js';
+import { isRasterContent as isRasterText } from '../canvas/plainTextRaster.js';
 import CanvasLayerObjects from '../canvas/CanvasLayerObjects.jsx';
 import { buildDepthLayers, itemDepth } from '../canvas/itemDepth.js';
 import CanvasMinimapObjects from '../canvas/CanvasMinimapObjects.jsx';
@@ -264,9 +271,9 @@ function CanvasWorkspace() {
     localStorage.setItem(GRAPHICS_QUALITY_KEY, next);
   };
   const [showGrid, setShowGrid] = useState(() => localStorage.getItem('agora_canvas_grid') !== 'false');
-  const [gridSpacing,setGridSpacing]=useState(()=>gridInterval(localStorage.getItem('agora_canvas_grid_spacing')??20));
+  const [gridSpacing,setGridSpacing]=useState(()=>({x:gridInterval(localStorage.getItem('agora_canvas_grid_spacing_x')??localStorage.getItem('agora_canvas_grid_spacing')??20),y:gridInterval(localStorage.getItem('agora_canvas_grid_spacing_y')??localStorage.getItem('agora_canvas_grid_spacing')??20)}));
   const [snapToGrid,setSnapToGrid]=useState(()=>localStorage.getItem('agora_canvas_snap_grid')==='true');
-  const changeGridSpacing=value=>{const next=gridInterval(value);setGridSpacing(next);localStorage.setItem('agora_canvas_grid_spacing',String(next));};
+  const changeGridSpacing=(value,axis='x')=>{const next=gridInterval(value);setGridSpacing(current=>{const updated={...current,[axis]:next};for(const key of ['x','y'])localStorage.setItem('agora_canvas_grid_spacing_'+key,String(updated[key]));localStorage.setItem('agora_canvas_grid_spacing',String(updated.x));return updated;});};
   const toggleSnapToGrid=()=>setSnapToGrid(current=>{localStorage.setItem('agora_canvas_snap_grid',String(!current));return !current;});
   const [showXAxis, setShowXAxis] = useState(() => localStorage.getItem('agora_canvas_x_axis') !== 'false');
   const [showYAxis, setShowYAxis] = useState(() => localStorage.getItem('agora_canvas_y_axis') !== 'false');
@@ -298,6 +305,7 @@ function CanvasWorkspace() {
   const [selectionBox, setSelectionBox] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [chatMessageTotal, setChatMessageTotal] = useState(0);
   const [chatHighlight, setChatHighlight] = useState(null);
   const [chatJumpNote, setChatJumpNote] = useState(null);
   const requestedChatMention = useRef(null);
@@ -311,7 +319,7 @@ function CanvasWorkspace() {
   const canvasSettingsRef=useRef(null);canvasSettingsRef.current=settings;
   useEffect(()=>()=>{for(const request of settingsRequestsRef.current.values()){clearTimeout(request.timer);request.reject(new Error('캔버스 연결이 종료되었습니다.'));}settingsRequestsRef.current.clear();},[]);
   const [toast, setToast] = useState('');
-  const { undo, undoCount, items, setItems, patchItems, moveItems, flushMoves, committedItemsRef, status: hostStatus, sessionRef: hostSessionRef, receiveServerItems, receiveServerEvent } = useServerCanvas({
+  const { beginObjectMove, previewObjectMove, finishObjectMove, undo, undoCount, items, setItems, patchItems, moveItems, flushMoves, committedItemsRef, status: hostStatus, sessionRef: hostSessionRef, receiveServerItems, receiveServerEvent } = useServerCanvas({
     accessRef, itemsRef, peerMeshRef, wsRef, rtcWsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems, reconnectRequestRef,
   });
   saveBlueprintOutputRef.current = (id, records) => {
@@ -355,13 +363,16 @@ function CanvasWorkspace() {
     const request = payload?.request_id ? payload : { ...payload, request_id: createId() };
     return rtcSendBudgetRef.current.send(socket,request);
   }, []);
+  const passwordPrompt = useCanvasPasswordPrompt();
+  const voice = useCanvasVoiceCall(canvasId, sendRtcRaw);
+  const [showVoicePanel,setShowVoicePanel]=useState(false);
+  const closeVoicePanel=useCallback(()=>setShowVoicePanel(false),[]);
   const requestChatHistory = useCallback((toSequence, aroundSequence) => {
     if (chatHistoryRequestRef.current) return false;
     const requestId = createId();
-    const payload = { type: 'chat_history', room_id: CHAT_ROOM_ID, request_id: requestId };
+    const payload = { type: 'chat_history', room_id: CHAT_ROOM_ID, request_id: requestId, limit: CHAT_HISTORY_LIMIT };
     if (aroundSequence) { payload.from_sequence = Math.max(1, aroundSequence - 10); payload.to_sequence = aroundSequence + 10; }
-    else if (toSequence == null) payload.limit = CHAT_HISTORY_LIMIT;
-    else payload.to_sequence = toSequence;
+    else if (toSequence != null) payload.to_sequence = toSequence;
     chatHistoryRequestRef.current = requestId;
     if (!sendRaw(payload)) {
       chatHistoryRequestRef.current = null;
@@ -829,6 +840,16 @@ function CanvasWorkspace() {
     refreshSpatialIndex();
     return true;
   }, [boardSize, markItemDirty, refreshSpatialIndex, selectItems, sendItemChange, snapToGrid, gridSpacing]);
+  const addItems=useCallback(entries=>{
+    if(!canvasSnapshotLoadedRef.current||!hostSessionRef.current.editable)return false;
+    const changes={};
+    for(const {id,item} of entries){
+      if(Object.hasOwn(itemsRef.current,id)||!canWriteItem(item))return false;
+      changes[id]=makeCollaborativeItem(snapToGrid?snapNewItem(item,gridSpacing,boardSize):item);
+    }
+    // One structural snapshot, one spatial revision and one publish per batch.
+    return patchItems(changes);
+  },[patchItems,snapToGrid,gridSpacing,boardSize]);
   const deleteItem = useCallback((id) => {
     const previous = itemsRef.current[id];
     if(previous&&!canWriteItem(previous)){setToast(WRITE_DENIED);return false;}
@@ -923,6 +944,7 @@ function CanvasWorkspace() {
       chatHistoryPageRef,
       chatHistoryRequestRef,
       chatEventsRef,
+      voiceCallRef: voice.ref,
       collaborativeBaseDocsRef,
       collaborativeDocsRef,
       deletedItemSyncVersionsRef,
@@ -966,6 +988,7 @@ function CanvasWorkspace() {
       setItems: receiveServerItems,
       setLaserStrokes,
       setMessages,
+      setChatMessageTotal,
       setPeerList,
       setReconnectEpoch,
       setRemoteDrawingStrokes,
@@ -989,6 +1012,7 @@ function CanvasWorkspace() {
       rejectServerChange,
       replacePersistedItems,
       requestChatHistory,
+      requestPassword: passwordPrompt.requestPassword,
       sendItemChange,
       sendStrokeFrameChanges,
       sendRaw,
@@ -1056,13 +1080,14 @@ function CanvasWorkspace() {
     return entries;
   }, [boardSize.height, boardSize.width, editingId, items, spatialIndex, spatialRevision, sceneWindow.key]);
   const usesOverview=useMemo(()=>visibleEntries.some(({item})=>!['shape','stroke','connector'].includes(item.kind) && !isRasterText(item)),[visibleEntries,items[selectedItemId]?.renderMode]);
-  const representationScale=usesOverview?overviewScale(camera.scale):1;
+  const representationScale=usesOverview?overviewScale(Math.min(camera.scale,camera.detailScale??camera.scale)):1;
   const selectedObjectIdsKey=selectedItemIds.filter(id=>Boolean(items[id])).join('|');
   const selectedObjectIds=useMemo(()=>selectedItemIds.filter(id=>Boolean(items[id])),[selectedObjectIdsKey]);
   const selectedObjectIdSet = useMemo(() => new Set(selectedObjectIds), [selectedObjectIds]);
   const domSelection = useMemo(() => selectedObjectIdSet.size<=64 ? selectedObjectIdSet : new Set(),[selectedObjectIdSet]);
   const sceneModelRef=useRef(null);if(!sceneModelRef.current)sceneModelRef.current=new SceneViewModel();
   const sceneModel=sceneModelRef.current.update(visibleEntries,items,boardSize,representationScale,new Set([...domSelection,editingId,connectionStartId].filter(Boolean)),selectedObjectIdSet,spatialIndex.stats.boundsCalculated,spatialIndex);
+  if(sceneRef.current){sceneRef.current.__agoraSceneStats=sceneModel.stats;sceneRef.current.__agoraContentCacheStats=objectContentCacheStats;sceneRef.current.__agoraSpatialStats=spatialIndex.stats;}
   const depthLayers=sceneModel.depthLayers,vectorHitOrder=sceneModel.hitOrder;
   const hasSingleSelection = selectedObjectIds.length === 1;
   const primarySelectedItemId = selectedObjectIdSet.has(String(selectedItemId)) ? String(selectedItemId) : selectedObjectIds[selectedObjectIds.length - 1] || null;
@@ -1244,7 +1269,7 @@ function CanvasWorkspace() {
     stopObjectDrag,
     startGroupRotation,
   } = useCanvasObjectInteractions({ canWriteItem, snapToGrid, gridSpacing,
-    moveItems, flushMoves,
+    moveItems, flushMoves, beginObjectMove, previewObjectMove, finishObjectMove,
     activeTool,
     spatialIndexRef,
     addItem,
@@ -1430,15 +1455,17 @@ function CanvasWorkspace() {
     setActiveTool(tool);
   };
   const clipboardBlocked = !hostStatus.editable || editingId != null || showSettings || showParticipants || showCanvasCode || sharePosition != null;
-  const objectClipboard = useObjectClipboard({ canvasId, boardRef, itemsRef, selectedIds: selectedObjectIds,
-    permission, pointerPosition, canvasSnapshotLoadedRef: hostReadyRef, addItem, deleteItem, saveCollaborativeItem,
+  const objectClipboard = useObjectClipboard({ canvasId, boardRef, itemsRef, spatialIndex, selectedIds: selectedObjectIds,
+    permission, pointerPosition, canvasSnapshotLoadedRef: hostReadyRef, addItem, addItems, deleteItem, saveCollaborativeItem,
+    pasteBackpressure:()=>hostSessionRef.current.queuedBytes>2*1024*1024 || hostSessionRef.current.pendingOperations.length>1024,
     canPaste: canWriteCanvas, uploadImage, uploadPdf,
     isInteracting: () => Boolean(dragRef.current || panRef.current || drawingRef.current || selectionRef.current || eraserRef.current),
     selectItems, setActiveTool, setConnectionStartId, setToast, blocked: clipboardBlocked });
   runtimeStore.notebook=async(id,{operation,code,cellId})=>{
     const previous=itemsRef.current[id];if(!previous||previous.runtimeRole!=='notebook'||!canExecuteItem(previous)||!hostSessionRef.current.editable)throw Error(ui('이 그룹에는 실행 권한이 없습니다.'));
-    const active=previous.runtimeState;if(active?.running&&Date.now()-active.updatedAt<240000)throw Error(ui('노트북 실행 중…'));
-    saveRuntimeStateRef.current(id,{running:true,status:'running',phase:operation,language:'python'});
+    if(operation==='prepare'&&(!canWriteCanvas||!canWriteItem(previous)))throw Error(ui('이 그룹에는 실행 환경을 변경할 권한이 없습니다.'));
+    const active=previous.runtimeState;if(active?.running&&Date.now()-active.updatedAt<runtimeStateTtl(previous,active))throw Error(ui('노트북 실행 중…'));
+    saveRuntimeStateRef.current(id,{running:true,status:'running',phase:operation,language:'python',detail:cellId||operation});
     try{
       const result=await api(`/api/canvases/${canvasId}/runtime/notebook`,{method:'POST',token,body:{objectId:id,operation,code,passwordGrant:readCanvasPasswordGrant(canvasPasswordGrantKey(canvasId,user))}});
       const current=itemsRef.current[id];
@@ -1484,22 +1511,22 @@ function CanvasWorkspace() {
     .map(key=>[key,(...args)=>objectActionsRef.current[key](...args)])),[]);
 
 
-  return <div className="canvas-app-page" data-theme={theme} data-info-collapsed={chrome.collapsed.info}>
+  return <CanvasGraphicsContext.Provider value={graphicsQuality}><div className="canvas-app-page" data-graphics-quality={graphicsQuality} data-theme={theme} data-info-collapsed={chrome.collapsed.info}>
     <div style={{ display: 'contents' }} inert={!hostStatus.editable && !error ? '' : undefined}>
     <header className={`canvas-topbar${chrome.collapsed.info?' is-collapsed':''}`}>
       <ChromeToggle label={ui("캔버스 정보")} collapsed={chrome.collapsed.info} onToggle={()=>chrome.toggle('info')} controls="canvas-info-content" />
       {chrome.collapsed.info && <span className="canvas-chrome-label">{ui("캔버스 정보")}</span>}
       <div id="canvas-info-content" className="canvas-info-content" hidden={chrome.collapsed.info}>
       <div className="canvas-title-group"><div className="canvas-title-copy"><h1 title={canvas?.canvas_name}>{canvas?.canvas_name || ui('캔버스 {id}',{id:canvasId})}</h1></div></div>
-      <div className="canvas-header-right"><div className="canvas-top-right"><LanguageSwitcher /><span className={`connection-pill ${connection}`} role="status" aria-live="polite" title={connection === 'connecting' ? ui("다시 연결하는 중입니다. 캔버스 편집은 계속할 수 있고 변경 사항은 연결 후 저장됩니다.") : connection === 'connected' ? ui("서버에 연결되어 변경 사항을 동기화하고 있습니다.") : ui("서버 연결이 해제되었습니다.")}><i />{connection === 'connected' ? ui("연결됨") : connection === 'connecting' ? ui("연결 중") : ui("연결 해제")}</span><CanvasPresenceStack participants={onlineParticipants} token={token} onManage={() => { setShowSettings(false); setShowParticipants(true); }} /><button className="button button-outline canvas-settings-button" onClick={() => { setShowParticipants(false); setShowSettings(true); }}><Icon name="settings" size={17} /><span>{ui("설정")}</span></button></div></div>
-      </div>{chrome.collapsed.info && <div className="canvas-folded-language"><LanguageSwitcher /></div>}
+      <div className="canvas-header-right"><div className="canvas-top-right"><LanguageSwitcher />{!chrome.collapsed.info&&<button type="button" className={`canvas-voice-trigger${voice.state.active?' is-active':''}`} title={ui(voice.state.active?'통화 중':'음성 통화')} aria-label={ui(voice.state.active?'통화 중':'음성 통화')} aria-expanded={showVoicePanel} aria-haspopup="dialog" onClick={()=>setShowVoicePanel(open=>!open)}><Icon name="microphone" size={16}/><span>{ui(voice.state.active?'통화 중':'음성 통화')}</span>{voice.state.active&&<i aria-hidden="true"/>}</button>}<span className={`connection-pill ${connection}`} role="status" aria-live="polite" title={connection === 'connecting' ? ui("다시 연결하는 중입니다. 캔버스 편집은 계속할 수 있고 변경 사항은 연결 후 저장됩니다.") : connection === 'connected' ? ui("서버에 연결되어 변경 사항을 동기화하고 있습니다.") : ui("서버 연결이 해제되었습니다.")}><i />{connection === 'connected' ? ui("연결됨") : connection === 'connecting' ? ui("연결 중") : ui("연결 해제")}</span><CanvasPresenceStack participants={onlineParticipants} token={token} onManage={() => { setShowSettings(false); setShowParticipants(true); }} /><button className="button button-outline canvas-settings-button" onClick={() => { setShowParticipants(false); setShowSettings(true); }}><Icon name="settings" size={17} /><span>{ui("설정")}</span></button></div></div>
+      </div>{chrome.collapsed.info && <div className="canvas-folded-language"><LanguageSwitcher /><button type="button" className={`canvas-voice-trigger${voice.state.active?' is-active':''}`} aria-label={ui(voice.state.active?'통화 중':'음성 통화')} aria-expanded={showVoicePanel} aria-haspopup="dialog" onClick={()=>setShowVoicePanel(open=>!open)}><Icon name="microphone" size={16}/>{voice.state.active&&<i aria-hidden="true"/>}</button></div>}
     </header>
     {error ? <div className="canvas-error-state"><div className="error-art"><Icon name="grid" size={30} /></div><span className="section-kicker">CANVAS CONNECTION</span><h1>{ui("캔버스를 열 수 없어요.")}</h1><p>{error}</p><div><button className="button button-dark" onClick={() => window.location.reload()}>{ui("다시 연결하기")}</button><Link className="button button-outline" to="/search">{ui("캔버스 목록")}</Link></div></div> : <div className="canvas-workspace resizable-workspace" ref={panelLayout.ref} style={panelLayout.style}>
       <ResizablePanel {...panelLayout.handle('tools')}><CanvasToolPanel activeTool={activeTool} onSelectTool={selectCanvasTool} color={color} onColorChange={setColor} onUploadPdf={uploadPdf} onUploadImage={uploadImage} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} /></ResizablePanel>
       <CanvasQuickDock shortcutGuard={()=>hostSessionRef.current.editable && editingIdRef.current==null && !dragRef.current && !drawingRef.current && !panRef.current && !selectionRef.current} undoCount={undoCount} onUndo={undoCanvas} canUndo={hostStatus.editable && editingId == null} canWrite={canWriteCanvas} activeTool={activeTool} onSelectTool={selectCanvasTool} onUploadImage={uploadImage}
         toolsExpanded={!panelLayout.handle('tools').collapsed} onToggleTools={panelLayout.handle('tools').onToggle} />
       <main className="board-region"><div className="board-topline"><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(true); }}><Icon name="code" size={15} />{ui("캔버스 코드")}</button><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={()=>setShowRuntimeSettings(true)}><Icon name="settings" size={15}/>{ui("실행 환경")}</button><button className="zoom-button" aria-label={ui("확대")} title={ui("클릭: 한 단계 확대 · 길게 누르기: 계속 확대")} onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label={ui("축소")} title={ui("클릭: 한 단계 축소 · 길게 누르기: 계속 축소")} onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>{ui("맞춤")}</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />{"" + ui("격자") + " "}{showGrid ? ui("켜짐") : ui("꺼짐")}</button></div></div>
-        <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} data-grid-spacing={gridSpacing} style={{ ...canvasGridStyle(camera,gridSpacing), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ touchNavigation, activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion: cancelPanInertia, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, sendCursorPosition, pickVector: (event,doubleClick = false,capture = false) => {
+        <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} data-grid-spacing={gridSpacing.x} data-grid-spacing-x={gridSpacing.x} data-grid-spacing-y={gridSpacing.y} style={{ ...canvasGridStyle(camera,gridSpacing), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ touchNavigation, activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion: cancelPanInertia, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, sendCursorPosition, pickVector: (event,doubleClick = false,capture = false) => {
             if (!['select', 'connect'].includes(activeTool) || event.button !== 0 || event.target.closest?.('.canvas-minimap, .stage-label, button, input, textarea')) return false;
             const target=event.target.closest?.('.canvas-object');
             if(capture !== Boolean(target))return false;
@@ -1617,8 +1644,10 @@ function CanvasWorkspace() {
         updateShapeArrowBend,
         zoomSensitivity
       }} /></ResizablePanel>
-<ResizablePanel {...panelLayout.handle('chat')}><CanvasChatPanel canWrite={canWriteCanvas} {...{ chatHistoryLoading, connection, hasOlderMessages, loadOlderMessages, message, messages, setMessage, submitMessage }} participants={mentionParticipants} highlight={chatHighlight} onHighlightVisible={() => { if (chatJumpNote) { comments.dismiss(chatJumpNote); setChatJumpNote(null); } }} /></ResizablePanel>
+<ResizablePanel {...panelLayout.handle('chat')}><CanvasChatPanel canWrite={canWriteCanvas} {...{ chatHistoryLoading, connection, hasOlderMessages, loadOlderMessages, message, messages, setMessage, submitMessage, chatMessageTotal }} participants={mentionParticipants} highlight={chatHighlight} onHighlightVisible={() => { if (chatJumpNote) { comments.dismiss(chatJumpNote); setChatJumpNote(null); } }} /></ResizablePanel>
     </div>}
+    {passwordPrompt.prompt&&<CanvasPasswordDialog prompt={passwordPrompt.prompt} theme={theme}/>}
+    {showVoicePanel&&<CanvasVoicePanel voice={voice} onClose={closeVoicePanel}/>}
     {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{ui(toast)}</div>}
     {comments.activeId && <ObjectCommentsPanel comments={comments} participants={mentionParticipants} connection={connection} />}
     <MentionNotifications notifications={comments.notifications} onJump={jumpToMention} onDismiss={comments.dismiss} />
@@ -1628,7 +1657,7 @@ function CanvasWorkspace() {
     {showParticipants && <CanvasParticipantsDialog participants={canvasParticipants} token={token} settings={settings} pending={settingsPending} onRequest={requestSettings} onClose={() => setShowParticipants(false)} onAddParticipant={(nickname, tag) => sendSettings('participant_add', null, { nickname, tag_number: tag })} onRemoveParticipant={(person) => sendSettings('participant_remove', null, { nickname: person.nickname, tag_number: person.tag_number })} />}
     </div>
     {!error && !hostStatus.editable && <CanvasLoadingStatus overlay message={hostStatus.message} />}
-  </div>;
+  </div></CanvasGraphicsContext.Provider>;
 }
 
 export default function CanvasPage() {

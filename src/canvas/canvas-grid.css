@@ -1,7 +1,7 @@
 .canvas-app-page .canvas-stage:not(.no-grid),
 .tutorial-page .tutorial-stage:not(.no-grid) {
   background-image: radial-gradient(circle at center, var(--stage-dot, #c7d1c4) var(--grid-dot-radius, 1px), transparent calc(var(--grid-dot-radius, 1px) + .5px));
-  background-size: var(--grid-size, 20px) var(--grid-size, 20px);
+  background-size: var(--grid-size-x,var(--grid-size,20px)) var(--grid-size-y,var(--grid-size,20px));
   background-position: var(--grid-position-x, -10px) var(--grid-position-y, -10px);
   background-repeat: repeat;
   background-origin: padding-box;
@@ -12,7 +12,7 @@
 /* Panning moves a pre-painted dot tile instead of repainting the full stage. */
 .canvas-app-page .canvas-stage:not(.no-grid){background-image:none}
 .canvas-grid-surface{position:absolute;left:0;top:0;width:calc(200% + 128px);height:calc(200% + 128px);pointer-events:none;will-change:transform;transform-origin:top left;
-  background-image:radial-gradient(circle at center,var(--stage-dot,#c7d1c4) 1.5px,transparent 2px);
+  background-image:radial-gradient(ellipse var(--surface-dot-x,2px) var(--surface-dot-y,2px) at center,var(--stage-dot,#c7d1c4) 75%,transparent 100%);
   background-size:24px 24px;background-position:0 0;
   transform:translate3d(-50px,-50px,0)}
 .canvas-stage.no-grid .canvas-grid-surface{display:none}

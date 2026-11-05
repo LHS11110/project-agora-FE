@@ -1,3 +1,4 @@
+import {isRasterCode} from './codePreviewMetrics.js';
 import { contentMode } from './content/contentPresentation.js';
 import { objectFontSize } from './objectSize.js';
 import { colorPieces } from './content/textColors.js';
@@ -6,6 +7,8 @@ import { colorPieces } from './content/textColors.js';
 // auto-height text keep the browser's layout/accessibility and editor behavior.
 export const isRasterText = item => item?.kind === 'text' && contentMode(item) === 'plain'
   && Number(item.width)>0 && Number(item.height)>0 && Boolean(item.text);
+
+export const isRasterContent=item=>isRasterText(item)||isRasterCode(item);
 
 export function plainTextLayout(context, item, world, fontFamily) {
   const fontSize=objectFontSize(item),scale=fontSize/13;

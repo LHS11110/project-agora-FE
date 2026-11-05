@@ -1,7 +1,7 @@
 import { createId } from './canvasIds.js';
 
 export const CHAT_ROOM_ID = 'general';
-export const CHAT_HISTORY_LIMIT = 50;
+export const CHAT_HISTORY_LIMIT = 10;
 
 export function toChatEntry(message, user) {
   const numericTimestamp = Number(message.created_at);

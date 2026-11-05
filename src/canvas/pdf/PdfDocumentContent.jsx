@@ -1,3 +1,5 @@
+import {useCanvasGraphics} from '../CanvasGraphicsContext.jsx';
+import {graphicsDocumentRatio} from '../graphicsQuality.js';
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
 import { useEffect, useRef, useState } from 'react';
@@ -6,6 +8,7 @@ import './pdf-object.css';
 
 export default function PdfDocumentContent({ item, token, interactive, canChangePage=true, onPageChange }) {
   useUiLocale();
+  const graphicsQuality=useCanvasGraphics();
   const [pdf, setPdf] = useState(null);
   const pageNumber=Math.max(1,Math.min(Number(item.pdfPage)||1,pdf?.numPages||1000000));
   const [error, setError] = useState(''), [rendering, setRendering] = useState(false), [reload, setReload] = useState(0);
@@ -38,8 +41,8 @@ export default function PdfDocumentContent({ item, token, interactive, canChange
       if (!active) return;
       const base = page.getViewport({ scale: 1 });
       const scale = Math.min(size.width / base.width, size.height / base.height);
-      const ratio = Math.min(2, window.devicePixelRatio || 1, 2048 / Math.max(size.width, size.height));
       const viewport = page.getViewport({ scale });
+      const ratio = graphicsDocumentRatio(graphicsQuality,viewport.width,viewport.height,window.devicePixelRatio || 1);
       // A separate canvas makes rapid page changes safe while old tasks cancel.
       const buffer = document.createElement('canvas');
       buffer.width = Math.max(1, Math.ceil(viewport.width * ratio)); buffer.height = Math.max(1, Math.ceil(viewport.height * ratio));
@@ -53,7 +56,7 @@ export default function PdfDocumentContent({ item, token, interactive, canChange
       });
     }).catch(failure => { if (active && failure.name !== 'RenderingCancelledException') { setError('이 페이지를 표시하지 못했습니다.'); setRendering(false); } });
     return () => { active = false; renderTask?.cancel(); };
-  }, [pdf, pageNumber, size]);
+  }, [pdf, pageNumber, size, graphicsQuality]);
   const download = async () => {
     if (downloadPending.current) return;
     downloadPending.current = true;

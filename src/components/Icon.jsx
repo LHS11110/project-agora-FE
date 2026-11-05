@@ -1,4 +1,7 @@
 const paths = {
+  volume: <><path d="M3 9h4l5-4v14l-5-4H3zM16 8a6 6 0 0 1 0 8M19 5a10 10 0 0 1 0 14"/></>,
+  volumeOff: <><path d="M3 9h4l5-4v14l-5-4H3zM16 9l6 6M22 9l-6 6"/></>,
+  microphone: <><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></>,
   document: <><path d="M5 3h9l5 5v13H5zM14 3v6h5M8 13h8M8 17h6"/></>,
   cut: <><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="m8 8 13 13M8 16 21 3"/></>,
   copy: <><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></>,
@@ -10,6 +13,7 @@ const paths = {
   grid: <><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></>,
   user: <><circle cx="12" cy="8" r="4"/><path d="M4 21c.8-4 3.5-6 8-6s7.2 2 8 6"/></>,
   arrow: <><path d="M7 17 17 7M7 7h10v10"/></>,
+  minus: <path d="M5 12h14"/>,
   plus: <><path d="M12 5v14M5 12h14"/></>,
   chevron: <path d="m9 18 6-6-6-6"/>,
   back: <><path d="M19 12H5M12 19l-7-7 7-7"/></>,

@@ -4,14 +4,18 @@ import {FitAddon} from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import {ui} from '../../i18n/locale.js';
 import './terminal.css';
+import {objectFontSize,MIN_OBJECT_FONT_SIZE,MAX_OBJECT_FONT_SIZE} from '../objectSize.js';
+import {correctTerminalCoordinates} from './terminalCoordinates.js';
 
 export default function TerminalObject({id,item,store,selected,canExecute}) {
  const root=useRef(null),session=useRef(null),latest=useRef({store,selected,canExecute});latest.current={store,selected,canExecute};
  const [state,setState]=useState('disconnected'),[error,setError]=useState('');
+ const fontSize=Math.max(MIN_OBJECT_FONT_SIZE,Math.min(MAX_OBJECT_FONT_SIZE,objectFontSize(item)));
+ useEffect(()=>{const s=session.current;if(s&&s.term.options.fontSize!==fontSize){s.term.options.fontSize=fontSize;s.fit.fit();}},[fontSize]);
  const mounted=useRef(true);
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
  const disconnect=async(closeRemote=true)=>{
-  const s=session.current;if(!s)return;session.current=null;s.closed=true;clearTimeout(s.timer);s.observer.disconnect();s.input.dispose();s.resize.dispose();
+  const s=session.current;if(!s)return;session.current=null;s.closed=true;clearTimeout(s.timer);s.observer.disconnect();s.input.dispose();s.resize.dispose();s.restoreCoordinates();
   if(s.socket?.readyState===WebSocket.OPEN&&closeRemote){s.socket.send(JSON.stringify({operation:'close',data:'',cols:Math.min(300,Math.max(2,s.term.cols)),rows:Math.min(150,Math.max(2,s.term.rows))}));setTimeout(()=>s.socket?.close(),1500);}else s.socket?.close();
   s.term.dispose();if(mounted.current)setState('disconnected');
  };
@@ -20,9 +24,9 @@ export default function TerminalObject({id,item,store,selected,canExecute}) {
  const connect=async()=>{
   if(session.current||!canExecute)return;
   setState('connecting');setError('');
-  const term=new Terminal({fontSize:Math.max(10,Math.min(28,item.fontSize||13)),fontFamily:'ui-monospace, SFMono-Regular, Consolas, monospace',scrollback:3000,convertEol:false,disableStdin:!selected,theme:{background:'#11141e',foreground:'#e3e7f1',cursor:'#ae9aff'},allowProposedApi:false});
+  const term=new Terminal({fontSize,fontFamily:'ui-monospace, SFMono-Regular, Consolas, monospace',scrollback:3000,convertEol:false,disableStdin:!selected,theme:{background:'#11141e',foreground:'#e3e7f1',cursor:'#ae9aff'},allowProposedApi:false});
   const fit=new FitAddon();term.loadAddon(fit);term.open(root.current);fit.fit();
-  const s={term,offset:0,closed:false,inputQueue:'',ready:false,retries:0,retryable:true};session.current=s;
+  const s={fit,restoreCoordinates:correctTerminalCoordinates(term),term,offset:0,closed:false,inputQueue:'',ready:false,retries:0,retryable:true};session.current=s;
   const render=result=>{
    if(s.closed)return;
    if(result.expired)throw Error(ui('터미널 세션이 만료되었습니다. 다시 연결해주세요.'));

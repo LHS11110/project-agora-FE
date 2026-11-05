@@ -13,6 +13,10 @@ export class ServerCanvasSession {
     this.seeded = false; this.syncAt = 0; this.sentAt = 0; this.nextAt = 0;
     this.queuedBytes = 0;
   }
+  get viewOperations() { return this.movePreview ? [...this.pendingOperations,this.movePreview] : this.pendingOperations; }
+  beginMove(ids,start={x:0,y:0}) { this.movePreview={action:'translate',ids:[...ids],dx:0,dy:0,start:{...start},end:{...start}}; }
+  previewMove(dx,dy) { if(!this.movePreview)return false;this.movePreview={...this.movePreview,dx,dy,end:{x:this.movePreview.start.x+dx,y:this.movePreview.start.y+dy}};this.redraw();return true; }
+  finishMove(cancel=false) { const operation=this.movePreview;this.movePreview=null;if(!operation)return true;const accepted=cancel||(!operation.dx&&!operation.dy)||this.submit([operation]);this.redraw();if(!cancel&&accepted)this.flushMoves();return accepted; }
   get editable() { return this.seeded && !this.blocked; }
   get pendingOperations() { return [...(this.flight?.operations || []), ...this.queue]; }
   notify() {
@@ -58,7 +62,7 @@ export class ServerCanvasSession {
     }
     for (const operation of operations) {
       const last = this.queue.at(-1);
-      if (operation.action === 'translate' && last?.action === 'translate'
+      if (operation.action === 'translate' && last?.action === 'translate' && !operation.start && !last.start
         && operation.ids.length === last.ids.length && operation.ids.every((id, i) => id === last.ids[i])) {
         this.queuedBytes -= bytes(last);
         last.dx += operation.dx; last.dy += operation.dy;
@@ -142,7 +146,7 @@ export class ServerCanvasSession {
         if (bytes && bytes + size > 1024 * 1024) break;
         operations.push(this.queue.shift()); bytes += size; this.queuedBytes -= size;
       }
-      this.flight = { type: 'canvas_ops', client_id: this.clientId, request_count: this.count + 1, request_id: createId(), operations: structuredClone(operations) };
+      this.flight = { wireBytes: bytes, type: 'canvas_ops', client_id: this.clientId, request_count: this.count + 1, request_id: createId(), operations: structuredClone(operations) };
       this.sentAt = 0; this.nextAt = now + (operations.every(o => o.action === 'translate') ? 100 : 33);
     }
     if (this.flight && now - this.sentAt >= 1000 && this.send(this.flight)) this.sentAt = now;

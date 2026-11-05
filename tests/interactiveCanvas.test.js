@@ -82,3 +82,10 @@ test('optimistic group translation preserves content and rebases on concurrent a
  assert.equal(view.items.a.x,.4);assert.equal(view.items.t.text,'remote edit');
  view.rebase({t:text},['a'],ops);assert.equal(view.items.a,undefined,'deleted group members are never recreated');
 });
+
+test('mixed acknowledgements and additions preserve the existing scene and minimap cache',()=>{
+ const before=itemSnapshot(Object.fromEntries(Array.from({length:10000},(_,i)=>['s'+i,shape]))),index=new CanvasSpatialBTree(before,world),query=new StableSpatialQuery(),bounds={minX:-1,minY:-1,maxX:2,maxY:2},scene=new SceneViewModel(),markers=new MinimapMarkers();
+ let entries=query.query(index,bounds);scene.update(entries,before,world,1,new Set(),new Set(),0,index);markers.update(entries,before,1600,1000,index);const resets=scene.stats.resets,untouched=scene.layers.get(0).vectors.s9999;
+ const after=changeItems(before,{s0:{...shape},extra:{...shape,x:.2}});index.update(after,world);entries=query.query(index,bounds);scene.update(entries,after,world,1,new Set(),new Set(),0,index);markers.update(entries,after,1600,1000,index);
+ assert.equal(scene.stats.resets,resets);assert.equal(scene.stats.appends,1);assert.equal(scene.layers.get(0).vectors.s9999,untouched);assert.ok(scene.layers.get(0).vectors.extra);assert.equal(markers.value.length,10001);
+});

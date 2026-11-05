@@ -1,5 +1,32 @@
 // UI messages only. User-authored content is never translated.
 export default {
+ '이전 메시지 10개 불러오기':'Load 10 older messages',
+
+ '캔버스에 입장하려면 비밀번호를 입력해 주세요.':'Enter the password to join this canvas.', '캔버스 비밀번호 입력':'Enter canvas password', '캔버스 입장':'Join canvas', '비밀번호가 올바르지 않습니다. 다시 입력해주세요.':'Incorrect password. Please try again.',
+
+ '음성 통화 패널 닫기':'Close voice panel', '참가자':'Participants', '참여할 준비가 되었어요':'Ready to join', '캔버스에 연결하는 중…':'Connecting to canvas…',
+ '마이크 꺼짐':'Microphone off', '마이크 켜짐':'Microphone on', '참여 중':'In call', '첫 번째로 통화에 참여해 보세요':'Be the first to join the call',
+ '같은 캔버스의 참여자와 대화할 수 있어요.':'Talk with people in this canvas.', '참여하면 마이크 접근 권한을 요청합니다.':'Joining requests access to your microphone.', '패널을 닫아도 통화는 계속됩니다.':'Your call continues when this panel is closed.',
+
+ '통화 중':'In a voice call', '음성 통화':'Voice call', '통화 참여':'Join call', '마이크 연결 중…':'Connecting microphone…',
+ '마이크 켜기':'Unmute microphone', '마이크 끄기':'Mute microphone', '소리 켜기':'Enable sound', '소리 끄기':'Mute sound', '통화 나가기':'Leave call', '음소거':'Muted', '나':'You', '연결 실패':'Connection failed',
+ '마이크 접근을 허용해 주세요.':'Allow access to your microphone.', '마이크를 사용할 수 없습니다.':'Microphone unavailable.',
+ '음성 연결에 실패했습니다. 통화에서 나간 후 다시 참여해 주세요.':'Voice connection failed. Leave and rejoin the call.',
+ '소리를 재생하려면 클릭해 주세요.':'Click to enable audio playback.', '소리 재생':'Play audio',
+
+"속도 우선 · 그림자 생략 · 대량 객체에 권장":"Fastest · shadows omitted · recommended for large canvases",
+"마크다운 편집":"Edit Markdown",
+"더블 클릭하여 마크다운 편집":"Double-click to edit Markdown",
+"가로 격자 간격":"Horizontal grid spacing",
+"세로 격자 간격":"Vertical grid spacing",
+"객체 붙여넣기 {count}/{total}":"Pasting objects {count}/{total}",
+"객체 {count}개를 붙여넣었습니다.":"Pasted {count} objects.",
+"함께 복사되지 않은 연결 대상의 화살표는 제외했습니다.":"Connectors to missing targets were skipped.",
+"한 번에 최대 10,000개 객체를 복사할 수 있습니다.":"You can copy up to 10,000 objects at once.",
+
+  "이 그룹에는 실행 환경을 변경할 권한이 없습니다.": "This group cannot change the runtime environment.",
+  "새 기능 적용 시 VM이 다시 시작될 수 있으며 파일은 유지됩니다.": "Applying new features may restart the VM; files are retained.",
+  "출력 지우기": "Clear output",
   "격자 간격": "Grid spacing",
   "격자에 맞춰 배치": "Snap to grid",
   "주피터 노트북": "Jupyter notebook",

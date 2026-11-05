@@ -1,5 +1,6 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { gridProjection } from './gridProjection.js';
+import {shouldCommitCamera} from './cameraCommitSchedule.js';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, startTransition } from 'react';
+import { applyGridProjection } from './gridProjection.js';
 import { CANVAS_SPACE, formatCanvasZoom } from './canvasSpace.js';
 
 // Camera motion is a compositor update. React refreshes scene membership at
@@ -7,10 +8,11 @@ import { CANVAS_SPACE, formatCanvasZoom } from './canvasSpace.js';
 export function useCanvasCamera(boardRef,sceneRef) {
   const current=useRef({x:0,y:0,scale:1}),committed=useRef(current.current);
   const [revision,setRevision]=useState(0);
-  const work=useRef({frame:0,idle:0,lastCommit:0,observer:null,size:null});
-  const commit=useCallback(()=>{
+  const work=useRef({frame:0,idle:0,lastCommit:0,detailScale:1,observer:null,size:null});
+  const commit=useCallback((settled=false)=>{
     committed.current={...current.current};work.current.lastCommit=performance.now();
-    setRevision(value=>value+1);
+    if(settled){work.current.detailScale=current.current.scale;setRevision(value=>value+1);}
+    else startTransition(()=>setRevision(value=>value+1));
   },[]);
   const apply=useCallback(()=>{
     const stage=boardRef.current,scene=sceneRef.current,camera=current.current;
@@ -22,7 +24,7 @@ export function useCanvasCamera(boardRef,sceneRef) {
     const {width,height}=work.current.size;
     for(const layer of scene.querySelectorAll('.canvas-world-layer'))layer.style.transform=`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`;
     const grid=stage.querySelector('.canvas-grid-surface');
-    if(grid)grid.style.transform=gridProjection(camera,Number(stage.dataset.gridSpacing)||undefined).transform;
+    if(grid)applyGridProjection(grid,camera,{x:Number(stage.dataset.gridSpacingX)||20,y:Number(stage.dataset.gridSpacingY)||20});
     const axes=stage.querySelector('.coordinate-plane');
     if(axes){
       const x=CANVAS_SPACE.width*camera.scale/2+camera.x,y=CANVAS_SPACE.height*camera.scale/2+camera.y;
@@ -44,12 +46,12 @@ export function useCanvasCamera(boardRef,sceneRef) {
     if(!work.current.frame)work.current.frame=requestAnimationFrame(()=>{
       work.current.frame=0;apply();
       const before=committed.current,now=current.current;
-      if(performance.now()-work.current.lastCommit>=100 || Math.abs(now.x-before.x)>96 || Math.abs(now.y-before.y)>96 || Math.abs(Math.log(now.scale/before.scale))>.15)commit();
+      if(shouldCommitCamera(before,now,performance.now()-work.current.lastCommit))commit();
     });
     clearTimeout(work.current.idle);
-    work.current.idle=setTimeout(()=>{boardRef.current?.classList.remove('camera-moving');commit();},120);
+    work.current.idle=setTimeout(()=>{boardRef.current?.classList.remove('camera-moving');commit(true);},160);
   },[apply,commit,boardRef]);
-  const camera=useMemo(()=>({get x(){return current.current.x},get y(){return current.current.y},get scale(){return current.current.scale}}),[revision]);
+  const camera=useMemo(()=>({get x(){return current.current.x},get y(){return current.current.y},get scale(){return current.current.scale},get detailScale(){return work.current.detailScale}}),[revision]);
   useLayoutEffect(apply);
   useLayoutEffect(()=>()=>{cancelAnimationFrame(work.current.frame);clearTimeout(work.current.idle);work.current.observer?.disconnect();boardRef.current?.classList.remove('camera-moving');},[boardRef]);
   return [camera,setCamera];

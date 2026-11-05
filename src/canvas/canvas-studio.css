@@ -40,7 +40,7 @@
 .canvas-app-page .connection-pill.connected i {background:var(--studio-accent);}
 .canvas-app-page .canvas-topbar>.canvas-chrome-toggle {position:absolute;left:44px;right:auto;top:12px;z-index:2;margin:0;pointer-events:auto;background:var(--surface);border-radius:10px;width:32px;height:32px;}
 .canvas-app-page .canvas-topbar.is-collapsed {height:50px;width:156px;padding:5px 42px 5px 12px;background:var(--surface)!important;border:1px solid var(--line);border-radius:12px;box-shadow:var(--studio-shadow)!important;}
-.canvas-app-page .canvas-topbar.is-collapsed>.canvas-chrome-toggle {top:9px;left:44px;right:auto;}
+.canvas-app-page .canvas-topbar.is-collapsed>.canvas-chrome-toggle {top:8px;left:44px;right:auto;}
 .canvas-app-page[data-info-collapsed="true"] {--canvas-panel-top:72px;}
 .canvas-app-page .canvas-panel-slot {border-color:var(--line);border-radius:16px;box-shadow:var(--studio-shadow);}
 .canvas-app-page .canvas-panel-slot-tools,.canvas-app-page .canvas-panel-slot-inspector {bottom:98px;}
@@ -202,10 +202,6 @@
  .canvas-app-page {--studio-panel-bottom:148px;--studio-map-gap:162px;}
  .canvas-app-page .canvas-quick-dock {bottom:76px;}
 }
-.app-shell.is-canvas-shell:has(.canvas-app-page[data-info-collapsed="true"]) .app-navigation-toggle{top:19px}
-@media(max-width:650px){
- .app-shell.is-canvas-shell:has(.canvas-app-page[data-info-collapsed="true"]) .app-navigation-toggle{top:69px}
- .app-shell.is-navigation-collapsed:has(.canvas-app-page[data-info-collapsed="true"]) .app-navigation-toggle{top:13px}
-}
+/* Folding keeps the same 50px title card; retain the navigation slot offsets. */
 .app-shell.is-canvas-shell .sidebar-account {margin-top:auto;justify-content:flex-end;}
 .canvas-app-page .settings-dialog-footer,.canvas-app-page .participants-dialog .settings-dialog-footer {justify-content:flex-end;}

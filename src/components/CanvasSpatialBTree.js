@@ -1,3 +1,5 @@
+import ConnectionIndex from '../canvas/clipboard/ConnectionIndex.js';
+import {isRasterCode,codePreviewHeight} from '../canvas/codePreviewMetrics.js';
 import { isDrawableCanvasItem } from '../canvas/drawableItems.js';
 import { shapeStrokeWidth } from '../canvas/shapeAppearance.js';
 import { changedItemIds } from '../canvas/itemSnapshots.js';
@@ -103,7 +105,7 @@ function objectBounds(item, items, viewportWidth = 1, viewportHeight = 1) {
   const y = Number(item?.y) || 0;
   const measured = connectorObjectSize(item);
   const objectWidth = measured ? measured.width / CANVAS_SPACE.width : Number(item?.width) || defaultWidth;
-  const objectHeight = measured ? measured.height / CANVAS_SPACE.height : Number(item?.height) || defaultHeight;
+  const objectHeight = measured ? measured.height / CANVAS_SPACE.height : Number(item?.height) || (isRasterCode(item)?codePreviewHeight(item,height)/height:defaultHeight);
   if (item?.kind === 'shape' && item.shapeType === 'arrow') {
     const geometry = shapeArrowGeometry(objectWidth * width, objectHeight * height, item.bend, item.startHead, item.endHead, item);
     const centerX = (x + objectWidth / 2) * width;
@@ -136,9 +138,9 @@ function objectBounds(item, items, viewportWidth = 1, viewportHeight = 1) {
 }
 
 // Keep the public query API while RBush incrementally updates changed rectangles.
-const geometryFields = ['kind','type','x','y','width','height','rotation','shapeType','vertexCount','cornerStyle','bend','bendPoints','startHead','endHead','headSize','strokeWidth','brush','simulatePressure','points','from','to','fromPort','toPort'];
+const geometryFields = ['renderMode','kind','type','x','y','width','height','rotation','shapeType','vertexCount','cornerStyle','bend','bendPoints','startHead','endHead','headSize','strokeWidth','brush','simulatePressure','points','from','to','fromPort','toPort'];
 function geometryKey(item) {
-  return geometryFields.map(field => item[field]);
+  return [...geometryFields.map(field=>item[field]),...(isRasterCode(item)&&!item.height?[item.text,item.code,item.fontSize,item.contentScale,item.contentScaleX,item.contentScaleY]:[])];
 }
 function sameKey(a,b) { return a?.length === b.length && b.every((value,index) => value === a[index]); }
 function paintedBounds(bounds,item,width,height) {
@@ -157,6 +159,7 @@ export default class CanvasSpatialBTree {
     this.tree = new RBush(fanout);
     this.entries = new Map();
     this.connectorIds = new Set();
+    this.connectionIndex=new ConnectionIndex();
     this.stats = { updates:0, boundsCalculated:0, inserted:0, removed:0, queries:0 };
     this.update(items,viewSize);
   }
@@ -169,6 +172,7 @@ export default class CanvasSpatialBTree {
     if(changedIds==null && !remeasured && this.items)changedIds=changedItemIds(this.items,items);
     const incremental = changedIds && !resized && !initial;
     const ids = incremental ? [...new Set(changedIds.map(String))] : Object.keys(items);
+    this.connectionIndex.update(items,ids,!incremental);
     let obstaclesChanged = resized || remeasured;
     const removals = incremental ? ids.map(id=>[id,this.entries.get(id)]).filter(([,entry])=>entry) : this.entries;
     for (const [id,entry] of removals) if (!Object.hasOwn(items,id) || !isDrawableCanvasItem(items[id])) {

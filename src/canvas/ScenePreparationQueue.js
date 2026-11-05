@@ -9,6 +9,10 @@ export default class ScenePreparationQueue {
   setItems(items) {
     if (items === this.items) return false;
     const changed=changedItemIds(this.items,items);
+    if(changed && changed.every(id=>items[id])){
+      for(const id of changed){const item=items[id];if(this.positions.has(id))this.entries[this.positions.get(id)]=[id,item];else{this.positions.set(id,this.entries.length);this.entries.push([id,item]);this.ids.add(id);this.orderKey+=(this.orderKey?'\0':'')+id;}}
+      this.changedIds=changed;this.items=items;return true;
+    }
     this.changedIds=changed && changed.every(id=>this.positions.has(id) && items[id])?changed:null;
     if(this.changedIds){for(const id of changed)this.entries[this.positions.get(id)]=[id,items[id]];this.items=items;return true;}
     this.items = items; this.entries = Object.entries(items || {});

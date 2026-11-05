@@ -4,17 +4,19 @@ export default class StableSpatialQuery {
     const same=this.bounds && ['minX','minY','maxX','maxY'].every(key=>this.bounds[key]===bounds[key]);
     if(same && index.stats && this.revision===index.stats.updates)return this.entries;
     if(same && index.stats && this.revision===index.stats.updates-1 && index.changedIds){
+      const previous=this.entries,delta={previous:new WeakRef(previous),added:[],removed:[],updated:[]};
       let result=this.entries;
       for(const id of index.changedIds){
         const entry=index.entries.get(id),position=this.positions.get(id);
         const inside=entry && entry.maxX>=bounds.minX && entry.minX<=bounds.maxX && entry.maxY>=bounds.minY && entry.minY<=bounds.maxY;
-        if(inside && position!==undefined){result[position]=entry;this.byId.set(id,entry);}
-        else if(inside){if(result===this.entries)result=result.slice();this.positions.set(id,result.length);result.push(entry);this.byId.set(id,entry);}
+        if(inside && position!==undefined){delta.updated.push(entry);result[position]=entry;this.byId.set(id,entry);}
+        else if(inside){delta.added.push(entry);if(result===this.entries)result=result.slice();this.positions.set(id,result.length);result.push(entry);this.byId.set(id,entry);}
         else if(position!==undefined){
-          if(result===this.entries)result=result.slice();const last=result.pop();this.positions.delete(id);this.byId.delete(id);
+          delta.removed.push(id);          if(result===this.entries)result=result.slice();const last=result.pop();this.positions.delete(id);this.byId.delete(id);
           if(position<result.length){result[position]=last;this.positions.set(last.id,position);}
         }
       }
+      if(result!==previous)Object.defineProperty(result,'sceneDelta',{value:delta,configurable:true});
       this.entries=result;this.revision=index.stats?.updates;return result;
     }
     const result=index.query(bounds);

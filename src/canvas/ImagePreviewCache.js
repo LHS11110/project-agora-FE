@@ -53,7 +53,7 @@ export default class ImagePreviewCache {
   }
 }
 
-export async function loadImagePreview(source, token, apiUrl, signal) {
+export async function loadImagePreview(source, token, apiUrl, signal, maxSide=96) {
   const url = new URL(/^(data|blob):/i.test(source) ? source : apiUrl(source));
   const apiOrigin = /^(data|blob):$/i.test(url.protocol) ? null : new URL(apiUrl('/')).origin;
   const response = await fetch(url.href, { signal, cache: 'no-store', headers: url.origin === apiOrigin && token ? { Authorization: `Bearer ${token}` } : {} });
@@ -68,10 +68,10 @@ export async function loadImagePreview(source, token, apiUrl, signal) {
       const image = new Image(); image.src = objectUrl; await image.decode();
       bitmap = image;
     }
-    const ratio = Math.min(1, 96 / Math.max(bitmap.width, bitmap.height));
+    const ratio = Math.min(1, Math.max(16,Math.min(1024,Number(maxSide)||96)) / Math.max(bitmap.width, bitmap.height));
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(bitmap.width * ratio)); canvas.height = Math.max(1, Math.round(bitmap.height * ratio));
-    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const context=canvas.getContext('2d');context.imageSmoothingQuality=maxSide>96?'high':'low';context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     return canvas;
   } finally { bitmap?.close?.(); if (objectUrl) URL.revokeObjectURL(objectUrl); }
 }

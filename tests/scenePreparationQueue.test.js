@@ -57,3 +57,11 @@ test('dirty vector edits do not discard the remaining initial preparation work',
  queue.setItems(before);queue.run(()=>{},0);queue.setItems(changeItems(before,{a:{x:1}}));queue.invalidate(queue.changedIds);
  const visited=[];queue.run(id=>visited.push(id),Infinity);assert.deepEqual(visited,['a','b','c']);
 });
+
+test('progressive paste appends work without restarting a prepared 100k scene',()=>{
+ const queue=new ScenePreparationQueue(),before=itemSnapshot(Object.fromEntries(Array.from({length:100000},(_,i)=>['s'+i,{kind:'shape',x:i}])));
+ queue.setItems(before);queue.run(()=>{},Infinity);const enumerations=queue.enumerations;
+ const after=changeItems(before,Object.fromEntries(Array.from({length:32},(_,i)=>['new'+i,{kind:'shape',x:i}])));
+ queue.setItems(after);queue.invalidate(queue.changedIds);const visited=[];queue.run(id=>visited.push(id),Infinity);
+ assert.equal(queue.enumerations,enumerations);assert.ok(visited.every(id=>id.startsWith('new')));assert.equal(new Set(visited).size,32);
+});

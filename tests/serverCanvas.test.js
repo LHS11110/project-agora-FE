@@ -112,3 +112,18 @@ test('uncertain server outcome forces reconciliation even at the same watermark'
   session.receiveServer({type:'canvas_watermark',revision:0,force_sync:true});
   assert.equal(session.ready,false); assert.equal(sent.at(-1).type,'canvas_sync');
 });
+
+test('drag previews send nothing until release, retain remote changes and commit only endpoints once',()=>{
+ const {session,sent}=client();session.beginMove(['box'],{x:0,y:0});
+ for(let i=1;i<=300;i++){session.previewMove(i/100,0);session.tick();}
+ assert.equal(sent.length,0);assert.equal(session.pendingOperations.length,0);assert.equal(session.viewOperations[0].dx,3);
+ session.receiveServer({type:'canvas_commit',revision:1,items:{box:{...box,color:'blue'}}});
+ assert.equal(session.items.box.color,'blue');assert.equal(session.movePreview.dx,3);
+ assert.equal(session.finishMove(),true);assert.equal(sent.length,1);
+ assert.deepEqual(sent[0].operations,[{action:'translate',ids:['box'],dx:3,dy:0,start:{x:0,y:0},end:{x:3,y:0}}]);
+ const flight=sent[0];commit(session,flight,2,{translations:flight.operations});assert.equal(session.items.box.x,3);assert.equal(session.items.box.color,'blue');assert.equal(session.viewOperations.length,0);
+});
+test('cancelled drags never enter the durable queue',()=>{
+ const {session,sent}=client();session.beginMove(['box']);session.previewMove(2,3);session.finishMove(true);session.tick();
+ assert.equal(sent.length,0);assert.equal(session.items.box.x,0);assert.equal(session.movePreview,null);
+});

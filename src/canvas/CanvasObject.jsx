@@ -1,5 +1,7 @@
-import NotebookObject from './notebook/NotebookObject.jsx';
-import CanvasImageContent from './CanvasImageContent.jsx';
+import {objectContentPropsEqual} from './objectContentCache.js';
+import {selectedScrollArea} from './editorWheel.js';
+import RawNotebookObject from './notebook/NotebookObject.jsx';
+import RawCanvasImageContent from './CanvasImageContent.jsx';
 import { supportsObjectCorners, objectCornerStyle } from './objectCorners.js';
 import './object-corners.css';
 import EditingSurface from './content/EditingSurface.jsx';
@@ -11,15 +13,15 @@ import './object-typography.css';
 import { objectShadowStyle } from './objectShadow.js';
 import { strokeSelectionGeometry } from './strokeSelection.js';
 import './object-shadow.css';
-import PdfDocumentContent from './pdf/PdfDocumentContent.jsx';
-import UserGroupContent from './userGroups/UserGroupContent.jsx';
+import RawPdfDocumentContent from './pdf/PdfDocumentContent.jsx';
+import RawUserGroupContent from './userGroups/UserGroupContent.jsx';
 import ConnectorBendHandles from '../components/canvas/ConnectorBendHandles.jsx';
-import UnifiedTextContent from './content/UnifiedTextContent.jsx';
-import TerminalObject from './runtime/TerminalObject.jsx';
-import BlueprintNode from './runtime/BlueprintNode.jsx';
+import RawUnifiedTextContent from './content/UnifiedTextContent.jsx';
+import RawTerminalObject from './runtime/TerminalObject.jsx';
+import RawBlueprintNode from './runtime/BlueprintNode.jsx';
 import RuntimeCodeFrame from './runtime/RuntimeCodeFrame.jsx';
 import { contentMode, isTextContent } from './content/contentPresentation.js';
-import ConnectorLabel from '../components/canvas/ConnectorLabel.jsx';
+import RawConnectorLabel from '../components/canvas/ConnectorLabel.jsx';
 import ConnectorSelectionEffect from '../components/canvas/ConnectorSelectionEffect.jsx';
 import { measureConnectorObject } from './connectors/objectMetrics.js';
 import { useEditingBoundary } from './useEditingBoundary.js';
@@ -29,11 +31,11 @@ import { handleObjectDoubleClick } from './objectDoubleClick.js';
 import { cloneElement, memo, useMemo, useLayoutEffect, useRef } from 'react';
 import Icon from '../components/Icon.jsx';
 import MarkdownText from '../components/MarkdownText.jsx';
-import EditableTable from '../components/EditableTable.jsx';
-import ChartView from './charts/ChartView.jsx';
-import ValueObject from './values/ValueObject.jsx';
-import QuestionCard from './questions/QuestionCard.jsx';
-import SharedMediaContent from '../components/SharedMediaContent.jsx';
+import RawEditableTable from '../components/EditableTable.jsx';
+import RawChartView from './charts/ChartView.jsx';
+import RawValueObject from './values/ValueObject.jsx';
+import RawQuestionCard from './questions/QuestionCard.jsx';
+import RawSharedMediaContent from '../components/SharedMediaContent.jsx';
 import ResizeHandles from '../components/ResizeHandles.jsx';
 import ConnectorArrowheads from '../components/canvas/ConnectorArrowheads.jsx';
 import './object-interaction.css';
@@ -43,8 +45,30 @@ import { updateTableValue } from '../components/tableModel.js';
 import { stickyNoteColors } from './canvasConstants.js';
 import { moveTextPosition, textSpliceBetween } from './collaborativeText.js';
 
+const NotebookObject=memo(RawNotebookObject,objectContentPropsEqual);
+const CanvasImageContent=memo(RawCanvasImageContent,objectContentPropsEqual);
+const PdfDocumentContent=memo(RawPdfDocumentContent,objectContentPropsEqual);
+const UserGroupContent=memo(RawUserGroupContent,objectContentPropsEqual);
+const TerminalObject=memo(RawTerminalObject,objectContentPropsEqual);
+const BlueprintNode=memo(RawBlueprintNode,objectContentPropsEqual);
+const UnifiedTextContent=memo(RawUnifiedTextContent,objectContentPropsEqual);
+const EditableTable=memo(RawEditableTable,objectContentPropsEqual);
+const ChartView=memo(RawChartView,objectContentPropsEqual);
+const ValueObject=memo(RawValueObject,objectContentPropsEqual);
+const QuestionCard=memo(RawQuestionCard,objectContentPropsEqual);
+const SharedMediaContent=memo(RawSharedMediaContent,objectContentPropsEqual);
+const ConnectorLabel=memo(RawConnectorLabel,objectContentPropsEqual);
+
 function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, token, runtimeStore, onUndo, onStartEditing, onTextChange, onTextColorChange, onMetadataChange, onFormulaChange, onTableChange, onQuestionChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
   useUiLocale();
+  const contentLatest=useRef(null);contentLatest.current={id,onTableChange,onQuestionChange,onStartEditing,onStopEditing};
+  const contentActions=useMemo(()=>({
+    change:patch=>{const c=contentLatest.current;return c.onQuestionChange(c.id,patch);},
+    page:pdfPage=>{const c=contentLatest.current;return c.onQuestionChange(c.id,{pdfPage});},
+    table:(location,value)=>{const c=contentLatest.current;return c.onTableChange(c.id,current=>updateTableValue(current,location,value));},
+    start:()=>{const c=contentLatest.current;return c.onStartEditing(c.id);},
+    stop:()=>{const c=contentLatest.current;return c.onStopEditing(c.id);},
+  }),[]);
   const collaborativeValue = String(item.kind === 'code' ? item.code || '' : item.text || '');
   const geometryElementRef = useRef(null);
   useLayoutEffect(() => {
@@ -133,7 +157,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
       selectingPointerRef.current = false;
       event.preventDefault(); event.stopPropagation();
     },
-    onPointerDown: (event) => { if (editing) { event.stopPropagation(); return; } onPointerDown(event, id, item); },
+    onPointerDown: (event) => { if (editing || (selected && selectedScrollArea(event.target))) { event.stopPropagation(); return; } onPointerDown(event, id, item); },
     onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onLostPointerCapture: onPointerUp,
   };
   const resizeHandles = selected && !item.locked && !readOnly && allowSingleSelectionControls && movable && !editing && item.kind !== 'connector'
@@ -150,7 +174,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
   if (item.kind === 'shape' && item.runtimeRole==='notebook') return withResizeHandles(<div className={`${classes} notebook-object`} style={style} {...handlers}><NotebookObject id={id} item={item} store={runtimeStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} canExecute={canExecute} onChange={onQuestionChange}/></div>);
   if (item.kind === 'shape' && item.runtimeRole==='terminal') return withResizeHandles(<div className={`${classes} terminal-object`} style={style} {...handlers}><TerminalObject id={id} item={item} store={runtimeStore} selected={selected && activeTool==='select'} canExecute={canExecute}/></div>);
   if (item.kind === 'shape' && ['executor', 'output'].includes(item.runtimeRole)) return withResizeHandles(<div className={`${classes} blueprint-object${item.runtimeRole==='executor'?' blueprint-executor-object':''}`} style={style} {...handlers}><BlueprintNode id={id} item={item} store={runtimeStore} selected={selected} canExecute={canExecute} canReset={canExecute&&!readOnly} /></div>);
-  if (item.kind === 'pdf') return withResizeHandles(<div className={`${classes} pdf-object`} style={style} {...handlers}><PdfDocumentContent item={item} token={token} interactive={selected && activeTool === 'select'} canChangePage={!readOnly&&!item.locked} onPageChange={pdfPage=>onQuestionChange(id,{pdfPage})}/></div>);
+  if (item.kind === 'pdf') return withResizeHandles(<div className={`${classes} pdf-object`} style={style} {...handlers}><PdfDocumentContent item={item} token={token} interactive={selected && activeTool === 'select'} canChangePage={!readOnly&&!item.locked} onPageChange={contentActions.page}/></div>);
   if (item.kind === 'user-group') return withResizeHandles(<div className={`${classes} user-group-object`} style={style} {...handlers}><UserGroupContent item={item} token={token} /></div>);
   if (item.kind === 'stroke') {
     const geometry = strokeSelectionGeometry(item, viewSize);
@@ -183,7 +207,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
     <div className="shared-media-header"><span className="shared-media-drag-handle" title={ui("여기를 끌어 자료를 이동하세요")}><Icon name={item.mediaType === 'link' ? 'link' : 'image'} size={13} />{item.mediaType === 'youtube' ? `YouTube · ${item.title || ui("동영상")}` : item.mediaType === 'video' ? ui("동영상 · {v0}", {
   v0: item.title || ui("재생")
 }) : ui("링크")}</span></div>
-    <SharedMediaContent item={item} interactive={editing} writable={!readOnly&&!item.locked} onChange={patch=>onQuestionChange(id,patch)} />
+    <SharedMediaContent item={item} interactive={editing} writable={!readOnly&&!item.locked} onChange={contentActions.change} />
   </div>);
   if (isTextContent(item)) {
     const mode = contentMode(item);
@@ -198,7 +222,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
       <textarea className="sticky-note-input" ref={collaborativeEditorRef} autoFocus aria-label={ui("포스트잇 Markdown 편집")} value={item.text || ''} placeholder={ui("# 메모 제목\n- 할 일\n**중요한 내용**")} onPointerDown={(event) => event.stopPropagation()} onSelect={rememberCollaborativeSelection} onKeyUp={rememberCollaborativeSelection} onClick={rememberCollaborativeSelection} onChange={handleCollaborativeInput} />
     </EditingSurface>
   </div>);
-  if (item.kind === 'table') return withResizeHandles(<div key={id} className={`${classes} canvas-table-object`} style={style} data-item-id={id} {...handlers}><EditableTable item={item} editingActive={editing} enabled={activeTool === 'select' && selected && !item.locked && !readOnly} onStartEditing={() => onStartEditing(id)} onStopEditing={() => onStopEditing(id)} onChange={(location, value) => onTableChange(id, (current) => updateTableValue(current, location, value))} /></div>);
+  if (item.kind === 'table') return withResizeHandles(<div key={id} className={`${classes} canvas-table-object`} style={style} data-item-id={id} {...handlers}><EditableTable item={item} editingActive={editing} enabled={activeTool === 'select' && selected && !item.locked && !readOnly} onStartEditing={contentActions.start} onStopEditing={contentActions.stop} onChange={contentActions.table} /></div>);
   if (item.kind === 'value') return withResizeHandles(<div className={`${classes} canvas-value-frame`} style={style} {...handlers}><ValueObject id={id} item={item} readOnly={readOnly||item.locked||activeTool!=='select'} onChange={onQuestionChange}/></div>);
   if (item.kind === 'question') return withResizeHandles(<div className={`${classes} canvas-question-object`} style={style} {...handlers}><QuestionCard id={id} item={item} readOnly={readOnly||item.locked||activeTool!=='select'} onChange={onQuestionChange} /></div>);
   if (item.kind === 'chart') return withResizeHandles(<div key={id} className={`${classes} canvas-chart-object`} style={style} data-item-id={id} {...handlers}><ChartView item={item} /></div>);

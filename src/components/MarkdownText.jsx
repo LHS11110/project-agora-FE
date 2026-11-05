@@ -1,10 +1,12 @@
+import {memo} from 'react';
+import {renderValueEqual} from '../canvas/canvasRenderEquality.js';
 import MathFormula from './MathFormula.jsx';
 import MarkdownInline from './markdown/MarkdownInline.jsx';
 import MarkdownCodeBlock from './markdown/MarkdownCodeBlock.jsx';
 import { parseMarkdownBlocks } from './markdown/parseBlocks.js';
 import './markdown/markdown-blocks.css';
 
-export default function MarkdownText({ source = '', colorRanges = [] }) {
+function MarkdownText({ source = '', colorRanges = [] }) {
   const offsets = [0];
   for (const match of String(source).matchAll(/\r\n|\r|\n/g)) offsets.push(match.index + match[0].length);
   const blocks = [];
@@ -49,3 +51,5 @@ export default function MarkdownText({ source = '', colorRanges = [] }) {
   flushList();
   return <div className="simple-markdown">{blocks}</div>;
 }
+
+export default memo(MarkdownText,(a,b)=>a.source===b.source&&renderValueEqual(a.colorRanges,b.colorRanges));

@@ -40,3 +40,29 @@ test('memoized objects ignore CRDT envelopes but retain content, selection, geom
   assert.ok(!canvasObjectPropsEqual(props,{...props,selected:true}));
   assert.ok(!canvasObjectPropsEqual(props,{...props,onPointerDown:()=>{}}));
 });
+
+import {objectContentPropsEqual} from '../src/canvas/objectContentCache.js';
+test('moving rich objects retains their content while meaningful state and authorization invalidate it',()=>{
+ const onChange=()=>{};
+ for(const item of [
+  {kind:'shape',runtimeRole:'terminal'}, {kind:'shape',runtimeRole:'notebook',notebookCells:[{id:'a',source:'x=1'}]},
+  {kind:'table',rows:[['a',1]]},{kind:'chart',rows:[['a',1]]},{kind:'text',text:'hello'},
+  {kind:'note',text:'# note'},{kind:'math',formula:'x^2'},{kind:'pdf',pdfPage:1},
+  {kind:'image',src:'image'},{kind:'link',mediaState:{paused:true,time:0}},{kind:'user-group',members:[]},
+  {kind:'value',valueNumber:1},{kind:'question',questionText:'Q'},{kind:'shape',runtimeRole:'output',runtimeResults:[]}
+ ]){
+  const props={item:{...item,x:1,y:2},onChange,selected:false,readOnly:false};
+  assert.equal(objectContentPropsEqual(props,{...props,item:{...props.item,x:3,y:4,rotation:30,depth:12}}),true,item.kind);
+  for(const patch of [{fontSize:24},{width:.4},{runtimeState:{running:true}},{color:'#123456'}])assert.equal(objectContentPropsEqual(props,{...props,item:{...props.item,...patch}}),false);
+  assert.equal(objectContentPropsEqual(props,{...props,readOnly:true}),false);
+  assert.equal(objectContentPropsEqual(props,{...props,selected:true}),false);
+  assert.equal(objectContentPropsEqual(props,{...props,onChange:()=>{}}),false);
+ }
+});
+test('unrelated routing revisions retain connector pixels, but moving its endpoint invalidates them',()=>{
+ const items={a:{kind:'shape',x:.1,y:.1,width:.1,height:.1},b:{kind:'shape',x:.6,y:.4,width:.1,height:.1}};
+ const connector={kind:'connector',from:'a',to:'b'},world={width:1600,height:1000};
+ const key=rasterDescriptor('c',connector,world,items,'revision:1').key;
+ assert.equal(rasterDescriptor('c',connector,world,items,'revision:2').key,key);
+ assert.notEqual(rasterDescriptor('c',connector,world,{...items,b:{...items.b,y:.6}},'revision:3').key,key);
+});
