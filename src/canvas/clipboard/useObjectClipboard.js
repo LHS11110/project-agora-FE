@@ -82,8 +82,8 @@ export function useObjectClipboard(options) {
         const position = {x:point.x+index*.025,y:point.y+index*.04};
         try {
           let id;
-          if (definition.file && ['image','pdf'].includes(definition.fileType)) {
-            id = await (definition.fileType === 'image' ? c.uploadImage : c.uploadPdf)?.({target:{files:[definition.file],value:''}}, {position,canInsert});
+          if (definition.file && ['image','pdf','sheet'].includes(definition.fileType)) {
+            id = await (definition.fileType === 'image' ? c.uploadImage : definition.fileType === 'sheet' ? c.uploadSheet : c.uploadPdf)?.({target:{files:[definition.file],value:''}}, {position,canInsert});
           } else {
             let item = definition;
             if (definition.file) {
@@ -101,7 +101,7 @@ export function useObjectClipboard(options) {
       }
       if (!canInsert()) return;
       if (ids.length) { c.setActiveTool('select'); c.selectItems(ids); c.setConnectionStartId(null); board.focus({preventScroll:true}); }
-      c.setToast(ids.length ? ui('자료 {count}개를 객체로 붙여넣었습니다.',{count:ids.length}) + (skipped ? ' '+ui('일부 자료는 형식이나 크기 제한으로 제외했습니다.') : '') : '붙여넣을 자료가 없거나 지원하지 않는 형식입니다. 이미지·PDF·텍스트·HTTPS 링크를 사용해주세요.');
+      c.setToast(ids.length ? ui('자료 {count}개를 객체로 붙여넣었습니다.',{count:ids.length}) + (skipped ? ' '+ui('일부 자료는 형식이나 크기 제한으로 제외했습니다.') : '') : '붙여넣을 자료가 없거나 지원하지 않는 형식입니다. 이미지·PDF·CSV·XLSX·텍스트·HTTPS 링크를 사용해주세요.');
     } catch (error) { if(canInsert())c.setToast(error.message); }
     finally { if(generation.current === turn){pending.current = false;setBusy(false);} }
   };

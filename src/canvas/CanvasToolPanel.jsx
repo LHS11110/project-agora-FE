@@ -14,7 +14,7 @@ import ToolFolderScatter from './toolFolders/ToolFolderScatter.jsx';
 import './canvas-tool-panel.css';
 import './toolFolders/tool-folders.css';
 
-export default function CanvasToolPanel({ activeTool, onSelectTool, color, onColorChange, onUploadImage, onUploadPdf, favoriteColors, onSaveFavorite }) {
+export default function CanvasToolPanel({ activeTool, onSelectTool, color, onColorChange, onUploadImage, onUploadPdf, onUploadSheet, favoriteColors, onSaveFavorite }) {
   useUiLocale();
   const panelRef = useRef(null);
   const folders = useToolFolderLayout(activeTool);
@@ -41,7 +41,7 @@ export default function CanvasToolPanel({ activeTool, onSelectTool, color, onCol
   v1: folder.tools.length
 }));
   };
-  const renderTools = ids => ids.map(id => <FolderTool key={id} tool={toolsById[id]} activeTool={activeTool} onSelectTool={onSelectTool} onUploadImage={onUploadImage} onUploadPdf={onUploadPdf} dragController={dragController} dragging={dragController.drag?.toolId === id} scattering={scattered.has(id)}>
+  const renderTools = ids => ids.map(id => <FolderTool key={id} tool={toolsById[id]} activeTool={activeTool} onSelectTool={onSelectTool} onUploadImage={onUploadImage} onUploadPdf={onUploadPdf} onUploadSheet={onUploadSheet} dragController={dragController} dragging={dragController.drag?.toolId === id} scattering={scattered.has(id)}>
     <CanvasColorPicker color={color} onChange={onColorChange} favoriteColors={favoriteColors} onSaveFavorite={onSaveFavorite} label={ui("펜 및 도형 색상")} compact />
   </FolderTool>);
   return <aside ref={panelRef} className="canvas-tools categorized-tools editable-tool-folders" aria-label={ui("캔버스 도구")}>

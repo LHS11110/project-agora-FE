@@ -38,6 +38,7 @@ import { hitTestVector } from '../canvas/vectorHitTest.js';
 import { renderWindow } from '../canvas/renderWindow.js';
 import { handleObjectDoubleClick } from '../canvas/objectDoubleClick.js';
 import StableSpatialQuery from '../canvas/StableSpatialQuery.js';
+import {useSheetUpload} from '../canvas/sheets/useSheetUpload.js';
 import { usePdfUpload } from '../canvas/pdf/usePdfUpload.js';
 import { useCanvasBackground } from '../canvas/background/useCanvasBackground.js';
 import { useParticipantProfiles } from '../canvas/useParticipantProfiles.js';
@@ -1229,6 +1230,7 @@ function CanvasWorkspace() {
     setSharePosition(null);
     setActiveTool('select');
   };
+  const uploadSheet = useSheetUpload({ canvasId, permission, addItem, centeredItemPosition, createId, setActiveTool, selectItems, setToast });
   const uploadPdf = usePdfUpload({ canvasId, token, permission, addItem, centeredItemPosition, createId, setActiveTool, selectItems, setToast });
   const uploadImage = async (event, options = {}) => {
     const file = event.target.files?.[0]; event.target.value = '';
@@ -1448,7 +1450,7 @@ function CanvasWorkspace() {
   const objectClipboard = useObjectClipboard({ canvasId, boardRef, itemsRef, spatialIndex, selectedIds: selectedObjectIds,
     permission, pointerPosition, canvasSnapshotLoadedRef: hostReadyRef, addItem, addItems, deleteItem, saveCollaborativeItem,
     pasteBackpressure:()=>hostSessionRef.current.queuedBytes>2*1024*1024 || hostSessionRef.current.pendingOperations.length>1024,
-    canPaste: canWriteCanvas, uploadImage, uploadPdf,
+    canPaste: canWriteCanvas, uploadImage, uploadPdf, uploadSheet,
     isInteracting: () => Boolean(dragRef.current || panRef.current || drawingRef.current || selectionRef.current || eraserRef.current),
     selectItems, setActiveTool, setConnectionStartId, setToast, blocked: clipboardBlocked });
   runtimeStore.notebook=async(id,{operation,code,cellId})=>{
@@ -1513,7 +1515,7 @@ function CanvasWorkspace() {
       </div>{chrome.collapsed.info && <div className="canvas-folded-language"><LanguageSwitcher /><button type="button" className={`canvas-voice-trigger${voice.state.active?' is-active':''}`} aria-label={ui(voice.state.active?'통화 중':'음성 통화')} aria-expanded={!panelLayout.handle('chat').collapsed&&communicationTab==='voice'} aria-controls="canvas-communication-panel" onClick={()=>{const panel=panelLayout.handle('chat');if(!panel.collapsed&&communicationTab==='voice')panel.onToggle();else{setCommunicationTab('voice');if(panel.collapsed)panel.onToggle();}}}><Icon name="microphone" size={16}/>{voice.state.active&&<i aria-hidden="true"/>}</button></div>}
     </header>
     {error ? <div className="canvas-error-state"><div className="error-art"><Icon name="grid" size={30} /></div><span className="section-kicker">CANVAS CONNECTION</span><h1>{ui("캔버스를 열 수 없어요.")}</h1><p>{error}</p><div><button className="button button-dark" onClick={() => window.location.reload()}>{ui("다시 연결하기")}</button><Link className="button button-outline" to="/search">{ui("캔버스 목록")}</Link></div></div> : <div className="canvas-workspace resizable-workspace" ref={panelLayout.ref} style={panelLayout.style}>
-      <ResizablePanel {...panelLayout.handle('tools')}><CanvasToolPanel activeTool={activeTool} onSelectTool={selectCanvasTool} color={color} onColorChange={setColor} onUploadPdf={uploadPdf} onUploadImage={uploadImage} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} /></ResizablePanel>
+      <ResizablePanel {...panelLayout.handle('tools')}><CanvasToolPanel activeTool={activeTool} onSelectTool={selectCanvasTool} color={color} onColorChange={setColor} onUploadPdf={uploadPdf} onUploadSheet={uploadSheet} onUploadImage={uploadImage} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} /></ResizablePanel>
       <CanvasQuickDock shortcutGuard={()=>hostSessionRef.current.editable && editingIdRef.current==null && !dragRef.current && !drawingRef.current && !panRef.current && !selectionRef.current} undoCount={undoCount} onUndo={undoCanvas} canUndo={hostStatus.editable && editingId == null} canWrite={canWriteCanvas} activeTool={activeTool} onSelectTool={selectCanvasTool} onUploadImage={uploadImage}
         toolsExpanded={!panelLayout.handle('tools').collapsed} onToggleTools={panelLayout.handle('tools').onToggle} />
       <main className="board-region"><div className="board-topline"><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(true); }}><Icon name="code" size={15} />{ui("캔버스 코드")}</button><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={()=>setShowRuntimeSettings(true)}><Icon name="settings" size={15}/>{ui("실행 환경")}</button><button className="zoom-button" aria-label={ui("확대")} title={ui("클릭: 한 단계 확대 · 길게 누르기: 계속 확대")} onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label={ui("축소")} title={ui("클릭: 한 단계 축소 · 길게 누르기: 계속 축소")} onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>{ui("맞춤")}</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />{"" + ui("격자") + " "}{showGrid ? ui("켜짐") : ui("꺼짐")}</button></div></div>

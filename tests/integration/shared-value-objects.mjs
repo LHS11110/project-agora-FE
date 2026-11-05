@@ -1,3 +1,4 @@
+import {sheetWorkbook} from '../fixtures/sheetWorkbook.mjs';
 import assert from 'node:assert/strict';
 const {chromium}=await import(process.env.AGORA_E2E_PLAYWRIGHT_MODULE||'playwright-core');
 const origin=process.env.AGORA_E2E_ORIGIN||'https://localhost:5191';
@@ -54,4 +55,19 @@ await page.getByRole('button',{name:'공유 일시정지',exact:true}).click();
 await observer.waitForFunction(()=>window.frelogCanvas.read().items.video.mediaState?.paused===true);
 await page.locator('.canvas-stage').click({position:{x:700,y:600}});await page.locator('[data-item-id="exec"]').getByRole('button',{name:'코드 실행',exact:true}).click();await observer.waitForFunction(()=>window.frelogCanvas.read().items.code.runtimeState?.status==='running');await observer.waitForFunction(()=>window.frelogCanvas.read().items.code.runtimeState?.status==='success');assert.equal(executions,1);
 await observer.reload();await observer.waitForFunction(()=>window.frelogCanvas?.read().items.text?.valueText==='shared input'&&window.frelogCanvas.read().items.pdf.pdfPage===2&&window.frelogCanvas.read().items.video.mediaState.paused===true&&window.frelogCanvas.read().items.code.runtimeState.status==='success');
+// Import real CSV/XLSX through the toolbar's file input and dedicated parser worker.
+const input=page.locator('input[type="file"][accept*=".xlsx"]');
+await input.setInputFiles({name:'records.csv',mimeType:'text/csv',buffer:Buffer.from('이름,코드\n민수,0012\n')});
+await observer.waitForFunction(()=>Object.values(window.frelogCanvas?.read().items||{}).some(i=>i.kind==='table'&&i.filename?.startsWith('records.csv')&&i.rows[0][1]==='0012'));
+await input.setInputFiles({name:'workbook.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:sheetWorkbook()});
+await observer.waitForFunction(()=>Object.values(window.frelogCanvas?.read().items||{}).filter(i=>i.kind==='table'&&i.filename?.startsWith('workbook.xlsx')).length===2);
+await observer.waitForFunction(()=>Object.values(window.frelogCanvas?.read().items||{}).some(i=>i.filename?.includes('매출')&&i.rows?.[0]?.[1]==='42'));
+// A failed optional PDF thumbnail must still upload and insert the original.
+let pdfUpload=null;await context.route('**/api/canvases/999003/pdfs',async route=>{pdfUpload=route.request().postDataBuffer().toString();await route.fulfill({json:{src:'/api/canvases/999003/pdfs/11111111-1111-4111-8111-111111111111',thumbnail:''}});});
+await page.evaluate(()=>{const original=HTMLCanvasElement.prototype.toBlob;HTMLCanvasElement.prototype.toBlob=function(callback,...args){HTMLCanvasElement.prototype.toBlob=original;callback(null);};});
+await page.locator('input[type="file"][accept="application/pdf,.pdf"]').setInputFiles({name:'document.pdf',mimeType:'application/pdf',buffer:Buffer.from(pdf)});
+await observer.waitForFunction(()=>Object.values(window.frelogCanvas?.read().items||{}).some(i=>i.kind==='pdf'&&i.filename==='document.pdf'));
+assert.match(pdfUpload,/name="file"/);assert.doesNotMatch(pdfUpload,/name="thumbnail"/);
+await observer.reload();await observer.waitForFunction(()=>Object.values(window.frelogCanvas?.read().items||{}).filter(i=>i.kind==='table'&&i.filename?.startsWith('workbook.xlsx')).length===2);
+console.log('PASS CSV, multi-sheet XLSX and PDF thumbnail-failure uploads persist and broadcast');
 await page.screenshot({path:'/tmp/shared-value-objects.png'});assert.deepEqual(errors,[]);await context.close();}console.log('PASS two browsers share real/discrete values, range settings, PDF page, YouTube playback, execution state and reconnect persistence');}finally{await browser.close();}

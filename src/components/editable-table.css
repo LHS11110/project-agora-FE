@@ -25,3 +25,4 @@
 .canvas-table-object:hover .canvas-table-delete,.canvas-table-object:focus-within .canvas-table-delete{opacity:1}
 .tutorial-table-item>button{position:absolute;z-index:3;top:-9px;right:-9px;width:21px;height:21px;display:grid;place-items:center;padding:0;border:1px solid #dce4db;border-radius:50%;background:#fff;color:#748377;font-size:14px}
 .tutorial-table-item{--line:#e2e8e0;--surface:#fff;--panel-soft:#f3f6f1;--ink-strong:#405347;--ink-muted:#879288}
+.canvas-data-table caption{text-align:left;padding:7px 9px;color:var(--ink-muted);font:inherit;overflow-wrap:anywhere}

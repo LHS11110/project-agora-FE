@@ -2,7 +2,7 @@ import { inspectShareUrl } from '../../components/shareMedia.js';
 
 const TEXT_FILE = /\.(txt|md|markdown|csv|tsv|json|xml|ya?ml|log|py|js|jsx|ts|tsx|cpp|cc|c|h|hpp|java|sh|sql|html|css|rs|go)$/i;
 const CODE_LANG = {py:'python',js:'javascript',jsx:'javascript',ts:'typescript',tsx:'typescript',cpp:'cpp',cc:'cpp',c:'c',h:'cpp',hpp:'cpp',java:'java',sh:'shell',sql:'sql',json:'json',xml:'xml',html:'html',css:'css',rs:'rust',go:'go',yaml:'yaml',yml:'yaml'};
-export const clipboardFileType = file => file.type?.startsWith('image/') ? 'image' : file.type==='application/pdf'||/\.pdf$/i.test(file.name||'') ? 'pdf' : file.type?.startsWith('text/')||TEXT_FILE.test(file.name||'') ? 'text' : null;
+export const clipboardFileType = file => file.type?.startsWith('image/') ? 'image' : file.type==='application/pdf'||/\.pdf$/i.test(file.name||'') ? 'pdf' : /\.(csv|tsv|xlsx)$/i.test(file.name||'') ? 'sheet' : file.type?.startsWith('text/')||TEXT_FILE.test(file.name||'') ? 'text' : null;
 export function clipboardTextObject(text, filename='') {
   if(new TextEncoder().encode(text).length>65536)throw new Error('붙여넣을 텍스트는 UTF-8 기준 64KiB 이하여야 합니다.');
   const extension=filename.split('.').at(-1)?.toLowerCase();

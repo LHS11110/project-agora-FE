@@ -31,6 +31,7 @@ export const canvasToolCategories = [
     { id: 'chart', label: '그래프', description: '그래프 추가', icon: 'chart' },
   ] },
   { id: 'media', label: '미디어', tools: [
+    { id: 'sheet', label: '데이터 시트', description: 'CSV · XLSX 데이터 시트 가져오기', icon: 'table', upload: true, accept: '.csv,.tsv,.xlsx,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
     { id: 'pdf', label: 'PDF', description: 'PDF 문서 올리기', icon: 'document', upload: true, accept: 'application/pdf,.pdf' },
     { id: 'image', label: '사진', description: '사진 올리기', icon: 'image', upload: true },
     { id: 'link', label: '링크', description: '동영상·링크 공유', icon: 'link' },

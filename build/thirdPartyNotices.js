@@ -3,6 +3,7 @@ import {resolve,join} from 'node:path';
 
 const noticeName=/^(?:licen[cs]e|notice|copying|ofl|third.*notices?)(?:[._ -].*)?$/i;
 const supplements={
+ 'isarray':'licenses/upstream/isarray-LICENSE.md',
  '@pixi/colord':'licenses/upstream/colord-LICENSE.md',
  '@mathjax/mathjax-newcm-font':'node_modules/mathjax/LICENSE',
  '@napi-rs/canvas-linux-x64-gnu':'node_modules/@napi-rs/canvas/LICENSE',

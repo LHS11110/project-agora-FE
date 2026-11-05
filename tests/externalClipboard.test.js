@@ -5,6 +5,7 @@ test('clipboard files take priority over duplicate text and HTML',()=>{
  const file={type:'image/png',name:'clip.png'};
  assert.deepEqual(externalClipboardObjects({files:[file],text:'https://example.com',html:'<img>'}),[{file,fileType:'image'}]);
  assert.equal(clipboardFileType({type:'',name:'document.pdf'}),'pdf');
+ for(const name of ['table.csv','table.tsv','table.xlsx'])assert.equal(clipboardFileType({type:'application/octet-stream',name}),'sheet');
  assert.equal(clipboardFileType({type:'application/octet-stream',name:'main.py'}),'text');
  assert.equal(clipboardFileType({type:'application/octet-stream',name:'app.exe'}),null);
 });

@@ -15,8 +15,12 @@ export function pdfErrorMessage(error) {
 }
 export async function pdfThumbnail(file) {
   const task = loadPdfBytes(new Uint8Array(await file.arrayBuffer()));
+  let timer;
   try {
+    return await Promise.race([(async () => {
     const pdf = await task.promise;
+    // A thumbnail is optional: a page rendering failure must not discard the PDF.
+    try {
     const page = await pdf.getPage(1);
     const base = page.getViewport({ scale: 1 });
     const viewport = page.getViewport({ scale: Math.min(1, 640 / Math.max(base.width, base.height)) });
@@ -24,5 +28,10 @@ export async function pdfThumbnail(file) {
     canvas.width = Math.max(1, Math.ceil(viewport.width)); canvas.height = Math.max(1, Math.ceil(viewport.height));
     await page.render({ canvas, viewport }).promise;
     return await new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('PDF 미리보기를 만들지 못했습니다.')), 'image/png'));
-  } finally { await task.destroy(); }
+    } catch (error) {
+      if (error?.name === 'PasswordException') throw error;
+      return null;
+    }
+    })(), new Promise(resolve => { timer=setTimeout(()=>resolve(null),15000); })]);
+  } finally { clearTimeout(timer); await task.destroy(); }
 }

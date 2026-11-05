@@ -26,6 +26,7 @@ export default function EditableTable({ item, onChange, enabled = true, editingA
 
   return <div className="table-scroll-area">
     <table className="canvas-data-table">
+      {item.filename && <caption>{item.filename}</caption>}
       <thead><tr>
         <th className="table-row-index-heading" scope="col">#</th>
         {columns.map((column, columnIndex) => {
