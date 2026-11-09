@@ -1,0 +1,64 @@
+import assert from 'node:assert/strict';
+const {chromium}=await import(process.env.AGORA_E2E_PLAYWRIGHT_MODULE||'playwright-core');
+const origin=process.env.AGORA_E2E_ORIGIN||'https://localhost:5191';
+const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox',...(process.env.AGORA_E2E_HOST_RESOLVER?['--host-resolver-rules='+process.env.AGORA_E2E_HOST_RESOLVER]:[])]});
+const user={email:'roles@example.invalid',nickname:'Roles',tag_number:1,role:'ROLE_USER',status:'ACTIVE'};
+const token='eyJhbGciOiJIUzI1NiJ9.'+Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+600})).toString('base64url')+'.roles';
+const policies={'admin-group':{read:true,write:true,execute:true},default:{read:true,write:false,execute:false}};
+const value=(valueType,x,y)=>({kind:'value',title:'',valueType,valueMin:0,valueMax:valueType==='real'?1:100,valueStep:valueType==='real'?.01:1,valueNumber:0,valueText:'',valueOptions:valueType==='select'?['A','B','C']:['꺼짐','켜짐'],x,y,width:.24,height:.21,permission:'default'});
+const items={real:value('real',.05,.08),integer:value('integer',.33,.08),button:value('button',.61,.08),select:value('select',.05,.36),text:value('text',.33,.36),pdf:{kind:'pdf',src:'/api/canvases/999003/pdfs/11111111-1111-4111-8111-111111111111',filename:'two.pdf',x:.65,y:.35,width:.24,height:.3,permission:'default'},video:{kind:'link',url:'https://youtu.be/dQw4w9WgXcQ',mediaType:'youtube',x:.05,y:.65,width:.3,height:.25,permission:'default'},exec:{kind:'shape',shapeType:'rectangle',runtimeRole:'executor',x:.4,y:.68,width:.2,height:.2,permission:'default'},code:{kind:'code',code:'print(1)',language:'python',filename:'main.py',x:.65,y:.7,width:.2,height:.2,permission:'default'},output:{kind:'shape',shapeType:'rectangle',runtimeRole:'output',x:.88,y:.7,width:.1,height:.2,permission:'default'},e1:{kind:'connector',from:'exec',to:'code',permission:'default'},e2:{kind:'connector',from:'code',to:'output',permission:'default'}};
+
+const peers=new Set(),receipts=new Map();
+const errors=[];
+try{for(const role of ['admin']){let executions=0,writes=0,settingsUpdate=null,revision=0,latest=structuredClone(items);const admin=role==='admin';const caps={groups:['default'],write_groups:admin?['default']:[],execute_groups:role==='viewer'?[]:['default'],is_admin:admin};
+const context=await browser.newContext({viewport:{width:2100,height:1450},locale:'ko-KR',ignoreHTTPSErrors:process.env.AGORA_E2E_INSECURE_LOCAL_TLS==='1'});
+await context.addInitScript(({token,user})=>{localStorage.setItem('frelog_tool_categories',JSON.stringify({structure:true}));localStorage.setItem('agora_token',token);localStorage.setItem('agora_user',JSON.stringify(user));},{token,user});
+const settings=()=>({canvas_name:'Role fixture',settings_revision:revision,visibility:'private',participants:[],group_permissions:policies,can_manage:admin});
+await context.route(url=>url.pathname.startsWith('/api/'),r=>{const path=new URL(r.request().url()).pathname.replace(/\/runtime\/execute\/stream$/, '/runtime/execute');let data={canvas_id:999003,canvas_name:'Role fixture'};if(path==='/api/auth/me')data=user;else if(path.endsWith('/access'))data={ws_port:8002,canvas_access_token:'fixture'};else if((path.endsWith('/runtime/execute')||path.endsWith('/runtime/build'))){executions++;data={output:'1\n',exitCode:0};}else if(path.endsWith('/runtime/settings'))data={revision:0,languages:{cpp:{engine:'clang21',standard:'c++17'}},catalog:{cpp:{label:'C++',engines:{clang21:{label:'Clang',mode:'shared'}},fields:{standard:{label:'언어 표준',values:['c++17']}}}}};else if(path.endsWith('/settings'))data=settings();return r.fulfill(new URL(r.request().url()).pathname.endsWith('/runtime/execute/stream')?{contentType:'application/x-ndjson',body:JSON.stringify({type:'result',result:data})+'\n'}:{json:data});});
+const rooms=new Map([[999003,{items:latest,revision:0,peers:new Set()}],[999004,{items:{},revision:0,peers:new Set()}]]);
+await context.routeWebSocket(/\/wss\/port\//,ws=>{const rtc=ws.url().includes('/rtc/'),id=Number(ws.url().match(/canvas\/(\d+)/)[1]),room=rooms.get(id),client=new URL(ws.url()).searchParams.get('client_id');
+ if(rtc){ws.onMessage(raw=>{if(JSON.parse(String(raw)).type==='rtc_join')ws.send(JSON.stringify({type:'rtc_peers',self_peer_id:'peer',peers:[]}));});return;}
+ room.peers.add(ws);ws.onClose(()=>room.peers.delete(ws));
+ setTimeout(()=>ws.send(JSON.stringify({type:'init_items',items:room.items,...caps,groups:['default'],sync_protocol:2,sync_user_id:7,revision:room.revision,accepted_count:receipts.get(client)||0,rtc_canvas_connection_id:'fixture',rtc_canvas_connection_hash:'proof'})),100);
+ ws.onMessage(raw=>{const data=JSON.parse(String(raw));if(data.type==='canvas_sync')ws.send(JSON.stringify({type:'canvas_snapshot',client_id:data.client_id,items:room.items,...caps,sync_protocol:2,sync_user_id:7,revision:room.revision,accepted_count:receipts.get(data.client_id)||0}));
+ if(data.type==='canvas_ops'){receipts.set(data.client_id,data.request_count);const touched={};for(const op of data.operations){if(op.action==='delete'){delete room.items[op.id];touched[op.id]=null;}else{room.items[op.id]={...room.items[op.id],...op.patch};for(const field of op.unset||[])delete room.items[op.id][field];touched[op.id]=room.items[op.id];}}room.revision++;for(const peer of room.peers)peer.send(JSON.stringify({type:'canvas_commit',client_id:data.client_id,author_id:7,request_count:data.request_count,revision:room.revision,items:touched}));}
+ });});
+const objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << >> /Contents 5 0 R >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << >> /Contents 5 0 R >>','<< /Length 0 >>\nstream\n\nendstream'];let pdf='%PDF-1.4\n',offsets=[];for(const [i,body] of objects.entries()){offsets.push(Buffer.byteLength(pdf));pdf+=`${i+1} 0 obj\n${body}\nendobj\n`;}const start=Buffer.byteLength(pdf);pdf+='xref\n0 6\n0000000000 65535 f \n'+offsets.map(n=>String(n).padStart(10,'0')+' 00000 n \n').join('')+`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${start}\n%%EOF`;
+await context.route('**/api/canvases/999003/pdfs/**',r=>r.fulfill({contentType:'application/pdf',body:Buffer.from(pdf)}));
+await context.route('**/runtime/execute/stream',async r=>{executions++;await new Promise(resolve=>setTimeout(resolve,900));return r.fulfill({contentType:'application/x-ndjson',body:JSON.stringify({type:'result',result:{output:'1\n',exitCode:0}})+'\n'});});
+await context.route('https://www.youtube-nocookie.com/embed/**',r=>r.fulfill({contentType:'text/html',body:`<body>Video fixture<script>window.mockMedia={time:0,state:2};function report(){parent.postMessage(JSON.stringify({event:'infoDelivery',info:{currentTime:mockMedia.time,playerState:mockMedia.state,duration:120}}),'*')}addEventListener('message',e=>{let d;try{d=JSON.parse(e.data)}catch{return}if(d.event==='command'){if(d.func==='seekTo')mockMedia.time=d.args[0];if(d.func==='playVideo')mockMedia.state=1;if(d.func==='pauseVideo')mockMedia.state=2;}report()});setInterval(report,200);</script>`}));
+const page=await context.newPage();page.on('pageerror',e=>{errors.push(e.message);console.error(e.message);});await page.goto(origin+'/canvases/999003');await page.waitForFunction(()=>window.frelogCanvas?.read().items.real);
+
+
+await page.locator('.canvas-loading-status.is-overlay').waitFor({state:'hidden'});const observer=await context.newPage();observer.on('pageerror',e=>errors.push(e.message));await observer.goto(origin+'/canvases/999003');await observer.waitForFunction(()=>window.frelogCanvas?.read().items.real);
+const mainSha='a'.repeat(40),oldSha='b'.repeat(40);let sources={},bindings={main:{canvasId:999003,initialized:true}},mergeCount=0;
+const project=()=>({rootId:999003,currentBranch:'main',project:{target:{owner:'example',repo:'canvas-backup',path:'canvases/999003.canvas.json'},branches:bindings}});
+await context.route(/\/api\/canvases\/\d+\/github(?:\/.*)?$/,async route=>{
+ const path=new URL(route.request().url()).pathname,id=Number(path.match(/canvases\/(\d+)/)[1]);let data={...project(),currentBranch:id===999004?'feature':'main'};
+ if(path.endsWith('/branches')){const branch=route.request().postDataJSON().branch;if(!bindings[branch])bindings[branch]={canvasId:999004,initialized:false};data=bindings[branch];}
+ if(path.endsWith('/initialized'))bindings[route.request().postDataJSON().branch].initialized=true;
+ await route.fulfill({json:data});
+});
+await context.route('https://api.github.com/**',async route=>{
+ const req=route.request(),url=new URL(req.url());let data={default_branch:'main'};
+ if(url.pathname.endsWith('/branches'))data=[{name:'main'},{name:'feature'}];
+ if(url.pathname.includes('/git/ref/heads/'))data={object:{sha:mainSha}};
+ if(url.pathname.endsWith('/commits'))data=[{sha:oldSha,commit:{message:'Older',author:{name:'Tester',date:'2026-11-09'}}}];
+ if(url.pathname.endsWith('/merges')){mergeCount++;sources.main=sources.feature;data={sha:mainSha};}
+ if(url.pathname.includes('/contents/')){const ref=url.searchParams.get('ref');const source=ref===oldSha?JSON.stringify({...JSON.parse(sources.main),items:{restored:{kind:'shape',shapeType:'rectangle',x:320,y:120,width:160,height:100,permission:'default'}}}):sources[ref]||sources.main;data={type:'file',size:source.length,sha:mainSha,encoding:'base64',content:Buffer.from(source).toString('base64')};}
+ await route.fulfill({json:data,headers:{'access-control-allow-origin':origin}});
+});
+sources.main=await page.evaluate(()=>JSON.stringify({...window.frelogCanvas.read(),mode:'replace'}));sources.feature=JSON.stringify({...JSON.parse(sources.main),items:{...JSON.parse(sources.main).items,featureOnly:{kind:'shape',shapeType:'rectangle',x:640,y:120,width:160,height:100,permission:'default'}}});
+async function openGithub(p,first=false){await p.getByRole('button',{name:'변경 이력',exact:true}).click();await p.getByRole('tab',{name:'저장소 연결',exact:true}).click();const panel=p.getByRole('region',{name:'GitHub 버전 관리'});if(first){await panel.getByLabel('GitHub 소유자',{exact:true}).fill('example');await panel.getByLabel('저장소 이름 또는 URL',{exact:true}).fill('canvas-backup');}await panel.getByLabel('GitHub 토큰',{exact:true}).fill('browser-test-token');await panel.getByRole('button',{name:'저장소 연결 · 새로고침'}).click();await p.getByRole('tab',{name:'브랜치 관리',exact:true}).click();await p.waitForTimeout(300);await p.screenshot({path:'/tmp/branch-connect-debug.png'});await panel.getByRole('button',{name:'브랜치 연결 · 목록 갱신'}).click();await p.waitForTimeout(500);await p.screenshot({path:'/tmp/branch-debug.png'});await panel.getByLabel('대상 브랜치',{exact:true}).selectOption('feature');return panel;}
+let panel=await openGithub(page,true);
+await panel.getByRole('button',{name:'별도 브랜치 캔버스로 이동'}).click();await page.waitForURL('**/canvases/999004');await page.waitForFunction(()=>window.frelogCanvas?.read().items.featureOnly);assert.equal(bindings.feature.initialized,true);assert.equal(await observer.evaluate(()=>Boolean(window.frelogCanvas.read().items.featureOnly)),false);
+// Main stays isolated until the merge and receives the durable merged snapshot.
+let grantsChecked=0;
+await observer.evaluate(({token})=>sessionStorage.setItem('agora_canvas_password_grant:999003:roles%40example.invalid',token),{token});
+await context.route('**/api/canvases/999003/access',async route=>{assert.equal(route.request().postDataJSON().canvas_password_token,token);grantsChecked++;await route.fulfill({json:{ws_port:8002,canvas_access_token:'fixture'}});});
+panel=await openGithub(observer,true);await panel.getByRole('button',{name:'선택 브랜치를 현재 브랜치에 병합'}).click();
+await panel.getByText('브랜치를 병합하고 변경사항을 대상 캔버스에 저장·공유했습니다.',{exact:true}).waitFor();assert.equal(mergeCount,1);await observer.waitForFunction(()=>Boolean(window.frelogCanvas.read().items.featureOnly));assert.ok(rooms.get(999003).items.featureOnly);
+// Restore a historical snapshot directly; absent objects are actually deleted.
+await observer.getByRole('tab',{name:'변경 이력',exact:true}).click();await panel.getByRole('button',{name:'이 커밋으로 캔버스 복구'}).click();await panel.getByText('커밋 내용으로 캔버스를 복구하고 서버 저장을 확인했습니다.',{exact:true}).waitFor();
+await observer.waitForFunction(()=>window.frelogCanvas.read().items.restored&&!window.frelogCanvas.read().items.featureOnly&&!window.frelogCanvas.read().items.real);assert.ok(rooms.get(999004).items.featureOnly,'restoring main must leave feature untouched');
+assert.ok(grantsChecked>=3,'background writers must reuse the current user password grant');assert.deepEqual(errors,[]);await context.close();}console.log('PASS separate branch room IDs and snapshots, durable initialization, main isolation, merged broadcast, exact commit restore and branch preservation');}finally{await browser.close();}

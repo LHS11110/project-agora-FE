@@ -14,7 +14,6 @@ import {
 import { createId } from './canvasIds.js';
 
 export function useCanvasConnection(options) {
-  const verifiedEntryRef = useRef(null);
   const rtcMembershipRetryRef = useRef(0);
   const {
     identity: {
@@ -195,12 +194,11 @@ export function useCanvasConnection(options) {
         setSettings(canvasSettings);
 
         const passwordGrantKey = canvasPasswordGrantKey(canvasId, user);
-        let passwordGrant = canvasSettings.password_protected && verifiedEntryRef.current === passwordGrantKey
+        let passwordGrant = canvasSettings.password_protected
           ? readCanvasPasswordGrant(passwordGrantKey)
           : null;
-        if (!canvasSettings.password_protected || verifiedEntryRef.current !== passwordGrantKey) {
+        if (!canvasSettings.password_protected) {
           saveCanvasPasswordGrant(passwordGrantKey, null);
-          verifiedEntryRef.current = null;
         }
 
         let password;
@@ -225,7 +223,6 @@ export function useCanvasConnection(options) {
             });
             serverAccessRetry = 0;
             if (canvasSettings.password_protected) {
-              verifiedEntryRef.current = passwordGrantKey;
               saveCanvasPasswordGrant(passwordGrantKey, access.canvas_password_token);
             }
           } catch (err) {

@@ -16,3 +16,5 @@
 .youtube-sr-only{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 @keyframes youtube-level{from{transform:scaleY(.35)}to{transform:scaleY(1)}}
 @media(prefers-reduced-motion:reduce){.is-playing .youtube-equalizer i{animation:none}}
+/* Keep the media element mounted and playing while modal actions stay unobstructed. */
+body:has([aria-modal="true"]) :is(.youtube-launcher,.youtube-panel,.youtube-subtitles){visibility:hidden;pointer-events:none}

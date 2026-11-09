@@ -9,29 +9,35 @@ export function isUnexpiredJwt(token) {
     if (!payload) return false;
     const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
     const claims = JSON.parse(atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')));
-    return Number.isFinite(Number(claims.exp)) && Number(claims.exp) * 1000 > Date.now() + 5000;
+    return Number.isFinite(Number(claims.exp)) && Number(claims.exp) * 1000 > Date.now();
   } catch {
     return false;
   }
 }
 
+// Only the signed, user/canvas-scoped grant is remembered, never the password.
+// Its original server expiration is preserved across tabs and reconnects.
 export function readCanvasPasswordGrant(key) {
-  try {
-    const grant = sessionStorage.getItem(key);
-    if (grant && isUnexpiredJwt(grant)) return grant;
-    sessionStorage.removeItem(key);
-  } catch {
-    // Storage can be disabled by the browser; the server-side password flow still works.
+  for (const name of ['localStorage', 'sessionStorage']) {
+    try {
+      const storage = globalThis[name], grant = storage?.getItem(key);
+      if (grant && isUnexpiredJwt(grant)) {
+        if (name === 'sessionStorage') { try { localStorage.setItem(key, grant); } catch {} }
+        return grant;
+      }
+      storage?.removeItem(key);
+    } catch { /* The other storage can still work in restricted browsers. */ }
   }
   return null;
 }
 
 export function saveCanvasPasswordGrant(key, grant) {
-  try {
-    if (grant && isUnexpiredJwt(grant)) sessionStorage.setItem(key, grant);
-    else sessionStorage.removeItem(key);
-  } catch {
-    // Storage can be disabled by the browser; the server-side password flow still works.
+  const valid = grant && isUnexpiredJwt(grant);
+  for (const name of ['localStorage', 'sessionStorage']) {
+    try {
+      const storage = globalThis[name];
+      if (valid) storage?.setItem(key, grant);
+      else storage?.removeItem(key);
+    } catch { /* The normal server password flow remains available. */ }
   }
 }
-

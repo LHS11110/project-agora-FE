@@ -6,9 +6,9 @@ import { exampleManifest } from './manifest.js';
 import './canvas-as-code.css';
 const stringify = value => JSON.stringify(value, null, 2);
 const noop = () => {};
-export default function CanvasAsCodeDialog({ api, canvasId, onClose }) {
+export default function CanvasAsCodeDialog({ api, canvasId, onClose, initialSource }) {
   useUiLocale();
-  const [source, setSource] = useState(() => stringify(api.read()));
+  const [source, setSource] = useState(() => initialSource ?? stringify(api.read()));
   const [preview, setPreview] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');

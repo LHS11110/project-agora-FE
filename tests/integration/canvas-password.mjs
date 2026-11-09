@@ -9,7 +9,7 @@ const value=(valueType,x,y)=>({kind:'value',title:'',valueType,valueMin:0,valueM
 const items={box:{kind:'shape',shapeType:'rectangle',x:.35,y:.4,width:.2,height:.2,permission:'default'}};const packets=[];
 
 const peers=new Set(),receipts=new Map();
-const errors=[];let notes=[];const attempts=[];const grant=token+'.granted';
+const errors=[];let notes=[];const attempts=[];const grant='header.'+Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+1800})).toString('base64url')+'.granted';
 try{for(const role of ['admin']){let executions=0,writes=0,settingsUpdate=null,revision=0,latest=structuredClone(items);const admin=role==='admin';const caps={groups:['default'],write_groups:admin?['default']:[],execute_groups:role==='viewer'?[]:['default'],is_admin:admin};
 const context=await browser.newContext({permissions:['microphone'],viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:2,locale:'ko-KR',ignoreHTTPSErrors:process.env.AGORA_E2E_INSECURE_LOCAL_TLS==='1'});
 await context.addInitScript(({token,user})=>{if(window!==window.top)return;localStorage.setItem('frelog_tool_categories',JSON.stringify({structure:true}));localStorage.setItem('agora_token',token);localStorage.setItem('agora_user',JSON.stringify(user));},{token,user});
@@ -39,10 +39,16 @@ assert.equal(await page.evaluate(()=>Object.values(sessionStorage).some(value=>v
 const before=attempts.length;for(const peer of peers)peer.send(JSON.stringify({type:'server_reconnect',retry_after_ms:100}));
 for(let i=0;i<100&&attempts.length===before;i++)await page.waitForTimeout(50);
 assert.equal(attempts.length,before+1);assert.equal(attempts.at(-1).canvas_password_token,grant);assert.equal(await dialog.count(),0,'automatic reconnect retains verification within this entry');
-await page.reload();await dialog.waitFor();assert.equal(await password.getAttribute('type'),'password');assert.equal(attempts.length,before+1,'refresh requires a password before any access request');
+await page.reload();await page.waitForFunction(()=>window.frelogCanvas?.read().items.box);assert.equal(await dialog.count(),0,'refresh reuses the 30-minute grant');assert.equal(attempts.at(-1).canvas_password_token,grant);
+await page.evaluate(()=>{history.pushState({},'', '/search');window.dispatchEvent(new PopStateEvent('popstate'));});await page.waitForURL('**/search');
+await page.evaluate(()=>{history.pushState({},'', '/canvases/999003');window.dispatchEvent(new PopStateEvent('popstate'));});await page.waitForFunction(()=>window.frelogCanvas?.read().items.box);assert.equal(await dialog.count(),0,'reentry reuses a valid grant');
+const other=await context.newPage();await other.goto(origin+'/canvases/999003');await other.waitForFunction(()=>window.frelogCanvas?.read().items.box);assert.equal(await other.getByRole('dialog',{name:'캔버스 비밀번호',exact:true}).count(),0,'new tab reuses the same user/canvas grant');await other.close();
+const expired='header.'+Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)-1})).toString('base64url')+'.expired';
+await page.evaluate(({key,expired})=>{localStorage.setItem(key,expired);sessionStorage.setItem(key,expired);},{key,expired});const expiryAttempts=attempts.length;
+await page.reload();await dialog.waitFor();assert.equal(await password.getAttribute('type'),'password');assert.equal(attempts.length,expiryAttempts,'expired grant requires password without sending an access request');
 await password.fill('correct secret');await password.press('Enter');await dialog.waitFor({state:'hidden'});await page.waitForFunction(()=>window.frelogCanvas?.read().items.box);
-await page.evaluate(({key,token})=>sessionStorage.setItem(key,token+'.stale'),{key,token});const reentryAttempts=attempts.length;await page.reload();await dialog.waitFor();assert.equal(await password.getAttribute('type'),'password');assert.equal(await password.inputValue(),'');assert.equal(attempts.length,reentryAttempts,'stored grants never bypass fresh entry');
+await page.evaluate(({key,grant})=>{localStorage.setItem(key,grant+'.stale');sessionStorage.setItem(key,grant+'.stale');},{key,grant});const staleAttempts=attempts.length;
+await page.reload();await dialog.waitFor();assert.equal(attempts.length,staleAttempts+1,'server-rejected grant is tried once then prompts');assert.equal(await password.inputValue(),'');assert.equal(await page.evaluate(key=>localStorage.getItem(key),key),null);
 await page.setViewportSize({width:1440,height:900});await page.screenshot({path:'/tmp/canvas-password-desktop.png'});
-const cancelledAttempts=attempts.length;await password.press('Escape');await page.waitForURL('**/search');assert.equal(await dialog.count(),0);assert.equal(attempts.length,cancelledAttempts);await page.locator('.search-page').waitFor();
-await page.evaluate(({key,grant})=>{sessionStorage.setItem(key,grant);history.pushState({},'', '/canvases/999003');window.dispatchEvent(new PopStateEvent('popstate'));},{key,grant});await dialog.waitFor();assert.equal(attempts.length,cancelledAttempts,'leaving and reentering requires a password despite a valid stored grant');await dialog.getByRole('button',{name:'취소',exact:true}).click();await page.waitForURL('**/search');
-assert.deepEqual(errors,[]);console.log('PASS masked custom password dialog, wrong-password retry, password on every fresh entry/refresh, grant reuse only during automatic reconnect, and cancel');await context.close();}}finally{await browser.close();}
+const cancelledAttempts=attempts.length;await password.press('Escape');await page.waitForURL('**/search');assert.equal(await dialog.count(),0);assert.equal(attempts.length,cancelledAttempts);
+assert.deepEqual(errors,[]);console.log('PASS masked custom password dialog, wrong-password retry, 30-minute grant reuse across refresh/reentry/new tabs, expired and revoked grant prompts, and cancel');await context.close();}}finally{await browser.close();}
