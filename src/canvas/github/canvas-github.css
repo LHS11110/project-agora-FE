@@ -3,3 +3,44 @@
 .canvas-github-feedback{border-radius:8px;border:1px solid #d5deea;padding:9px 11px;background:#f6f8fb;overflow-wrap:anywhere;scroll-margin-block:12px}.canvas-github-feedback p{margin:0}.canvas-github-feedback p+p{margin-top:6px}.canvas-github-connected{color:#365a45;font-weight:600}.canvas-github button[aria-busy=true]{cursor:progress}
 .canvas-version-dialog{width:min(1120px,100%);height:min(820px,94dvh)}.canvas-version-dialog>header{flex-shrink:0}.canvas-version-dialog>header p{margin-top:7px;color:#65738b}.canvas-version-dialog>.canvas-github{flex:1;min-height:0;max-height:none;border:0;border-radius:0;padding:0;background:transparent}.canvas-version-tabs{position:sticky;top:0;z-index:2;flex-shrink:0;padding:4px;border:1px solid #d5deea;border-radius:10px;background:#eaf0f6;display:flex;gap:5px}.canvas-version-tabs button{flex:1;background:transparent;border-color:transparent;white-space:nowrap}.canvas-version-tabs button[aria-selected=true]{background:#fff;border-color:#d5deea;box-shadow:0 2px 6px #26374b09;color:#365a45;font-weight:650}.canvas-version-dialog [hidden]{display:none!important}.canvas-version-history-layout{display:grid;grid-template-columns:minmax(250px,.85fr) minmax(0,1.35fr);gap:16px;align-items:start}.canvas-version-save-card,.canvas-version-dialog .canvas-github-history,.canvas-version-dialog #version-panel-connection{border:1px solid #d5deea;border-radius:12px;padding:16px;background:#fff}.canvas-version-save-card{display:flex;flex-direction:column;gap:12px}.canvas-version-save-card p{color:#65738b}.canvas-version-dialog .canvas-github-history article{border-top:1px solid #e3e8ee;padding:14px 0;display:flex;flex-direction:column;gap:9px}.canvas-version-commit-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline}.canvas-version-commit-heading strong{overflow-wrap:anywhere}.canvas-version-commit-heading code{color:#65738b;white-space:nowrap;font-size:11px}.canvas-version-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;min-height:240px;text-align:center;padding:24px;border:1px dashed #c8d4e2;border-radius:12px;background:#fff}.canvas-version-empty p,.canvas-version-history-empty{color:#65738b}.canvas-version-history-empty{padding:24px 0}.canvas-github-advanced summary{font-size:12px;cursor:pointer;color:#65738b}.canvas-github-advanced .canvas-github-fields{padding-top:12px}.canvas-version-dialog #version-panel-branches{background:#fff;border:1px solid #d5deea;border-radius:12px;padding:16px}.canvas-version-dialog .canvas-github-branches{border-top:0;padding-top:0}@media(max-width:700px){.canvas-version-history-layout{grid-template-columns:1fr}.canvas-version-tabs button{padding:9px 5px;font-size:11px}.canvas-version-dialog{height:96dvh}.canvas-version-dialog .canvas-github-history,.canvas-version-save-card{padding:12px}}
 .canvas-version-dialog>header>div{min-width:0}.canvas-version-dialog>header>button{flex:0 0 auto;white-space:nowrap}
+.canvas-github-policy{margin-top:14px;border-top:1px solid #d5deea;padding-top:12px}.canvas-github-policy summary{cursor:pointer;font-size:13px}.canvas-github-policy-scroll{overflow:auto;margin:12px 0}.canvas-github-policy table{border-collapse:collapse;font-size:12px;min-width:470px;width:100%}.canvas-github-policy th,.canvas-github-policy td{padding:8px;border-bottom:1px solid #e3e8ee;text-align:center}.canvas-github-policy input[type=checkbox]{width:16px;height:16px;accent-color:#365a45}.canvas-github-drafts>div{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #e3e8ee;font-size:12px}.canvas-github-pr{display:flex;flex-direction:column;gap:9px;border-top:1px solid #d5deea;padding-top:12px}.canvas-github-pr textarea{min-height:80px;width:100%;box-sizing:border-box;border:1px solid #d5deea;border-radius:7px;background:#f6f8fb;color:inherit;padding:8px;font:inherit}
+.canvas-commit-graph-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.canvas-commit-graph-scroll{overflow-x:auto;margin-top:14px}
+.canvas-commit-graph{list-style:none;margin:0;padding:0;min-width:280px}
+.canvas-commit-graph>li{display:grid;grid-template-columns:var(--graph-width) minmax(200px,1fr);position:relative;margin:0;padding:0}
+.canvas-commit-lanes{position:relative;min-height:118px}
+.canvas-commit-lanes svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.canvas-commit-node{position:absolute;top:50%;width:10px;height:10px;box-sizing:border-box;transform:translate(-50%,-50%);border:3px solid;background:var(--panel-bg,#171c29);border-radius:50%}
+.canvas-commit-node.is-merge{width:14px;height:14px;border-width:3px;box-shadow:0 0 0 2px var(--panel-bg,#171c29)}
+.canvas-commit-content{display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:17px 8px 17px 9px;border-bottom:1px solid rgba(128,140,165,.16);min-width:0}
+.canvas-commit-content>strong{overflow-wrap:anywhere;line-height:1.5}
+.canvas-commit-content small{overflow-wrap:anywhere;line-height:1.5}
+.canvas-commit-content code{color:#999ff7;font-size:11px}
+.canvas-commit-refs{display:flex;flex-wrap:wrap;gap:5px}
+.canvas-commit-refs:empty{display:none}
+.canvas-commit-refs span{border:1px solid rgba(128,140,165,.35);border-radius:5px;padding:2px 6px;font-size:10px;overflow-wrap:anywhere}
+.canvas-commit-refs .is-current{color:#aaaefb;background:rgba(124,131,245,.12);border-color:rgba(124,131,245,.45)}
+.canvas-commit-content .canvas-github-actions{flex-wrap:wrap}
+.canvas-github-history>.canvas-commit-graph-scroll{display:block;padding:0;border:0}
+.canvas-github-history>.canvas-commit-graph-heading{padding:0;border:0}
+.canvas-commit-node{background:#fff}
+.canvas-commit-node.is-merge{box-shadow:0 0 0 2px #fff}
+.canvas-github-history>.canvas-commit-legend{display:flex;justify-content:flex-start;flex-wrap:wrap;gap:6px 12px;padding:10px 0 0;border:0}
+.canvas-commit-legend>span{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#65738b}
+.canvas-commit-legend>span:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--lane-color);flex:0 0 auto}
+.canvas-version-dialog{width:min(1440px,100%)}
+.canvas-version-history-layout{grid-template-columns:minmax(230px,.55fr) minmax(0,1.45fr)}
+.canvas-github-history>.canvas-parallel-history{display:block;overflow-x:auto;border:0;padding:0;margin-top:14px}
+.canvas-parallel-headings{display:grid;grid-template-columns:repeat(var(--branch-columns),280px);width:var(--branch-width);border-bottom:1px solid #e3e8ee;background:#f6f8fb;border-radius:8px 8px 0 0}
+.canvas-parallel-headings>div{padding:10px 12px;font-size:12px;font-weight:650;overflow-wrap:anywhere;border-right:1px solid #e3e8ee;box-sizing:border-box}
+.canvas-parallel-graph{width:var(--branch-width);min-width:var(--branch-width)}
+.canvas-parallel-graph>.canvas-commit-band{display:grid;grid-template-columns:repeat(var(--branch-columns),280px);position:relative;min-height:260px;border-bottom:1px solid #e3e8ee;box-sizing:border-box}
+.canvas-band-lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.canvas-commit-entry{position:relative;min-width:0;padding:50px 12px 16px 36px;box-sizing:border-box}
+.canvas-commit-entry>.canvas-commit-node{top:8%;left:18px;z-index:1}
+.canvas-commit-entry>.canvas-commit-content{position:relative;background:#fff;gap:6px;border:1px solid #e3e8ee;border-radius:8px;padding:10px;box-shadow:0 2px 5px #26374b05}
+.canvas-commit-entry .canvas-commit-content>strong{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.canvas-commit-entry .canvas-github-actions{gap:6px;justify-content:flex-start}
+.canvas-commit-entry .canvas-github-actions button{padding:6px 8px;font-size:10px}
+@media(max-width:700px){.canvas-version-history-layout{grid-template-columns:1fr}}
+.canvas-as-code-dialog.canvas-version-dialog{width:min(1440px,100%)}

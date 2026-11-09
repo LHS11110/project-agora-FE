@@ -32,7 +32,7 @@ const page=await context.newPage();page.on('pageerror',e=>{errors.push(e.message
 
 await page.locator('.canvas-loading-status.is-overlay').waitFor({state:'hidden'});const observer=await context.newPage();observer.on('pageerror',e=>errors.push(e.message));await observer.goto(origin+'/canvases/999003');await observer.waitForFunction(()=>window.frelogCanvas?.read().items.real);
 const mainSha='a'.repeat(40),oldSha='b'.repeat(40);let sources={},bindings={main:{canvasId:999003,initialized:true}},mergeCount=0;
-const project=()=>({rootId:999003,currentBranch:'main',project:{target:{owner:'example',repo:'canvas-backup',path:'canvases/999003.canvas.json'},branches:bindings}});
+const project=()=>({rootId:999003,currentBranch:'main',project:{target:{owner:'example',repo:'canvas-backup',path:'canvases/999003.canvas.json'},branches:bindings,permissions:{}},groups:['default'],readGroups:['default'],capabilities:{manage:true,commit:true,push:true,pr:true,create_branch:true,switch_branch:true,restore:true,merge:true}});
 await context.route(/\/api\/canvases\/\d+\/github(?:\/.*)?$/,async route=>{
  const path=new URL(route.request().url()).pathname,id=Number(path.match(/canvases\/(\d+)/)[1]);let data={...project(),currentBranch:id===999004?'feature':'main'};
  if(path.endsWith('/branches')){const branch=route.request().postDataJSON().branch;if(!bindings[branch])bindings[branch]={canvasId:999004,initialized:false};data=bindings[branch];}

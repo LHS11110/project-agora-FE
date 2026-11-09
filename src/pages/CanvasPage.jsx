@@ -134,6 +134,7 @@ function CanvasWorkspace() {
   useUiLocale();
   const [showCanvasCode, setShowCanvasCode] = useState(false);
   const [showVersions,setShowVersions]=useState(false);
+  const versionsOpened=useRef(false);if(showVersions)versionsOpened.current=true;
   const [canvasCodeSource,setCanvasCodeSource]=useState(null);
   const [showRuntimeSettings, setShowRuntimeSettings] = useState(false);
   const { canvasId } = useParams();
@@ -1636,7 +1637,7 @@ function CanvasWorkspace() {
     {comments.activeId && <ObjectCommentsPanel comments={comments} participants={mentionParticipants} connection={connection} />}
     <MentionNotifications notifications={comments.notifications} onJump={jumpToMention} onDismiss={comments.dismiss} />
     {showRuntimeSettings && <RuntimeSettingsDialog canManage={canWriteCanvas&&canUseCanvas(capabilities,'execute')} canvasId={canvasId} token={token} user={user} initialLanguage={selectedItem?.language || 'cpp'} isRunning={()=>runtimeStore.isRunning()} onClose={()=>setShowRuntimeSettings(false)} />}
-    {showVersions&&<CanvasVersionDialog api={canvasCodeApi} canvasId={canvasId} onClose={()=>setShowVersions(false)} onInspect={source=>{setCanvasCodeSource(source);setShowVersions(false);setShowCanvasCode(true);}}/>}
+    {versionsOpened.current&&<CanvasVersionDialog open={showVersions} api={canvasCodeApi} canvasId={canvasId} onClose={()=>setShowVersions(false)} onInspect={source=>{setCanvasCodeSource(source);setShowVersions(false);setShowCanvasCode(true);}}/>}
     {showCanvasCode && <CanvasAsCodeDialog api={canvasCodeApi} canvasId={canvasId} initialSource={canvasCodeSource} onClose={() => setShowCanvasCode(false)} />}
     {showSettings && <SettingsDialog backgroundColor={backgroundColor} setBackgroundColor={setBackgroundColor} favoriteColors={favoriteColors} saveFavoriteColor={saveFavoriteColor} theme={theme} canvasId={canvasId} image={canvas?.image} token={token} onImageSaved={(image) => setCanvas(current => ({ ...current, image }))} settings={settings} pending={settingsPending} onClose={() => setShowSettings(false)} onUpdate={sendSettings} onRequest={requestSettings} />}
     {showParticipants && <CanvasParticipantsDialog participants={canvasParticipants} token={token} settings={settings} pending={settingsPending} onRequest={requestSettings} onClose={() => setShowParticipants(false)} onAddParticipant={(nickname, tag) => sendSettings('participant_add', null, { nickname, tag_number: tag })} onRemoveParticipant={(person) => sendSettings('participant_remove', null, { nickname: person.nickname, tag_number: person.tag_number })} />}

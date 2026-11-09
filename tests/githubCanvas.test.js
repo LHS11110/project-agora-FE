@@ -33,8 +33,8 @@ test('conflicts and authentication errors do not retry or expose API responses',
  for(const status of [401,403,409,422]){let count=0;const client=githubCanvasClient('token',{fetcher:async()=>{count++;return json({message:'secret-response'},status);}});await assert.rejects(()=>client.commit(config,'{}','commit',sha),e=>!e.message.includes('secret-response'));assert.equal(count,1);}
 });
 test('large contents use authenticated API raw response, historical reads require commit IDs',async()=>{
- const calls=[];const client=githubCanvasClient('token',{fetcher:async(url,o)=>{calls.push({url,o});return o.headers.Accept.includes('raw')?new Response('한글'):json({type:'file',size:100,sha,encoding:'none'});}});
- assert.equal(await client.read(config,sha),'한글');assert.equal(calls.length,2);assert.equal(calls[1].o.headers.Authorization,'Bearer token');await assert.rejects(()=>client.read(config,'main'),/커밋/);
+ const calls=[];const client=githubCanvasClient('token',{fetcher:async(url,o)=>{calls.push({url,o});return o.headers.Accept.includes('raw')?new Response('{"text":"한글"}'):json({type:'file',size:100,sha,encoding:'none'});}});
+ assert.equal(await client.read(config,sha),'{"text":"한글"}');assert.equal(calls.length,2);assert.equal(calls[1].o.headers.Authorization,'Bearer token');await assert.rejects(()=>client.read(config,'main'),/커밋/);
 });
 test('branch creation uses a head reference and merge handles 204 without JSON parsing',async()=>{
  const calls=[];const client=githubCanvasClient('token',{fetcher:async(url,o)=>{calls.push({url,o});if(url.endsWith('/merges'))return new Response(null,{status:204});if(url.includes('/git/ref/heads/'))return json({object:{sha}});if(url.includes('/git/refs'))return json({ref:'refs/heads/feature'});if(url.includes('/contents/'))return json({type:'file',sha,size:2,encoding:'base64',content:encodeContent('{}')});return json({default_branch:'main'});}});
@@ -60,3 +60,17 @@ test('a missing branch in a nonempty repository is not mistaken for an empty rep
  const client=githubCanvasClient('token',{fetcher:async url=>url.includes('/branches/')?json({},404):url.includes('/branches?')?json([{name:'main'}]):json({default_branch:'main',size:0})});
  await assert.rejects(()=>client.connect({...config,branch:'typo'}),/브랜치가 없습니다/);
 });
+test('PR creation uses the configured repository and checks distinct base/head',async()=>{
+ let call;const client=githubCanvasClient('token',{fetcher:async(url,o)=>{call={url,o};return json({number:17});}});
+ const result=await client.pullRequest(config,{base:'main',title:'Canvas update',body:'Review'});assert.equal(result.number,17);assert.ok(call.url.endsWith('/pulls'));assert.deepEqual(JSON.parse(call.o.body),{head:config.branch,base:'main',title:'Canvas update',body:'Review'});
+ await assert.rejects(()=>client.pullRequest(config,{base:config.branch,title:'x'}),/PR/);
+});
+test('graph history requests only the current branch and retains its merged ancestry',async()=>{
+ const calls=[];const client=githubCanvasClient('token',{fetcher:async url=>{const u=new URL(url);calls.push(u);if(u.pathname.includes('/branches/'))return json({name:'main',commit:{sha}});assert.equal(u.searchParams.get('sha'),'main');return json([{sha,parents:[{sha:'c'.repeat(40)},{sha:'d'.repeat(40)}],commit:{message:'merge',author:{date:'2026-01-01',name:'User'}}}]);}});
+ const result=await client.graphHistory({...config,branch:'main'},2);assert.deepEqual(result.refs,[{name:'main',sha}]);assert.equal(result.entries.length,1);assert.equal(result.entries[0].parents.length,2);assert.deepEqual(result.entries[0].branches,['main']);assert.equal(result.more,false);
+ assert.equal(calls.length,2);assert.equal(calls.some(u=>u.pathname.endsWith('/branches')),false);const request=calls.find(u=>u.pathname.endsWith('/commits'));assert.equal(request.searchParams.has('path'),false);assert.equal(request.searchParams.get('page'),'2');
+});
+
+test('graph history file scope passes the selected shard path to GitHub',async()=>{const urls=[];const client=githubCanvasClient('token',{fetcher:async url=>{urls.push(new URL(url));return json(url.includes('/branches/')?{name:'main',commit:{sha}}:[]);}});await client.graphHistory({...config,branch:'main'},1,{path:'canvases/demo.parts/permissions.json'});assert.equal(urls.find(u=>u.pathname.endsWith('/commits')).searchParams.get('path'),'canvases/demo.parts/permissions.json');});
+
+test('current branch pagination and file scope do not fetch independent feature histories',async()=>{const urls=[];const client=githubCanvasClient('token',{fetcher:async url=>{const u=new URL(url);urls.push(u);if(u.pathname.includes('/branches/'))return json({commit:{sha}});if(u.searchParams.get('sha')!=='feature/test2')throw new Error('Unexpected branch');return json(Array.from({length:20},(_,i)=>({sha:String(i),parents:[],commit:{message:'Current '+i}})));}});const result=await client.graphHistory({...config,branch:'feature/test2'},3,{path:'canvas.parts/permissions.json'});assert.equal(result.more,true);assert.deepEqual(result.refs,[{name:'feature/test2',sha}]);assert.ok(result.entries.every(e=>e.branches.length===1&&e.branches[0]==='feature/test2'));assert.equal(urls.length,2);assert.equal(urls[1].searchParams.get('path'),'canvas.parts/permissions.json');assert.equal(urls[1].searchParams.get('page'),'3');});

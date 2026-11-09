@@ -1,0 +1,22 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {githubCanvasClient} from '../src/canvas/github/githubCanvas.js';
+import {splitCanvas} from '../src/canvas/github/canvasRepository.js';
+const target={owner:'team',repo:'test',branch:'main',path:'canvas.json'},head='a'.repeat(40),commit='b'.repeat(40),blob='c'.repeat(40);
+const source=JSON.stringify({version:1,mode:'replace',remove:[],items:{a:{kind:'shape',x:1,permission:['g']}}});
+function mock({split=false,race=false,missing=false,empty=false}={}){let files=empty?{}:split?splitCanvas(source,target.path):{[target.path]:source},tree=[],patches=0;const calls=[];const client=githubCanvasClient('token',{fetcher:async(url,options)=>{const u=new URL(url),p=u.pathname,body=options.body&&JSON.parse(options.body);calls.push({p,body,method:options.method,ref:u.searchParams.get('ref')});let value;
+ if(p.includes('/contents/')){if(options.method==='PUT'){files[target.path]=Buffer.from(body.content,'base64').toString();return Response.json({content:{sha:blob},commit:{sha:head}});}const path=decodeURIComponent(p.split('/contents/')[1]);if(!files[path]||missing&&path.endsWith('permissions.json'))return new Response('{}',{status:404});value={type:'file',sha:blob,size:files[path].length,encoding:'base64',content:Buffer.from(files[path]).toString('base64')};}
+ else if(p.includes('/git/ref/heads/'))value={object:{sha:head}};
+ else if(p.endsWith('/git/trees')){tree=body.tree;value={sha:'tree-new'};}
+ else if(p.endsWith('/git/commits')&&options.method==='POST')value={sha:commit};
+ else if(p.includes('/git/commits/'))value={tree:{sha:'tree-old'}};
+ else if(p.includes('/git/refs/heads/')){patches++;if(race)return new Response('{}',{status:422});for(const e of tree){if(e.sha===null)delete files[e.path];else files[e.path]=e.content;}value={object:{sha:commit}};}
+ else throw new Error('Unexpected '+p);
+ return Response.json(value);
+ }});return {client,calls,get tree(){return tree;},get patches(){return patches;}};}
+test('migration writes all split files in one tree/commit and non-force ref update',async()=>{const m=mock();const result=await m.client.commitSplit(target,source,'migrate',blob,{baseSource:source});assert.equal(m.tree.length,3);assert.equal(m.patches,1);assert.equal(JSON.parse(result.file.source).items.a.x,1);assert.equal(result.file.split,true);assert.deepEqual(m.calls.find(c=>c.method==='PATCH').body,{sha:commit,force:false});assert.ok(m.calls.filter(c=>c.p.includes('/contents/')).every(c=>[head,commit].includes(c.ref)));});
+test('ACL edit changes only permissions blob; stale split contents are refused',async()=>{const m=mock({split:true}),next=JSON.parse(source);next.items.a.permission=['new'];await m.client.commitSplit(target,JSON.stringify(next),'acl',blob,{baseSource:source});assert.deepEqual(m.tree.map(e=>e.path),['canvas.parts/permissions.json']);const stale=mock({split:true});await assert.rejects(()=>stale.client.commitSplit(target,source,'stale',blob,{baseSource:JSON.stringify(next)}),/변경/);assert.equal(stale.patches,0);});
+test('concurrent branch update never forces ref; missing parts fail closed',async()=>{const m=mock({race:true});await assert.rejects(()=>m.client.commitSplit(target,source,'race',blob),e=>e.status===422);assert.equal(m.calls.find(c=>c.method==='PATCH').body.force,false);const bad=mock({split:true,missing:true});await assert.rejects(()=>bad.client.read(target,head),/누락/);});
+
+test('empty repository bootstraps a valid snapshot before publishing split commit',async()=>{const m=mock({empty:true});const result=await m.client.commitSplit(target,source,'first',undefined,{empty:true});assert.equal(m.calls[0].method,'PUT');assert.equal(m.calls[0].body.branch,undefined);assert.deepEqual(JSON.parse(Buffer.from(m.calls[0].body.content,'base64').toString()).items,JSON.parse(source).items);assert.equal(result.file.split,true);assert.equal(m.patches,1);});
+test('last kind deletion removes obsolete shard in same commit; old drafts without a base cannot overwrite split data',async()=>{const m=mock({split:true});await m.client.commitSplit(target,JSON.stringify({version:1,items:{}}),'delete',blob,{baseSource:source});assert.ok(m.tree.some(e=>e.path==='canvas.parts/objects/shape.json'&&e.sha===null));const old=mock({split:true});await assert.rejects(()=>old.client.commitSplit(target,source,'old draft',blob),/다시 검토/);assert.equal(old.patches,0);});
