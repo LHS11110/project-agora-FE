@@ -1,3 +1,4 @@
+import {ensureCanvasPasswordGrant} from '../canvas/canvasPasswordSession.js';
 import {useCanvasPasswordPrompt} from '../canvas/useCanvasPasswordPrompt.js';
 import CanvasPasswordDialog from '../components/canvas/CanvasPasswordDialog.jsx';
 import {useCanvasVoiceCall} from '../canvas/voice/CanvasVoicePanel.jsx';
@@ -1463,7 +1464,7 @@ function CanvasWorkspace() {
     const active=previous.runtimeState;if(active?.running&&Date.now()-active.updatedAt<runtimeStateTtl(previous,active))throw Error(ui('노트북 실행 중…'));
     saveRuntimeStateRef.current(id,{running:true,status:'running',phase:operation,language:'python',detail:cellId||operation});
     try{
-      const result=await api(`/api/canvases/${canvasId}/runtime/notebook`,{method:'POST',token,body:{objectId:id,operation,code,passwordGrant:readCanvasPasswordGrant(canvasPasswordGrantKey(canvasId,user))}});
+      const result=await api(`/api/canvases/${canvasId}/runtime/notebook`,{method:'POST',token,body:{objectId:id,operation,code,passwordGrant:await ensureCanvasPasswordGrant(canvasPasswordGrantKey(canvasId,user))}});
       const current=itemsRef.current[id];
       if(current&&canExecuteItem(current)&&cellId){
         const entry={outputs:result.outputs||[],executionCount:result.executionCount??null,exitCode:result.exitCode??1,...(result.error?{error:result.error}:{}),...(result.truncated?{truncated:true}:{})};

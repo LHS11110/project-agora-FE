@@ -1,4 +1,5 @@
-import {canvasPasswordGrantKey,readCanvasPasswordGrant} from '../canvasAccess.js';
+import {canvasPasswordGrantKey} from '../canvasAccess.js';
+import {ensureCanvasPasswordGrant} from '../canvasPasswordSession.js';
 import {api,canvasSocketUrl} from '../../api/client.js';
 import {ServerCanvasSession} from '../sync/ServerCanvasSession.js';
 import {exportManifest,stable} from '../asCode/manifest.js';
@@ -7,7 +8,7 @@ import {restoreOperations} from './branchRestore.js';
 
 /** A short-lived authenticated writer; waits for durable broker commits, not local drafts. */
 export async function syncBranchCanvas({canvasId,token,user,source,expected,signal}){
- const grant=user?readCanvasPasswordGrant(canvasPasswordGrantKey(canvasId,user)):null;
+ const grant=user?await ensureCanvasPasswordGrant(canvasPasswordGrantKey(canvasId,user)):null;
  const access=await api(`/api/canvases/${canvasId}/access`,{method:'POST',body:grant?{canvas_password_token:grant}:{},token});
  if(signal?.aborted)throw new DOMException('Aborted','AbortError');
  return new Promise((resolve,reject)=>{

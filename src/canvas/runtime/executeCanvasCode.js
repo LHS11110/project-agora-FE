@@ -1,9 +1,10 @@
 import { readRuntimeStream } from './readRuntimeStream.js';
 import { api, apiUrl, ApiError } from '../../api/client.js';
-import { canvasPasswordGrantKey, readCanvasPasswordGrant } from '../canvasAccess.js';
+import { canvasPasswordGrantKey } from '../canvasAccess.js';
+import {ensureCanvasPasswordGrant} from '../canvasPasswordSession.js';
 
 export async function executeCanvasCode({ canvasId, token, user, language, code, stdin, action, onOutput }) {
-  const passwordGrant = readCanvasPasswordGrant(canvasPasswordGrantKey(canvasId, user));
+  const passwordGrant = await ensureCanvasPasswordGrant(canvasPasswordGrantKey(canvasId, user));
   if (!action && typeof onOutput === 'function') {
     const response = await fetch(apiUrl(`/api/canvases/${encodeURIComponent(canvasId)}/runtime/execute/stream`), {
       method:'POST', headers:{'Content-Type':'application/json', Authorization:`Bearer ${token}`},

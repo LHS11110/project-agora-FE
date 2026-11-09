@@ -1,5 +1,6 @@
 // UI messages only. User-authored content is never translated.
 export default {
+ '접속 중 비밀번호 인증 갱신. { connectionId, proof, passwordGrant }로 살아 있는 브로커 연결을 증명하면 30분 토큰을 갱신합니다.':'Renew password verification while connected. A live broker connection proven by { connectionId, proof, passwordGrant } renews the 30-minute token.',
  '현재 브랜치의 이력만 표시합니다. 이미 병합된 커밋은 포함됩니다.':'Only the current branch history is shown, including commits already merged into it.',
 
  '공통 조상부터 커밋 수에 따라 아래에서 위로 배치합니다. 브랜치마다 필요한 행만 사용합니다.':'Commits grow upwards from shared ancestors. Each branch uses only the rows it needs.',
