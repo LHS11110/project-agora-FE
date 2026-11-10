@@ -1,3 +1,4 @@
+import {newFrame,validFrame,validFrameField,createFrameStore,animationGroups} from '../canvas/portfolio/frameModel.js';
 import {AnimationContext,createAnimationStore} from '../canvas/portfolio/animationStore.js';
 import {PORTFOLIO_ID,newPortfolio,defaultAnimation,validPortfolio,validAnimation} from '../canvas/portfolio/portfolioModel.js';
 import PortfolioViewer from '../canvas/portfolio/PortfolioViewer.jsx';
@@ -79,7 +80,7 @@ import { useEraserSize } from '../canvas/useEraserSize.js';
 import { useCanvasPalette } from '../canvas/useCanvasPalette.js';
 import { useCanvasTouchNavigation } from '../canvas/useCanvasTouchNavigation.js';
 import { stagePointerHandlers } from '../canvas/stagePointerHandlers.js';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import * as Automerge from '@automerge/automerge/slim';
 import automergeWasmUrl from '@automerge/automerge/automerge.wasm?url';
 import { Link, useNavigate, useParams } from '../routing.jsx';
@@ -148,6 +149,8 @@ function CanvasWorkspace() {
   const { canvasId } = useParams();
   const { token, user } = useAuth();
   const [portfolioViewing,setPortfolioViewing]=useState(false),[portfolioIndex,setPortfolioIndex]=useState(0),[portfolioSettings,setPortfolioSettings]=useState(false);
+  const frameStore=useMemo(()=>createFrameStore(),[]),framePages=useSyncExternalStore(frameStore.subscribe,frameStore.getSnapshot,frameStore.getSnapshot);
+  const currentFrameRef=useRef(null),presentationPendingRef=useRef(null),presentationBusy=useRef(0),seenCursor=useRef(''),[presentationSending,setPresentationSending]=useState(false);
   const portfolioCamera=useRef(null),autoPortfolioOpened=useRef(false),portfolioViewingRef=useRef(false);portfolioViewingRef.current=portfolioViewing;
   const [capabilities,setCapabilities]=useState(null);
   const projectStore=useMemo(()=>createProjectStore(),[]);
@@ -336,7 +339,7 @@ function CanvasWorkspace() {
   useEffect(()=>()=>{for(const request of settingsRequestsRef.current.values()){clearTimeout(request.timer);request.reject(new Error('캔버스 연결이 종료되었습니다.'));}settingsRequestsRef.current.clear();},[]);
   const [toast, setToast] = useState('');
   const { beginObjectMove, previewObjectMove, finishObjectMove, undo, undoCount, items, setItems, patchItems, moveItems, flushMoves, committedItemsRef, status: hostStatus, sessionRef: hostSessionRef, receiveServerItems, receiveServerEvent } = useServerCanvas({
-    accessRef, itemsRef, peerMeshRef, wsRef, rtcWsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems, reconnectRequestRef, onItemsPublished:(draft,ids)=>projectStore.update(draft,ids), onCommittedItems:(committed,ids)=>animationStore.update(committed,ids),
+    accessRef, itemsRef, peerMeshRef, wsRef, rtcWsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems, reconnectRequestRef, onItemsPublished:(draft,ids)=>{projectStore.update(draft,ids);frameStore.update(draft,ids);}, onCommittedItems:(committed,ids)=>animationStore.update(committed,ids),
   });
   projectStore.actions={
     admin:()=>accessRef.current?.is_admin===true,
@@ -347,33 +350,64 @@ function CanvasWorkspace() {
     remove:id=>{const records=projectStore.getSnapshot().records;if(records[id]?.projectType==='board'&&!projectStore.actions.admin())return false;const plan=removeProject(records,id);for(const key of [...plan.removed,...Object.keys(plan.changes)])if(!projectStore.actions.canWrite(key))throw Error('연결된 작업의 쓰기 권한과 잠금 상태를 확인해주세요.');const removed=new Set(plan.removed);for(const [key,item] of Object.entries(itemsRef.current))if(item.kind==='connector'&&(removed.has(String(item.from))||removed.has(String(item.to)))){if(item.locked||!canWriteItem(item))throw Error('연결된 작업의 쓰기 권한과 잠금 상태를 확인해주세요.');plan.removed.push(key);}return patchItems(plan.changes,plan.removed);},
     create:(boardId,definition)=>{const board=itemsRef.current[boardId];if(!projectStore.actions.canWrite(boardId))return false;const existing=Object.values(projectStore.getSnapshot().records).filter(i=>i.projectBoard===boardId),count=existing.length,id=createId();const item={...newIssue(boardId,(count+1)*1024),...definition,kind:'project',projectType:'issue',projectBoard:boardId,projectRank:Math.max(0,...existing.map(i=>i.projectRank))+1024,permission:board.permission,x:board.x+board.width+.03+(count%3)*.3,y:board.y+Math.floor(count/3)*.16,width:.28,height:.14};delete item.id;if(!validProject(item))throw Error('작업의 입력값 또는 일정을 확인해주세요.');validateProjectLinks({...itemsRef.current,[id]:item},id);return patchItems({[id]:item});},
   };
-  useEffect(()=>{if(portfolioViewing&&!items[PORTFOLIO_ID]?.portfolioPages?.[portfolioIndex]){setPortfolioViewing(false);setPortfolioSettings(false);if(portfolioCamera.current)setCamera(portfolioCamera.current);}},[items[PORTFOLIO_ID],portfolioIndex,portfolioViewing]);
+  const presentationPages=useMemo(()=>framePages.length?framePages:items[PORTFOLIO_ID]?.portfolioPages||[],[framePages,items[PORTFOLIO_ID]?.portfolioPages]);
+  const presentationPage=presentationPages[portfolioIndex];
+  useEffect(()=>{if(portfolioViewing&&!presentationPage){setPortfolioViewing(false);setPortfolioSettings(false);if(portfolioCamera.current)setCamera(portfolioCamera.current);}},[presentationPage,portfolioViewing]);
   const portfolioWritable=item=>Boolean(hostSessionRef.current?.editable&&item&&!item.locked&&canUseItem(item,accessRef.current,'write'));
   const savePortfolio=patch=>{const current=itemsRef.current[PORTFOLIO_ID];if(!current||current.kind!=='portfolio'||!portfolioWritable(current))return false;const next={...current,...patch};if(!validPortfolio(next))throw Error('포트폴리오 설정을 확인해주세요.');return patchItems({[PORTFOLIO_ID]:next});};
-  const runAnimations=(ids,action='play')=>{const changes={},runId=createId();for(const id of [...new Set(ids)]){const item=itemsRef.current[id];if(!item||item.kind==='portfolio')continue;if(!portfolioWritable(item))throw Error('선택 객체의 쓰기 권한과 잠금 상태를 확인해주세요.');const config=item.animation||defaultAnimation();if(action==='play'&&config.effect==='none')continue;changes[id]={...item,animationPlayback:{runId,action,startedAt:0,config}};}if(!Object.keys(changes).length&&action==='play')throw Error('재생할 객체에 애니메이션 효과를 먼저 지정해주세요.');return Object.keys(changes).length?patchItems(changes):false;};
-  const showPortfolioPage=index=>{
-    const p=itemsRef.current[PORTFOLIO_ID],page=p?.portfolioPages[index],rect=boardRef.current?.getBoundingClientRect();if(!page||!rect)return;
-    const bounds=page.objectIds.flatMap(id=>{const item=itemsRef.current[id];return item&&item.kind!=='portfolio'?[objectBounds(item,itemsRef.current,boardSize.width,boardSize.height)]:[];});
+  const runAnimations=(ids,action='play')=>{const changes={},runId=createId();for(const id of [...new Set(ids)]){const item=itemsRef.current[id];if(!item||['portfolio','frame'].includes(item.kind))continue;if(!portfolioWritable(item))throw Error('선택 객체의 쓰기 권한과 잠금 상태를 확인해주세요.');const config=item.animation||defaultAnimation();if(action==='play'&&config.effect==='none')continue;changes[id]={...item,animationPlayback:{runId,action,startedAt:0,config}};}if(action==='stop'&&portfolioViewingRef.current&&currentFrameRef.current&&itemsRef.current[currentFrameRef.current]?.kind==='frame'){const meta=itemsRef.current[PORTFOLIO_ID];if(meta&&portfolioWritable(meta))changes[PORTFOLIO_ID]={...meta,portfolioCursor:{runId,previousRunId:meta.portfolioCursor?.runId||'',frameId:currentFrameRef.current,step:meta.portfolioCursor?.frameId===currentFrameRef.current?meta.portfolioCursor.step:0,startedAt:0}};}if(!Object.keys(changes).length&&action==='play')throw Error('재생할 객체에 애니메이션 효과를 먼저 지정해주세요.');return Object.keys(changes).length?patchItems(changes):false;};
+  const frameMeta=()=>itemsRef.current[PORTFOLIO_ID]||{...newPortfolio(permission),title:ui('포트폴리오')};
+  const showPortfolioPage=(index,publish=true)=>{
+    const page=(frameStore.getSnapshot().length?frameStore.getSnapshot():itemsRef.current[PORTFOLIO_ID]?.portfolioPages||[])[index],rect=boardRef.current?.getBoundingClientRect();if(!page||!rect)return;
+    const frame=page.frameId&&itemsRef.current[page.frameId];
+    const bounds=frame?[{minX:frame.x,minY:frame.y,maxX:frame.x+frame.width,maxY:frame.y+frame.height}]:page.objectIds.flatMap(id=>{const item=itemsRef.current[id];return item&&item.kind!=='portfolio'?[objectBounds(item,itemsRef.current,boardSize.width,boardSize.height)]:[];});
     if(!bounds.length){setToast(ui('이 장면에서 볼 수 있는 객체가 없습니다.'));return;}
-    if(!portfolioViewing)portfolioCamera.current=camera;
-    finishEditing(editingId);setActiveTool('select');selectItems([]);setPortfolioViewing(true);setPortfolioIndex(index);
+    if(!portfolioViewingRef.current)portfolioCamera.current={x:camera.x,y:camera.y,scale:camera.scale,detailScale:camera.detailScale};
+    finishEditing(editingId);setActiveTool('select');selectItems([]);setPortfolioViewing(true);setPortfolioIndex(index);currentFrameRef.current=page.frameId||page.id;
     const minX=Math.min(...bounds.map(b=>b.minX))*boardSize.width,minY=Math.min(...bounds.map(b=>b.minY))*boardSize.height,maxX=Math.max(...bounds.map(b=>b.maxX))*boardSize.width,maxY=Math.max(...bounds.map(b=>b.maxY))*boardSize.height;
-    const scale=Math.min(4,Math.max(.01,Math.min((rect.width-100)/Math.max(1,maxX-minX),(rect.height-180)/Math.max(1,maxY-minY))));
-    setCamera(current=>({...current,scale,detailScale:scale,x:rect.width/2-(minX+maxX)/2*scale,y:(rect.height-90)/2-(minY+maxY)/2*scale}));
+    const scale=Math.min(100,Math.max(.0001,Math.min((rect.width-(frame?0:100))/Math.max(1,maxX-minX),(rect.height-(frame?0:180))/Math.max(1,maxY-minY))));
+    setCamera(current=>({...current,scale,detailScale:scale,x:rect.width/2-(minX+maxX)/2*scale,y:(rect.height-(frame?0:90))/2-(minY+maxY)/2*scale}));
+    requestAnimationFrame(()=>boardRef.current?.focus({preventScroll:true}));
+    if(publish&&frame&&portfolioWritable(frame)&&(!itemsRef.current[PORTFOLIO_ID]||portfolioWritable(itemsRef.current[PORTFOLIO_ID]))){
+      const meta=frameMeta(),runId=createId(),changes={};
+      for(const id of Object.keys(itemsRef.current)){const item=itemsRef.current[id];if(item?.frameId&&[seenCursor.current?meta.portfolioCursor?.frameId:'',page.frameId].includes(item.frameId)&&item.animationPlayback?.action==='play'&&portfolioWritable(item))changes[id]={...item,animationPlayback:{runId:createId(),action:'stop',startedAt:0,config:item.animation||defaultAnimation()}};}
+      changes[PORTFOLIO_ID]={...meta,portfolioCursor:{runId,previousRunId:meta.portfolioCursor?.runId||'',frameId:page.frameId,step:0,startedAt:0}};patchItems(changes);
+    }else if(publish){seenCursor.current=itemsRef.current[PORTFOLIO_ID]?.portfolioCursor?.runId||'';}
   };
+  const advancePresentation=()=>{
+    try{
+      if(presentationPendingRef.current||Date.now()<presentationBusy.current)return;
+      const page=frameStore.getSnapshot().find(p=>p.frameId===currentFrameRef.current)||presentationPages[portfolioIndex];if(!page)return;
+      if(!page.frameId){if(portfolioIndex<presentationPages.length-1)showPortfolioPage(portfolioIndex+1);return;}
+      if(!portfolioWritable(itemsRef.current[page.frameId]))return;
+      const meta=frameMeta();if(itemsRef.current[PORTFOLIO_ID]&&!portfolioWritable(meta))return;
+      const cursor=meta.portfolioCursor,step=cursor?.frameId===page.frameId?cursor.step:0,groups=animationGroups(page,itemsRef.current);
+      if(cursor?.startedAt===0)return;
+      if(step>=groups.length){const next=frameStore.getSnapshot().findIndex(p=>p.frameId===page.nextFrameId);if(next>=0)showPortfolioPage(next);else setToast(ui('마지막 프레임입니다.'));return;}
+      const runId=createId(),changes={};for(const id of groups[step].ids){const item=itemsRef.current[id];if(!portfolioWritable(item))throw Error('선택 객체의 쓰기 권한과 잠금 상태를 확인해주세요.');changes[id]={...item,animationPlayback:{runId,action:'play',startedAt:0,config:{...item.animation,loop:false}}};}
+      changes[PORTFOLIO_ID]={...meta,portfolioCursor:{runId,previousRunId:cursor?.runId||'',frameId:page.frameId,step:step+1,startedAt:0}};
+      presentationPendingRef.current=runId;setPresentationSending(true);if(!patchItems(changes)){presentationPendingRef.current=null;setPresentationSending(false);}setTimeout(()=>{if(presentationPendingRef.current===runId){presentationPendingRef.current=null;setPresentationSending(false);}},5000);
+    }catch(error){setToast(ui(error.message));}
+  };
+  const cursor=committedItemsRef.current[PORTFOLIO_ID]?.portfolioCursor;
+  useEffect(()=>{if(!cursor?.startedAt)return;if(presentationPendingRef.current===cursor.runId){presentationPendingRef.current=null;setPresentationSending(false);}if(!portfolioViewing||seenCursor.current===cursor.runId)return;const index=framePages.findIndex(page=>page.frameId===cursor.frameId);if(index<0)return;seenCursor.current=cursor.runId;showPortfolioPage(index,false);const groups=animationGroups(framePages[index],itemsRef.current),group=groups[cursor.step-1];presentationBusy.current=group&&!group.ids.every(id=>itemsRef.current[id]?.animationPlayback?.action==='stop')?cursor.startedAt+Math.max(...group.ids.map(id=>{const a=itemsRef.current[id]?.animation;return (a?.duration||0)+(a?.delay||0);})):0;},[cursor,portfolioViewing,framePages]);
   const portfolioActions={
     canManage:()=>itemsRef.current[PORTFOLIO_ID]?portfolioWritable(itemsRef.current[PORTFOLIO_ID]):Boolean(hostSessionRef.current?.editable&&canUseCanvas(accessRef.current,'write')),
     create:()=>{if(itemsRef.current[PORTFOLIO_ID])return false;return patchItems({[PORTFOLIO_ID]:{...newPortfolio(permission),title:ui('포트폴리오')}});},patch:savePortfolio,
+    createFrame:ids=>{if(!hostSessionRef.current?.editable||portfolioViewingRef.current)return false;const selected=ids.filter(id=>itemsRef.current[id]&&!['frame','portfolio'].includes(itemsRef.current[id].kind));const bounds=selected.map(id=>objectBounds(itemsRef.current[id],itemsRef.current,boardSize.width,boardSize.height));const id=createId(),frame={...newFrame(),title:ui('새 프레임'),frameOrder:Math.min(1000000,Math.max(-1,...frameStore.getSnapshot().map(p=>p.frame.frameOrder))+1),depth:-1000,permission,...(bounds.length?{x:Math.min(...bounds.map(b=>b.minX))-.025,y:Math.min(...bounds.map(b=>b.minY))-.04,width:Math.max(.2,Math.max(...bounds.map(b=>b.maxX))-Math.min(...bounds.map(b=>b.minX))+.05),height:Math.max(.15,Math.max(...bounds.map(b=>b.maxY))-Math.min(...bounds.map(b=>b.minY))+.08)}:centeredItemPosition(.8,.72))};const changes={[id]:frame};if(!itemsRef.current[PORTFOLIO_ID])changes[PORTFOLIO_ID]=frameMeta();for(const key of selected){if(!portfolioWritable(itemsRef.current[key]))return false;changes[key]={...itemsRef.current[key],frameId:id};}return patchItems(changes);},
+    patchFrame:(id,patch)=>{const old=itemsRef.current[id];if(!portfolioWritable(old))return false;const next={...old,...patch};if(!validFrame(next))throw Error('프레임 설정을 확인해주세요.');return patchItems({[id]:next});},
+    assign:(ids,frameId,priority)=>{if(frameId&&itemsRef.current[frameId]?.kind!=='frame')return false;const changes={};for(const id of ids){const item=itemsRef.current[id];if(!portfolioWritable(item)||['frame','portfolio'].includes(item.kind))return false;const next={...item,...(priority!==undefined?{animationPriority:priority}:{})};if(priority!==undefined&&!validFrameField('animationPriority',priority))throw Error('프레임 또는 우선순위 설정을 확인해주세요.');if(frameId!==undefined){if(frameId)next.frameId=frameId;else delete next.frameId;}changes[id]=next;}return patchItems(changes);},
+    linkPriority:(id,value)=>{const item=itemsRef.current[id];if(!portfolioWritable(item)||!validFrameField('frameLinkPriority',value))return false;return patchItems({[id]:{...item,frameLinkPriority:value}});},
     add:ids=>{const p=itemsRef.current[PORTFOLIO_ID];return savePortfolio({portfolioPages:[...p.portfolioPages,{id:createId(),title:ui('새 장면'),notes:'',objectIds:ids}]});},
     page:(id,patch)=>{const p=itemsRef.current[PORTFOLIO_ID];return savePortfolio({portfolioPages:p.portfolioPages.map(s=>s.id===id?{...s,...patch}:s)});},
     remove:id=>savePortfolio({portfolioPages:itemsRef.current[PORTFOLIO_ID].portfolioPages.filter(s=>s.id!==id)}),
-    reorder:(index,direction)=>{const pages=[...itemsRef.current[PORTFOLIO_ID].portfolioPages],next=index+direction;if(next<0||next>=pages.length)return false;[pages[index],pages[next]]=[pages[next],pages[index]];return savePortfolio({portfolioPages:pages});},
+    reorder:(index,direction)=>{if(frameStore.getSnapshot().length){const pages=frameStore.getSnapshot(),a=pages[index],b=pages[index+direction];if(!a||!b||!portfolioWritable(a.frame)||!portfolioWritable(b.frame))return false;return patchItems({[a.id]:{...a.frame,frameOrder:b.frame.frameOrder},[b.id]:{...b.frame,frameOrder:a.frame.frameOrder}});}const pages=[...itemsRef.current[PORTFOLIO_ID].portfolioPages],next=index+direction;if(next<0||next>=pages.length)return false;[pages[index],pages[next]]=[pages[next],pages[index]];return savePortfolio({portfolioPages:pages});},
     configure:(ids,config)=>{if(!validAnimation(config))throw Error('애니메이션 설정을 확인해주세요.');const changes={};for(const id of ids){const item=itemsRef.current[id];if(!portfolioWritable(item))return false;changes[id]={...item,animation:config,...(config.effect==='none'?{animationPlayback:{runId:createId(),action:'stop',startedAt:0,config}}:{})};}return patchItems(changes);},
     copyLink:()=>navigator.clipboard.writeText(`${window.location.origin}/canvases/${canvasId}?portfolio=1`).then(()=>setToast(ui('포트폴리오 보기 링크를 복사했습니다.'))).catch(()=>setToast(ui('링크를 복사하지 못했습니다.'))),
-    play:ids=>runAnimations(ids),stop:ids=>runAnimations(ids,'stop'),playPage:()=>runAnimations(itemsRef.current[PORTFOLIO_ID]?.portfolioPages[portfolioIndex]?.objectIds||[]),stopPage:()=>runAnimations(itemsRef.current[PORTFOLIO_ID]?.portfolioPages[portfolioIndex]?.objectIds||[],'stop'),show:showPortfolioPage,
+    play:ids=>runAnimations(ids),stop:ids=>runAnimations(ids,'stop'),playPage:()=>portfolioViewingRef.current&&presentationPages[portfolioIndex]?.frameId?advancePresentation():runAnimations(presentationPages[portfolioIndex]?.objectIds||[]),stopPage:()=>runAnimations(presentationPages[portfolioIndex]?.objectIds||[],'stop'),show:showPortfolioPage,
   };
-  useEffect(()=>{if(!autoPortfolioOpened.current&&items[PORTFOLIO_ID]?.portfolioPages?.length&&hostStatus.ready&&new URLSearchParams(window.location.search).get('portfolio')==='1'){const frame=requestAnimationFrame(()=>{if(boardRef.current){autoPortfolioOpened.current=true;showPortfolioPage(0);}});return()=>cancelAnimationFrame(frame);}},[items[PORTFOLIO_ID],hostStatus.ready]);
-  const exitPortfolio=()=>{setPortfolioViewing(false);setPortfolioSettings(false);if(portfolioCamera.current)setCamera(portfolioCamera.current);};
+  useEffect(()=>{if(!autoPortfolioOpened.current&&presentationPages.length&&hostStatus.ready&&new URLSearchParams(window.location.search).get('portfolio')==='1'){const frame=requestAnimationFrame(()=>{if(boardRef.current){autoPortfolioOpened.current=true;const index=cursor?.frameId?presentationPages.findIndex(p=>p.frameId===cursor.frameId):0;showPortfolioPage(Math.max(0,index),false);}});return()=>cancelAnimationFrame(frame);}},[presentationPages,hostStatus.ready]);
+  const exitPortfolio=()=>{setPortfolioViewing(false);setPortfolioSettings(false);if(portfolioCamera.current)setCamera(portfolioCamera.current);if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});};
   saveBlueprintOutputRef.current = (id, records) => {
     const previous = itemsRef.current[id];
     if (!hostStatus.editable || previous?.runtimeRole !== 'output') return false;
@@ -904,6 +938,15 @@ function CanvasWorkspace() {
   },[patchItems,snapToGrid,gridSpacing,boardSize]);
   const deleteItem = useCallback((id) => {
     const previous = itemsRef.current[id];
+    if(previous?.kind==='frame'){
+      if(!canWriteItem(previous)||previous.locked)return false;const changes={},removed=[String(id)];
+      for(const [key,item] of Object.entries(itemsRef.current)){
+        if(item?.frameId===id){if(!canWriteItem(item)||item.locked){setToast(WRITE_DENIED);return false;}const next={...item};delete next.frameId;changes[key]=next;}
+        if(item?.kind==='connector'&&(item.from===id||item.to===id)){if(!canWriteItem(item)||item.locked){setToast(WRITE_DENIED);return false;}removed.push(key);}
+      }
+      const meta=itemsRef.current[PORTFOLIO_ID];if(meta?.portfolioCursor?.frameId===id){if(!canWriteItem(meta)||meta.locked)return false;changes[PORTFOLIO_ID]={...meta};delete changes[PORTFOLIO_ID].portfolioCursor;}
+      return patchItems(changes,removed);
+    }
     if(previous?.kind==='project'){try{return projectStore.actions.remove(String(id));}catch(error){setToast(error.message);return false;}}
     if(previous&&!canWriteItem(previous)){setToast(WRITE_DENIED);return false;}
     if (isObjectLocked(previous) || Object.values(itemsRef.current).some(item => item?.kind === 'connector' && isObjectLocked(item) && (String(item.from) === String(id) || String(item.to) === String(id)))) { setToast(OBJECT_LOCK_MESSAGE); return false; }
@@ -1085,6 +1128,7 @@ function CanvasWorkspace() {
   const drawableItemCount = itemCount(items);
 
   const viewportSize = useCanvasViewport({ boardRef, setCamera, refreshKey: error });
+  useEffect(()=>{if(portfolioViewing&&presentationPage?.frameId)showPortfolioPage(portfolioIndex,false);},[viewportSize.width,viewportSize.height,presentationPage?.frame]);
   const spatialIndexRef = useRef(null);
   const spatialIndex = useMemo(() => {
     if (!spatialIndexRef.current) spatialIndexRef.current = new CanvasSpatialBTree();
@@ -1125,7 +1169,8 @@ function CanvasWorkspace() {
     }
     return entries;
   }, [boardSize.height, boardSize.width, editingId, items, spatialIndex, spatialRevision, sceneWindow.key]);
-  const portfolioEntries=useMemo(()=>{if(!portfolioViewing)return visibleEntries;const ids=new Set(items[PORTFOLIO_ID]?.portfolioPages?.[portfolioIndex]?.objectIds||[]);return visibleEntries.filter(entry=>ids.has(entry.id));},[visibleEntries,portfolioViewing,portfolioIndex,items[PORTFOLIO_ID]]);
+  const portfolioEntries=useMemo(()=>{if(!portfolioViewing)return visibleEntries;const ids=new Set(presentationPage?.objectIds||[]);return visibleEntries.filter(entry=>ids.has(entry.id));},[visibleEntries,portfolioViewing,presentationPage]);
+  const pendingEntrance=useMemo(()=>portfolioViewing?new Set(animationGroups(presentationPage,items).slice(cursor?.frameId===presentationPage?.frameId?cursor?.step||0:0).flatMap(g=>g.ids).filter(id=>['fade','slide-up','slide-left','zoom'].includes(items[id]?.animation?.effect))):null,[portfolioViewing,presentationPage,cursor,items]);
   const usesOverview=useMemo(()=>portfolioEntries.some(({item})=>!['shape','stroke','connector'].includes(item.kind) && !isRasterText(item)),[portfolioEntries,items[selectedItemId]?.renderMode]);
   const representationScale=usesOverview?overviewScale(Math.min(camera.scale,camera.detailScale??camera.scale)):1;
   const selectedObjectIdsKey=selectedItemIds.filter(id=>Boolean(items[id])).join('|');
@@ -1241,7 +1286,7 @@ function CanvasWorkspace() {
   });
   const sendSettings = (field,value,participant) => {requestSettings(field,value,participant).catch(()=>{});};
 
-  const { cancelStageGesture, pointerPosition, startPan, cancelPanInertia, centeredItemPosition, hideCursor, sendCursorPosition, startZoomHold, stopZoomHold, cancelZoomHold, clickZoom, startDrawing, moveDrawing, stopDrawing } = useCanvasStageInteractions({ canWriteItem, canWriteCanvas,
+  const { cancelStageGesture, pointerPosition, startPan, cancelPanInertia, centeredItemPosition, hideCursor, sendCursorPosition, startZoomHold, stopZoomHold, cancelZoomHold, clickZoom, startDrawing, moveDrawing, stopDrawing } = useCanvasStageInteractions({ presentation:portfolioViewing&&Boolean(presentationPage?.frameId),canWriteItem, canWriteCanvas,
     boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth, eraserMode,
     addItem, setToast, setItems, patchItems, refreshSpatialIndex, spatialIndexRef,
     sendStrokeFrameChanges, pendingItemChangesRef, strokeSaveFlushRef,
@@ -1318,7 +1363,7 @@ function CanvasWorkspace() {
     moveObject,
     stopObjectDrag,
     startGroupRotation,
-  } = useCanvasObjectInteractions({ canWriteItem, snapToGrid, gridSpacing,
+  } = useCanvasObjectInteractions({ frameMemberIds:id=>frameStore.getSnapshot().find(frame=>frame.id===id)?.objectIds||[],canWriteItem, snapToGrid, gridSpacing,
     moveItems, flushMoves, beginObjectMove, previewObjectMove, finishObjectMove,
     activeTool,
     spatialIndexRef,
@@ -1562,7 +1607,7 @@ function CanvasWorkspace() {
     .map(key=>[key,(...args)=>objectActionsRef.current[key](...args)])),[]);
 
 
-  return <AnimationContext.Provider value={animationStore}><ProjectContext.Provider value={projectStore}><CanvasGraphicsContext.Provider value={graphicsQuality}><div className={`canvas-app-page${portfolioViewing?' portfolio-view':''}`} data-presentation-settings={portfolioSettings} data-graphics-quality={graphicsQuality} data-theme={theme} data-info-collapsed={chrome.collapsed.info}>
+  return <AnimationContext.Provider value={animationStore}><ProjectContext.Provider value={projectStore}><CanvasGraphicsContext.Provider value={graphicsQuality}><div className={`canvas-app-page${portfolioViewing?' portfolio-view':''}`} data-presentation-settings={portfolioSettings} style={portfolioViewing&&presentationPage?.frame?{'--frame-screen-left':`${presentationPage.frame.x*boardSize.width*camera.scale+camera.x}px`,'--frame-screen-top':`${presentationPage.frame.y*boardSize.height*camera.scale+camera.y}px`,'--frame-screen-width':`${presentationPage.frame.width*boardSize.width*camera.scale}px`,'--frame-screen-height':`${presentationPage.frame.height*boardSize.height*camera.scale}px`,'--frame-view-fill':presentationPage.frame.fill||'#fff'}:undefined} data-frame-view={Boolean(portfolioViewing&&presentationPage?.frameId)} data-graphics-quality={graphicsQuality} data-theme={theme} data-info-collapsed={chrome.collapsed.info}>
     <div style={{ display: 'contents' }} inert={!hostStatus.editable && !error ? '' : undefined}>
     <header className={`canvas-topbar${chrome.collapsed.info?' is-collapsed':''}`}>
       <ChromeToggle label={ui("캔버스 정보")} collapsed={chrome.collapsed.info} onToggle={()=>chrome.toggle('info')} controls="canvas-info-content" />
@@ -1576,7 +1621,7 @@ function CanvasWorkspace() {
       <ResizablePanel {...panelLayout.handle('tools')}><CanvasToolPanel activeTool={activeTool} onSelectTool={selectCanvasTool} color={color} onColorChange={setColor} onUploadPdf={uploadPdf} onUploadSheet={uploadSheet} onUploadImage={uploadImage} onUploadMedia={uploadMedia} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} /></ResizablePanel>
       <CanvasQuickDock shortcutGuard={()=>hostSessionRef.current.editable && editingIdRef.current==null && !dragRef.current && !drawingRef.current && !panRef.current && !selectionRef.current} undoCount={undoCount} onUndo={undoCanvas} canUndo={hostStatus.editable && editingId == null} canWrite={canWriteCanvas} activeTool={activeTool} onSelectTool={selectCanvasTool} onUploadImage={uploadImage}
         toolsExpanded={!panelLayout.handle('tools').collapsed} onToggleTools={panelLayout.handle('tools').onToggle} />
-      <main className="board-region"><div className="board-topline"><div className="board-toolbar-actions">{items[PORTFOLIO_ID]?.portfolioPages?.length>0&&<button className="board-toggle" onClick={()=>showPortfolioPage(0)}>{ui('포트폴리오 보기')}</button>}<button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId);setShowVersions(false);setCanvasCodeSource(null); setShowCanvasCode(true); }}><Icon name="code" size={15} />{ui("캔버스 코드")}</button><button className="board-toggle" title={ui("변경 이력")} aria-haspopup="dialog" disabled={!canvasSnapshotLoadedRef.current} onClick={()=>{finishEditing(editingId);setShowCanvasCode(false);setShowVersions(true);}}><Icon name="document" size={15}/>{ui("변경 이력")}</button><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={()=>setShowRuntimeSettings(true)}><Icon name="settings" size={15}/>{ui("실행 환경")}</button><button className="zoom-button" aria-label={ui("확대")} title={ui("클릭: 한 단계 확대 · 길게 누르기: 계속 확대")} onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label={ui("축소")} title={ui("클릭: 한 단계 축소 · 길게 누르기: 계속 축소")} onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>{ui("맞춤")}</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />{"" + ui("격자") + " "}{showGrid ? ui("켜짐") : ui("꺼짐")}</button></div></div>
+      <main className="board-region"><div className="board-topline"><div className="board-toolbar-actions">{presentationPages.length>0&&<button className="board-toggle" onClick={()=>showPortfolioPage(0)}>{ui('포트폴리오 보기')}</button>}<button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId);setShowVersions(false);setCanvasCodeSource(null); setShowCanvasCode(true); }}><Icon name="code" size={15} />{ui("캔버스 코드")}</button><button className="board-toggle" title={ui("변경 이력")} aria-haspopup="dialog" disabled={!canvasSnapshotLoadedRef.current} onClick={()=>{finishEditing(editingId);setShowCanvasCode(false);setShowVersions(true);}}><Icon name="document" size={15}/>{ui("변경 이력")}</button><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={()=>setShowRuntimeSettings(true)}><Icon name="settings" size={15}/>{ui("실행 환경")}</button><button className="zoom-button" aria-label={ui("확대")} title={ui("클릭: 한 단계 확대 · 길게 누르기: 계속 확대")} onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label={ui("축소")} title={ui("클릭: 한 단계 축소 · 길게 누르기: 계속 축소")} onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>{ui("맞춤")}</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />{"" + ui("격자") + " "}{showGrid ? ui("켜짐") : ui("꺼짐")}</button></div></div>
         <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} data-grid-spacing={gridSpacing.x} data-grid-spacing-x={gridSpacing.x} data-grid-spacing-y={gridSpacing.y} style={{ ...canvasGridStyle(camera,gridSpacing), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ touchNavigation, activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion: cancelPanInertia, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, sendCursorPosition, pickVector: (event,doubleClick = false,capture = false) => {
             if (!['select', 'connect'].includes(activeTool) || event.button !== 0 || event.target.closest?.('.stage-label, button, input, textarea')) return false;
             const target=event.target.closest?.('.canvas-object');
@@ -1596,13 +1641,13 @@ function CanvasWorkspace() {
           <div className="stage-label"><span>FRELOG / {String(canvasId).padStart(2, '0')}</span><b>{canvas?.canvas_name || ui("공유 캔버스")}</b></div>
           <div className="canvas-grid-surface" aria-hidden="true" />
           <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true">{(showXAxis || showYAxis) && <CanvasAxisTicks boardRef={boardRef} camera={camera} showXAxis={showXAxis} showYAxis={showYAxis} />}{showXAxis && <span className="coordinate-x" />}{showYAxis && <span className="coordinate-y" />}{(showXAxis || showYAxis) && <i className="coordinate-origin">0</i>}</div>
-          <div className="canvas-scene" ref={sceneRef} style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }}>
+          <div className="canvas-scene" ref={sceneRef} style={{clipPath:portfolioViewing&&presentationPage?.frameId?`inset(var(--frame-screen-top) calc(100% - var(--frame-screen-left) - var(--frame-screen-width)) calc(100% - var(--frame-screen-top) - var(--frame-screen-height)) var(--frame-screen-left))`:undefined, width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }}>
             {depthLayers.map((layer, index) => <div className="canvas-depth-layer" key={layer.depth} data-depth={layer.depth} style={{ position: 'absolute', inset: 0, zIndex: index + 1, pointerEvents: 'none' }}>
               <VectorLayer token={token} graphicsQuality={graphicsQuality} style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }} worldSize={boardSize} items={layer.vectors} referenceItems={items} routingRevision={spatialIndex.stats.boundsCalculated} inkItems={layer.inkItems} previewStrokes={layer.depth === 0 ? remoteDrawingStrokes : undefined} camera={camera} onReady={layer.depth === 0 ? (setDraft) => { vectorDraftRef.current = setDraft; } : undefined} />
-            <div className="canvas-world-layer" style={{position:'absolute',width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`}}><CanvasLayerObjects presentation={portfolioViewing} objects={layer.domObjects} domSelection={domSelection} editingId={editingId} connectionStartId={connectionStartId} world={boardSize} scale={representationScale} token={token} runtimeStore={runtimeStore} selected={selectedObjectIdSet} singleSelection={hasSingleSelection} activeTool={activeTool} dirtyItems={dirtyItems} editorsByItem={editorsByItem} actions={objectActions} access={capabilities} canWriteItem={canWriteItem} canExecuteItem={canExecuteItem} /></div>
+            <div className="canvas-world-layer" style={{position:'absolute',width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`}}><CanvasLayerObjects pendingEntrance={pendingEntrance} presentation={portfolioViewing} objects={layer.domObjects} domSelection={domSelection} editingId={editingId} connectionStartId={connectionStartId} world={boardSize} scale={representationScale} token={token} runtimeStore={runtimeStore} selected={selectedObjectIdSet} singleSelection={hasSingleSelection} activeTool={activeTool} dirtyItems={dirtyItems} editorsByItem={editorsByItem} actions={objectActions} access={capabilities} canWriteItem={canWriteItem} canExecuteItem={canExecuteItem} /></div>
             </div>)}
             <div className="canvas-world-layer" style={{ position: 'absolute', width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`, zIndex: depthLayers.length + 1, pointerEvents: 'none' }}>
-            {selectedItem && canWriteItem(selectedItem) && !isObjectLocked(selectedItem) && selectedItem.kind !== 'connector' && activeTool === 'select' && !editingId && <RotationHandles sceneRef={sceneRef} id={String(primarySelectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startObjectRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
+            {selectedItem && canWriteItem(selectedItem) && !isObjectLocked(selectedItem) && !['connector','frame'].includes(selectedItem.kind) && activeTool === 'select' && !editingId && <RotationHandles sceneRef={sceneRef} id={String(primarySelectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startObjectRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
             {selectionIsSingleGroup && selectedObjectIds.every(id => canWriteItem(items[id]) && !isObjectLocked(items[id])) && selectedObjectIds.length > 1 && activeTool === 'select' && !editingId && <GroupRotationHandles sceneRef={sceneRef} ids={selectedObjectIds} items={items} viewSize={boardSize} onPointerDown={startGroupRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
             <RemoteCursorLayer updaterRef={remoteCursorUpdaterRef} activePeerIds={activePeerIds} visibleBounds={visibleBounds} />
             </div>
@@ -1614,7 +1659,7 @@ function CanvasWorkspace() {
           {activeTool === 'laser' && <div className="draw-cursor-label laser-cursor-label"><Icon name="laser" size={13} />{" " + ui("가리키는 중 · 1.6초 후 사라짐") + ""}</div>}{activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} />{" " + ui("그리는 중") + ""}</div>}{activeTool === 'eraser' && <div className="draw-cursor-label"><Icon name="eraser" size={13} />{" " + ui("드로잉을 드래그해 지우기") + ""}</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? ui("도착 오브젝트 선택") : ui("시작 오브젝트 선택")}</div>}{activeTool === 'link' && !sharePosition && <div className="draw-cursor-label"><Icon name="link" size={13} />{" " + ui("공유 자료를 놓을 위치 선택") + ""}</div>}
         </div>
       </main>
-<ResizablePanel {...panelLayout.handle('inspector')}><CanvasInspectorPanel portfolioActions={portfolioActions} portfolioViewing={portfolioViewing} graphicsQuality={graphicsQuality} changeGraphicsQuality={changeGraphicsQuality} spatialIndex={spatialIndex} updateContentSetting={updateContentSetting} updateChartItem={updateTableItem} onNavigateObject={focusCanvasObject} onOpenComments={id => { finishEditing(editingId); comments.open(id); }} {...{
+<ResizablePanel {...panelLayout.handle('inspector')}><CanvasInspectorPanel portfolioFrames={framePages} portfolioActions={portfolioActions} portfolioViewing={portfolioViewing} graphicsQuality={graphicsQuality} changeGraphicsQuality={changeGraphicsQuality} spatialIndex={spatialIndex} updateContentSetting={updateContentSetting} updateChartItem={updateTableItem} onNavigateObject={focusCanvasObject} onOpenComments={id => { finishEditing(editingId); comments.open(id); }} {...{
         activeTool,
         canvasId,
         canvasParticipants,
@@ -1697,7 +1742,7 @@ function CanvasWorkspace() {
     {showParticipants && <CanvasParticipantsDialog participants={canvasParticipants} token={token} settings={settings} pending={settingsPending} onRequest={requestSettings} onClose={() => setShowParticipants(false)} onAddParticipant={(nickname, tag) => sendSettings('participant_add', null, { nickname, tag_number: tag })} onRemoveParticipant={(person) => sendSettings('participant_remove', null, { nickname: person.nickname, tag_number: person.tag_number })} />}
     </div>
     {!error && !hostStatus.editable && <CanvasLoadingStatus overlay message={hostStatus.message} />}
-    {portfolioViewing&&items[PORTFOLIO_ID]&&<PortfolioViewer portfolio={items[PORTFOLIO_ID]} index={portfolioIndex} onPage={showPortfolioPage} onExit={exitPortfolio} onSettings={()=>{setPortfolioSettings(v=>!v);if(panelLayout.handle('inspector').collapsed)panelLayout.handle('inspector').onToggle();}}/>}
+    {portfolioViewing&&presentationPage&&<PortfolioViewer portfolio={{...items[PORTFOLIO_ID],title:items[PORTFOLIO_ID]?.title||ui('포트폴리오'),portfolioPages:presentationPages}} index={portfolioIndex} onAdvance={advancePresentation} sending={presentationSending} busyUntil={presentationBusy.current} step={cursor?.frameId===presentationPage.frameId?cursor?.step||0:0} totalSteps={animationGroups(presentationPage,itemsRef.current).length} canAdvance={portfolioWritable(presentationPage.frame||itemsRef.current[PORTFOLIO_ID])&&portfolioWritable(itemsRef.current[PORTFOLIO_ID]||frameMeta())} onPage={showPortfolioPage} onExit={exitPortfolio} onSettings={()=>{setPortfolioSettings(v=>!v);if(panelLayout.handle('inspector').collapsed)panelLayout.handle('inspector').onToggle();}}/>}
   </div></CanvasGraphicsContext.Provider></ProjectContext.Provider></AnimationContext.Provider>;
 }
 

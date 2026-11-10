@@ -19,6 +19,7 @@ export const canvasToolCategories = [
     { id: 'note', label: '포스트잇', icon: 'sticky' },
   ] },
   { id: 'structure', label: '자료·계산', tools: [
+    {id:'frame',label:'프레임',description:'발표 화면 프레임',icon:'grid'},
     {id:'project',label:'프로젝트 관리',description:'이슈·칸반·스크럼·스프린트·로드맵',icon:'table'},
     { id: 'continuous-value', label: '연속 값', description: '실수 슬라이더와 수치 입력', icon: 'settings' },
     { id: 'discrete-value', label: '이산 값', description: '정수·버튼·선택·문자 입력', icon: 'table' },

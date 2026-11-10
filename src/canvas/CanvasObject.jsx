@@ -64,7 +64,7 @@ const QuestionCard=memo(RawQuestionCard,objectContentPropsEqual);
 const SharedMediaContent=memo(RawSharedMediaContent,objectContentPropsEqual);
 const ConnectorLabel=memo(RawConnectorLabel,objectContentPropsEqual);
 
-function CanvasObjectView({ mediaWritable, readOnly=false, canExecute=true, id, item, bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, token, runtimeStore, onUndo, onStartEditing, onTextChange, onTextColorChange, onMetadataChange, onFormulaChange, onTableChange, onQuestionChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
+function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=false, canExecute=true, id, item, bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, token, runtimeStore, onUndo, onStartEditing, onTextChange, onTextColorChange, onMetadataChange, onFormulaChange, onTableChange, onQuestionChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
   useUiLocale();
   const contentLatest=useRef(null);contentLatest.current={id,onTableChange,onQuestionChange,onStartEditing,onStopEditing};
   const contentActions=useMemo(()=>({
@@ -140,7 +140,7 @@ function CanvasObjectView({ mediaWritable, readOnly=false, canExecute=true, id, 
   const style = { ...objectFontStyle(item), ...objectShadowStyle(item), left: `${(Number(item.x) || 0) * 100}%`, top: `${(Number(item.y) || 0) * 100}%`, width: `${width * 100}%`, '--object-color': item.color || '#617d68', '--object-rotation': `${Number(item.rotation) || 0}deg` };
   if (item.height) style.height = `${height * 100}%`;
   const movable = activeTool === 'select' && selected && !item.locked && !readOnly;
-  const classes = `canvas-object canvas-object-${item.kind}${movable ? ' movable' : ''}${selected ? ' selected' : ''}${connectionStartId === id ? ' connection-source' : ''}${item.height ? ' has-custom-height' : ''}`;
+  const classes = `canvas-object${presentationHidden?' presentation-entrance-pending':''} canvas-object-${item.kind}${movable ? ' movable' : ''}${selected ? ' selected' : ''}${connectionStartId === id ? ' connection-source' : ''}${item.height ? ' has-custom-height' : ''}`;
   const handlers = {
     ...(supportsObjectCorners(item) ? { 'data-corner-style': objectCornerStyle(item) } : {}),
     ref: editingBoundary.ref,
@@ -177,6 +177,10 @@ function CanvasObjectView({ mediaWritable, readOnly=false, canExecute=true, id, 
   };
 
 
+  if(item.kind==='frame')return withResizeHandles(<div className={`${classes} portfolio-frame-object`} style={{...style,pointerEvents:'none'}} {...handlers}>
+    <svg className="portfolio-frame-outline" width="100%" height="100%"><rect x="1" y="1" width="calc(100% - 2px)" height="calc(100% - 2px)" fill="none"/><rect className="portfolio-frame-hit" x="1" y="1" width="calc(100% - 2px)" height="calc(100% - 2px)"/></svg>
+    <span className="portfolio-frame-caption">{item.title||ui('프레임')}</span>
+  </div>);
   if (item.kind === 'shape' && item.runtimeRole==='notebook') return withResizeHandles(<div className={`${classes} notebook-object`} style={style} {...handlers}><NotebookObject id={id} item={item} store={runtimeStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} canExecute={canExecute} onChange={onQuestionChange}/></div>);
   if (item.kind === 'shape' && item.runtimeRole==='terminal') return withResizeHandles(<div className={`${classes} terminal-object`} style={style} {...handlers}><TerminalObject id={id} item={item} store={runtimeStore} selected={selected && activeTool==='select'} canExecute={canExecute}/></div>);
   if (item.kind === 'shape' && ['executor', 'output'].includes(item.runtimeRole)) return withResizeHandles(<div className={`${classes} blueprint-object${item.runtimeRole==='executor'?' blueprint-executor-object':''}`} style={style} {...handlers}><BlueprintNode id={id} item={item} store={runtimeStore} selected={selected} canExecute={canExecute} canReset={canExecute&&!readOnly} /></div>);

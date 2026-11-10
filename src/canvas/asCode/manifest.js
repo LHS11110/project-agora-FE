@@ -1,3 +1,4 @@
+import {validFrame,validFrameField,validCursor} from '../portfolio/frameModel.js';
 import {validAnimation,validPlayback,validPortfolio} from '../portfolio/portfolioModel.js';
 import {PROJECT_FIELDS,validProject} from '../projects/projectModel.js';
 import {validNotebookCells,validNotebookResults} from '../notebook/notebookData.js';
@@ -16,10 +17,10 @@ import { textColorRanges, colorRangesFromDoc } from '../content/textColors.js';
 import { loadItemDoc } from '../host/hostOperations.js';
 import { textSpliceBetween } from '../collaborativeText.js';
 
-const KINDS = new Set(['portfolio','project','text', 'note', 'code', 'math', 'shape', 'table', 'chart', 'question', 'value', 'image', 'link', 'connector', 'stroke', 'pdf', 'user-group']);
+const KINDS = new Set(['frame','portfolio','project','text', 'note', 'code', 'math', 'shape', 'table', 'chart', 'question', 'value', 'image', 'link', 'connector', 'stroke', 'pdf', 'user-group']);
 const NUMBERS = new Set(['valueNumber','valueMin','valueMax','valueStep','pdfPage','questionMaxScore', 'questionScore', 'shadowBlur', 'shadowOpacity', 'shadowOffsetX', 'shadowOffsetY', 'depth', 'x', 'y', 'width', 'height', 'rotation', 'fontSize', 'strokeWidth', 'bend', 'opacity', 'contentScale', 'contentScaleX', 'contentScaleY', 'bendPointCount', 'headSize', 'vertexCount', 'fillOpacity', 'sketchFillOpacity']);
 const STRINGS = new Set(['valueType','valueText','questionType', 'questionPrompt', 'questionAnswer', 'questionFeedback', 'questionVersion', 'questionGradedVersion', 'kind', 'text', 'code', 'formula', 'format', 'filename', 'language', 'shapeType', 'visualStyle', 'volumeStyle', 'chartType', 'color', 'fill', 'groupId', 'src', 'url', 'title', 'mediaType', 'from', 'to', 'fromPort', 'toPort', 'startHead', 'endHead', 'brush', 'embedUrl', 'videoId', 'renderMode', 'label', 'labelMode', 'groupTitle', 'thumbnail', 'cornerStyle', 'runtimeRole']);
-const FIELDS = new Set(['animation','animationPlayback','portfolioPages','portfolioDescription',...PROJECT_FIELDS,...NUMBERS, ...STRINGS, 'notebookCells','notebookResults','valueOptions', 'mediaState', 'mediaLoop', 'runtimeState', 'permission', 'points', 'rows', 'columns', 'simulatePressure', 'complete', 'strokeEnabled', 'shadowEnabled', 'locked', 'imageFrameEnabled', 'bendPoints', 'members', 'textColors', 'runtimeResults', 'questionOptions', 'questionSubmitted']);
+const FIELDS = new Set(['frameId','animationPriority','frameOrder','frameLinkPriority','portfolioCursor','animation','animationPlayback','portfolioPages','portfolioDescription',...PROJECT_FIELDS,...NUMBERS, ...STRINGS, 'notebookCells','notebookResults','valueOptions', 'mediaState', 'mediaLoop', 'runtimeState', 'permission', 'points', 'rows', 'columns', 'simulatePressure', 'complete', 'strokeEnabled', 'shadowEnabled', 'locked', 'imageFrameEnabled', 'bendPoints', 'members', 'textColors', 'runtimeResults', 'questionOptions', 'questionSubmitted']);
 export const CANVAS_ITEM_FIELDS = new Set([...FIELDS].filter(field => field !== 'textColors'));
 const unsafeId = id => !id || ['__proto__', 'constructor', 'prototype'].includes(id);
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -53,6 +54,9 @@ export function exportManifest(items) {
 }
 function validateItem(id, item) {
   if (unsafeId(id) || !plain(item)) fail(`${id}: 올바른 객체 ID와 객체 정의가 필요합니다.`);
+  for(const key of ['frameId','animationPriority','frameOrder','frameLinkPriority'])if(item[key]!==undefined&&!validFrameField(key,item[key]))fail(`${id}: 프레임 또는 우선순위 설정을 확인해주세요.`);
+  if(item.kind==='frame'&&!validFrame(item))fail(`${id}: 프레임 설정을 확인해주세요.`);
+  if(item.portfolioCursor!==undefined&&(item.kind!=='portfolio'||!validCursor(item.portfolioCursor)))fail(`${id}: 발표 진행 정보를 확인해주세요.`);
   if(item.animation!==undefined&&!validAnimation(item.animation))fail(`${id}: 애니메이션 설정을 확인해주세요.`);
   if(item.animationPlayback!==undefined&&!validPlayback(item.animationPlayback))fail(`${id}: 애니메이션 재생 정보를 확인해주세요.`);
   if(item.kind==='portfolio'&&!validPortfolio(item))fail(`${id}: 포트폴리오 설정을 확인해주세요.`);

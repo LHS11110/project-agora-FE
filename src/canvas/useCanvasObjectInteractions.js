@@ -15,7 +15,7 @@ import { inheritConnectorObjectSize } from './connectors/objectMetrics.js';
 
 export function useCanvasObjectInteractions(options) {
   const {
-    activeTool, canWriteItem = () => true, snapToGrid=false, gridSpacing=20,
+    activeTool, frameMemberIds=()=>[], canWriteItem = () => true, snapToGrid=false, gridSpacing=20,
     addItem,
     boardRef,
     boardSize,
@@ -116,7 +116,8 @@ export function useCanvasObjectInteractions(options) {
     event.preventDefault(); event.stopPropagation();
     const start = pointerPosition(event);
     const touchStart = event.pointerType !== 'mouse' ? { x: event.clientX, y: event.clientY } : null;
-    const movableIds = targetIds.filter((targetId) => itemsRef.current[targetId] && !isObjectLocked(itemsRef.current[targetId]) && canWriteItem(itemsRef.current[targetId]) && !['connector'].includes(itemsRef.current[targetId].kind));
+    const moveTargets=new Set(targetIds);for(const targetId of targetIds)if(itemsRef.current[targetId]?.kind==='frame')for(const memberId of frameMemberIds(targetId)){const member=itemsRef.current[memberId];if(member&&(member.locked||!canWriteItem(member))){setToast(OBJECT_LOCK_MESSAGE);return;}moveTargets.add(memberId);}
+    const movableIds = [...moveTargets].filter((targetId) => itemsRef.current[targetId] && !isObjectLocked(itemsRef.current[targetId]) && canWriteItem(itemsRef.current[targetId]) && !['connector'].includes(itemsRef.current[targetId].kind));
     if (!movableIds.length || !beginObjectMove(movableIds)) return;
     if (movableIds.length > 1) {
       const initialItems = Object.fromEntries(movableIds.map((targetId) => [targetId, itemsRef.current[targetId]]));

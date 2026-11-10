@@ -53,6 +53,6 @@ export function removeProject(records,id){
 }
 export function orderProjectCreates(entries){
  const pending=new Map(entries.map(entry=>[entry.id,entry])),ordered=[],visiting=new Set();
- const visit=(id,depth=0)=>{const entry=pending.get(id);if(!entry)return;if(depth>128||visiting.has(id))throw Error('순환 의존성 또는 하위 작업 순환은 만들 수 없습니다.');visiting.add(id);const item=entry.item;const refs=item.kind==='project'&&item.projectType==='issue'?[item.projectBoard,item.projectParent,...item.projectDependencies]:item.kind==='connector'?[item.from,item.to]:[];for(const ref of refs)visit(ref,depth+1);visiting.delete(id);pending.delete(id);ordered.push(entry);};
+ const visit=(id,depth=0)=>{const entry=pending.get(id);if(!entry)return;if(depth>128||visiting.has(id))throw Error('순환 의존성 또는 하위 작업 순환은 만들 수 없습니다.');visiting.add(id);const item=entry.item;const refs=[...(item.frameId?[item.frameId]:[]),...(item.kind==='project'&&item.projectType==='issue'?[item.projectBoard,item.projectParent,...item.projectDependencies]:item.kind==='connector'?[item.from,item.to]:[])];for(const ref of refs)visit(ref,depth+1);visiting.delete(id);pending.delete(id);ordered.push(entry);};
  for(const id of [...pending.keys()])visit(id);return ordered;
 }

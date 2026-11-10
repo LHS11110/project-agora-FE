@@ -38,7 +38,7 @@ export default function AppShell({ children }) {
         <div className="sidebar-section-label">WORKSPACE</div>
         <nav className="side-nav" aria-label={ui("주요 메뉴")}>
           {navItems.map((item) => <NavLink key={item.to} to={item.to} className={({ isActive }) => `side-link${isActive ? ' active' : ''}`}><Icon name={item.icon} size={19} /><span>{ui(item.label)}</span>{item.to === '/search' && location.pathname.startsWith('/canvases/') && <span className="nav-live-dot" />}</NavLink>)}
-          <a href={proofStudioHref} target="_blank" rel="noopener noreferrer" className="side-link" title="Lean 4 Proof Notebook R&D Studio 열기">
+          <a href={proofStudioHref} target="_blank" rel="noopener noreferrer" className="side-link" title={ui("Lean 4 Proof Notebook R&D Studio 열기")}>
             <Icon name="code" size={19} />
             <span>{ui("∀ Lean 4 증명 스튜디오")}</span>
           </a>

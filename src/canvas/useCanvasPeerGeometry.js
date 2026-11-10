@@ -3,7 +3,7 @@ import { useCallback, useRef } from 'react';
 
 const REALTIME_ITEM_GEOMETRY_INTERVAL_MS = 32;
 const CANVAS_SYNC_ITEM_KINDS = new Set([
-  'image', 'link', 'code', 'note', 'table', 'chart', 'shape', 'text', 'math', 'stroke', 'connector', 'pdf', 'user-group', 'question','project',
+  'image', 'link', 'code', 'note', 'table', 'chart', 'shape', 'text', 'math', 'stroke', 'connector', 'pdf', 'user-group', 'question','project','frame',
 ]);
 
 export function isCanvasSyncItem(item) {

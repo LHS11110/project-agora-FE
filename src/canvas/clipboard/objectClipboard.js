@@ -15,6 +15,7 @@ export const rememberedObjects = () => localCopy;
 export function collectCopyObjects(items,selectedIds,canvasId,cut=false,connectionIndex=null){
  const ids=new Set(selectedIds.map(String).filter(id=>items[id]&&items[id].type!=='chat_room'));
  if(!ids.size)return null;
+ const frames=new Set([...ids].filter(id=>items[id]?.kind==='frame'));if(frames.size)for(const [id,item] of Object.entries(items))if(item.frameId&&frames.has(item.frameId))ids.add(id);
  if(ids.size>MAX_ITEMS)throw Error('한 번에 최대 10,000개 객체를 복사할 수 있습니다.');
  const candidates=connectionIndex?connectionIndex.update(items).iterate([...ids]):Object.keys(items);
  for(const id of candidates){const item=items[id];if(item?.kind==='connector'&&((ids.has(String(item.from))&&ids.has(String(item.to)))||(cut&&(ids.has(String(item.from))||ids.has(String(item.to)))))){ids.add(id);if(ids.size>MAX_ITEMS)throw Error('한 번에 최대 10,000개 객체를 복사할 수 있습니다.');}}
@@ -59,6 +60,8 @@ export function preparePastePayload(payload, current, canvasId, permission, poin
     item.permission = permission;
     delete item.runtimeState;
     delete item.animationPlayback;
+    if(item.frameId){const target=ids.get(String(item.frameId))||(String(payload.canvasId)===String(canvasId)&&Object.hasOwn(current,String(item.frameId))?String(item.frameId):null);if(target)item.frameId=target;else delete item.frameId;}
+    delete item.portfolioCursor;
     if (item.groupId) {
       if (!groups.has(item.groupId)) groups.set(item.groupId, createId());
       item.groupId = groups.get(item.groupId);

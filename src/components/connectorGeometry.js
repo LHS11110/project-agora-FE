@@ -108,7 +108,7 @@ function calculateConnectorGeometry(item, items, width, height) {
   if (isLogicGate(fromItem.shapeType) || isLogicGate(toItem.shapeType)) {
     return logicConnectorGeometry(item, fromItem, toItem, objectRect(fromItem, width, height), objectRect(toItem, width, height), { width, height }, distanceToEdge);
   }
-  const rectangles = Object.entries(items).filter(([, candidate]) => isDrawableCanvasItem(candidate) && candidate.kind !== 'connector').map(([id, candidate]) => ({ id, ...objectRect(candidate, width, height) }));
+  const rectangles = Object.entries(items).filter(([id, candidate]) => isDrawableCanvasItem(candidate) && candidate.kind !== 'connector' && (candidate.kind!=='frame'||id===String(item.from)||id===String(item.to))).map(([id, candidate]) => ({ id, ...objectRect(candidate, width, height) }));
   const from = rectangles.find(rect => rect.id === String(item.from));
   const to = rectangles.find(rect => rect.id === String(item.to));
   if (!from || !to) return null;

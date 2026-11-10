@@ -6,3 +6,34 @@
 .portfolio-view .canvas-object{cursor:default!important}.portfolio-view .canvas-object.selected{outline:0!important}
 .portfolio-viewer{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:1100;display:flex;align-items:center;gap:24px;max-width:calc(100vw - 40px);box-sizing:border-box;padding:12px 18px;background:rgb(255 255 255 / 94%);border:1px solid #e3dfed;border-radius:16px;box-shadow:0 8px 32px #2419381a;color:#484058;backdrop-filter:blur(10px)}.portfolio-viewer>div{min-width:0;max-width:440px}.portfolio-viewer strong,.portfolio-viewer>div>span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.portfolio-viewer>div>span{color:#91869d;font-size:11px;margin-top:3px}.portfolio-viewer p{font-size:11px;line-height:1.5;margin:5px 0 0;max-height:55px;overflow:auto;white-space:pre-wrap}.portfolio-viewer nav{display:flex;align-items:center;gap:7px;flex-shrink:0}.portfolio-viewer button{font:inherit;font-size:11px;border:1px solid #e3dfed;border-radius:7px;background:#f8f6fc;padding:7px 10px;color:#65577b;cursor:pointer}.portfolio-viewer button:disabled{opacity:.4}.portfolio-viewer nav>span{font-size:11px;white-space:nowrap}.animated-vector-surface{position:absolute;inset:0;pointer-events:none}
 @media(max-width:700px){.portfolio-viewer{bottom:12px;gap:8px;flex-wrap:wrap;width:calc(100vw - 24px)}.portfolio-viewer>div{flex:1}.portfolio-viewer nav{flex-wrap:wrap}.portfolio-viewer p{display:none}}
+/* Frames define an explicit viewport; their interior never intercepts editing. */
+.portfolio-frame-object{background:none!important;border:0!important;box-shadow:none!important;overflow:visible!important}
+.portfolio-frame-outline{position:absolute;inset:0;overflow:visible;pointer-events:none}
+.portfolio-frame-outline>rect:first-child{stroke:#a99dc8;stroke-width:1.5;stroke-dasharray:7 5;vector-effect:non-scaling-stroke}
+.portfolio-frame-hit{fill:none;stroke:transparent;stroke-width:12;pointer-events:stroke;vector-effect:non-scaling-stroke}
+.portfolio-frame-caption{position:absolute;left:0;top:-28px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:3px 9px;border-radius:6px;background:#eee9f8;color:#786398;font:12px/1.5 var(--display,system-ui);pointer-events:auto;cursor:grab}
+.portfolio-frame-object.selected .portfolio-frame-outline>rect:first-child{stroke:#8c6adb;stroke-dasharray:none;stroke-width:2}
+.presentation-entrance-pending{opacity:0}
+.portfolio-view[data-frame-view=true] .canvas-stage{background:#171922!important}
+.portfolio-view[data-frame-view=true] .canvas-scene::before{content:'';position:absolute;left:var(--frame-screen-left);top:var(--frame-screen-top);width:var(--frame-screen-width);height:var(--frame-screen-height);background:var(--frame-view-fill,#fff);pointer-events:none}
+.portfolio-controls>strong.inspector-label{font-size:11px;letter-spacing:.02em;margin-top:5px}
+.portfolio-controls button{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:7px 10px;min-height:32px;font-size:11px;font-weight:500;line-height:1.5;background:#f8f6fc;border-color:#e6e1f0;color:#706181;transition:background .12s,border-color .12s}
+.portfolio-controls button:hover:not(:disabled){background:#f0ebfa;border-color:#c9bce5}
+.portfolio-controls .portfolio-primary{background:#7963ba;border-color:#7963ba;color:#fff;box-shadow:0 2px 5px #7963ba12}
+.portfolio-controls .portfolio-primary:hover:not(:disabled){background:#6c57ad;color:white;border-color:#6c57ad}
+.portfolio-frame-actions{display:flex;flex-direction:column;gap:6px}
+.portfolio-frame-list{display:flex;flex-direction:column;gap:5px;max-height:240px;overflow:auto}
+.portfolio-frame-list>div{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid #e6e1ee;border-radius:9px;background:#faf9fd}
+.portfolio-frame-number{display:grid;place-items:center;width:23px;height:23px;flex-shrink:0;border-radius:6px;background:#eee8f8;color:#8a73ae;font:10px/1 system-ui}
+.portfolio-frame-list>div>div{min-width:0;flex:1}.portfolio-frame-list strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;color:#5b506c}
+.portfolio-frame-list small{display:block;overflow-wrap:anywhere;margin-top:2px}
+.portfolio-controls input[type=color]{width:34px;height:28px;padding:2px;border-radius:6px;margin-left:auto}
+.portfolio-viewer{gap:20px;padding:10px 14px;border-radius:14px;border-color:#e8e2f0;box-shadow:0 6px 28px #2014311a}
+.portfolio-viewer-title{min-width:110px;max-width:260px}.portfolio-viewer .portfolio-viewer-badge{font-size:9px;color:#a598b5;margin:0 0 2px;letter-spacing:.03em}.portfolio-viewer-title strong{font-size:12px;font-weight:600}
+.portfolio-viewer .portfolio-icon-button,.portfolio-controls .portfolio-icon-button{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;min-height:30px;flex-shrink:0;padding:0;border:1px solid transparent;background:transparent;border-radius:8px;color:#8c7b9f;font-size:20px}
+.portfolio-viewer .portfolio-icon-button:hover:not(:disabled){background:#f0ebf7;border-color:#e4dbee}
+.portfolio-viewer nav{gap:5px}.portfolio-viewer .portfolio-viewer-count{font-size:10px;color:#a599b1}
+.portfolio-nav-divider{height:20px;width:1px;background:#eee8f3;margin:0 5px}
+.portfolio-step-hint{display:flex;align-items:center;gap:6px;margin-left:6px}.portfolio-step-hint kbd{padding:4px 6px;border:1px solid #e7dfef;border-bottom-width:2px;border-radius:5px;background:#f8f5fc;color:#9b8bab;font:9px/1 system-ui}.portfolio-step-hint>span{font-size:10px;white-space:nowrap;color:#8f7fa1}.portfolio-step-hint small{color:#b1a5bd;font-size:9px}
+.portfolio-viewer .portfolio-exit-button{font-size:10px;padding:6px 9px;background:#f7f3fb;color:#9b85b0;border-color:#e9e1f1}
+@media(max-width:700px){.portfolio-viewer-title{min-width:0;max-width:100%;width:100%}.portfolio-step-hint>span{max-width:85px;overflow:hidden;text-overflow:ellipsis}.portfolio-viewer{gap:5px;justify-content:center}.portfolio-viewer nav{justify-content:center}.portfolio-viewer .portfolio-viewer-badge{display:none}}

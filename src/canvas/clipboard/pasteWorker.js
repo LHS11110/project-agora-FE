@@ -9,6 +9,7 @@ self.onmessage=event=>{
    if(source?.type!==CLIPBOARD_TYPE||source.version!==1||!source.items||Array.isArray(source.items)||typeof source.items!=='object')throw Error('지원하지 않는 객체 클립보드 형식입니다.');
    const own=new Set(Object.keys(source.items)),references=new Set();
    for(const item of Object.values(source.items))if(item?.kind==='project'&&item.projectType==='issue')for(const id of [item.projectBoard,item.projectParent,...item.projectDependencies]){if(id&&!own.has(String(id)))references.add(String(id));}
+   for(const item of Object.values(source.items))if(item?.frameId&&!own.has(String(item.frameId)))references.add(String(item.frameId));
    for(const item of Object.values(source.items))if(item?.kind==='connector')for(const id of [item.from,item.to])if(!own.has(String(id)))references.add(String(id));
    self.postMessage({type:'references',ids:[...references]});
   }else if(request.type==='references'){
