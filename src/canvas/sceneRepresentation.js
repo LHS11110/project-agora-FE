@@ -1,7 +1,7 @@
 import { contentSource } from './content/contentPresentation.js';
 import { objectFontSize } from './objectSize.js';
-const richKinds=new Set(['text','code','math','note','table','chart','value','question','image','link','pdf','user-group']);
-const colors={value:'#e4def7',text:'#e1e9e2',code:'#dce9df',math:'#e7def2',note:'#f3ebce',table:'#dfe6ef',chart:'#e6e1f4',question:'#eae3f8',image:'#eaded4',link:'#eaded4',pdf:'#eeded7','user-group':'#e7def2'};
+const richKinds=new Set(['project','text','code','math','note','table','chart','value','question','image','link','pdf','user-group']);
+const colors={project:'#dfe8f3',value:'#e4def7',text:'#e1e9e2',code:'#dce9df',math:'#e7def2',note:'#f3ebce',table:'#dfe6ef',chart:'#e6e1f4',question:'#eae3f8',image:'#eaded4',link:'#eaded4',pdf:'#eeded7','user-group':'#e7def2'};
 // Small rich objects use overview rendering. Selecting or zooming restores
 // their full renderer; persisted objects are never replaced.
 export function isOverviewProxy(item,world,scale){
@@ -24,7 +24,7 @@ export function overviewProxy(item, world, scale){
   if (item.kind === 'image' && world && (Math.min(item.width * world.width, item.height * world.height) * scale < 2 || item.width * world.width * item.height * world.height * scale * scale < 16)) return { kind: 'shape', shapeType: 'rectangle', x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, depth: item.depth, cornerStyle: item.cornerStyle, fill: '', color: '#9ca99f', strokeEnabled: true, shadowEnabled: false };
   if (item.kind === 'image') return { kind: 'shape', shapeType: 'rectangle',
     x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, depth: item.depth,
-    __imagePreview: item.src, cornerStyle: item.cornerStyle, imageFrameEnabled: item.imageFrameEnabled, strokeEnabled: false, shadowEnabled: false };
+    __imagePreview: item.src, cornerStyle: item.cornerStyle, imageFrameEnabled: false, strokeEnabled: false, shadowEnabled: false };
 
   return {kind:'shape',shapeType:'rectangle',x:item.x,y:item.y,width:item.width,height:item.height,rotation:item.rotation,
     cornerStyle:item.cornerStyle,fill:colors[item.kind],strokeEnabled:false,shadowEnabled:false,depth:item.depth};

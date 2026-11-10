@@ -1,3 +1,5 @@
+import {validAnimation,validPlayback,validPortfolio} from '../portfolio/portfolioModel.js';
+import {PROJECT_FIELDS,validProject} from '../projects/projectModel.js';
 import {validNotebookCells,validNotebookResults} from '../notebook/notebookData.js';
 import {validMediaState,validRuntimeState} from '../runtime/sharedState.js';
 import { validValue } from '../values/valueData.js';
@@ -14,10 +16,10 @@ import { textColorRanges, colorRangesFromDoc } from '../content/textColors.js';
 import { loadItemDoc } from '../host/hostOperations.js';
 import { textSpliceBetween } from '../collaborativeText.js';
 
-const KINDS = new Set(['text', 'note', 'code', 'math', 'shape', 'table', 'chart', 'question', 'value', 'image', 'link', 'connector', 'stroke', 'pdf', 'user-group']);
+const KINDS = new Set(['portfolio','project','text', 'note', 'code', 'math', 'shape', 'table', 'chart', 'question', 'value', 'image', 'link', 'connector', 'stroke', 'pdf', 'user-group']);
 const NUMBERS = new Set(['valueNumber','valueMin','valueMax','valueStep','pdfPage','questionMaxScore', 'questionScore', 'shadowBlur', 'shadowOpacity', 'shadowOffsetX', 'shadowOffsetY', 'depth', 'x', 'y', 'width', 'height', 'rotation', 'fontSize', 'strokeWidth', 'bend', 'opacity', 'contentScale', 'contentScaleX', 'contentScaleY', 'bendPointCount', 'headSize', 'vertexCount', 'fillOpacity', 'sketchFillOpacity']);
 const STRINGS = new Set(['valueType','valueText','questionType', 'questionPrompt', 'questionAnswer', 'questionFeedback', 'questionVersion', 'questionGradedVersion', 'kind', 'text', 'code', 'formula', 'format', 'filename', 'language', 'shapeType', 'visualStyle', 'volumeStyle', 'chartType', 'color', 'fill', 'groupId', 'src', 'url', 'title', 'mediaType', 'from', 'to', 'fromPort', 'toPort', 'startHead', 'endHead', 'brush', 'embedUrl', 'videoId', 'renderMode', 'label', 'labelMode', 'groupTitle', 'thumbnail', 'cornerStyle', 'runtimeRole']);
-const FIELDS = new Set([...NUMBERS, ...STRINGS, 'notebookCells','notebookResults','valueOptions', 'mediaState', 'runtimeState', 'permission', 'points', 'rows', 'columns', 'simulatePressure', 'complete', 'strokeEnabled', 'shadowEnabled', 'locked', 'imageFrameEnabled', 'bendPoints', 'members', 'textColors', 'runtimeResults', 'questionOptions', 'questionSubmitted']);
+const FIELDS = new Set(['animation','animationPlayback','portfolioPages','portfolioDescription',...PROJECT_FIELDS,...NUMBERS, ...STRINGS, 'notebookCells','notebookResults','valueOptions', 'mediaState', 'mediaLoop', 'runtimeState', 'permission', 'points', 'rows', 'columns', 'simulatePressure', 'complete', 'strokeEnabled', 'shadowEnabled', 'locked', 'imageFrameEnabled', 'bendPoints', 'members', 'textColors', 'runtimeResults', 'questionOptions', 'questionSubmitted']);
 export const CANVAS_ITEM_FIELDS = new Set([...FIELDS].filter(field => field !== 'textColors'));
 const unsafeId = id => !id || ['__proto__', 'constructor', 'prototype'].includes(id);
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -51,9 +53,14 @@ export function exportManifest(items) {
 }
 function validateItem(id, item) {
   if (unsafeId(id) || !plain(item)) fail(`${id}: 올바른 객체 ID와 객체 정의가 필요합니다.`);
+  if(item.animation!==undefined&&!validAnimation(item.animation))fail(`${id}: 애니메이션 설정을 확인해주세요.`);
+  if(item.animationPlayback!==undefined&&!validPlayback(item.animationPlayback))fail(`${id}: 애니메이션 재생 정보를 확인해주세요.`);
+  if(item.kind==='portfolio'&&!validPortfolio(item))fail(`${id}: 포트폴리오 설정을 확인해주세요.`);
+  if(item.mediaLoop!==undefined&&(item.kind!=='link'||typeof item.mediaLoop!=='boolean'))fail(`${id}: mediaLoop는 링크 객체의 불리언이어야 합니다.`);
   if(item.mediaState!==undefined&&(item.kind!=='link'||!validMediaState(item.mediaState)))fail(`${id}: 올바른 공유 재생 상태가 필요합니다.`);
   if(item.runtimeState!==undefined&&!validRuntimeState(item))fail(`${id}: 올바른 공유 실행 상태가 필요합니다.`);
   if(item.pdfPage!==undefined&&(item.kind!=='pdf'||!Number.isSafeInteger(item.pdfPage)||item.pdfPage<1||item.pdfPage>1000000))fail(`${id}: PDF 페이지 번호를 확인해주세요.`);
+  if(item.kind==='project'&&!validProject(item))fail(`${id}: 올바른 프로젝트 또는 이슈 데이터가 필요합니다.`);
   if (item.kind === 'value' && !validValue(item)) fail(`${id}: 값 객체의 유형·범위·현재 값을 확인해주세요.`);
   if (item.kind === 'pdf' && !/^\/api\/canvases\/\d+\/pdfs\/[0-9a-f-]{36}$/.test(item.src || '')) fail(`${id}: 업로드한 PDF의 src가 필요합니다.`);
   if (!KINDS.has(item.kind)) fail(`${id}: 지원하지 않는 kind입니다.`);

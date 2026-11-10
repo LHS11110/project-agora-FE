@@ -1,4 +1,4 @@
-const cardKinds = new Set(['image', 'pdf', 'chart', 'value','question', 'table', 'text', 'code', 'link']);
+const cardKinds = new Set(['project','image', 'pdf', 'chart', 'value','question', 'table', 'text', 'code', 'link']);
 export const supportsObjectCorners = item => cardKinds.has(item?.kind);
 export const validObjectCornerStyle = value => value === 'sharp' || value === 'rounded';
 export const objectCornerStyle = item => item?.cornerStyle || (item?.kind === 'image' ? 'sharp' : 'rounded');

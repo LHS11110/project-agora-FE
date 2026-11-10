@@ -1,8 +1,9 @@
+import {isGif,mediaFileType} from '../media/mediaModel.js';
 import { inspectShareUrl } from '../../components/shareMedia.js';
 
 const TEXT_FILE = /\.(txt|md|markdown|csv|tsv|json|xml|ya?ml|log|py|js|jsx|ts|tsx|cpp|cc|c|h|hpp|java|sh|sql|html|css|rs|go)$/i;
 const CODE_LANG = {py:'python',js:'javascript',jsx:'javascript',ts:'typescript',tsx:'typescript',cpp:'cpp',cc:'cpp',c:'c',h:'cpp',hpp:'cpp',java:'java',sh:'shell',sql:'sql',json:'json',xml:'xml',html:'html',css:'css',rs:'rust',go:'go',yaml:'yaml',yml:'yaml'};
-export const clipboardFileType = file => file.type?.startsWith('image/') ? 'image' : file.type==='application/pdf'||/\.pdf$/i.test(file.name||'') ? 'pdf' : /\.(csv|tsv|xlsx)$/i.test(file.name||'') ? 'sheet' : file.type?.startsWith('text/')||TEXT_FILE.test(file.name||'') ? 'text' : null;
+export const clipboardFileType = file => mediaFileType(file)?'media':file.type?.startsWith('image/') ? 'image' : file.type==='application/pdf'||/\.pdf$/i.test(file.name||'') ? 'pdf' : /\.(csv|tsv|xlsx)$/i.test(file.name||'') ? 'sheet' : file.type?.startsWith('text/')||TEXT_FILE.test(file.name||'') ? 'text' : null;
 export function clipboardTextObject(text, filename='') {
   if(new TextEncoder().encode(text).length>65536)throw new Error('붙여넣을 텍스트는 UTF-8 기준 64KiB 이하여야 합니다.');
   const extension=filename.split('.').at(-1)?.toLowerCase();
@@ -12,12 +13,21 @@ const urlObject = raw => {
   if(!/^(?:https:\/\/|www\.)\S+$/i.test(raw))return null;
   const media=inspectShareUrl(raw);if(!media)return null;
   const url=new URL(media.url);
+  if(isGif(media.url))return {kind:'link',url:media.url,mediaType:'gif',title:'GIF',mediaLoop:false,width:.3,height:.3};
   if(/\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i.test(url.pathname))return {kind:'image',src:media.url,width:.3};
   const {defaultTitle,...fields}=media;
   return {kind:'link',...fields,title:defaultTitle,width:media.mediaType==='link'?.3:.36,height:media.mediaType==='link'?.15:.36};
 };
 export function externalClipboardObjects({text='',html='',uriList='',files=[]}) {
   // Files and their HTML/plain-text representations describe the same paste.
+  // Browsers often expose a still PNG alongside the original GIF URL in HTML.
+  // Prefer that original only for GIFs; keep ordinary file-paste precedence unchanged.
+  if(files.length&&files.every(file=>file.type==='image/png')){const original=urlObject((uriList||text).trim());if(original?.mediaType==='gif')return [original];}
+  if(files.length&&files.every(file=>file.type==='image/png')&&html&&typeof DOMParser!=='undefined'){
+    const doc=new DOMParser().parseFromString(html,'text/html'),images=[...doc.querySelectorAll('img')];
+    const originals=images.map(img=>urlObject(img.getAttribute('src')||''));
+    if(originals.length&&originals.every(o=>o?.mediaType==='gif'))return originals;
+  }
   if(files.length)return files.map(file=>({file,fileType:clipboardFileType(file)}));
   if(uriList.trim()){
     const urls=uriList.split(/\r?\n/).map(x=>x.trim()).filter(x=>x&&!x.startsWith('#'));
@@ -28,7 +38,7 @@ export function externalClipboardObjects({text='',html='',uriList='',files=[]}) 
     doc.querySelectorAll('script,style,iframe,object,template').forEach(node=>node.remove());
     const images=[...doc.querySelectorAll('img')];
     if(images.length&&!doc.body.textContent.trim()){
-      const objects=images.map(img=>{const src=img.getAttribute('src')||'';const media=inspectShareUrl(src);return /^https:\/\//i.test(src)&&media?{kind:'image',src:media.url,width:.3}:null;});
+      const objects=images.map(img=>{const src=img.getAttribute('src')||'';const media=inspectShareUrl(src);return /^https:\/\//i.test(src)&&media?(isGif(src)?urlObject(src):{kind:'image',src:media.url,width:.3}):null;});
       if(objects.every(Boolean))return objects;
     }
     const links=[...doc.querySelectorAll('a[href]')];

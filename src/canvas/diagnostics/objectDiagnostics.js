@@ -2,7 +2,7 @@ import { changedItemIds } from '../itemSnapshots.js';
 import { connectorGeometry } from '../../components/connectorGeometry.js';
 import { objectBounds } from '../../components/CanvasSpatialBTree.js';
 import { CANVAS_SPACE } from '../canvasSpace.js';
-const kinds = new Set(['image','link','code','note','table','chart','shape','text','math','stroke','connector','pdf','user-group','value','question']);
+const kinds = new Set(['image','link','code','note','table','chart','shape','text','math','stroke','connector','pdf','user-group','value','question','project']);
 export const finiteBounds = bounds => bounds && Object.values(bounds).every(Number.isFinite) && bounds.maxX >= bounds.minX && bounds.maxY >= bounds.minY;
 export function createObjectDiagnostics() { return {items:null,reasons:new Map(),geometry:-1,value:[]}; }
 export function updateObjectDiagnostics(current, items, spatialIndex) {
@@ -16,7 +16,7 @@ export function updateObjectDiagnostics(current, items, spatialIndex) {
   let modified=changed===null;
   for(const id of dirty){const item=items[id];
     if(!item){if(current.reasons.delete(id))modified=true;continue;}
-    if (item?.type === 'chat_room') continue;
+    if (item?.type === 'chat_room'||item?.kind==='portfolio') continue;
     let reason;
     if (!item || !kinds.has(item.kind)) reason = '지원하지 않는 객체 형식';
     else if (item.kind === 'connector' && (!items[item.from] || !items[item.to] || String(item.from) === String(item.to))) reason = '연결 대상이 없거나 잘못된 화살표';

@@ -12,6 +12,7 @@ export function handleObjectDoubleClick(event, { id, item, activeTool, editing, 
     event.preventDefault(); event.stopPropagation();
     onConnectorDoubleClick(id, item);
   } else if (item.kind === 'link') {
+    if(['video','gif','youtube'].includes(item.mediaType))return;
     const media = inspectShareUrl(item.url);
     if (!media || media.mediaType === 'youtube') return;
     event.preventDefault(); event.stopPropagation();

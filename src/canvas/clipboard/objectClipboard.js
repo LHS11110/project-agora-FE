@@ -1,3 +1,4 @@
+import {orderProjectCreates} from '../projects/projectModel.js';
 import { createId } from '../canvasIds.js';
 import { CANVAS_SPACE } from '../canvasSpace.js';
 import { exportManifest, planManifest } from '../asCode/manifest.js';
@@ -57,10 +58,20 @@ export function preparePastePayload(payload, current, canvasId, permission, poin
     const item = JSON.parse(JSON.stringify(definition));
     item.permission = permission;
     delete item.runtimeState;
+    delete item.animationPlayback;
     if (item.groupId) {
       if (!groups.has(item.groupId)) groups.set(item.groupId, createId());
       item.groupId = groups.get(item.groupId);
     } else { delete item.groupId; }
+    if(item.kind==='project'&&item.projectType==='issue'){
+      const same=String(payload.canvasId)===String(canvasId),copiedBoard=ids.has(String(item.projectBoard));
+      const resolve=ref=>ids.get(String(ref))||(!copiedBoard&&same&&Object.hasOwn(current,String(ref))?String(ref):'');
+      item.projectBoard=ids.get(String(item.projectBoard))||(same&&Object.hasOwn(current,String(item.projectBoard))?String(item.projectBoard):'');
+      if(!item.projectBoard){skipped++;continue;}
+      item.projectParent=resolve(item.projectParent);item.projectDependencies=item.projectDependencies.map(resolve).filter(Boolean);
+      if(item.projectIssueType==='Sub-task'&&!item.projectParent){skipped++;continue;}
+      item.projectHistory=[];
+    }
     if (item.kind === 'connector') {
       const resolve = endpoint => ids.get(String(endpoint)) || (String(payload.canvasId) === String(canvasId) && Object.hasOwn(current,String(endpoint)) ? String(endpoint) : null);
       item.from = resolve(item.from); item.to = resolve(item.to);
@@ -76,5 +87,5 @@ export function preparePastePayload(payload, current, canvasId, permission, poin
   const endpoints=Object.fromEntries([...references].map(id=>[id,{kind:current[id].kind==='stroke'||current[id].kind==='connector'?current[id].kind:'shape',...(current[id].shapeType?{shapeType:current[id].shapeType}:{})}]));
   // Endpoint markers avoid scanning or serializing unrelated canvas contents.
   const plan = planManifest({ version: 1, mode: 'merge', items: definitions, remove: [] }, endpoints, permission);
-  return { creates: plan.creates.sort((a, b) => Number(a.item.kind === 'connector') - Number(b.item.kind === 'connector')), skipped };
+  return { creates:orderProjectCreates(plan.creates), skipped };
 }

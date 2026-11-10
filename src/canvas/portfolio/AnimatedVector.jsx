@@ -1,0 +1,6 @@
+import {useCanvasGraphics} from '../CanvasGraphicsContext.jsx';
+import {graphicsRasterItem,graphicsRasterRatio,GRAPHICS_PROFILES,normalizeGraphicsQuality} from '../graphicsQuality.js';
+import {useLayoutEffect,useRef} from 'react';
+import {rasterDescriptor,rasterizeObject} from '../rasterObjectCache.js';
+import {useAnimationItems} from './animationStore.js';
+export default function AnimatedVector({id,item,world,origin}){const node=useRef(null),getItems=useAnimationItems(),quality=useCanvasGraphics();useLayoutEffect(()=>{const refs=getItems(),descriptor=rasterDescriptor(id,graphicsRasterItem(item,quality),world,refs);if(!descriptor)return;const raster=rasterizeObject(id,descriptor,world,refs,graphicsRasterRatio(quality,4,devicePixelRatio||1),GRAPHICS_PROFILES[normalizeGraphicsQuality(quality)].documentPixelBudget);const target=node.current;target.replaceChildren(raster.canvas);Object.assign(raster.canvas.style,{position:'absolute',left:`${descriptor.x+raster.left-origin.x}px`,top:`${descriptor.y+raster.top-origin.y}px`,width:`${raster.width}px`,height:`${raster.height}px`,pointerEvents:'none'});return()=>target.replaceChildren();},[id,item,world.width,world.height,origin.x,origin.y,getItems,quality]);return <span ref={node} className="animated-vector-surface" aria-hidden="true"/>;}

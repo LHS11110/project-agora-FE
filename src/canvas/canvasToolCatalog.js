@@ -19,6 +19,7 @@ export const canvasToolCategories = [
     { id: 'note', label: '포스트잇', icon: 'sticky' },
   ] },
   { id: 'structure', label: '자료·계산', tools: [
+    {id:'project',label:'프로젝트 관리',description:'이슈·칸반·스크럼·스프린트·로드맵',icon:'table'},
     { id: 'continuous-value', label: '연속 값', description: '실수 슬라이더와 수치 입력', icon: 'settings' },
     { id: 'discrete-value', label: '이산 값', description: '정수·버튼·선택·문자 입력', icon: 'table' },
     { id: 'notebook', label: '주피터 노트북', description: '셀 편집과 표·그래프·이미지 출력', icon: 'document' },
@@ -31,6 +32,7 @@ export const canvasToolCategories = [
     { id: 'chart', label: '그래프', description: '그래프 추가', icon: 'chart' },
   ] },
   { id: 'media', label: '미디어', tools: [
+    {id:'media-file',label:'동영상·GIF',description:'동영상·GIF 업로드',icon:'image',upload:true,accept:'.gif,.mp4,.m4v,.mov,.webm,.ogv,image/gif,video/*'},
     { id: 'sheet', label: '데이터 시트', description: 'CSV · XLSX 데이터 시트 가져오기', icon: 'table', upload: true, accept: '.csv,.tsv,.xlsx,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
     { id: 'pdf', label: 'PDF', description: 'PDF 문서 올리기', icon: 'document', upload: true, accept: 'application/pdf,.pdf' },
     { id: 'image', label: '사진', description: '사진 올리기', icon: 'image', upload: true },

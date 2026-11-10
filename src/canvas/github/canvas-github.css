@@ -31,16 +31,26 @@
 .canvas-version-dialog{width:min(1440px,100%)}
 .canvas-version-history-layout{grid-template-columns:minmax(230px,.55fr) minmax(0,1.45fr)}
 .canvas-github-history>.canvas-parallel-history{display:block;overflow-x:auto;border:0;padding:0;margin-top:14px}
-.canvas-parallel-headings{display:grid;grid-template-columns:repeat(var(--branch-columns),280px);width:var(--branch-width);border-bottom:1px solid #e3e8ee;background:#f6f8fb;border-radius:8px 8px 0 0}
-.canvas-parallel-headings>div{padding:10px 12px;font-size:12px;font-weight:650;overflow-wrap:anywhere;border-right:1px solid #e3e8ee;box-sizing:border-box}
+.canvas-parallel-headings{display:grid;grid-template-columns:repeat(var(--branch-columns),var(--branch-column-width));width:var(--branch-width);border-bottom:1px solid #e3e8ee;background:#f6f8fb;border-radius:8px 8px 0 0}
+.canvas-parallel-headings>div{padding:7px 10px;font-size:11px;font-weight:650;overflow-wrap:anywhere;border-right:1px solid #e3e8ee;box-sizing:border-box}
 .canvas-parallel-graph{width:var(--branch-width);min-width:var(--branch-width)}
-.canvas-parallel-graph>.canvas-commit-band{display:grid;grid-template-columns:repeat(var(--branch-columns),280px);position:relative;min-height:260px;border-bottom:1px solid #e3e8ee;box-sizing:border-box}
+.canvas-parallel-graph>.canvas-commit-band{display:grid;grid-template-columns:repeat(var(--branch-columns),var(--branch-column-width));position:relative;min-height:140px;border-bottom:1px solid #e3e8ee;box-sizing:border-box}
 .canvas-band-lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.canvas-commit-entry{position:relative;min-width:0;padding:50px 12px 16px 36px;box-sizing:border-box}
-.canvas-commit-entry>.canvas-commit-node{top:8%;left:18px;z-index:1}
-.canvas-commit-entry>.canvas-commit-content{position:relative;background:#fff;gap:6px;border:1px solid #e3e8ee;border-radius:8px;padding:10px;box-shadow:0 2px 5px #26374b05}
+.canvas-commit-entry{position:relative;min-width:0;padding:28px 8px 8px 28px;box-sizing:border-box}
+.canvas-commit-entry>.canvas-commit-node{top:8%;left:14px;z-index:1}
+.canvas-commit-entry>.canvas-commit-content{position:relative;background:#fff;gap:4px;border:1px solid #e3e8ee;border-radius:7px;padding:8px;box-shadow:0 1px 3px #26374b05}
 .canvas-commit-entry .canvas-commit-content>strong{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .canvas-commit-entry .canvas-github-actions{gap:6px;justify-content:flex-start}
-.canvas-commit-entry .canvas-github-actions button{padding:6px 8px;font-size:10px}
-@media(max-width:700px){.canvas-version-history-layout{grid-template-columns:1fr}}
+.canvas-commit-entry .canvas-github-actions button{padding:4px 8px;font-size:10px;min-height:25px}
+@media(max-width:700px){.canvas-version-history-layout{grid-template-columns:minmax(0,1fr)}}
 .canvas-as-code-dialog.canvas-version-dialog{width:min(1440px,100%)}
+
+.canvas-commit-entry .canvas-commit-content>strong{font-size:12px;line-height:1.4}
+.canvas-commit-entry .canvas-commit-meta{display:flex;align-items:baseline;flex-wrap:wrap;gap:3px 7px;width:100%;margin:0;font-size:10px;line-height:1.4}
+.canvas-commit-meta>span{max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.canvas-commit-meta time{white-space:nowrap}
+.canvas-commit-entry .canvas-commit-refs{gap:4px}
+.canvas-commit-entry .canvas-commit-refs span{padding:1px 4px;font-size:9px}
+.canvas-commit-entry .canvas-github-actions{margin-top:2px}
+
+.canvas-version-history-layout>section{min-width:0}

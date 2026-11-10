@@ -1,3 +1,4 @@
+import {hasAnimation} from './portfolio/portfolioModel.js';
 import { isDrawableCanvasItem } from './drawableItems.js';
 import { itemSnapshot,changeItems,changedItemIds } from './itemSnapshots.js';
 import { itemDepth } from './itemDepth.js';
@@ -101,6 +102,7 @@ export default class SceneViewModel {
     const overview=isOverviewProxy(item,world,scale),imageTier=item.kind==='image'&&overview&&(Math.min(item.width*world.width,item.height*world.height)*scale<2||item.width*world.width*item.height*world.height*scale*scale<16),worldKey=world.width+':'+world.height,dom=domIds.has(String(id)),selection=selected.has(String(id)),old=this.representations.get(id);
     if(old&&old.item===item&&old.overview===overview&&old.imageTier===imageTier&&old.worldKey===worldKey&&old.dom===dom&&old.selection===selection)return old.result;
     if(item.kind==='stroke' && item.complete===false)return {ink:true};
+    if(hasAnimation(item))return {vector:null};
     let vector=!item.runtimeRole && ['stroke','shape','connector'].includes(item.kind) || (isRasterText(item)&&!domIds.has(String(id)))?item:null;
     if(!vector && !domIds.has(String(id)) && isOverviewProxy(item,world,scale))vector=overviewProxy(item,world,scale);
     if(vector && selected.has(String(id)) && !domIds.has(String(id)))vector={...vector,__selectionOutline:true};

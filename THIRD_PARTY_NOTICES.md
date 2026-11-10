@@ -4,6 +4,7 @@ The frontend uses the following third-party rendering and collaboration librarie
 
 | Package | Version range | License | Upstream |
 | --- | --- | --- | --- |
+| `gifuct-js` | `2.1.2` | MIT | [matt-way/gifuct-js](https://github.com/matt-way/gifuct-js) |
 | `papaparse` | `5.7.0` | MIT | [mholt/PapaParse](https://github.com/mholt/PapaParse) |
 | `read-excel-file` | `8.0.0` | MIT | [catamphetamine/read-excel-file](https://gitlab.com/catamphetamine/read-excel-file) |
 | `pixi.js` | `^8.21.0` | MIT | [pixijs/pixijs](https://github.com/pixijs/pixijs) |

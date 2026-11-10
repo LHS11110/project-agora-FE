@@ -1,3 +1,4 @@
+import {orderProjectCreates} from '../projects/projectModel.js';
 import { isObjectLocked, OBJECT_LOCK_MESSAGE } from '../locks/objectLock.js';
 import { useCallback, useEffect, useRef } from 'react';
 import * as Automerge from '@automerge/automerge/slim';
@@ -28,7 +29,7 @@ export function useCanvasAsCode(options) {
     if ([...preview.updates.map(entry=>entry.id),...preview.deletes].some(id=>isObjectLocked(c.itemsRef.current[id]))) throw new Error(OBJECT_LOCK_MESSAGE);
     if((preview.creates.length&&c.canWriteCanvas===false)||[...preview.updates.map(e=>e.id),...preview.deletes].some(id=>c.canWriteItem&&!c.canWriteItem(c.itemsRef.current[id])))throw new Error('이 그룹에는 쓰기 권한이 없습니다.');
     const changed = [];
-    const creations = [...preview.creates].sort((a, b) => Number(a.item.kind === 'connector') - Number(b.item.kind === 'connector'));
+    const creations = orderProjectCreates(preview.creates);
     for (const { id, item } of creations) {
       if (!c.addItem(id, item)) throw new Error(`${id}: 생성을 처리하지 못했습니다. 일부 변경은 이미 적용되었을 수 있습니다.`);
       if (isCollaborativeItem(item)) c.saveCollaborativeItem(id, { silent: true });

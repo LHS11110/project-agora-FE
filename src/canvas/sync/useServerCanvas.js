@@ -11,7 +11,7 @@ import { itemOperations, operationIds, validateTranslation, loadItemDoc, transla
 import { loadEncodedDocument } from '../host/documentCache.js';
 import { collaborativeField, encodeBase64 } from '../collaborativeSync.js';
 
-export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems }) {
+export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems, onItemsPublished, onCommittedItems }) {
   const history=useRef(new CanvasUndoHistory()), undoing=useRef(false);
   const [undoCount,setUndoCount]=useState(0);
   const [items, publishItems] = useState({});
@@ -19,7 +19,7 @@ export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsR
   const [lastReceipt, setLastReceipt] = useState(null);
   const view = useRef(null); if (!view.current) view.current = new HostCanvasView();
   const working = useRef(view.current.items), committedItemsRef = useRef({}), sessionRef = useRef(null);
-  const callbacks = useRef({ setToast, setDirtyItems }); callbacks.current = { setToast, setDirtyItems };
+  const callbacks = useRef({ setToast, setDirtyItems }); callbacks.current = { setToast, setDirtyItems, onItemsPublished, onCommittedItems };
   if (!sessionRef.current) sessionRef.current = new ServerCanvasSession({
     available: () => wsRef.current?.readyState === 1,
     send: message => {
@@ -29,11 +29,13 @@ export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsR
     },
     reject: message => callbacks.current.setToast(message), status: setStatus, receipt: setLastReceipt,
     publish: (committed, touched) => {
+      callbacks.current.onCommittedItems?.(committed,touched);
       const draft = view.current.rebase(committed, touched, sessionRef.current.viewOperations);
       collaborativeDocsRef.current = view.current.docs; collaborativeBaseDocsRef.current = view.current.bases;
       working.current = draft; itemsRef.current = draft; committedItemsRef.current = committed;
       const pendingIds = new Set(sessionRef.current.pendingOperations.flatMap(operationIds));
       callbacks.current.setDirtyItems?.(current => current.size === pendingIds.size && [...pendingIds].every(id => current.has(id)) ? current : pendingIds);
+      callbacks.current.onItemsPublished?.(draft,[...new Set([...(touched||[]),...pendingIds])]);
       publishItems(draft);
     },
   });

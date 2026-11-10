@@ -1,3 +1,5 @@
+import {ui} from '../i18n/locale.js';
+import {newProject} from './projects/projectModel.js';
 import {notebookCell} from './notebook/notebookData.js';
 import { createValue } from './values/valueData.js';
 import { hasPolygonVertices } from './shapeAppearance.js';
@@ -353,7 +355,7 @@ export function useCanvasStageInteractions(options) {
         || Object.entries(itemsRef.current).map(([id,item])=>({id,item,bounds:objectBounds(item,itemsRef.current,boardSize.width,boardSize.height)}));
       const contains = bounds => bounds && bounds.minX >= marquee.minX && bounds.maxX <= marquee.maxX
         && bounds.minY >= marquee.minY && bounds.maxY <= marquee.maxY;
-      const hits = candidates.filter(({item,bounds}) => item && ['image','link','code','note','table','shape','text','math','stroke','pdf','user-group','question','value'].includes(item.kind) && contains(bounds)).map(({id})=>id);
+      const hits = candidates.filter(({item,bounds}) => item && ['image','link','code','note','table','shape','text','math','stroke','pdf','user-group','question','value','project'].includes(item.kind) && contains(bounds)).map(({id})=>id);
       const expanded = new Set([...selection.baseIds, ...hits]);
       const selectedGroups = new Set([...expanded].map((id) => itemsRef.current[id]?.groupId).filter(Boolean));
       if (selectedGroups.size) {
@@ -411,6 +413,7 @@ export function useCanvasStageInteractions(options) {
       else setActiveTool('select');
       return;
     }
+    if(activeTool==='project'){event.preventDefault();const point=pointerPosition(event),id=createId(),item={...newProject(),title:ui('프로젝트')};if(addItem(id,{...item,x:point.x-item.width/2,y:point.y-item.height/2,permission})){setActiveTool('select');selectItems([id]);}return;}
     if (activeTool === 'question') {
       event.preventDefault();
       const point=pointerPosition(event),id=createId(),width=.28,height=.4;

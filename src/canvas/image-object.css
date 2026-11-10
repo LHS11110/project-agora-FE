@@ -50,3 +50,5 @@
 /* Preserve the previous placeholder size while an automatic-height image loads. */
 .canvas-stage .image-object:not(.has-custom-height) .image-object-media>.image-object-fallback{min-height:97px}
 .canvas-stage .image-object.image-frame-hidden:not(.has-custom-height) .image-object-media>.image-object-fallback{min-height:130px}
+/* Decorative borders/captions are removed for all saved images as well. */
+.canvas-stage .frameless-media-object.image-object>.image-object-surface{border:0;padding:0;background:transparent}

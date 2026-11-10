@@ -80,18 +80,14 @@ export function drawImagePreview(context, item, world, bitmap) {
   const width = item.width * world.width, height = item.height * world.height;
   const radius = objectCornerRadius(item, width, height);
   if (radius) { context.save(); context.beginPath(); context.roundRect(0, 0, width, height, radius); context.clip(); }
-  if (item.imageFrameEnabled !== false) {
-    context.fillStyle = '#fff'; context.fillRect(0, 0, width, height);
-    context.fillStyle = '#f3f3ef'; context.fillRect(7, 7, Math.max(0, width - 14), Math.max(0, height - 33));
-  }
   if (!bitmap) {
     // An outline while loading avoids replacing the image with an opaque block.
     context.strokeStyle = '#a8b2aa'; context.lineWidth = 1; context.strokeRect(1, 1, Math.max(0, width - 2), Math.max(0, height - 2));
     if (radius) context.restore();
     return;
   }
-  const border = item.imageFrameEnabled === false ? 0 : 7;
-  const footer = item.imageFrameEnabled === false ? 0 : 26;
+  const border = 0;
+  const footer = 0;
   const boxWidth = Math.max(1, width - border * 2), boxHeight = Math.max(1, height - border - footer);
   const ratio = Math.min(boxWidth / bitmap.width, boxHeight / bitmap.height);
   const w = bitmap.width * ratio, h = bitmap.height * ratio;

@@ -82,8 +82,8 @@ export function useObjectClipboard(options) {
         const position = {x:point.x+index*.025,y:point.y+index*.04};
         try {
           let id;
-          if (definition.file && ['image','pdf','sheet'].includes(definition.fileType)) {
-            id = await (definition.fileType === 'image' ? c.uploadImage : definition.fileType === 'sheet' ? c.uploadSheet : c.uploadPdf)?.({target:{files:[definition.file],value:''}}, {position,canInsert});
+          if (definition.file && ['media','image','pdf','sheet'].includes(definition.fileType)) {
+            id = await (definition.fileType === 'media' ? c.uploadMedia : definition.fileType === 'image' ? c.uploadImage : definition.fileType === 'sheet' ? c.uploadSheet : c.uploadPdf)?.({target:{files:[definition.file],value:''}}, {position,canInsert});
           } else {
             let item = definition;
             if (definition.file) {
@@ -133,8 +133,8 @@ export function useObjectClipboard(options) {
           const entries = await navigator.clipboard.read();
           content = {files:[],text:'',html:'',uriList:''};
           for (const entry of entries) {
-            const binary = entry.types.find(type=>type.startsWith('image/')||type==='application/pdf');
-            if (binary) { const blob = await entry.getType(binary); content.files.push(new File([blob],binary==='application/pdf'?'clipboard.pdf':'clipboard.png',{type:binary})); continue; }
+            const binary = entry.types.includes('image/gif')?'image/gif':entry.types.find(type=>type.startsWith('image/')||type.startsWith('video/')||type==='application/pdf');
+            if (binary) { const blob = await entry.getType(binary); content.files.push(new File([blob],binary==='application/pdf'?'clipboard.pdf':binary==='image/gif'?'clipboard.gif':binary.startsWith('video/')?'clipboard.'+binary.split('/')[1]:'clipboard.png',{type:binary})); }
             for (const [type,key] of [['text/plain','text'],['text/html','html'],['text/uri-list','uriList']]) if(entry.types.includes(type))content[key] += await (await entry.getType(type)).text();
           }
         } catch { /* Fall back to text/local objects when rich clipboard access is unavailable. */ }

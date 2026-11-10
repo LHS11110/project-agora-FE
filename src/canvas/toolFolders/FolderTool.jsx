@@ -6,7 +6,7 @@ export function ToolLabel({ tool }) {
   useUiLocale();
   return <>{tool.mark ? <span className="markdown-tool-mark" aria-hidden="true">{tool.mark}</span> : <Icon name={tool.icon} size={18} />}<span className="canvas-tool-label">{ui(tool.label)}</span></>;
 }
-export default function FolderTool({ tool, activeTool, onSelectTool, onUploadImage, onUploadPdf, onUploadSheet, dragController, dragging, scattering, children }) {
+export default function FolderTool({ tool, activeTool, onSelectTool, onUploadMedia, onUploadImage, onUploadPdf, onUploadSheet, dragController, dragging, scattering, children }) {
   useUiLocale();
   const input = useRef(null);
   const [paletteOpen, setPaletteOpen] = useState(true);
@@ -17,7 +17,7 @@ export default function FolderTool({ tool, activeTool, onSelectTool, onUploadIma
       else if (tool.palette) setPaletteOpen(open => !open);
       else onSelectTool(tool.id);
     }}><ToolLabel tool={tool} /></button>
-    {tool.upload && <input ref={input} type="file" accept={tool.accept || 'image/*'} hidden aria-label={ui(tool.description || tool.label)} onChange={tool.id === 'pdf' ? onUploadPdf : tool.id === 'sheet' ? onUploadSheet : onUploadImage} />}
+    {tool.upload && <input ref={input} type="file" accept={tool.accept || 'image/*'} hidden aria-label={ui(tool.description || tool.label)} onChange={tool.id === 'media-file' ? onUploadMedia : tool.id === 'pdf' ? onUploadPdf : tool.id === 'sheet' ? onUploadSheet : onUploadImage} />}
     {tool.palette && paletteOpen && children}
   </div>;
 }

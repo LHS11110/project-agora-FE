@@ -1,3 +1,4 @@
+import PortfolioControls from '../../canvas/portfolio/PortfolioControls.jsx';
 import ObjectLockControls from '../../canvas/locks/ObjectLockControls.jsx';
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
@@ -5,7 +6,6 @@ import LogicPortControls from './LogicPortControls.jsx';
 import ShapeGeometryControls from '../../canvas/ShapeGeometryControls.jsx';
 import ObjectCornerControls from '../../canvas/ObjectCornerControls.jsx';
 import { supportsObjectCorners } from '../../canvas/objectCorners.js';
-import ImageFrameControls from '../../canvas/ImageFrameControls.jsx';
 import ObjectNumericControls from '../../canvas/ObjectNumericControls.jsx';
 import { SizeInput } from '../../canvas/ObjectSizeControls.jsx';
 import ObjectShadowControls from '../../canvas/ObjectShadowControls.jsx';
@@ -93,6 +93,7 @@ export default function CanvasInspectorPanel({
   shapeFillOpacity, setShapeFillOpacity, shapeSketchFillOpacity, setShapeSketchFillOpacity, shapeVertexCount, shapeCornerStyle, updateNewShapeGeometry,
   shapeVisualStyle, setShapeVisualStyle, shapeStrokeEnabled, setShapeStrokeEnabled, shapeBorderWidth, setShapeBorderWidth, updateShapeAppearance,
   connectorVisualStyle, setConnectorVisualStyle,
+  portfolioActions, portfolioViewing,
   showGrid, gridSpacing=20, changeGridSpacing, snapToGrid=false, toggleSnapToGrid, showXAxis, showYAxis, toggleXAxis, toggleYAxis,
   strokeWidth,
   penBrush, penOpacity, changePenBrush, changePenOpacity,
@@ -114,18 +115,18 @@ export default function CanvasInspectorPanel({
   const selectionSummary=useMemo(()=>{let grouped=false,savedText=false,groupable=0;for(const id of selectedObjectIds){const item=items[id];grouped ||= Boolean(item?.groupId);savedText ||= ['text','code'].includes(item?.kind);if(!['stroke','connector'].includes(item?.kind))groupable++;}return {grouped,savedText,groupable};},[selectedObjectIds,items]);
   const hasLockedSelection = activeTool === 'select' && selectedObjectIds.some(id => items[id]?.locked === true || !canWriteItem(items[id]));
   return (
-      <aside className={`canvas-sidepanel canvas-inspector${activeTool === 'select' ? ' server-settings-mode' : ' tool-settings-mode'}`}><div className="inspector-heading"><div><h2>{activeTool === 'select' ? ui("환경 설정") : ui('{tool} 설정', {tool:ui(({ notebook:'주피터 노트북',terminal:'터미널','continuous-value':'연속 값','discrete-value':'이산 값','user-group': '사용자 그룹', pen: '드로잉', laser: '레이저 포인터', eraser: '지우개', connect: '연결', shape: '도형', chart: '그래프', question: '문제', text: '텍스트', note: '포스트잇', math: '수식', table: '테이블', code: '코드', link: '동영상·링크' })[activeTool] || ui("도구"))})}</h2></div>{activeTool === 'select' && <button className="icon-button" onClick={() => setShowSettings(true)} aria-label={ui("캔버스 세부 설정")}><Icon name="settings" size={18} /></button>}</div>
+      <aside className={`canvas-sidepanel canvas-inspector${activeTool === 'select' ? ' server-settings-mode' : ' tool-settings-mode'}`}><div className="inspector-heading"><div><h2>{activeTool === 'select' ? ui("환경 설정") : ui('{tool} 설정', {tool:ui(({ project:'프로젝트 관리',notebook:'주피터 노트북',terminal:'터미널','continuous-value':'연속 값','discrete-value':'이산 값','user-group': '사용자 그룹', pen: '드로잉', laser: '레이저 포인터', eraser: '지우개', connect: '연결', shape: '도형', chart: '그래프', question: '문제', text: '텍스트', note: '포스트잇', math: '수식', table: '테이블', code: '코드', link: '동영상·링크' })[activeTool] || ui("도구"))})}</h2></div>{activeTool === 'select' && <button className="icon-button" onClick={() => setShowSettings(true)} aria-label={ui("캔버스 세부 설정")}><Icon name="settings" size={18} /></button>}</div>
         {activeTool === 'select' && selectedObjectIds.length > 0 && <ObjectLockControls ids={selectedObjectIds} items={items} disabled={selectedObjectIds.some(id=>!canWriteItem(items[id]))} onChange={updateItemLocked}/>}
         {activeTool === 'select' && selectedObjectIds.length === 1 && selectedItem && <button type="button" className="inspector-secondary-action" disabled={!canWriteItem(selectedItem)} onClick={() => onOpenComments(primarySelectedItemId)}><Icon name="chat" size={14} /><span>{ui('객체 댓글')}</span></button>}
         {(['executor', 'execution-output', 'code'].includes(activeTool) || ['executor','output'].includes(selectedItem?.runtimeRole) || (isTextContent(selectedItem) && contentMode(selectedItem) === 'code')) && <section className="inspector-section"><strong className="inspector-label">{ui('블루프린트 실행')}</strong><p className="inspector-hint">{ui('실행 객체 → 코드 객체 → 결과 객체 순서로 연결하세요. 실행 객체의 코드 실행 버튼을 눌러 실행합니다.')}</p><p className="inspector-hint">{ui('연결 화살표의 방향을 따릅니다. 결과 객체끼리 연결하면 같은 출력을 여러 곳에서 볼 수 있습니다.')}</p></section>}
         {activeTool === 'select' && selectedItem?.kind === 'chart' && <fieldset className="object-property-fields" disabled={hasLockedSelection}><ChartControls key={primarySelectedItemId} item={selectedItem} onChange={patch => updateChartItem(primarySelectedItemId, patch)} /></fieldset>}
+        {activeTool==='select'&&portfolioActions&&<PortfolioControls items={items} selectedIds={selectedObjectIds} canWriteItem={canWriteItem} actions={portfolioActions} viewing={portfolioViewing}/>}
         {activeTool === 'select' && <ObjectRecoveryControls items={items} spatialIndex={spatialIndex} onDelete={deleteItem} />}
         {activeTool === 'select' && <GraphicsQualityControls value={graphicsQuality} onChange={changeGraphicsQuality} />}
         {activeTool === 'select' && <ObjectClipboardControls actions={objectClipboard} selectedCount={selectedObjectIds.length} blocked={clipboardBlocked} />}
         <fieldset className="object-property-fields" disabled={hasLockedSelection}>
         {activeTool === 'select' && selectedObjectIds.length > 0 && <ObjectDepthControls ids={selectedObjectIds} items={items} onChange={updateItemDepth} />}
         {activeTool === 'select' && selectedObjectIds.length > 0 && <ObjectShadowControls ids={selectedObjectIds} items={items} onChange={updateItemShadow} />}
-        {activeTool === 'select' && selectedObjectIds.length === 1 && selectedItem?.kind === 'image' && <ImageFrameControls item={selectedItem} onChange={enabled => updateImageFrame(primarySelectedItemId, enabled)} />}
         {activeTool === 'select' && selectedObjectIds.length === 1 && supportsObjectCorners(selectedItem) && <ObjectCornerControls item={selectedItem} onChange={value => updateObjectCornerStyle(primarySelectedItemId, value)} />}
         {selectedItem?.kind === 'user-group' && <UserGroupControls key={primarySelectedItemId} item={selectedItem} token={token} user={user} onChange={patch => updateUserGroup(primarySelectedItemId, patch)} />}
         {(activeTool === 'shape' || shapeToEdit) && <>

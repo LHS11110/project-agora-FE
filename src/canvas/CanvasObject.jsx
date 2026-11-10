@@ -1,3 +1,8 @@
+import {hasAnimation} from './portfolio/portfolioModel.js';
+import {useObjectAnimation} from './portfolio/animationStore.js';
+import AnimatedVector from './portfolio/AnimatedVector.jsx';
+import UploadedMedia from './media/UploadedMedia.jsx';
+import ProjectObject from './projects/ProjectObject.jsx';
 import {objectContentPropsEqual} from './objectContentCache.js';
 import {selectedScrollArea} from './editorWheel.js';
 import RawNotebookObject from './notebook/NotebookObject.jsx';
@@ -59,7 +64,7 @@ const QuestionCard=memo(RawQuestionCard,objectContentPropsEqual);
 const SharedMediaContent=memo(RawSharedMediaContent,objectContentPropsEqual);
 const ConnectorLabel=memo(RawConnectorLabel,objectContentPropsEqual);
 
-function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, token, runtimeStore, onUndo, onStartEditing, onTextChange, onTextColorChange, onMetadataChange, onFormulaChange, onTableChange, onQuestionChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
+function CanvasObjectView({ mediaWritable, readOnly=false, canExecute=true, id, item, bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, token, runtimeStore, onUndo, onStartEditing, onTextChange, onTextColorChange, onMetadataChange, onFormulaChange, onTableChange, onQuestionChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
   useUiLocale();
   const contentLatest=useRef(null);contentLatest.current={id,onTableChange,onQuestionChange,onStartEditing,onStopEditing};
   const contentActions=useMemo(()=>({
@@ -160,6 +165,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
     onPointerDown: (event) => { if (editing || (selected && selectedScrollArea(event.target))) { event.stopPropagation(); return; } onPointerDown(event, id, item); },
     onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onLostPointerCapture: onPointerUp,
   };
+  useObjectAnimation(id,geometryElementRef,editing);
   const resizeHandles = selected && !item.locked && !readOnly && allowSingleSelectionControls && movable && !editing && item.kind !== 'connector'
     ? <ResizeHandles onPointerDown={(event, handle) => onResizeStart(event, id, item, handle)} />
     : null;
@@ -174,7 +180,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
   if (item.kind === 'shape' && item.runtimeRole==='notebook') return withResizeHandles(<div className={`${classes} notebook-object`} style={style} {...handlers}><NotebookObject id={id} item={item} store={runtimeStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} canExecute={canExecute} onChange={onQuestionChange}/></div>);
   if (item.kind === 'shape' && item.runtimeRole==='terminal') return withResizeHandles(<div className={`${classes} terminal-object`} style={style} {...handlers}><TerminalObject id={id} item={item} store={runtimeStore} selected={selected && activeTool==='select'} canExecute={canExecute}/></div>);
   if (item.kind === 'shape' && ['executor', 'output'].includes(item.runtimeRole)) return withResizeHandles(<div className={`${classes} blueprint-object${item.runtimeRole==='executor'?' blueprint-executor-object':''}`} style={style} {...handlers}><BlueprintNode id={id} item={item} store={runtimeStore} selected={selected} canExecute={canExecute} canReset={canExecute&&!readOnly} /></div>);
-  if (item.kind === 'pdf') return withResizeHandles(<div className={`${classes} pdf-object`} style={style} {...handlers}><PdfDocumentContent item={item} token={token} interactive={selected && activeTool === 'select'} canChangePage={!readOnly&&!item.locked} onPageChange={contentActions.page}/></div>);
+  if (item.kind === 'pdf') return withResizeHandles(<div className={`${classes} pdf-object`} style={style} {...handlers}><PdfDocumentContent item={item} token={token} interactive={selected && activeTool === 'select'} canChangePage={mediaWritable??(!readOnly&&!item.locked)} onPageChange={contentActions.page}/></div>);
   if (item.kind === 'user-group') return withResizeHandles(<div className={`${classes} user-group-object`} style={style} {...handlers}><UserGroupContent item={item} token={token} /></div>);
   if (item.kind === 'stroke') {
     const geometry = strokeSelectionGeometry(item, viewSize);
@@ -182,6 +188,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
     const strokeStyle = { ...style, left: `${geometry.x / viewSize.width * 100}%`, top: `${geometry.y / viewSize.height * 100}%`, width: `${geometry.width / viewSize.width * 100}%`, height: `${geometry.height / viewSize.height * 100}%` };
     const point = geometry.points[0];
     return withResizeHandles(<div className={classes} style={strokeStyle} {...handlers} aria-label={ui("드로잉 객체")}>
+      {hasAnimation(item)&&<AnimatedVector id={id} item={item} world={viewSize} origin={{x:geometry.x,y:geometry.y}}/>}
       <svg className="stroke-selection-path" fill="none" stroke="transparent" viewBox={`0 0 ${geometry.width} ${geometry.height}`} preserveAspectRatio="none" aria-hidden="true">
         {geometry.points.length === 1 ? <circle cx={point.x} cy={point.y} r=".1" strokeWidth={geometry.hitWidth} />
           : <polyline points={geometry.points.map(p => `${p.x},${p.y}`).join(' ')} strokeWidth={geometry.hitWidth} />}
@@ -202,12 +209,12 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
       : null;
     return withResizeHandles(<div key={id} className={`${classes} vector-object-hit`} style={vectorStyle} data-item-id={id} {...handlers} title={ui("한 번 클릭해 선택 · 두 번 클릭해 연결된 객체로 이동")}>{curvePath && <svg className="connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} />{connectorEnds.map((point, index) => <circle key={index} cx={point.x - offsetX} cy={point.y - offsetY} r="9" />)}<ConnectorArrowheads visualStyle={item.visualStyle} seed={id} geometry={connectorCurve} offsetX={offsetX} offsetY={offsetY} strokeWidth={Number(item.strokeWidth) || 1.5} /></svg>}{selected && <ConnectorSelectionEffect geometry={connectorCurve} offsetX={offsetX} offsetY={offsetY} width={geometryWidth} height={geometryHeight} color={item.color} strokeWidth={item.strokeWidth} />}<ConnectorLabel item={item} geometry={connectorCurve} offsetX={offsetX} offsetY={offsetY} />{bendHandle}</div>);
   }
-  if (item.kind === 'image') return withResizeHandles(<div key={id} className={`${classes} image-object${item.imageFrameEnabled === false ? ' image-frame-hidden' : ''}`} style={style} {...handlers}><CanvasImageContent item={item} token={token} />{item.imageFrameEnabled !== false && <div className="object-caption"><Icon name="image" size={13} />{item.filename || ui("공유 이미지")}</div>}</div>);
-  if (item.kind === 'link') return withResizeHandles(<div key={id} className={`${classes} media-link-object${item.mediaType === 'link' ? ' external-link-object' : ' video-link-object'}`} style={style} data-item-id={id} {...handlers}>
-    <div className="shared-media-header"><span className="shared-media-drag-handle" title={ui("여기를 끌어 자료를 이동하세요")}><Icon name={item.mediaType === 'link' ? 'link' : 'image'} size={13} />{item.mediaType === 'youtube' ? `YouTube · ${item.title || ui("동영상")}` : item.mediaType === 'video' ? ui("동영상 · {v0}", {
+  if (item.kind === 'image') return withResizeHandles(<div key={id} className={`${classes} image-object image-frame-hidden frameless-media-object`} style={style} {...handlers}><CanvasImageContent item={item} token={token} /></div>);
+  if (item.kind === 'link') return withResizeHandles(<div key={id} className={`${classes} media-link-object${item.mediaType === 'link' ? ' external-link-object' : ' video-link-object frameless-media-object'}`} style={style} data-item-id={id} {...handlers}>
+    {item.mediaType==='link'&&<div className="shared-media-header"><span className="shared-media-drag-handle" title={ui("여기를 끌어 자료를 이동하세요")}><Icon name={item.mediaType === 'link' ? 'link' : 'image'} size={13} />{item.mediaType === 'gif' ? `GIF · ${item.title || 'GIF'}` : item.mediaType === 'youtube' ? `YouTube · ${item.title || ui("동영상")}` : ['video','gif'].includes(item.mediaType) ? ui("동영상 · {v0}", {
   v0: item.title || ui("재생")
-}) : ui("링크")}</span></div>
-    <SharedMediaContent item={item} interactive={editing || (item.mediaType === 'youtube' && activeTool === 'select')} writable={!readOnly&&!item.locked} onChange={contentActions.change} />
+}) : ui("링크")}</span></div>}
+    {['video','gif'].includes(item.mediaType)?<UploadedMedia item={item} token={token} selected={selected} interactive={activeTool==='select'} writable={mediaWritable??(!readOnly&&!item.locked)} onChange={contentActions.change}/>:<SharedMediaContent item={item} interactive={selected && (editing || (item.mediaType === 'youtube' && activeTool === 'select'))} writable={mediaWritable??(!readOnly&&!item.locked)} onChange={contentActions.change} />}
   </div>);
   if (isTextContent(item)) {
     const mode = contentMode(item);
@@ -223,6 +230,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
     </EditingSurface>
   </div>);
   if (item.kind === 'table') return withResizeHandles(<div key={id} className={`${classes} canvas-table-object`} style={style} data-item-id={id} {...handlers}><EditableTable item={item} editingActive={editing} enabled={activeTool === 'select' && selected && !item.locked && !readOnly} onStartEditing={contentActions.start} onStopEditing={contentActions.stop} onChange={contentActions.table} /></div>);
+  if (item.kind === 'project') return withResizeHandles(<div className={`${classes} canvas-project-frame`} style={style} {...handlers}><ProjectObject id={id} item={item} readOnly={readOnly||item.locked||activeTool!=='select'}/></div>);
   if (item.kind === 'value') return withResizeHandles(<div className={`${classes} canvas-value-frame`} style={style} {...handlers}><ValueObject id={id} item={item} readOnly={readOnly||item.locked||activeTool!=='select'} onChange={onQuestionChange}/></div>);
   if (item.kind === 'question') return withResizeHandles(<div className={`${classes} canvas-question-object`} style={style} {...handlers}><QuestionCard id={id} item={item} readOnly={readOnly||item.locked||activeTool!=='select'} onChange={onQuestionChange} /></div>);
   if (item.kind === 'chart') return withResizeHandles(<div key={id} className={`${classes} canvas-chart-object`} style={style} data-item-id={id} {...handlers}><ChartView item={item} /></div>);
@@ -233,7 +241,7 @@ function CanvasObjectView({ readOnly=false, canExecute=true, id, item, bounds, s
   v0: index + 1
 })} onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onArrowBendStart(event, id, item, index); }} />)
       : null;
-    return withResizeHandles(<div key={id} className={`${classes} shape-object shape-vector-hit shape-${item.shapeType || 'rectangle'}`} style={style} {...handlers}>{bendHandle}</div>);
+    return withResizeHandles(<div key={id} className={`${classes} shape-object shape-vector-hit shape-${item.shapeType || 'rectangle'}`} style={style} {...handlers}>{hasAnimation(item)&&<AnimatedVector id={id} item={item} world={viewSize} origin={{x:(Number(item.x)||0)*viewSize.width,y:(Number(item.y)||0)*viewSize.height}}/>}{bendHandle}</div>);
   }
   return null;
 }
