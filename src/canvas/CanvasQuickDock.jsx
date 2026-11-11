@@ -1,40 +1,26 @@
-import { useEffect, useRef } from 'react';
+import {useEffect,useRef,useState} from 'react';
 import Icon from '../components/Icon.jsx';
-import { QUICK_DOCK_GROUPS as groups, QUICK_DOCK_TOOLS, quickDockShortcut, quickDockShortcutTool, isQuickDockEditingTarget } from './quickDockShortcuts.js';
-import { canvasToolCategories } from './canvasToolCatalog.js';
-import { ui } from '../i18n/locale.js';
-import { useUiLocale } from '../i18n/useUiLocale.js';
-const tools = Object.fromEntries(canvasToolCategories.flatMap(category => category.tools).map(tool => [tool.id, tool]));
-export default function CanvasQuickDock({ shortcutGuard, undoCount = 0, onUndo, canUndo = false, canWrite = true, activeTool, onSelectTool, onUploadImage, toolsExpanded, onToggleTools }) {
-  useUiLocale();
-  const imageInput = useRef(null);
-  const latest=useRef(null);latest.current={canWrite,onSelectTool,shortcutGuard};
-  useEffect(()=>{
-    const keydown=event=>{
-      const id=quickDockShortcutTool(event);
-      if(!id||isQuickDockEditingTarget(event.target)||latest.current.shortcutGuard?.()===false)return;
-      event.preventDefault();event.stopPropagation();
-      if(event.repeat||(!latest.current.canWrite&&!['select','hand','laser'].includes(id)))return;
-      if(tools[id].upload)imageInput.current?.click();else latest.current.onSelectTool(id);
-    };
-    window.addEventListener('keydown',keydown,true);
-    return()=>window.removeEventListener('keydown',keydown,true);
-  },[]);
-
-  return <nav className="canvas-quick-dock" aria-label={ui('캔버스 도구')}>
-    <div className="quick-dock-group"><button type="button" className="quick-dock-tool" disabled={!canUndo || !undoCount} onClick={onUndo} aria-label={ui('실행 취소')} title={`${ui('실행 취소')} · Ctrl/⌘ + Z (${undoCount})`}>
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 5 4 10l5 5M4 10h9a6 6 0 0 1 0 12" transform="translate(0 -2)" /></svg><span className="quick-dock-tooltip">{ui('실행 취소')} · Ctrl/⌘ + Z</span>
-    </button></div>
-    {groups.map((group, index) => <div className="quick-dock-group" key={index}>
-      {group.map(id => { const tool = tools[id], shortcut=quickDockShortcut(QUICK_DOCK_TOOLS.indexOf(id)); return <button type="button" key={id}
-        disabled={!canWrite&&!['select','hand','laser'].includes(id)} className={`quick-dock-tool${activeTool === id ? ' is-active' : ''}`}
-        aria-label={ui(tool.description || tool.label)} aria-keyshortcuts={`Control+${shortcut} Meta+${shortcut}`} title={`${ui(tool.label)} · Ctrl+${shortcut} / ⌘+${shortcut}`} aria-pressed={tool.upload ? undefined : activeTool === id}
-        onClick={() => tool.upload ? imageInput.current?.click() : onSelectTool(id)}>
-        <Icon name={tool.icon} size={21} /><span className="quick-dock-tooltip">{ui(tool.label)} · Ctrl+{shortcut}</span>
-      </button>; })}
-    </div>)}
-    <div className="quick-dock-group"><button type="button" className="quick-dock-tool quick-dock-more" aria-label={ui('툴 패널')}
-      aria-expanded={toolsExpanded} onClick={onToggleTools}><Icon name="grid" size={20} /><span className="quick-dock-tooltip">{ui('툴 패널')}</span></button></div>
-    <input ref={imageInput} type="file" accept="image/*" hidden onChange={onUploadImage} />
-  </nav>;
+import {QUICK_DOCK_TOOLS,quickDockShortcut,quickDockShortcutTool,isQuickDockEditingTarget} from './quickDockShortcuts.js';
+import {canvasToolCategories} from './canvasToolCatalog.js';
+import {ui} from '../i18n/locale.js';
+import {useUiLocale} from '../i18n/useUiLocale.js';
+const tools=Object.fromEntries(canvasToolCategories.flatMap(c=>c.tools).map(t=>[t.id,t]));
+const pages=[QUICK_DOCK_TOOLS.slice(0,10),[...QUICK_DOCK_TOOLS.slice(10),'frame','project','continuous-value','discrete-value','notebook','terminal','executor','code','anchor']];
+export default function CanvasQuickDock({anchors=[],setAnchors=()=>{},selectedItemIds=[],onNavigateAnchor=()=>{},allowPageKeys=true,navigationGuard,shortcutGuard,undoCount=0,onUndo,canUndo=false,canWrite=true,activeTool,onSelectTool,onUploadImage,toolsExpanded,onToggleTools}){
+ useUiLocale();const imageInput=useRef(null),latest=useRef(null),[page,setPage]=useState(0),[open,setOpen]=useState(false),[name,setName]=useState(''),[type,setType]=useState('point'),[x,setX]=useState('0'),[y,setY]=useState('0'),[error,setError]=useState(''),[targetIds,setTargetIds]=useState(null);
+ latest.current={canWrite,onSelectTool,shortcutGuard,anchors,onNavigateAnchor,allowPageKeys,navigationGuard,open};
+ useEffect(()=>{const openAnchors=e=>{const d=e.detail||{};setError('');setTargetIds(Array.isArray(d.objectIds)?d.objectIds.map(String):null);if(d.point){setType('point');setX(String(Math.round(d.point.x*100)/100));setY(String(Math.round(d.point.y*100)/100));}else if(d.objectIds?.length)setType('object');setOpen(true);setPage(pages.length);};window.addEventListener('canvas-open-anchors',openAnchors);return()=>window.removeEventListener('canvas-open-anchors',openAnchors);},[]);
+ useEffect(()=>{const keydown=e=>{const c=latest.current;if(isQuickDockEditingTarget(e.target)||c.open||e.isComposing||e.defaultPrevented)return;
+  const id=quickDockShortcutTool(e);if(id){if(c.shortcutGuard?.()===false)return;e.preventDefault();e.stopPropagation();if(e.repeat||(!c.canWrite&&!['select','hand','laser','anchor'].includes(id)))return;if(tools[id].upload)imageInput.current?.click();else c.onSelectTool(id);return;}
+  if(e.target?.closest?.('button,[role=slider],[role=spinbutton]')||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey||e.repeat)return;
+  if(['ArrowUp','ArrowDown'].includes(e.key)&&c.allowPageKeys&&c.navigationGuard?.()!==false){e.preventDefault();e.stopPropagation();setPage(p=>Math.max(0,Math.min(pages.length,p+(e.key==='ArrowUp'?-1:1))));return;}
+  if(page===pages.length&&c.navigationGuard?.()!==false&&/^[0-9]$/.test(e.key)){const index=e.key==='0'?9:Number(e.key)-1,anchor=c.anchors[index];if(anchor){e.preventDefault();e.stopPropagation();c.onNavigateAnchor(anchor);}}
+ };window.addEventListener('keydown',keydown,true);return()=>window.removeEventListener('keydown',keydown,true);},[page]);
+ const add=()=>{const label=name.trim();if(!label){setError(ui('앵커 이름을 입력하세요.'));return;}if(anchors.length>=10){setError(ui('앵커는 최대 10개입니다.'));return;}let anchor;if(type==='object'){const ids=targetIds||selectedItemIds;if(!ids.length){setError(ui('객체를 선택하세요.'));return;}anchor=ids.length===1?{name:label,type,objectId:String(ids[0])}:{name:label,type:'objects',objectIds:ids.map(String)};}else{if(!x.trim()||!y.trim()||!Number.isFinite(Number(x))||!Number.isFinite(Number(y))){setError(ui('유효한 좌표를 입력하세요.'));return;}anchor={name:label,type,x:Number(x),y:Number(y)};}setAnchors(old=>[...old,anchor]);setName('');setError('');};
+ return <><nav className="canvas-quick-dock" aria-label={ui('캔버스 도구')}>
+ <div className="quick-dock-group"><button type="button" className="quick-dock-tool" disabled={!canUndo||!undoCount} onClick={onUndo} aria-label={ui('실행 취소')} title={`${ui('실행 취소')} · Ctrl/⌘ + Z (${undoCount})`}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 5 4 10l5 5M4 10h9a6 6 0 0 1 0 12" transform="translate(0 -2)"/></svg></button></div>
+ <div className="quick-dock-group">{page<pages.length?pages[page].map(id=>{const tool=tools[id],index=QUICK_DOCK_TOOLS.indexOf(id),shortcut=index>=0?quickDockShortcut(index):null;return <button type="button" key={id} disabled={!canWrite&&!['select','hand','laser','anchor'].includes(id)} className={`quick-dock-tool${activeTool===id?' is-active':''}`} aria-label={ui(tool.description||tool.label)} title={ui(tool.label)} aria-keyshortcuts={shortcut?`Control+${shortcut} Meta+${shortcut}`:undefined} aria-pressed={tool.upload?undefined:activeTool===id} onClick={()=>tool.upload?imageInput.current?.click():onSelectTool(id)}><Icon name={tool.icon} size={21}/><span className="quick-dock-tooltip">{ui(tool.label)}{shortcut?` · Ctrl+${shortcut}`:''}</span></button>}):<>{anchors.map((anchor,i)=><button key={i} className="quick-dock-anchor" onClick={()=>onNavigateAnchor(anchor)} title={`${i===9?0:i+1} · ${anchor.name}`}><kbd>{i===9?0:i+1}</kbd><span>{anchor.name}</span></button>)}<button className="quick-dock-tool" onClick={()=>{setTargetIds(null);setOpen(true);}} aria-label={ui('앵커 관리')}>＋</button></>}</div>
+ <div className="quick-dock-pages"><button type="button" aria-label={ui('이전 도구 페이지')} disabled={!page} onClick={()=>setPage(p=>p-1)}>‹</button><span>{page+1}/{pages.length+1}</span><button type="button" aria-label={ui('다음 도구 페이지')} disabled={page===pages.length} onClick={()=>setPage(p=>p+1)}>›</button></div>
+ <div className="quick-dock-group"><button type="button" className="quick-dock-tool quick-dock-more" aria-label={ui('툴 패널')} aria-expanded={toolsExpanded} onClick={onToggleTools}><Icon name="grid" size={20}/></button></div><input ref={imageInput} type="file" accept="image/*" hidden onChange={onUploadImage}/></nav>
+ {open&&<div className="anchor-overlay" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setOpen(false);}}><section className="anchor-dialog" role="dialog" aria-modal="true" aria-label={ui('개인 앵커')} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setOpen(false);}}}><header><strong>{ui('개인 앵커')} · {anchors.length}/10</strong><button onClick={()=>setOpen(false)} aria-label={ui('닫기')}>×</button></header><p>{ui('앵커는 이 브라우저의 내 계정에만 저장됩니다.')}</p><label className="anchor-name-field"><span>{ui('앵커 이름')}</span><input value={name} maxLength={60} placeholder={ui('예: 회의 보드')} onChange={e=>setName(e.target.value)}/></label><label>{ui('이동 대상')}<select value={type} onChange={e=>{setType(e.target.value);setError('');}}><option value="point">{ui('좌표')}</option><option value="object">{ui('선택한 객체')}</option></select></label>{type==='point'?<div className="anchor-coordinates"><label>X<input type="number" value={x} onChange={e=>setX(e.target.value)}/></label><label>Y<input type="number" value={y} onChange={e=>setY(e.target.value)}/></label></div>:<small>{(targetIds||selectedItemIds).length?ui('선택한 객체에 연결됩니다.'):ui('캔버스에서 객체를 먼저 선택하세요.')}</small>}<button type="button" className="anchor-add-button" onClick={add} disabled={anchors.length>=10}><Icon name="plus" size={15}/><span>{ui('앵커 추가')}</span></button>{error&&<p role="alert">{error}</p>}<ol>{anchors.map((anchor,i)=><li key={i}><button onClick={()=>{onNavigateAnchor(anchor);setOpen(false);}}>{i===9?0:i+1}. {anchor.name}</button><button type="button" className="anchor-delete" aria-label={`${anchor.name} ${ui('삭제')}`} title={ui('앵커 삭제')} onClick={()=>setAnchors(old=>old.filter((_,j)=>j!==i))}>{ui('삭제')}</button></li>)}</ol></section></div>}</>;
 }

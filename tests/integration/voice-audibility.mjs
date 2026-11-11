@@ -38,9 +38,11 @@ try{
  await page.waitForFunction(()=>[...calls.values()].every(c=>[...c.links.values()].some(l=>l.pc.connectionState==='connected')));
  await page.waitForFunction(()=>rms().every(level=>level.post>.05));
  console.log('PASS decoded audible output on both peers',await page.evaluate(()=>rms()));
+ await page.evaluate(async()=>{const receiver=calls.get('b');receiver.links.get('a').audio.pause();await receiver.audioContext.suspend();});
  await page.evaluate(async()=>{const canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;const ctx=canvas.getContext('2d');ctx.fillStyle='red';ctx.fillRect(0,0,320,180);window.screenStream=canvas.captureStream(15);const call=calls.get('a');call.media={...call.media,getDisplayMedia:async()=>screenStream};await call.startScreen();});
  await page.waitForFunction(()=>calls.get('b').links.get('a').screenStream?.getVideoTracks().length);
  await page.waitForFunction(()=>rms().every(level=>level.post>.05));
+ await page.waitForFunction(()=>!calls.get('b').links.get('a').audio.paused&&calls.get('b').audioContext.state==='running');
  await page.waitForTimeout(1500);assert.ok((await page.evaluate(()=>rms())).every(level=>level.post>.05),'audio remains audible during screen sharing');
  await page.evaluate(()=>calls.get('a').stopScreen());await page.waitForTimeout(1500);await page.waitForFunction(()=>rms().every(level=>level.post>.05));assert.ok((await page.evaluate(()=>rms())).every(level=>level.post>.05),'audio remains audible after sharing stops');
  console.log('PASS audible audio during and after screen sharing');

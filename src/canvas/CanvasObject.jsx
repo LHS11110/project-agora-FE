@@ -221,10 +221,7 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
   }
   if (item.kind === 'image') return withResizeHandles(<div key={id} className={`${classes} image-object image-frame-hidden frameless-media-object`} style={style} {...handlers}><CanvasImageContent item={item} token={token} /></div>);
   if (item.kind === 'link') return withResizeHandles(<div key={id} className={`${classes} media-link-object${item.mediaType === 'link' ? ' external-link-object' : ' video-link-object frameless-media-object'}`} style={style} data-item-id={id} {...handlers}>
-    {item.mediaType==='link'&&<div className="shared-media-header"><span className="shared-media-drag-handle" title={ui("여기를 끌어 자료를 이동하세요")}><Icon name={item.mediaType === 'link' ? 'link' : 'image'} size={13} />{item.mediaType === 'gif' ? `GIF · ${item.title || 'GIF'}` : item.mediaType === 'youtube' ? `YouTube · ${item.title || ui("동영상")}` : ['video','gif'].includes(item.mediaType) ? ui("동영상 · {v0}", {
-  v0: item.title || ui("재생")
-}) : ui("링크")}</span></div>}
-    {['video','gif'].includes(item.mediaType)?<UploadedMedia item={item} token={token} selected={selected} interactive={activeTool==='select'} writable={mediaWritable??(!readOnly&&!item.locked)} onChange={contentActions.change}/>:<SharedMediaContent item={item} interactive={selected && (editing || (item.mediaType === 'youtube' && activeTool === 'select'))} writable={mediaWritable??(!readOnly&&!item.locked)} onChange={contentActions.change} />}
+    {['video','gif'].includes(item.mediaType)?<UploadedMedia item={item} token={token} selected={selected} interactive={activeTool==='select'} writable={mediaWritable??(!readOnly&&!item.locked)} onChange={contentActions.change}/>:<SharedMediaContent token={token} item={item} interactive={selected && (editing || (item.mediaType === 'youtube' && activeTool === 'select'))} writable={mediaWritable??(!readOnly&&!item.locked)} onChange={contentActions.change} />}
   </div>);
   if (isTextContent(item)) {
     const mode = contentMode(item);

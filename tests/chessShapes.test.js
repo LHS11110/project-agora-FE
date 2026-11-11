@@ -56,3 +56,6 @@ test('drawVectorItems renders all chess shapes in standard and sketch visual sty
     assert.doesNotThrow(() => drawVectorItems(g, items, 1600, 1000));
   }
 });
+test('default pawn proportions keep its circular head round in canvas coordinates',()=>{
+ const pawn=chessShapeCatalog.find(s=>s.id==='chess-pawn'),height=200,width=height*pawn.aspect,g=chessShapeGeometry(pawn.id,width,height),head=g.paths[0].slice(0,21);const centerX=width/2,radiusY=height*14/92;const radiusX=Math.max(...head.map(p=>p.x))-centerX;assert.ok(Math.abs(radiusX/radiusY-1)<.03,`head ratio ${radiusX/radiusY}`);
+});

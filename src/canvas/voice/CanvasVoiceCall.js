@@ -4,7 +4,7 @@ export default class CanvasVoiceCall {
   Object.assign(this,{send,iceServers,media,Peer,audio,AudioContext,reconnectTimeout,disconnectDelay,negotiationTimeout});
   this.peers=new Map();this.links=new Map();this.volumes=new Map();this.listeners=new Set();this.outbox=[];
   this.self='';this.stream=null;this.screenStream=null;this.screenPending=false;this.watchingScreen=null;this.generation=0;this.muted=false;this.deafened=false;this.pending=false;this.reconnecting=false;this.closed=false;this.error='';
-  this.reconnectTimer=null;this.signalTimer=null;this.audioContext=null;this.emit();
+  this.reconnectTimer=null;this.signalTimer=null;this.audioContext=null;this.audioHealthTimer=null;this.emit();
  }
  subscribe=fn=>{this.listeners.add(fn);return()=>this.listeners.delete(fn);};
  getSnapshot=()=>this.snapshot;
@@ -47,6 +47,7 @@ export default class CanvasVoiceCall {
    if(generation!==this.generation||this.closed){stream.getTracks().forEach(t=>t.stop());return;}
    this.stream=stream;this.muted=false;this.deafened=false;
    stream.getAudioTracks().forEach(t=>{t.onended=()=>{if(this.stream===stream)this.leave();};});
+   this.audioHealthTimer=setInterval(()=>{for(const [id,link] of this.links)this.restorePeerAudio(id,link);},10000);
    this.announce();for(const peer of this.peers.values())this.connect(peer);
   }catch(error){if(generation===this.generation){this.closeAudioContext();this.error=error.name==='NotAllowedError'?'VOICE_MIC_DENIED':'VOICE_MIC_FAILED';}}
   finally{if(generation===this.generation){this.pending=false;this.emit();}}
@@ -82,12 +83,12 @@ export default class CanvasVoiceCall {
  }
  closeAudioContext(){const context=this.audioContext;this.audioContext=null;if(context)context.close().catch(()=>{});}
  drop(id){
-  const link=this.links.get(id);if(!link)return;this.links.delete(id);clearTimeout(link.timer);clearTimeout(link.repairTimer);
+  const link=this.links.get(id);if(!link)return;this.links.delete(id);clearTimeout(link.timer);clearTimeout(link.repairTimer);clearTimeout(link.muteTimer);if(link.remoteAudioTrack){link.remoteAudioTrack.onmute=null;link.remoteAudioTrack.onunmute=null;}
   for(const event of ['onicecandidate','ontrack','onconnectionstatechange','oniceconnectionstatechange','onnegotiationneeded','onsignalingstatechange'])link.pc[event]=null;
   link.pc.close();link.audio.pause();link.audio.srcObject=null;link.source?.disconnect();link.gain?.disconnect();
  }
  leave(){
-  this.stopScreen();this.watchingScreen=null;this.screenPending=false;++this.generation;clearTimeout(this.reconnectTimer);this.reconnectTimer=null;this.pending=false;this.reconnecting=false;
+  clearInterval(this.audioHealthTimer);this.audioHealthTimer=null;this.stopScreen();this.watchingScreen=null;this.screenPending=false;++this.generation;clearTimeout(this.reconnectTimer);this.reconnectTimer=null;this.pending=false;this.reconnecting=false;
   const stream=this.stream;this.stream=null;stream?.getTracks().forEach(t=>{t.onended=null;t.stop();});
   for(const id of this.links.keys())this.drop(id);this.muted=false;this.deafened=false;this.closeAudioContext();this.clearSignals();this.announce();this.emit();
  }
@@ -118,7 +119,7 @@ export default class CanvasVoiceCall {
  repair(id,reset=false){
   const link=this.links.get(id);if(!link||!this.current(id,link)||!this.stream)return;
   if(reset){link.retries=0;link.exhausted=false;}
-  if(link.retries>=3){link.recovering=false;link.exhausted=true;this.error='VOICE_CONNECTION_FAILED';this.emit();return;}
+  if(link.retries>=3){link.recovering=false;link.exhausted=true;this.error='VOICE_CONNECTION_FAILED';clearTimeout(link.repairTimer);link.repairTimer=setTimeout(()=>{link.repairTimer=null;if(this.current(id,link))this.repair(id,true);},30000);this.emit();return;}
   this.announce();link.retries++;link.recovering=true;clearTimeout(link.repairTimer);link.repairTimer=null;
   try{link.pc.restartIce();this.armTimeout(id,link);}catch{this.error='VOICE_CONNECTION_FAILED';}
   this.emit();
@@ -138,6 +139,8 @@ export default class CanvasVoiceCall {
    if(!this.current(id,link))return;
    const remoteStream=event.streams[0]||new MediaStream([event.track]);
    if(event.track?.kind==='video'){this.restorePeerAudio(id,link);link.screenStream=remoteStream;event.track.onended=()=>{if(this.current(id,link)){link.screenStream=null;this.emit();}};this.emit();return;}
+   if(link.remoteAudioTrack&&link.remoteAudioTrack!==event.track){link.remoteAudioTrack.onmute=null;link.remoteAudioTrack.onunmute=null;clearTimeout(link.muteTimer);}
+   if(event.track){link.remoteAudioTrack=event.track;event.track.onmute=()=>{clearTimeout(link.muteTimer);link.muteTimer=setTimeout(()=>{if(this.current(id,link)&&event.track.muted&&!this.reconnecting)this.repair(id);},8000);};event.track.onunmute=()=>{clearTimeout(link.muteTimer);link.muteTimer=null;this.restorePeerAudio(id,link);};}
    audio.srcObject=remoteStream;
    if(this.audioContext){
     try{
@@ -163,13 +166,16 @@ export default class CanvasVoiceCall {
    this.emit();
   };
   pc.onconnectionstatechange=()=>{changed();if(pc.connectionState==='connected')this.restorePeerAudio(id,link);};pc.oniceconnectionstatechange=changed;
-  pc.onsignalingstatechange=()=>{if(pc.signalingState==='stable')this.restorePeerAudio(id,link);};
-  // Perfect negotiation lets either endpoint restart ICE and resolves offer glare.
-  pc.onnegotiationneeded=()=>this.enqueue(id,link,async()=>{
-   if(pc.signalingState!=='stable')return;
+  const negotiate=()=>this.enqueue(id,link,async()=>{
+   if(!link.needsNegotiation||pc.signalingState!=='stable')return;
+   link.needsNegotiation=false;
    try{link.offering=true;await pc.setLocalDescription();if(this.current(id,link))this.signal({type:'rtc_signal',peer_id:id,action:pc.localDescription.type,description:pc.localDescription.toJSON()},link);}
+   catch(error){link.needsNegotiation=true;throw error;}
    finally{link.offering=false;}
   });
+  pc.onsignalingstatechange=()=>{if(pc.signalingState==='stable'){this.restorePeerAudio(id,link);if(link.needsNegotiation)negotiate();}};
+  // Keep a pending negotiation until a simultaneous offer has settled.
+  pc.onnegotiationneeded=()=>{link.needsNegotiation=true;negotiate();};
   for(const track of this.stream.getAudioTracks())pc.addTrack(track,this.stream);
   if(this.screenStream)for(const track of this.screenStream.getVideoTracks())link.screenSender=pc.addTrack(track,this.screenStream);
   this.armTimeout(id,link);this.emit();

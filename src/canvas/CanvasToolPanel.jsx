@@ -14,7 +14,7 @@ import ToolFolderScatter from './toolFolders/ToolFolderScatter.jsx';
 import './canvas-tool-panel.css';
 import './toolFolders/tool-folders.css';
 
-export default function CanvasToolPanel({ activeTool, onSelectTool, color, onColorChange, onUploadImage, onUploadMedia, onUploadPdf, onUploadSheet, favoriteColors, onSaveFavorite }) {
+export default function CanvasToolPanel({ onOpenAnchors, activeTool, onSelectTool, color, onColorChange, onUploadImage, onUploadMedia, onUploadPdf, onUploadSheet, favoriteColors, onSaveFavorite }) {
   useUiLocale();
   const panelRef = useRef(null);
   const folders = useToolFolderLayout(activeTool);
@@ -45,7 +45,7 @@ export default function CanvasToolPanel({ activeTool, onSelectTool, color, onCol
     <CanvasColorPicker color={color} onChange={onColorChange} favoriteColors={favoriteColors} onSaveFavorite={onSaveFavorite} label={ui("펜 및 도형 색상")} compact />
   </FolderTool>);
   return <aside ref={panelRef} className="canvas-tools categorized-tools editable-tool-folders" aria-label={ui("캔버스 도구")}>
-    <div className="tool-folder-toolbar"><div className="canvas-tool-fold-actions"><button type="button" onClick={() => folders.setAllOpen(true)}>{ui("모두 열기")}</button><button type="button" onClick={() => folders.setAllOpen(false)}>{ui("모두 접기")}</button></div>
+    <div className="tool-folder-toolbar"><button type="button" className="canvas-folder-color-reset" onClick={onOpenAnchors}>{ui("개인 앵커")}</button><div className="canvas-tool-fold-actions"><button type="button" onClick={() => folders.setAllOpen(true)}>{ui("모두 열기")}</button><button type="button" onClick={() => folders.setAllOpen(false)}>{ui("모두 접기")}</button></div>
       <button type="button" className="canvas-folder-color-reset" onClick={() => setEditingFolder('new')}>{ui("+ 폴더 만들기")}</button>
       <button type="button" className="canvas-folder-color-reset" onClick={folders.resetColors}>{ui("폴더 색상 초기화")}</button>
       <button type="button" className="canvas-folder-color-reset" onClick={() => { setFlights([]); folders.resetLayout(); setEditingFolder(null); setNotice('기본 폴더 구조로 복원했습니다.'); }}>{ui("기본 구조 복원")}</button>

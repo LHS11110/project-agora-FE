@@ -1,3 +1,4 @@
+import {MessageLinkPreviews} from '../../components/LinkPreview.jsx';
 import {useLatestMessages} from './useLatestMessages.js';
 import { useRef } from 'react';
 import { ui } from '../../i18n/locale.js';
@@ -6,14 +7,14 @@ import MarkdownText from '../../components/MarkdownText.jsx';
 import MentionComposer from './MentionComposer.jsx';
 import './comments.css';
 
-export default function ObjectCommentsPanel({ comments, participants, connection }) {
+export default function ObjectCommentsPanel({ comments, participants, connection, token }) {
   const locale = useUiLocale(), panel = useRef(null),list=useRef(null);
   const thread = comments.threads[comments.activeId] || {};
   useLatestMessages(list,thread.entries,comments.activeId,comments.highlight,comments.markVisible,{onHighlightExpired:comments.clearHighlight});
   return <aside ref={panel} className="object-comments-panel" aria-label={ui('객체 댓글')}>
     <header><div><strong>{ui('객체 댓글')}</strong><small title={comments.activeId}>{comments.activeId}</small></div><button type="button" aria-label={ui('댓글 닫기')} onClick={() => comments.setActiveId(null)}>×</button></header>
     {thread.hasMore && <button className="comments-older" disabled={thread.loading} onClick={() => comments.requestHistory(comments.activeId, thread.nextToSequence)}>{ui('이전 댓글')}</button>}
-    <div className="object-comments-list" ref={list}>{thread.loading && !thread.entries?.length ? <p>{ui('불러오는 중')}</p> : thread.entries?.length ? thread.entries.map(entry => <article key={entry.id} data-message-id={entry.id} className={`object-comment${comments.highlight === entry.id ? ' mention-target' : ''}`}><div><strong>{entry.sender}</strong><time>{entry.time.toLocaleTimeString(locale === 'en' ? 'en-US' : 'ko-KR', { hour: '2-digit', minute: '2-digit' })}</time></div><MarkdownText source={entry.text} /></article>) : <p>{ui('아직 댓글이 없습니다.')}</p>}</div>
+    <div className="object-comments-list" ref={list}>{thread.loading && !thread.entries?.length ? <p>{ui('불러오는 중')}</p> : thread.entries?.length ? thread.entries.map(entry => <article key={entry.id} data-message-id={entry.id} className={`object-comment${comments.highlight === entry.id ? ' mention-target' : ''}`}><div><strong>{entry.sender}</strong><time>{entry.time.toLocaleTimeString(locale === 'en' ? 'en-US' : 'ko-KR', { hour: '2-digit', minute: '2-digit' })}</time></div><MarkdownText source={entry.text} /><MessageLinkPreviews text={entry.text} token={token}/></article>) : <p>{ui('아직 댓글이 없습니다.')}</p>}</div>
     {comments.error && <p className="comments-error" role="alert">{ui(comments.error)}</p>}
     <MentionComposer label={ui("객체 댓글 입력")} placeholder={ui("댓글을 남겨보세요...")} value={comments.draft} onChange={comments.setDraft} onSubmit={comments.sendComment} participants={participants} disabled={connection !== 'connected'} />
   </aside>;

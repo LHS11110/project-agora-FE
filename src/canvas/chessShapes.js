@@ -9,12 +9,12 @@ en['체스 나이트'] = 'Chess Knight';
 en['체스 폰'] = 'Chess Pawn';
 
 export const chessShapeCatalog = [
-  { id: 'chess-king', label: '체스 킹', aspect: 0.55, category: 'chess', keywords: '체스 킹 chess king 기물 말' },
-  { id: 'chess-queen', label: '체스 퀸', aspect: 0.55, category: 'chess', keywords: '체스 퀸 chess queen 기물 말' },
-  { id: 'chess-rook', label: '체스 룩', aspect: 0.6, category: 'chess', keywords: '체스 룩 chess rook 캐슬 castle 기물 말' },
-  { id: 'chess-bishop', label: '체스 비숍', aspect: 0.52, category: 'chess', keywords: '체스 비숍 chess bishop 기물 말' },
-  { id: 'chess-knight', label: '체스 나이트', aspect: 0.65, category: 'chess', keywords: '체스 나이트 chess knight 말 horse 기물' },
-  { id: 'chess-pawn', label: '체스 폰', aspect: 0.58, category: 'chess', keywords: '체스 폰 chess pawn 기물 말' },
+  { id: 'chess-king', label: '체스 킹', aspect: 72/98, category: 'chess', keywords: '체스 킹 chess king 기물 말' },
+  { id: 'chess-queen', label: '체스 퀸', aspect: 72/97.4, category: 'chess', keywords: '체스 퀸 chess queen 기물 말' },
+  { id: 'chess-rook', label: '체스 룩', aspect: 72/94, category: 'chess', keywords: '체스 룩 chess rook 캐슬 castle 기물 말' },
+  { id: 'chess-bishop', label: '체스 비숍', aspect: 72/97, category: 'chess', keywords: '체스 비숍 chess bishop 기물 말' },
+  { id: 'chess-knight', label: '체스 나이트', aspect: 72/94, category: 'chess', keywords: '체스 나이트 chess knight 말 horse 기물' },
+  { id: 'chess-pawn', label: '체스 폰', aspect: 72/92, category: 'chess', keywords: '체스 폰 chess pawn 기물 말' },
 ];
 
 const types = new Set(chessShapeCatalog.map(s => s.id));
@@ -135,10 +135,10 @@ function base(type) {
       ['C', 22, 91, 24, 88.5, 30, 88],
       ['C', 30, 84, 33, 82, 36, 81],
       ['C', 34, 74, 37, 66, 45, 58],
-      ['C', 42, 56, 38, 55, 33, 57],
-      ['C', 27, 60, 21, 58, 18, 54],
-      ['C', 15, 50, 17, 45, 22, 41],
-      ['C', 30, 33, 37, 25, 42, 18],
+      ['C', 41, 56, 37, 55, 33, 57],
+      ['C', 25, 61, 17, 60, 14, 55],
+      ['C', 12, 51, 14, 47, 19, 43],
+      ['C', 27, 36, 35, 27, 42, 18],
       ['L', 44, 6],
       ['L', 50, 13],
       ['C', 53, 10, 56, 8, 58, 6],
@@ -151,7 +151,7 @@ function base(type) {
     ]));
     details = [
       circle(43, 29, 2.2),
-      [p(21, 49), p(25, 48.5)],
+      [p(19, 51), p(23, 50)],
       [p(44, 18), p(55, 15)],
       trace([60, 15], [['C', 70, 26, 74, 44, 72, 60], ['C', 71, 68, 68, 74, 64, 80]]),
       [p(30, 88), p(76, 88)], [p(22, 94), p(84, 94)], [p(36, 81), p(70, 81)],

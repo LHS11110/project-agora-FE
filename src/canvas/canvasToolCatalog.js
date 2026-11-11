@@ -4,6 +4,7 @@ export const canvasToolCategories = [
     { id: 'select', label: '선택', description: '선택 및 이동', icon: 'select' },
     { id: 'hand', label: '손', description: '캔버스 화면 이동 · 마우스로 집어서 드래그', icon: 'hand' },
     { id: 'user-group', label: '사용자 그룹', description: '사용자 프로필을 모아 캔버스에 배치', icon: 'user' },
+    { id: 'anchor', label: '앵커', description: '클릭한 위치를 개인 앵커로 저장', icon: 'anchor' },
     { id: 'laser', label: '포인터', description: '레이저 포인터', icon: 'laser' },
   ] },
   { id: 'draw', label: '그리기', tools: [

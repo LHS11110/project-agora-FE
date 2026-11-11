@@ -371,7 +371,7 @@ export function useCanvasStageInteractions(options) {
     if (boardRef.current?.hasPointerCapture?.(event.pointerId)) boardRef.current.releasePointerCapture(event.pointerId);
   };
   const startDrawing = (event) => {
-    if(!canWriteCanvas&&activeTool!=='laser')return;
+    if(!canWriteCanvas&&!['laser','anchor'].includes(activeTool))return;
     if (drawingRef.current || event.button !== 0 && event.button !== 1) return;
     if (activeTool === 'hand') { startPan(event); return; }
     updateEraserCursor(event);
@@ -382,7 +382,8 @@ export function useCanvasStageInteractions(options) {
     }
     if (event.button === 1 || spacePressedRef.current) { startPan(event); return; }
     if (activeTool === 'select' && clickedEmptySpace) { startMarqueeSelection(event); return; }
-    if (!canvasSnapshotLoadedRef.current || (!['pen', 'laser'].includes(activeTool) && event.target.closest?.('.canvas-object'))) return;
+    if (!canvasSnapshotLoadedRef.current || (!['pen', 'laser','anchor'].includes(activeTool) && event.target.closest?.('.canvas-object'))) return;
+    if(activeTool==='anchor'){event.preventDefault();const point=pointerPosition(event);window.dispatchEvent(new CustomEvent('canvas-open-anchors',{detail:{point:{x:point.x*boardSize.width-boardSize.width/2,y:point.y*boardSize.height-boardSize.height/2}}}));setActiveTool('select');return;}
     if (activeTool === 'eraser') {
       event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);

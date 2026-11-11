@@ -1,3 +1,4 @@
+import {LinkSummary} from './LinkPreview.jsx';
 import {mediaPosition} from '../canvas/media/mediaModel.js';
 import { ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
@@ -6,7 +7,7 @@ import Icon from './Icon.jsx';
 import { inspectShareUrl } from './shareMedia.js';
 import './shared-playback.css';
 export function playbackTime(state,now=Date.now()){return Math.max(0,(state?.time||0)+(state&&!state.paused?Math.max(0,now-state.updatedAt)/1000:0));}
-export default function SharedMediaContent({ item, interactive = true, writable=true, onChange }) {
+export default function SharedMediaContent({ item, token, interactive = true, writable=true, onChange }) {
   useUiLocale();
   const media = inspectShareUrl(item?.url),frame=useRef(null),video=useRef(null),actor=useRef(globalThis.crypto?.randomUUID?.()||String(Math.random())),until=useRef(0),latest=useRef(null),observed=useRef(null),playerReady=useRef(false),reportedState=useRef(null),lastPublished=useRef(null),seekTimer=useRef(null),pendingSeek=useRef(0);
   const [position,setPosition]=useState(0),[duration,setDuration]=useState(0),[blocked,setBlocked]=useState(false);
@@ -82,5 +83,5 @@ export default function SharedMediaContent({ item, interactive = true, writable=
     return player(<video key={media.url} ref={video} className="shared-video-player" controls={interactive} playsInline preload="metadata" onPointerDown={e=>{until.current=0;e.stopPropagation();}} onWheel={e=>e.stopPropagation()} onLoadedMetadata={e=>{setDuration(e.currentTarget.duration);apply();}} onPlay={e=>{if(local()&&item.mediaState?.paused!==false)publish(false,e.currentTarget.currentTime);}} onPause={e=>{if(local()&&item.mediaState?.paused!==true)publish(true,e.currentTarget.currentTime);}} onSeeked={e=>{if(local()&&Math.abs(e.currentTarget.currentTime-sharedTime(item.mediaState))>.75)publish(e.currentTarget.paused,e.currentTarget.currentTime);}} onTimeUpdate={e=>setPosition(e.currentTarget.currentTime)} onEnded={e=>{if(local())publish(true,e.currentTarget.currentTime);}}>
       <source src={media.url}/>{ui('브라우저에서 이 동영상을 재생할 수 없습니다.')}</video>);
   }
-  return <a className="shared-link-card" href={media.url} target="_blank" rel="noopener noreferrer" onPointerDown={event => event.stopPropagation()}><span className="shared-link-icon"><Icon name="link" size={17}/></span><span className="shared-link-copy"><strong>{item.title||media.defaultTitle}</strong><small>{media.url}</small></span><Icon name="arrow" size={15}/></a>;
+  return <div className="shared-link-plain"><a href={media.url} target="_blank" rel="noopener noreferrer" onPointerDown={event=>event.stopPropagation()}>{media.url}</a><LinkSummary url={media.url} token={token}/></div>;
 }

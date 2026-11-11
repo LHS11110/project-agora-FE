@@ -418,6 +418,7 @@ export function useCanvasConnection(options) {
             setCanvas(current => ({...current,canvas_name:data.settings?.canvas_name||current?.canvas_name,description:data.settings?.description??current?.description}));
             return;
           }
+          if (data.type === 'canvas_participants_changed') { sendRaw({ type: 'canvas_settings_get' }); return; }
           if (data.type === 'canvas_settings_snapshot' || data.type === 'canvas_settings_changed') {
             setSettings(data.settings);
             setCanvas((current) => ({ ...current, canvas_name: data.settings?.canvas_name || current?.canvas_name, description: data.settings?.description ?? current?.description }));
