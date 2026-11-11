@@ -43,10 +43,10 @@ await page.reload();await page.waitForFunction(()=>window.frelogCanvas?.read().i
 await page.evaluate(()=>{history.pushState({},'', '/search');window.dispatchEvent(new PopStateEvent('popstate'));});await page.waitForURL('**/search');
 await page.evaluate(()=>{history.pushState({},'', '/canvases/999003');window.dispatchEvent(new PopStateEvent('popstate'));});await page.waitForFunction(()=>window.frelogCanvas?.read().items.box);assert.equal(await dialog.count(),0,'reentry reuses a valid grant');
 const other=await context.newPage();await other.goto(origin+'/canvases/999003');await other.waitForFunction(()=>window.frelogCanvas?.read().items.box);assert.equal(await other.getByRole('dialog',{name:'캔버스 비밀번호',exact:true}).count(),0,'new tab reuses the same user/canvas grant');await other.close();
+const originalGrant=await page.evaluate(key=>localStorage.getItem(key),key);
 clockOffset+=35*60*1000;await page.clock.fastForward(35*60*1000);
-await page.waitForFunction(key=>{const raw=localStorage.getItem(key);if(!raw)return false;return JSON.parse(atob(raw.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).exp*1000>Date.now();},key);
-assert.ok(renewals>0,'active canvas renews proof after the original 30 minutes');assert.equal(await dialog.count(),0,'active canvas never prompts after 30 minutes');
-await page.reload();await page.waitForFunction(()=>window.frelogCanvas?.read().items.box);assert.equal(await dialog.count(),0,'renewed grant is reused on reconnect');
+assert.ok(renewals>0,'active canvas renews its in-memory proof');assert.equal(await dialog.count(),0,'active canvas does not prompt after 30 minutes');assert.equal(await page.evaluate(key=>localStorage.getItem(key),key),originalGrant,'renewal does not extend the remembered grant');
+const reentryAttempts=attempts.length;await page.reload();await dialog.waitFor();assert.equal(attempts.length,reentryAttempts,'expired original grant prompts before access');await password.fill('correct secret');await password.press('Enter');await dialog.waitFor({state:'hidden'});await page.waitForFunction(()=>window.frelogCanvas?.read().items.box);
 const expired='header.'+Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)-1})).toString('base64url')+'.expired';
 await page.evaluate(({key,expired})=>{localStorage.setItem(key,expired);sessionStorage.setItem(key,expired);},{key,expired});const expiryAttempts=attempts.length;
 await page.reload();await dialog.waitFor();assert.equal(await password.getAttribute('type'),'password');assert.equal(attempts.length,expiryAttempts,'expired grant requires password without sending an access request');

@@ -139,12 +139,16 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
   });
   const width = Number(item.width) || ({ image: 0.3, code: 0.32, shape: 0.14, math: 0.2, text: 0.22, note: 0.22, table: 0.42, link: 0.3 }[item.kind] || 0.2);
   const height = Number(item.height) || ({ shape: 0.12, math: 0.09, text: 0.12, note: 0.15, table: 0.32, link: 0.15 }[item.kind] || 0.2);
-  const style = { ...objectFontStyle(item), ...objectShadowStyle(item), left: `${(Number(item.x) || 0) * 100}%`, top: `${(Number(item.y) || 0) * 100}%`, width: `${width * 100}%`, '--object-color': item.color || '#617d68', '--object-rotation': `${Number(item.rotation) || 0}deg` };
+  const shadowStyle = item?.kind === 'user-group' && item.shadowEnabled !== true
+    ? { '--object-shadow-box': 'none', '--object-shadow-filter': 'none' }
+    : objectShadowStyle(item);
+  const style = { ...objectFontStyle(item), ...shadowStyle, left: `${(Number(item.x) || 0) * 100}%`, top: `${(Number(item.y) || 0) * 100}%`, width: `${width * 100}%`, '--object-color': item.color || '#617d68', '--object-rotation': `${Number(item.rotation) || 0}deg` };
   if (item.height) style.height = `${height * 100}%`;
   const movable = activeTool === 'select' && selected && !item.locked && !readOnly;
   const classes = `canvas-object${presentationHidden?' presentation-entrance-pending':''} canvas-object-${item.kind}${movable ? ' movable' : ''}${selected ? ' selected' : ''}${connectionStartId === id ? ' connection-source' : ''}${item.height ? ' has-custom-height' : ''}`;
   const handlers = {
     ...(supportsObjectCorners(item) ? { 'data-corner-style': objectCornerStyle(item) } : {}),
+    ...(item?.kind === 'user-group' ? { 'data-shadow': item.shadowEnabled === true ? 'true' : 'false' } : {}),
     ref: editingBoundary.ref,
     'data-item-id': id,
     onDoubleClickCapture: (event) => handleObjectDoubleClick(event, { id, item, activeTool, editing, onStartEditing, onConnectorDoubleClick }),

@@ -19,6 +19,12 @@ export default function PortfolioViewer({portfolio,index,onExit,onAdvance,sendin
     return()=>{window.removeEventListener('keydown',keys,true);window.removeEventListener('wheel',block,{capture:true});window.removeEventListener('contextmenu',block,true);};
   },[onExit,onAdvance,busy,canAdvance,locked]);
   const remaining=Math.max(0,totalSteps-step);
-  const status=sending?ui('동기화 중'):busy?ui('애니메이션 재생 중'):!remaining&&!remainingFrames?ui('발표 완료'):ui('프레임 발표');
-  return <div className="portfolio-viewer" aria-live="polite"><div className="portfolio-viewer-title"><span className="portfolio-viewer-badge">{ui('프레임')} {index+1} / {pages.length}</span><strong>{page?.title||portfolio.title}</strong></div><div className="portfolio-step-hint"><kbd>Space</kbd><span>{status}</span></div><span className="portfolio-viewer-count">{ui('다음 애니메이션')} {remaining}</span><i className="portfolio-nav-divider"/><span className="portfolio-viewer-count">{ui('다음 프레임')} {remainingFrames}</span></div>;
+  const status=sending?ui('동기화 중'):busy?ui('애니메이션 재생 중'):remaining?ui('다음 애니메이션'):page?.nextFrameId?ui('다음 프레임'):ui('발표 완료');
+  return <div className="portfolio-viewer portfolio-status-bar" aria-live="polite">
+    <div className="portfolio-viewer-title"><strong>{page?.title||portfolio.title}</strong></div>
+    <i className="portfolio-nav-divider"/>
+    <div className="portfolio-step-hint"><kbd>Space</kbd><span>{status}</span></div>
+    <i className="portfolio-nav-divider"/>
+    <dl className="portfolio-status-counts"><div><dt>{ui('다음 애니메이션')}</dt><dd>{remaining}</dd></div><div><dt>{ui('다음 프레임')}</dt><dd>{remainingFrames}</dd></div></dl>
+  </div>;
 }

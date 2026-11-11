@@ -1,6 +1,7 @@
 import { researchSymbolCatalog } from './researchSymbols.js';
 import { logicGateCatalog } from './logicGates.js';
 import { volumeShapeCatalog } from './volumeGeometry.js';
+import { chessShapeCatalog } from './chessShapes.js';
 export const shapeCatalog = [
   { id: 'circle', label: '원', aspect: 1 },
   { id: 'ellipse', label: '타원', aspect: 1.8 },
@@ -24,12 +25,13 @@ export const shapeCatalog = [
   { id: 'heart', label: '하트', aspect: 1.1 },
   { id: 'trapezoid', label: '사다리꼴', aspect: 1.5 },
   { id: 'arrow', label: '화살표', aspect: 1.8 },
+  ...chessShapeCatalog,
   ...logicGateCatalog,
   ...researchSymbolCatalog,
   ...volumeShapeCatalog,
 ].map(shape => ({...shape,category:shape.category || 'basic'}));
 
-export const shapeCategories = {basic:'기본·용지',logic:'논리 회로',development:'개발·흐름도',data:'자료 구조',math:'수학',science:'과학·실험',engineering:'공학·회로',geometry:'입체·기하'};
+export const shapeCategories = {basic:'기본·용지',chess:'체스',logic:'논리 회로',development:'개발·흐름도',data:'자료 구조',math:'수학',science:'과학·실험',engineering:'공학·회로',geometry:'입체·기하'};
 
 export function shapeCreationSize(type, space) {
   const shape = shapeCatalog.find(entry => entry.id === type) || shapeCatalog.find(entry => entry.id === 'rectangle');

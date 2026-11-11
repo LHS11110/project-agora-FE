@@ -1,4 +1,6 @@
-import {newFrame,validFrame,validFrameField,createFrameStore,animationGroups} from '../canvas/portfolio/frameModel.js';
+import ScreenShareViewer from '../canvas/voice/ScreenShareViewer.jsx';
+import {newFrame,validFrame,validFrameField,createFrameStore,animationGroups,isColorDark} from '../canvas/portfolio/frameModel.js';
+import { groupMember } from '../canvas/userGroups/userGroupModel.js';
 import {AnimationContext,createAnimationStore} from '../canvas/portfolio/animationStore.js';
 import {PORTFOLIO_ID,newPortfolio,defaultAnimation,validAnimation} from '../canvas/portfolio/portfolioModel.js';
 import PortfolioViewer from '../canvas/portfolio/PortfolioViewer.jsx';
@@ -92,6 +94,7 @@ import VectorLayer from '../canvas/DepthVectorLayer.jsx';
 import { SocketSendBudget } from '../canvas/socketSendBudget.js';
 import { GRAPHICS_QUALITY_KEY, normalizeGraphicsQuality } from '../canvas/graphicsQuality.js';
 import LaserLayer from '../components/LaserLayer.jsx';
+import { LASER_COLOR } from '../canvas/canvasConstants.js';
 import RotationHandles from '../components/CanvasRotationHandles.jsx';
 import GroupRotationHandles from '../components/GroupRotationHandles.jsx';
 import { useGroupShortcuts } from '../canvas/useGroupShortcuts.js';
@@ -267,7 +270,12 @@ function CanvasWorkspace() {
   const { eraserWidth, changeEraserWidth, eraserMode, changeEraserMode } = useEraserSize();
   const [activeTool, setActiveTool] = useState('select');
   const [sharePosition, setSharePosition] = useState(null);
+  const [userGroupTemplate, setUserGroupTemplate] = useState(null);
+  const userGroupTemplateRef = useRef(null);
+  userGroupTemplateRef.current = userGroupTemplate;
   const { color, setColor, favoriteColors, saveFavoriteColor } = useCanvasPalette();
+  const [laserColor, setLaserColorState] = useState(() => { try { const v = localStorage.getItem('agora_laser_color'); return /^#[0-9a-f]{6}$/i.test(v || '') ? v : LASER_COLOR; } catch { return LASER_COLOR; } });
+  const setLaserColor = useCallback((value) => { if (!/^#[0-9a-f]{6}$/i.test(value || '')) return; setLaserColorState(value); try { localStorage.setItem('agora_laser_color', value); } catch { /* storage disabled */ } }, []);
   const [connectorColor, setConnectorColor] = useState('#8b8f8c');
   const [connectorWidth, setConnectorWidth] = useState(1.5);
   const [connectorHeadSize, setConnectorHeadSize] = useState(14);
@@ -1286,9 +1294,9 @@ function CanvasWorkspace() {
     addItem, setToast, setItems, patchItems, refreshSpatialIndex, spatialIndexRef,
     sendStrokeFrameChanges, pendingItemChangesRef, strokeSaveFlushRef,
     lastCursorSentAtRef, peerMeshRef, panRef, zoomHoldRef, zoomPointerPressRef, zoomSensitivity,
-    stageWheelHandlerRef, laserDrawingRef, setLaserStrokes, selectionRef, selectedItemIds,
+    stageWheelHandlerRef, laserDrawingRef, laserColor, setLaserStrokes, selectionRef, selectedItemIds,
     setSelectionBox, selectItems, canvasSnapshotLoadedRef: hostReadyRef, finishEditing, setConnectionStartId,
-    spacePressedRef, user, tableConfig, permission, setSharePosition, shapeType, shapeArrowStartHead, shapeArrowHeadSize,
+    spacePressedRef, user, userGroupTemplateRef, tableConfig, permission, setSharePosition, shapeType, shapeArrowStartHead, shapeArrowHeadSize,
     shapeArrowEndHead, shapeFillColor, shapeFillOpacity, shapeSketchFillOpacity, shapeVertexCount, shapeCornerStyle, shapeVisualStyle, shapeStrokeEnabled, shapeBorderWidth, color, noteColor, setActiveTool, startEditing, strokeWidth, penBrush, penOpacity,
     drawingRef, drawingSessionRef, draftRef, vectorDraftRef,
   });
@@ -1326,6 +1334,33 @@ function CanvasWorkspace() {
     setSharePosition(null);
     setActiveTool('select');
   };
+  const insertUserGroup = useCallback((definition) => {
+    if (!canWriteCanvas) return;
+    const id = createId();
+    const width = 0.3;
+    const height = 0.2;
+    const pos = centeredItemPosition(width, height);
+    const item = {
+      kind: 'user-group',
+      groupTitle: definition?.groupTitle || '사용자 그룹',
+      members: Array.isArray(definition?.members) && definition.members.length > 0
+        ? definition.members
+        : (user?.user_id != null ? [groupMember(user)] : []),
+      shadowEnabled: false,
+      ...(definition?.groupColor ? { groupColor: definition.groupColor } : {}),
+      x: pos.x,
+      y: pos.y,
+      width,
+      height,
+      permission,
+    };
+    if (addItem(id, item)) {
+      setActiveTool('select');
+      selectItems([id]);
+    } else {
+      setToast('연결이 복구되면 사용자 그룹을 다시 추가해주세요.');
+    }
+  }, [canWriteCanvas, centeredItemPosition, user, permission, addItem, setActiveTool, selectItems, setToast]);
   const uploadSheet = useSheetUpload({ canvasId, permission, addItem, centeredItemPosition, createId, setActiveTool, selectItems, setToast });
   const uploadPdf = usePdfUpload({ canvasId, token, permission, addItem, centeredItemPosition, createId, setActiveTool, selectItems, setToast });
   const uploadMedia = useMediaUpload({canvasId,token,permission,addItem,centeredItemPosition,createId,setActiveTool,selectItems,setToast});
@@ -1602,7 +1637,7 @@ function CanvasWorkspace() {
     .map(key=>[key,(...args)=>objectActionsRef.current[key](...args)])),[]);
 
 
-  return <AnimationContext.Provider value={animationStore}><ProjectContext.Provider value={projectStore}><CanvasGraphicsContext.Provider value={graphicsQuality}><div className={`canvas-app-page${portfolioViewing?' portfolio-view':''}`} data-presentation-settings={portfolioSettings} style={portfolioViewing&&presentationPage?.frame?{'--frame-screen-left':`${presentationPage.frame.x*boardSize.width*camera.scale+camera.x}px`,'--frame-screen-top':`${presentationPage.frame.y*boardSize.height*camera.scale+camera.y}px`,'--frame-screen-width':`${presentationPage.frame.width*boardSize.width*camera.scale}px`,'--frame-screen-height':`${presentationPage.frame.height*boardSize.height*camera.scale}px`,'--frame-view-fill':presentationPage.frame.fill||'#fff'}:undefined} data-frame-view={Boolean(portfolioViewing&&presentationPage?.frameId)} data-graphics-quality={graphicsQuality} data-theme={theme} data-info-collapsed={chrome.collapsed.info}>
+  return <AnimationContext.Provider value={animationStore}><ProjectContext.Provider value={projectStore}><CanvasGraphicsContext.Provider value={graphicsQuality}><div className={`canvas-app-page${portfolioViewing?' portfolio-view':''}`} data-presentation-settings={portfolioSettings} style={portfolioViewing&&presentationPage?.frame?{'--frame-screen-left':`${presentationPage.frame.x*boardSize.width*camera.scale+camera.x}px`,'--frame-screen-top':`${presentationPage.frame.y*boardSize.height*camera.scale+camera.y}px`,'--frame-screen-width':`${presentationPage.frame.width*boardSize.width*camera.scale}px`,'--frame-screen-height':`${presentationPage.frame.height*boardSize.height*camera.scale}px`,'--frame-view-fill':presentationPage.frame.fill||'#fff','--frame-content-color':isColorDark(presentationPage.frame.fill||'#fff')?'#f0f1f5':'#1e2029','--frame-content-muted':isColorDark(presentationPage.frame.fill||'#fff')?'#a3a4bb':'#5f6377'}:undefined} data-frame-view={Boolean(portfolioViewing&&presentationPage?.frameId)} data-graphics-quality={graphicsQuality} data-theme={theme} data-info-collapsed={chrome.collapsed.info}>
     <div style={{ display: 'contents' }} inert={!hostStatus.editable && !error ? '' : undefined}>
     <header className={`canvas-topbar${chrome.collapsed.info?' is-collapsed':''}`}>
       <ChromeToggle label={ui("캔버스 정보")} collapsed={chrome.collapsed.info} onToggle={()=>chrome.toggle('info')} controls="canvas-info-content" />
@@ -1616,7 +1651,7 @@ function CanvasWorkspace() {
       <ResizablePanel {...panelLayout.handle('tools')}><CanvasToolPanel activeTool={activeTool} onSelectTool={selectCanvasTool} color={color} onColorChange={setColor} onUploadPdf={uploadPdf} onUploadSheet={uploadSheet} onUploadImage={uploadImage} onUploadMedia={uploadMedia} favoriteColors={favoriteColors} onSaveFavorite={saveFavoriteColor} /></ResizablePanel>
       <CanvasQuickDock shortcutGuard={()=>hostSessionRef.current.editable && editingIdRef.current==null && !dragRef.current && !drawingRef.current && !panRef.current && !selectionRef.current} undoCount={undoCount} onUndo={undoCanvas} canUndo={hostStatus.editable && editingId == null} canWrite={canWriteCanvas} activeTool={activeTool} onSelectTool={selectCanvasTool} onUploadImage={uploadImage}
         toolsExpanded={!panelLayout.handle('tools').collapsed} onToggleTools={panelLayout.handle('tools').onToggle} />
-      <main className="board-region"><div className="board-topline"><div className="board-toolbar-actions">{presentationPages.length>0&&<button className="board-toggle" onClick={()=>showPortfolioPage(0)}>{ui('프레임 발표 시작')}</button>}<button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId);setShowVersions(false);setCanvasCodeSource(null); setShowCanvasCode(true); }}><Icon name="code" size={15} />{ui("캔버스 코드")}</button><button className="board-toggle" title={ui("변경 이력")} aria-haspopup="dialog" disabled={!canvasSnapshotLoadedRef.current} onClick={()=>{finishEditing(editingId);setShowCanvasCode(false);setShowVersions(true);}}><Icon name="document" size={15}/>{ui("변경 이력")}</button><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={()=>setShowRuntimeSettings(true)}><Icon name="settings" size={15}/>{ui("실행 환경")}</button><button className="zoom-button" aria-label={ui("확대")} title={ui("클릭: 한 단계 확대 · 길게 누르기: 계속 확대")} onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label={ui("축소")} title={ui("클릭: 한 단계 축소 · 길게 누르기: 계속 축소")} onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>{ui("맞춤")}</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />{"" + ui("격자") + " "}{showGrid ? ui("켜짐") : ui("꺼짐")}</button></div></div>
+      <main className="board-region"><div className="board-topline"><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId);setShowVersions(false);setCanvasCodeSource(null); setShowCanvasCode(true); }}><Icon name="code" size={15} />{ui("캔버스 코드")}</button><button className="board-toggle" title={ui("변경 이력")} aria-haspopup="dialog" disabled={!canvasSnapshotLoadedRef.current} onClick={()=>{finishEditing(editingId);setShowCanvasCode(false);setShowVersions(true);}}><Icon name="document" size={15}/>{ui("변경 이력")}</button><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={()=>setShowRuntimeSettings(true)}><Icon name="settings" size={15}/>{ui("실행 환경")}</button><button className="zoom-button" aria-label={ui("확대")} title={ui("클릭: 한 단계 확대 · 길게 누르기: 계속 확대")} onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" aria-label={ui("축소")} title={ui("클릭: 한 단계 축소 · 길게 누르기: 계속 축소")} onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>{ui("맞춤")}</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />{"" + ui("격자") + " "}{showGrid ? ui("켜짐") : ui("꺼짐")}</button></div></div>
         <div className={`canvas-stage ${activeTool === 'select' ? 'select-mode' : ''}${!['select', 'connect', 'hand'].includes(activeTool) ? ' creation-mode' : ''}${activeTool === 'pen' ? ' drawing-mode' : ''}${activeTool === 'laser' ? ' laser-mode' : ''}${activeTool === 'hand' ? ' hand-mode' : ''}${activeTool === 'eraser' ? ' eraser-active' : ''}${showGrid ? '' : ' no-grid'}`} data-grid-spacing={gridSpacing.x} data-grid-spacing-x={gridSpacing.x} data-grid-spacing-y={gridSpacing.y} style={{ ...canvasGridStyle(camera,gridSpacing), ...backgroundStyle }} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({ touchNavigation, activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion: cancelPanInertia, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, sendCursorPosition, pickVector: (event,doubleClick = false,capture = false) => {
             if (!['select', 'connect'].includes(activeTool) || event.button !== 0 || event.target.closest?.('.stage-label, button, input, textarea')) return false;
             const target=event.target.closest?.('.canvas-object');
@@ -1657,7 +1692,10 @@ function CanvasWorkspace() {
 <ResizablePanel {...panelLayout.handle('inspector')}><CanvasInspectorPanel portfolioFrames={framePages} portfolioActions={portfolioActions} portfolioViewing={portfolioViewing} graphicsQuality={graphicsQuality} changeGraphicsQuality={changeGraphicsQuality} spatialIndex={spatialIndex} updateContentSetting={updateContentSetting} updateChartItem={updateTableItem} onNavigateObject={focusCanvasObject} onOpenComments={id => { finishEditing(editingId); comments.open(id); }} {...{
         activeTool,
         canvasId,
-        canvasParticipants,
+        canvasParticipants: mentionParticipants,
+        onInsertUserGroup: insertUserGroup,
+        userGroupTemplate,
+        onUserGroupTemplateChange: setUserGroupTemplate,
         backgroundColor,
         setBackgroundColor,
         changeSelectionGroup,
@@ -1693,6 +1731,7 @@ function CanvasWorkspace() {
         setColor,
         favoriteColors,
         saveFavoriteColor,
+        laserColor, setLaserColor,
         setConnectorColor,
         setConnectorWidth,
         setNoteColor,
@@ -1724,7 +1763,7 @@ function CanvasWorkspace() {
         updateShapeArrowBend,
         zoomSensitivity
       }} /></ResizablePanel>
-<ResizablePanel {...panelLayout.handle('chat')} title={ui('채팅 · 통화')} callActive={voice.state.active}><CanvasChatPanel voice={voice} tab={communicationTab} onTabChange={setCommunicationTab} canWrite={canWriteCanvas} {...{ chatHistoryLoading, connection, hasOlderMessages, loadOlderMessages, message, messages, setMessage, submitMessage, chatMessageTotal }} participants={mentionParticipants} highlight={chatHighlight} onHighlightExpired={() => setChatHighlight(null)} onHighlightVisible={() => { if (chatJumpNote) { comments.dismiss(chatJumpNote); setChatJumpNote(null); } }} /></ResizablePanel>
+<ScreenShareViewer voice={voice}/><ResizablePanel {...panelLayout.handle('chat')} title={ui('채팅 · 통화')} callActive={voice.state.active}><CanvasChatPanel voice={voice} tab={communicationTab} onTabChange={setCommunicationTab} canWrite={canWriteCanvas} {...{ chatHistoryLoading, connection, hasOlderMessages, loadOlderMessages, message, messages, setMessage, submitMessage, chatMessageTotal }} participants={mentionParticipants} highlight={chatHighlight} onHighlightExpired={() => setChatHighlight(null)} onHighlightVisible={() => { if (chatJumpNote) { comments.dismiss(chatJumpNote); setChatJumpNote(null); } }} /></ResizablePanel>
     </div>}
     {passwordPrompt.prompt&&<CanvasPasswordDialog prompt={passwordPrompt.prompt} theme={theme}/>}
     {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{ui(toast)}</div>}

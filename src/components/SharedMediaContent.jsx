@@ -66,7 +66,7 @@ export default function SharedMediaContent({ item, interactive = true, writable=
   },[item.url]);
   if (!media) return <div className="shared-media-invalid">{ui('올바른 주소가 아닙니다.')}</div>;
   const player = content => <div className="shared-playback" data-object-action={interactive && media.mediaType === 'youtube' ? 'playback' : undefined} onPointerDown={interactive && media.mediaType === 'youtube' ? e=>e.stopPropagation() : undefined} data-playback-paused={item.mediaState?.paused!==false}>
-   {interactive?content:<div className="shared-media-preview">{content}<div className="shared-media-activate" aria-hidden="true"/></div>}
+   <div className="shared-media-preview">{content}{!interactive&&<div className="shared-media-activate" aria-hidden="true"/>}</div>
    {interactive&&writable&&onChange&&<div className="shared-playback-controls" data-object-action="playback" onPointerDown={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()}>
     <button aria-label={ui(item.mediaState?.paused===false?'공유 일시정지':'공유 재생')} onClick={()=>{clearTimeout(seekTimer.current);seekTimer.current=null;const paused=(lastPublished.current?.updatedAt>=(item.mediaState?.updatedAt||0)?lastPublished.current:item.mediaState)?.paused===false;const time=position;until.current=Date.now()+500;publish(paused,time);if(video.current){if(paused)video.current.pause();else video.current.play().catch(()=>setBlocked(true));}else command(paused?'pauseVideo':'playVideo');}}>{ui(item.mediaState?.paused===false?'일시정지':'재생')}</button>
     <input aria-label={ui('공유 재생 위치')} type="range" min={0} max={Math.max(1,duration,position)} step={.1} value={position} onChange={e=>seek(Number(e.target.value))}/><span>{Math.floor(position)}s</span>

@@ -196,3 +196,57 @@
 @media(max-width:650px){.selection-actions-buttons .button{flex:1}}
 .online-indicator.connecting{color:#9c7740}.online-indicator.connecting i{background:#d4a75d;animation:pulse 1.2s infinite}.online-indicator.disconnected{color:#b16e59}.online-indicator.disconnected i{background:#d9866b}
 @media(max-width:650px){.canvas-top-right .connection-pill{width:auto;min-width:0;height:23px;padding:0 7px;font-size:7px;flex:0 0 auto}}
+
+/* Notebook dark mode high-contrast text and surface styling */
+.canvas-app-page[data-theme="dark"] .notebook-object,
+[data-theme="dark"] .notebook-object {
+  --panel-bg: var(--surface, #20212c);
+  --border-color: var(--line, #363747);
+  --text-color: var(--ink-strong, #ececf7);
+  color: var(--ink-strong, #ececf7)!important;
+}
+.canvas-app-page[data-theme="dark"] .notebook-content,
+[data-theme="dark"] .notebook-content {
+  background: var(--surface, #20212c)!important;
+  color: var(--ink-strong, #ececf7)!important;
+}
+.canvas-app-page[data-theme="dark"] .notebook-content header,
+.canvas-app-page[data-theme="dark"] .notebook-content nav,
+.canvas-app-page[data-theme="dark"] .notebook-content footer {
+  border-color: var(--line, #363747);
+  color: var(--ink-strong, #ececf7);
+}
+.canvas-app-page[data-theme="dark"] .notebook-content header strong,
+.canvas-app-page[data-theme="dark"] .notebook-content header span,
+.canvas-app-page[data-theme="dark"] .notebook-content footer span {
+  color: inherit;
+}
+.canvas-app-page[data-theme="dark"] .notebook-content button,
+.canvas-app-page[data-theme="dark"] .notebook-content select {
+  background: var(--surface-soft, #262733);
+  border-color: var(--line, #363747);
+  color: var(--ink-strong, #ececf7);
+}
+.canvas-app-page[data-theme="dark"] .notebook-cell {
+  border-color: var(--line, #363747);
+}
+.canvas-app-page[data-theme="dark"] .notebook-cell-toolbar {
+  background: var(--surface-soft, #262733);
+  color: var(--ink-muted, #a3a4bb);
+}
+.canvas-app-page[data-theme="dark"] .notebook-cell textarea {
+  color: var(--ink-strong, #ececf7)!important;
+  background: transparent;
+}
+.canvas-app-page[data-theme="dark"] .notebook-outputs pre {
+  color: var(--ink-strong, #ececf7)!important;
+}
+.canvas-app-page[data-theme="dark"] .notebook-markdown {
+  color: var(--ink-strong, #ececf7)!important;
+}
+.canvas-app-page[data-theme="dark"] .notebook-markdown :is(h1,h2,h3,h4,h5,h6,p,li,span,strong,em) {
+  color: inherit;
+}
+.canvas-app-page[data-theme="dark"] .notebook-error {
+  color: #ff7588!important;
+}

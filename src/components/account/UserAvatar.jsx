@@ -9,7 +9,8 @@ export function profileImageUrl(user) {
 export default function UserAvatar({ user, token, className = '', color, revision = '' }) {
   useUiLocale();
   const { user: currentUser } = useAuth();
-  const ownProfile = user?.user_id != null && currentUser?.user_id != null && String(user.user_id) === String(currentUser.user_id);
+  const ownProfile = (user?.user_id != null && currentUser?.user_id != null && String(user.user_id) === String(currentUser.user_id)) ||
+    (Boolean(user?.nickname && currentUser?.nickname) && user.nickname === currentUser.nickname && Number(user.tag_number) === Number(currentUser.tag_number));
   const source = profileImageUrl(ownProfile ? currentUser : user);
   const imageRevision = revision || (ownProfile ? currentUser.avatar_revision : user?.avatar_revision) || 0;
   return <span title={`${user?.nickname || ui("사용자")}${user?.tag_number != null ? `#${user.tag_number}` : ''}`} className={`user-avatar ${className}`} style={color ? { borderColor: color, color } : undefined}>

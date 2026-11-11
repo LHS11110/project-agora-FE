@@ -99,3 +99,10 @@ test('Web Audio primes native remote playout while preserving exactly one audibl
   call.drop('b');assert.equal(player.paused,true);assert.equal(player.srcObject,null);
  }finally{call.close();}
 });
+test('screen share announces, attaches video, removes tracks, and ends on leave',async()=>{
+ const screenTrack={kind:'video',stopped:false,stop(){this.stopped=true;}},screen={getTracks:()=>[screenTrack],getVideoTracks:()=>[screenTrack]};
+ class ScreenPeer extends FakePeer{addTrack(track){if(track.kind==='video')return this.videoSender={track};}removeTrack(sender){this.removed=sender;}}
+ const {call,events}=fixture({Peer:ScreenPeer,media:{getUserMedia:async()=>({getTracks:()=>[],getAudioTracks:()=>[]}),getDisplayMedia:async()=>screen}});
+ try{await call.join();await call.startScreen();const link=call.links.get('b');assert.equal(call.snapshot.screenSharing,true);assert.equal(link.screenSender.track,screenTrack);assert.equal(events.at(-1).screen_sharing,true);call.stopScreen();assert.equal(link.pc.removed.track,screenTrack);assert.equal(screenTrack.stopped,true);assert.equal(events.at(-1).screen_sharing,false);assert.equal(call.snapshot.screenSharing,false);}finally{call.close();}
+});
+test('leaving while screen picker is open stops late capture',async()=>{let finish;const track={stop(){this.stopped=true;}},screen={getTracks:()=>[track],getVideoTracks:()=>[track]};const {call}=fixture({media:{getUserMedia:async()=>({getTracks:()=>[],getAudioTracks:()=>[]}),getDisplayMedia:()=>new Promise(resolve=>finish=resolve)}});await call.join();const pending=call.startScreen();call.leave();finish(screen);await pending;assert.equal(track.stopped,true);assert.equal(call.snapshot.screenSharing,false);call.close();});

@@ -472,7 +472,7 @@ export function useCanvasPeerEvents(options) {
       const next = {
         id: key,
         peerId: peer.peer_id,
-        color: LASER_COLOR,
+        color: /^#[0-9a-f]{6}$/i.test(String(data?.color || '')) ? data.color : previous?.color || LASER_COLOR,
         pointBySequence,
         points,
         active: previous?.endedAt ? false : phase !== 'end',

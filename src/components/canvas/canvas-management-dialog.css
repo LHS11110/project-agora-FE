@@ -6,9 +6,12 @@ dialog.canvas-management-dialog{
   background:var(--surface);color:var(--ink-strong);color-scheme:light;
 }
 dialog.canvas-management-dialog[data-theme="dark"]{
-  --surface:#202923;--surface-soft:#1b231e;--line:#35433a;
-  --ink-strong:#e0e9df;--ink-muted:#9ba99d;--panel-soft:#28342c;
+  --surface:#20212c;--surface-soft:#262733;--line:#363747;
+  --ink-strong:#ececf7;--ink-muted:#a3a4bb;--panel-soft:#2d2d3e;
+  --dialog-accent:#ad88ff;
   color-scheme:dark;
+  background:var(--surface);
+  color:var(--ink-strong);
 }
 dialog.canvas-management-dialog::backdrop{background:#14241d80;backdrop-filter:blur(3px)}
 .canvas-management-dialog .participant-chip button:disabled{opacity:.4;cursor:wait}
@@ -22,8 +25,8 @@ dialog.canvas-management-dialog::backdrop{background:#14241d80;backdrop-filter:b
   border-color:var(--line);background:var(--surface);color:var(--ink-strong);
 }
 .canvas-management-dialog .button-outline:hover:not(:disabled){background:var(--panel-soft);border-color:var(--ink-muted)}
-.canvas-management-dialog .button-dark{background:#354e3f;color:#fff;box-shadow:none}
-.canvas-management-dialog .button-dark:hover:not(:disabled){background:#496652}
+.canvas-management-dialog .button-dark{background:#7963ba;color:#fff;box-shadow:none}
+.canvas-management-dialog .button-dark:hover:not(:disabled){background:#6c57ad}
 .canvas-management-dialog .button:disabled{opacity:.45;cursor:not-allowed}
 .canvas-management-dialog .icon-button{color:var(--ink-muted)}
 .canvas-management-dialog .icon-button:hover{background:var(--panel-soft);color:var(--ink-strong)}
@@ -32,3 +35,26 @@ dialog.canvas-management-dialog::backdrop{background:#14241d80;backdrop-filter:b
 .canvas-management-dialog .plain-input{background:var(--surface-soft);color:var(--ink-strong);border-color:var(--line)}
 .canvas-management-dialog .settings-dialog-footer{border-color:var(--line);color:var(--ink-muted)}
 .canvas-management-dialog .settings-dialog-footer{justify-content:flex-end}
+
+/* Dark theme high-contrast support inside settings dialogs */
+dialog.canvas-management-dialog[data-theme="dark"] :is(h2,h3,strong,b,span){color:inherit}
+dialog.canvas-management-dialog[data-theme="dark"] .form-field>span{color:var(--ink-strong)}
+dialog.canvas-management-dialog[data-theme="dark"] :is(p,small){color:var(--ink-muted)}
+dialog.canvas-management-dialog[data-theme="dark"] .plain-input{background:var(--surface-soft);color:var(--ink-strong);border-color:var(--line)}
+dialog.canvas-management-dialog[data-theme="dark"] .plain-input::placeholder{color:var(--ink-muted)}
+dialog.canvas-management-dialog[data-theme="dark"] .canvas-delete-settings{background:#2a1f26;border-color:#5a2d38}
+dialog.canvas-management-dialog[data-theme="dark"] .canvas-delete-settings>strong,
+dialog.canvas-management-dialog[data-theme="dark"] .canvas-delete-settings>a{color:#f695a5}
+dialog.canvas-management-dialog[data-theme="dark"] .canvas-delete-settings>p{color:#d6a3b0!important}
+dialog.canvas-management-dialog[data-theme="dark"] .access-management-details{background:var(--surface-soft);border-color:var(--line)}
+dialog.canvas-management-dialog[data-theme="dark"] .access-management-details>summary{color:var(--ink-strong)}
+dialog.canvas-management-dialog[data-theme="dark"] .access-management-members label{color:var(--ink-strong)}
+dialog.canvas-management-dialog[data-theme="dark"] .group-permissions-header{background:var(--surface-soft);color:var(--ink-muted)}
+dialog.canvas-management-dialog[data-theme="dark"] .group-permissions-row{border-color:var(--line);color:var(--ink-strong)}
+dialog.canvas-management-dialog[data-theme="dark"] .canvas-role-list button{background:var(--surface-soft);border-color:var(--line);color:var(--ink-strong)}
+dialog.canvas-management-dialog[data-theme="dark"] .canvas-cover-editor-placeholder{background:var(--surface-soft);color:var(--ink-muted);border-color:var(--line)}
+dialog.canvas-management-dialog[data-theme="dark"] .canvas-cover-filename{color:var(--ink-muted)}
+dialog.canvas-management-dialog[data-theme="dark"] .bot-management-row{border-color:var(--line)}
+dialog.canvas-management-dialog[data-theme="dark"] .bot-management-row strong{color:var(--ink-strong)}
+dialog.canvas-management-dialog[data-theme="dark"] .bot-management-row small{color:var(--ink-muted)}
+dialog.canvas-management-dialog[data-theme="dark"] .bot-secret-card{background:var(--surface-soft);border-color:var(--line);color:var(--ink-strong)}

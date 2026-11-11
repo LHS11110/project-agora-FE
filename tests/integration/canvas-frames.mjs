@@ -32,7 +32,7 @@ async function open(role){
 }
 const wait=async fn=>{for(let n=0;n<100;n++){if(fn())return;await new Promise(r=>setTimeout(r,50));}assert.ok(fn(),'stored state did not converge');};
 const active=client=>client.page.locator('[data-item-id=board]').evaluate(el=>el.getAnimations().filter(a=>a.id.startsWith('portfolio:')).map(a=>({id:a.id,time:a.currentTime,state:a.playState})));
-async function enter(client){await client.controls.getByRole('button',{name:'프레임 발표 시작',exact:true}).click();await client.page.locator('.portfolio-view[data-frame-view=true]').waitFor();}
+async function enter(client){await client.controls.getByRole('button',{name:'프레임 내부 보기',exact:true}).first().click();await client.page.locator('.portfolio-view[data-frame-view=true]').waitFor();}
 async function pressSpace(client){await client.page.locator('.canvas-stage').focus();await client.page.keyboard.press('Space');}
 const count=async(client,id)=>client.page.locator(`[data-item-id=${id}]`).evaluate(el=>el.getAnimations().filter(a=>a.id.startsWith('portfolio:')).map(a=>a.id));
 try{

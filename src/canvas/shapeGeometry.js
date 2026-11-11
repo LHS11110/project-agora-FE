@@ -1,5 +1,6 @@
 import { researchSymbolGeometry } from './researchSymbols.js';
 import { logicGateGeometry } from './logicGates.js';
+import { chessShapeGeometry } from './chessShapes.js';
 import { hasPolygonVertices, hasShapeCorners, polygonVertexCount } from './shapeAppearance.js';
 import { volumeGeometry } from './volumeGeometry.js';
 
@@ -80,6 +81,8 @@ export function shapeOutlinePaths(type, width, height, options = {}) {
   if (research) return research.paths;
   const logic = logicGateGeometry(type, width, height);
   if (logic) return logic.paths;
+  const chess = chessShapeGeometry(type, width, height);
+  if (chess) return chess.paths;
   let paths = createShapeOutlinePaths(type, width, height, options);
   if (options.cornerStyle === 'rounded' && hasShapeCorners(type)) paths = paths.map(roundPolygonCorners);
   if (type === 'arrow') return paths;
@@ -100,6 +103,8 @@ export function shapeFillPaths(type, width, height, options = {}) {
   if (research) return research.fills;
   const logic = logicGateGeometry(type, width, height);
   if (logic) return logic.fills;
+  const chess = chessShapeGeometry(type, width, height);
+  if (chess) return chess.fills;
   if (type === 'arrow') return [];
   const paths = shapeOutlinePaths(type, width, height, options);
   if (type === 'cylinder') return [[...paths[0], ...paths[1].slice(32).reverse()]];

@@ -33,10 +33,10 @@ export function useCanvasStageInteractions(options) {
     addItem, setToast, setItems, patchItems, refreshSpatialIndex, spatialIndexRef,
     sendStrokeFrameChanges, pendingItemChangesRef, strokeSaveFlushRef,
     lastCursorSentAtRef, peerMeshRef, panRef, zoomHoldRef, zoomPointerPressRef,
-    zoomSensitivity, stageWheelHandlerRef, laserDrawingRef, setLaserStrokes,
+    zoomSensitivity, stageWheelHandlerRef, laserDrawingRef, laserColor = LASER_COLOR, setLaserStrokes,
     selectionRef, selectedItemIds, setSelectionBox, selectItems,
     canvasSnapshotLoadedRef, finishEditing, setConnectionStartId, spacePressedRef,
-    user, tableConfig, permission, setSharePosition, shapeType, shapeArrowStartHead, shapeArrowHeadSize,
+    user, userGroupTemplateRef, tableConfig, permission, setSharePosition, shapeType, shapeArrowStartHead, shapeArrowHeadSize,
     shapeArrowEndHead, shapeFillColor, shapeFillOpacity, shapeSketchFillOpacity, shapeVertexCount, shapeCornerStyle, shapeVisualStyle, shapeStrokeEnabled, shapeBorderWidth, color, noteColor, setActiveTool, startEditing, strokeWidth, penBrush, penOpacity,
     drawingRef, drawingSessionRef, draftRef, vectorDraftRef,
   } = options;
@@ -287,7 +287,7 @@ export function useCanvasStageInteractions(options) {
         active.lastSentPoint = point;
         peerMeshRef.current?.sendLaser({
           type: 'laser', phase: 'point', stroke_id: active.strokeId, sequence: active.sequence,
-          x: point.x, y: point.y,
+          x: point.x, y: point.y, color: laserColor,
         });
       }
     }
@@ -399,7 +399,10 @@ export function useCanvasStageInteractions(options) {
     if (activeTool === 'user-group') {
       event.preventDefault();
       const point = pointerPosition(event), id = createId();
-      const item = { kind: 'user-group', groupTitle: '사용자 그룹', members: user?.user_id != null ? [groupMember(user)] : [], x: point.x - .15, y: point.y - .1, width: .3, height: .2, permission };
+      const tpl = userGroupTemplateRef?.current;
+      const groupTitle = tpl?.groupTitle || '사용자 그룹';
+      const members = Array.isArray(tpl?.members) && tpl.members.length > 0 ? tpl.members : (user?.user_id != null ? [groupMember(user)] : []);
+      const item = { kind: 'user-group', groupTitle, members, shadowEnabled: false, ...(tpl?.groupColor ? { groupColor: tpl.groupColor } : {}), x: point.x - .15, y: point.y - .1, width: .3, height: .2, permission };
       if (!addItem(id, item)) setToast('연결이 복구되면 사용자 그룹을 다시 추가해주세요.');
       else { setActiveTool('select'); selectItems([id]); }
       return;
@@ -482,9 +485,9 @@ export function useCanvasStageInteractions(options) {
         lastSentAt: performance.now(), points: [point],
       };
       setLaserStrokes((current) => [...current, {
-        id: key, color: LASER_COLOR, points: [point], active: true, updatedAt: now, endedAt: null,
+        id: key, color: laserColor, points: [point], active: true, updatedAt: now, endedAt: null,
       }]);
-      peerMeshRef.current?.sendLaser({ type: 'laser', phase: 'start', stroke_id: strokeId, sequence: 0, x: point.x, y: point.y });
+      peerMeshRef.current?.sendLaser({ type: 'laser', phase: 'start', stroke_id: strokeId, sequence: 0, x: point.x, y: point.y, color: laserColor });
       return;
     }
     if (activeTool !== 'pen') return;
