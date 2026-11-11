@@ -33,7 +33,8 @@ import { useEditingBoundary } from './useEditingBoundary.js';
 import './image-object.css';
 import { scaleObjectElement } from './ScalableObjectContent.jsx';
 import { handleObjectDoubleClick } from './objectDoubleClick.js';
-import { cloneElement, memo, useMemo, useLayoutEffect, useRef } from 'react';
+import { cloneElement, memo, useContext, useMemo, useLayoutEffect, useRef } from 'react';
+import {PresentationContext} from './portfolio/presentationContext.js';
 import Icon from '../components/Icon.jsx';
 import MarkdownText from '../components/MarkdownText.jsx';
 import RawEditableTable from '../components/EditableTable.jsx';
@@ -66,6 +67,7 @@ const ConnectorLabel=memo(RawConnectorLabel,objectContentPropsEqual);
 
 function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=false, canExecute=true, id, item, bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, token, runtimeStore, onUndo, onStartEditing, onTextChange, onTextColorChange, onMetadataChange, onFormulaChange, onTableChange, onQuestionChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
   useUiLocale();
+  const presentation=useContext(PresentationContext);
   const contentLatest=useRef(null);contentLatest.current={id,onTableChange,onQuestionChange,onStartEditing,onStopEditing};
   const contentActions=useMemo(()=>({
     change:patch=>{const c=contentLatest.current;return c.onQuestionChange(c.id,patch);},
@@ -235,7 +237,7 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
   </div>);
   if (item.kind === 'table') return withResizeHandles(<div key={id} className={`${classes} canvas-table-object`} style={style} data-item-id={id} {...handlers}><EditableTable item={item} editingActive={editing} enabled={activeTool === 'select' && selected && !item.locked && !readOnly} onStartEditing={contentActions.start} onStopEditing={contentActions.stop} onChange={contentActions.table} /></div>);
   if (item.kind === 'project') return withResizeHandles(<div className={`${classes} canvas-project-frame`} style={style} {...handlers}><ProjectObject id={id} item={item} readOnly={readOnly||item.locked||activeTool!=='select'}/></div>);
-  if (item.kind === 'value') return withResizeHandles(<div className={`${classes} canvas-value-frame`} style={style} {...handlers}><ValueObject id={id} item={item} readOnly={readOnly||item.locked||activeTool!=='select'} onChange={onQuestionChange}/></div>);
+  if (item.kind === 'value') return withResizeHandles(<div className={`${classes} canvas-value-frame`} style={style} {...handlers}><ValueObject id={id} item={item} readOnly={(readOnly&&!presentation)||item.locked||activeTool!=='select'} onChange={onQuestionChange}/></div>);
   if (item.kind === 'question') return withResizeHandles(<div className={`${classes} canvas-question-object`} style={style} {...handlers}><QuestionCard id={id} item={item} readOnly={readOnly||item.locked||activeTool!=='select'} onChange={onQuestionChange} /></div>);
   if (item.kind === 'chart') return withResizeHandles(<div key={id} className={`${classes} canvas-chart-object`} style={style} data-item-id={id} {...handlers}><ChartView item={item} /></div>);
   if (item.kind === 'shape') {

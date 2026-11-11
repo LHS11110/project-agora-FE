@@ -1,11 +1,24 @@
 import {useEffect,useState} from 'react';
 import {ui} from '../../i18n/locale.js';
-import Icon from '../../components/Icon.jsx';
-export default function PortfolioViewer({portfolio,index,onPage,onExit,onSettings,onAdvance,sending=false,busyUntil=0,step=0,totalSteps=0,canAdvance=true}){
- const pages=portfolio.portfolioPages||[],page=pages[index],frame=Boolean(page?.frameId),[now,setNow]=useState(Date.now());
- useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),150);return()=>clearInterval(timer);},[]);
- const busy=sending||now<busyUntil,advance=()=>{if(!busy&&canAdvance)onAdvance?.();};
- useEffect(()=>{const keys=e=>{if(e.repeat)return;if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();onExit();return;}if(e.target.closest('input,textarea,select,button,[contenteditable=true]'))return;if(e.code==='Space'||e.key==='ArrowRight'){e.preventDefault();e.stopImmediatePropagation();if(frame)advance();else if(index<pages.length-1)onPage(index+1);}else if(e.key==='ArrowLeft'&&index>0){e.preventDefault();e.stopImmediatePropagation();onPage(index-1);}};window.addEventListener('keydown',keys,true);return()=>window.removeEventListener('keydown',keys,true);},[index,pages.length,onExit,onPage,onAdvance,busy,canAdvance,frame]);
- const fullscreen=()=>{const root=document.querySelector('.canvas-app-page');if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});else root?.requestFullscreen?.().catch(()=>{});};
- return <div className="portfolio-viewer" data-object-action="portfolio-viewer"><div className="portfolio-viewer-title"><span className="portfolio-viewer-badge">{ui(frame?'프레임 발표':'포트폴리오')}</span><strong>{page?.title||portfolio.title}</strong>{page?.notes&&<p>{page.notes}</p>}</div><nav aria-label={ui('포트폴리오 장면 탐색')}><button className="portfolio-icon-button" aria-label={ui('이전 장면')} disabled={!index} onClick={()=>onPage(index-1)}>‹</button><span className="portfolio-viewer-count">{index+1} / {pages.length}</span><button className="portfolio-icon-button" aria-label={ui(frame?'다음 단계':'다음 장면')} disabled={frame?(!canAdvance||busy||step>=totalSteps&&!page.nextFrameId):index>=pages.length-1} onClick={()=>frame?advance():onPage(index+1)}>›</button>{frame&&<span className="portfolio-step-hint"><kbd>Space</kbd><span>{sending?ui('동기화 중'):busy?ui('애니메이션 재생 중'):step<totalSteps?ui('다음 애니메이션'):page.nextFrameId?ui('다음 프레임'):ui('발표 완료')}</span><small>{Math.min(step,totalSteps)} / {totalSteps}</small></span>}<i className="portfolio-nav-divider"/><button className="portfolio-icon-button" title={ui('전체 화면')} aria-label={ui('전체 화면')} onClick={fullscreen}><Icon name="grid" size={15}/></button><button className="portfolio-icon-button" title={ui('설정 패널')} aria-label={ui('설정 패널')} onClick={onSettings}><Icon name="settings" size={15}/></button><button className="portfolio-exit-button" onClick={onExit}>{ui('보기 종료')}</button></nav></div>;
+// Status-only presentation bar. Space advances; every other key is swallowed so
+// viewers can only run code, play media and enter values by clicking objects.
+const typing=target=>target?.closest?.('input,textarea,select,[contenteditable=true],.canvas-code-editor,.monaco-editor');
+export default function PortfolioViewer({portfolio,index,onExit,onAdvance,sending=false,busyUntil=0,step=0,totalSteps=0,remainingFrames=0,canAdvance=true,locked=false}){
+  const pages=portfolio.portfolioPages||[],page=pages[index],[now,setNow]=useState(Date.now());
+  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),150);return()=>clearInterval(timer);},[]);
+  const busy=sending||now<busyUntil;
+  useEffect(()=>{
+    const keys=e=>{
+      if(typing(e.target))return;
+      if(e.key==='Escape'&&!locked){e.preventDefault();e.stopImmediatePropagation();onExit();return;}
+      e.preventDefault();e.stopImmediatePropagation();
+      if(e.code==='Space'&&!e.repeat&&!busy&&canAdvance)onAdvance?.();
+    };
+    const block=e=>{e.preventDefault();e.stopImmediatePropagation();};
+    window.addEventListener('keydown',keys,true);window.addEventListener('wheel',block,{capture:true,passive:false});window.addEventListener('contextmenu',block,true);
+    return()=>{window.removeEventListener('keydown',keys,true);window.removeEventListener('wheel',block,{capture:true});window.removeEventListener('contextmenu',block,true);};
+  },[onExit,onAdvance,busy,canAdvance,locked]);
+  const remaining=Math.max(0,totalSteps-step);
+  const status=sending?ui('동기화 중'):busy?ui('애니메이션 재생 중'):!remaining&&!remainingFrames?ui('발표 완료'):ui('프레임 발표');
+  return <div className="portfolio-viewer" aria-live="polite"><div className="portfolio-viewer-title"><span className="portfolio-viewer-badge">{ui('프레임')} {index+1} / {pages.length}</span><strong>{page?.title||portfolio.title}</strong></div><div className="portfolio-step-hint"><kbd>Space</kbd><span>{status}</span></div><span className="portfolio-viewer-count">{ui('다음 애니메이션')} {remaining}</span><i className="portfolio-nav-divider"/><span className="portfolio-viewer-count">{ui('다음 프레임')} {remainingFrames}</span></div>;
 }

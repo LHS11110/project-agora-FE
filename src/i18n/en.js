@@ -2463,4 +2463,9 @@ export default {
   "마지막 프레임입니다.": "This is the last frame.",
   "발표 화면 프레임": "Presentation frame",
   "Lean 4 Proof Notebook R&D Studio 열기": "Open Lean 4 Proof Notebook R&D Studio",
+  "프레임 발표 시작": "Start frame presentation",
+  "첫 프레임으로": "First frame",
+  "현재 프레임 애니메이션 재생": "Play current frame animations",
+  "현재 프레임 애니메이션 정지": "Stop current frame animations",
+  "프레임 발표 보기 링크를 복사했습니다.": "Frame presentation link copied.",
 };

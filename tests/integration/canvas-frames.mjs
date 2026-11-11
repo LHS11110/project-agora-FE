@@ -32,11 +32,13 @@ async function open(role){
 }
 const wait=async fn=>{for(let n=0;n<100;n++){if(fn())return;await new Promise(r=>setTimeout(r,50));}assert.ok(fn(),'stored state did not converge');};
 const active=client=>client.page.locator('[data-item-id=board]').evaluate(el=>el.getAnimations().filter(a=>a.id.startsWith('portfolio:')).map(a=>({id:a.id,time:a.currentTime,state:a.playState})));
-async function enter(client){await client.controls.getByRole('button',{name:'포트폴리오 보기',exact:true}).click();await client.page.locator('.portfolio-view[data-frame-view=true]').waitFor();}
+async function enter(client){await client.controls.getByRole('button',{name:'프레임 발표 시작',exact:true}).click();await client.page.locator('.portfolio-view[data-frame-view=true]').waitFor();}
 async function pressSpace(client){await client.page.locator('.canvas-stage').focus();await client.page.keyboard.press('Space');}
 const count=async(client,id)=>client.page.locator(`[data-item-id=${id}]`).evaluate(el=>el.getAnimations().filter(a=>a.id.startsWith('portfolio:')).map(a=>a.id));
 try{
  const admin=await open('admin'),viewer=await open('viewer');
+ for(const name of ['프레임 만들기','포트폴리오 만들기','선택 객체로 장면 추가'])assert.equal(await admin.controls.getByRole('button',{name,exact:true}).count(),0);assert.equal(await admin.controls.getByLabel('장면 제목',{exact:true}).count(),0);
+ await admin.page.evaluate(()=>{window.copiedViewingLink='';Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>{window.copiedViewingLink=value;}}});});assert.ok(await admin.controls.getByRole('button',{name:'보기 링크 복사',exact:true}).isDisabled(),'viewing links require a selected frame');
  await enter(admin);await wait(()=>latest['portfolio-settings'].portfolioCursor?.startedAt>0);await enter(viewer);
  await admin.page.waitForFunction(()=>document.querySelector('[data-item-id=board]')?.classList.contains('presentation-entrance-pending'));
  assert.equal(await admin.page.locator('[data-item-id=final]').count(),0);assert.equal(await admin.page.locator('[data-item-id=f1]').count(),0,'frame border is excluded from presentation');
