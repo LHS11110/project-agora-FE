@@ -1,0 +1,8 @@
+import assert from 'node:assert/strict';
+const {chromium}=await import(process.env.AGORA_E2E_PLAYWRIGHT_MODULE||'playwright-core');const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox']});
+try{const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1100,height:900}});const page=await context.newPage(),errors=[];page.setDefaultTimeout(15000);page.on('pageerror',e=>errors.push(e.message));
+ await page.goto((process.env.AGORA_E2E_ORIGIN||'https://localhost:5191')+'/tests/browser/notebook-completions.html');await page.locator('textarea[data-cell-id="first"]').focus();await page.locator('.canvas-code-editor[data-status="ready"]').waitFor();await page.locator('.canvas-code-editor .monaco-editor textarea').focus();await page.keyboard.press('Control+A');await page.keyboard.type('pr');await page.locator('.agora-code-widgets .suggest-widget.visible').waitFor();await page.keyboard.press('Tab');
+ await page.waitForFunction(()=>window.notebookFixture.getValue().notebookCells[0].source.startsWith('print('));await page.keyboard.press('Escape');await page.keyboard.press('Shift+Enter');
+ await page.waitForFunction(()=>window.notebookFixture.runs.length===1);assert.equal(await page.evaluate(()=>window.notebookFixture.runs[0].cellId),'first');
+ await page.locator('.notebook-cell').nth(1).locator('.canvas-code-editor[data-status="ready"]').waitFor();assert.equal(await page.locator('.canvas-code-editor').count(),1);assert.equal(await page.locator('.notebook-cell').count(),2);assert.deepEqual(errors,[]);console.log('PASS notebook suggestions, snippet insertion, Shift+Enter execution, next-cell focus and one active editor');
+}finally{await browser.close();}

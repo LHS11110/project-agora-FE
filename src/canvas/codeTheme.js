@@ -1,5 +1,7 @@
 export const CODE_THEME = 'frelog-night';
 export function registerCodeTheme(monaco) {
+  monaco.editor.defineTheme('frelog-notebook',{base:'vs',inherit:true,rules:[],colors:{'editor.background':'#f7f8fa','editor.foreground':'#283044','editor.selectionBackground':'#ddd6f5','editorCursor.foreground':'#6852d6'}});
+
   monaco.editor.defineTheme(CODE_THEME, {
     base: 'vs-dark', inherit: true,
     rules: [

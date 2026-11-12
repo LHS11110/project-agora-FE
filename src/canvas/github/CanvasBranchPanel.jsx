@@ -1,4 +1,3 @@
-import {ensureCanvasPasswordGrant} from '../canvasPasswordSession.js';
 import {useEffect,useRef,useState} from 'react';
 import {api as request} from '../../api/client.js';
 import {useAuth} from '../../state/AuthContext.jsx';
@@ -25,7 +24,7 @@ export default function CanvasBranchPanel({canvasId,api,connection,work,onConnec
   if(create)await client.createBranch(target,branch);
   const remote=await client.connect({...target,branch});if(!remote.file)throw new Error('선택한 브랜치에 캔버스 파일이 없습니다. 먼저 현재 캔버스를 커밋해주세요.');
   canvasSnapshot(JSON.parse(remote.file.source));
-  const binding=await request(`/api/canvases/${canvasId}/github/branches`,{method:'POST',body:{branch,canvas_password_token:await ensureCanvasPasswordGrant(canvasPasswordGrantKey(canvasId,user))},token});
+  const binding=await request(`/api/canvases/${canvasId}/github/branches`,{method:'POST',body:{branch,canvas_password_token:readCanvasPasswordGrant(canvasPasswordGrantKey(canvasId,user))},token});
   if(binding.canvas_password_token)saveCanvasPasswordGrant(canvasPasswordGrantKey(binding.canvasId,user),binding.canvas_password_token);
   if(!binding.initialized){await syncBranchCanvas({canvasId:binding.canvasId,token,user,source:remote.file.source,signal});await request(`/api/canvases/${canvasId}/github/initialized`,{method:'POST',body:{branch},token});}
   const config={...remote.target};localStorage.setItem(`frelog.github.canvas.${binding.canvasId}`,JSON.stringify(config));

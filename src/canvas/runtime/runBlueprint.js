@@ -34,7 +34,7 @@ export async function runBlueprint(items, executorId, execute, publish, {codeOnl
       const chunks = inputIds.flatMap(id => (outputs.get(id) || items[id].runtimeResults || []).map(entry => typeof entry.output === 'string' ? entry.output : ''));
       const stdin = chunks.filter(text=>text.length).map(text=>text.endsWith('\n')?text:text+'\n').join('');
       if (!buildOnly && new TextEncoder().encode(stdin).length > 65536) throw new Error('표준 입력은 64KB 이하여야 합니다.');
-      const { environmentReset, ...response } = await execute({ language: step.language, code: step.code, ...(buildOnly?{action:'build'}:inputIds.length?{stdin}:{}) }, buildOnly?undefined:onOutput);
+      const { environmentReset, ...response } = await execute({ objectId:step.codeId, language: step.language, code: step.code, ...(buildOnly?{action:'build'}:inputIds.length?{stdin}:{}) }, buildOnly?undefined:onOutput);
       if (streamError) throw streamError;
       result = response;
       if (environmentReset) result.error = `${result.output || ''}\n실행 환경이 종료되어 변수와 함수가 초기화되었습니다.`.trim();

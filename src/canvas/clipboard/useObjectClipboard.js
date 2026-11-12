@@ -4,7 +4,8 @@ import { ui } from '../../i18n/locale.js';
 import { useEffect, useRef, useState } from 'react';
 import { collectCopyObjects, serializeCopyObjects, rememberObjects, rememberedObjects, hasLocalOnlyObjects } from './objectClipboard.js';
 import { createId } from '../canvasIds.js';
-import { clipboardTextObject, externalClipboardObjects } from './externalClipboard.js';
+import { clipboardTextObject, resolveExternalClipboardObjects, clipboardDataContent, readClipboardEntries } from './externalClipboard.js';
+import { importNotebook, notebookCellItem, NOTEBOOK_FILE_LIMIT_BYTES } from '../notebook/notebookData.js';
 import { isCollaborativeItem } from '../collaborativeSync.js';
 
 const editable = target => target?.isContentEditable || target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"]), .monaco-editor, .canvas-code-editor, [role="dialog"], dialog, .modal-backdrop, .canvas-as-code-overlay');
@@ -74,15 +75,22 @@ export function useObjectClipboard(options) {
     const canInsert = () => generation.current === turn && latest.current.canvasId === canvasId && !latest.current.blocked && latest.current.canPaste !== false && !latest.current.isInteracting?.() && latest.current.canvasSnapshotLoadedRef.current;
     pending.current = true; setBusy(true);
     try {
-      const objects = externalClipboardObjects(content);
+      const objects = await resolveExternalClipboardObjects(content);
+      if (!canInsert()) return;
       if (objects.length > 32) throw new Error('한 번에 최대 32개 자료를 붙여넣을 수 있습니다.');
-      const ids = []; let skipped = 0;
+      const ids = []; let skipped = 0, notebookError='';
       for (const [index, definition] of objects.entries()) {
         if (!canInsert()) break;
         const position = {x:point.x+index*.025,y:point.y+index*.04};
         try {
           let id;
-          if (definition.file && ['media','image','pdf','sheet'].includes(definition.fileType)) {
+          if(definition.fileType==='notebook'||definition.notebookDocument){
+            let document=definition.notebookDocument;
+            if(definition.file){if(definition.file.size>NOTEBOOK_FILE_LIMIT_BYTES)throw Error(ui('노트북 파일은 1MB 이하로 선택하세요.'));document ||= JSON.parse((await definition.file.text()).replace(/^\uFEFF/, ''));if(!canInsert())break;}
+            const notebook=importNotebook(document);id=createId();
+            const value={kind:'shape',shapeType:'rectangle',runtimeRole:'notebook',x:position.x-.24,y:position.y-.34,width:.48,height:.65,permission:c.permission,...notebook};
+            if(!c.addItems([{id,item:value}])){skipped++;continue;}
+          } else if (definition.file && ['media','image','pdf','sheet'].includes(definition.fileType)) {
             id = await (definition.fileType === 'media' ? c.uploadMedia : definition.fileType === 'image' ? c.uploadImage : definition.fileType === 'sheet' ? c.uploadSheet : c.uploadPdf)?.({target:{files:[definition.file],value:''}}, {position,canInsert});
           } else {
             let item = definition;
@@ -97,11 +105,11 @@ export function useObjectClipboard(options) {
             if (isCollaborativeItem(value)) c.saveCollaborativeItem(id,{silent:true});
           }
           if (id) ids.push(id); else skipped++;
-        } catch (error) { skipped++; if(canInsert())c.setToast(error.message); }
+        } catch (error) { skipped++; if(canInsert()){if(definition.fileType==='notebook'||definition.notebookDocument)notebookError ||= error.message;c.setToast(error.message);} }
       }
       if (!canInsert()) return;
       if (ids.length) { c.setActiveTool('select'); c.selectItems(ids); c.setConnectionStartId(null); board.focus({preventScroll:true}); }
-      c.setToast(ids.length ? ui('자료 {count}개를 객체로 붙여넣었습니다.',{count:ids.length}) + (skipped ? ' '+ui('일부 자료는 형식이나 크기 제한으로 제외했습니다.') : '') : '붙여넣을 자료가 없거나 지원하지 않는 형식입니다. 이미지·PDF·CSV·XLSX·텍스트·HTTPS 링크를 사용해주세요.');
+      c.setToast(notebookError || (ids.length ? ui('자료 {count}개를 객체로 붙여넣었습니다.',{count:ids.length}) + (skipped ? ' '+ui('일부 자료는 형식이나 크기 제한으로 제외했습니다.') : '') : '붙여넣을 자료가 없거나 지원하지 않는 형식입니다. 이미지·동영상·PDF·CSV·XLSX·IPYNB·텍스트·HTTPS 링크를 사용해주세요.'));
     } catch (error) { if(canInsert())c.setToast(error.message); }
     finally { if(generation.current === turn){pending.current = false;setBusy(false);} }
   };
@@ -131,12 +139,7 @@ export function useObjectClipboard(options) {
       if (!content && navigator.clipboard?.read) {
         try {
           const entries = await navigator.clipboard.read();
-          content = {files:[],text:'',html:'',uriList:''};
-          for (const entry of entries) {
-            const binary = entry.types.includes('image/gif')?'image/gif':entry.types.find(type=>type.startsWith('image/')||type.startsWith('video/')||type==='application/pdf');
-            if (binary) { const blob = await entry.getType(binary); content.files.push(new File([blob],binary==='application/pdf'?'clipboard.pdf':binary==='image/gif'?'clipboard.gif':binary.startsWith('video/')?'clipboard.'+binary.split('/')[1]:'clipboard.png',{type:binary})); }
-            for (const [type,key] of [['text/plain','text'],['text/html','html'],['text/uri-list','uriList']]) if(entry.types.includes(type))content[key] += await (await entry.getType(type)).text();
-          }
+          content = await readClipboardEntries(entries);
         } catch { /* Fall back to text/local objects when rich clipboard access is unavailable. */ }
       }
       if (!content) {
@@ -159,7 +162,7 @@ export function useObjectClipboard(options) {
         if (event.type === 'paste') {
           if (c.canPaste === false || !event.clipboardData) return;
           const data = event.clipboardData;
-          const content = {text:data.getData('text/plain'),html:data.getData('text/html'),uriList:data.getData('text/uri-list'),files:[...data.files]};
+          const content = clipboardDataContent(data);
           if (!content.text && !content.html && !content.uriList && !content.files.length) return;
           event.preventDefault(); event.stopPropagation(); void a.pasteContent(content);
         } else {

@@ -4,7 +4,7 @@ import {yieldPasteFrame} from './pasteJob.js';
 export function estimatedCopySize(item){
  let size=256;
  for(const [key,value] of Object.entries(item))if(typeof value==='string'&&(CANVAS_ITEM_FIELDS.has(key)||(item.kind==='text'&&key.startsWith('automerge_'))))size+=value.length*2;
- return size+(item.points?.length||0)*64+(item.rows?.length||0)*Math.max(1,item.columns?.length||1)*128+(item.runtimeResults?.length||0)*65536+(item.notebookCells?.length||0)*65536;
+ return size+(item.points?.length||0)*64+(item.rows?.length||0)*Math.max(1,item.columns?.length||1)*128+(item.runtimeResults?.length||0)*65536+(item.notebookCells?.length||0)*65536+(item.notebookCell?.source?.length||0)*2+(item.notebookResult?JSON.stringify(item.notebookResult).length*2:0);
 }
 export function quickCopy(snapshot){
  const entries=Object.values(snapshot.originals);

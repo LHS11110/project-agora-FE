@@ -24,7 +24,7 @@ try{
  assert.match(await page.evaluate(()=>window.completionFixture.getValue()),/prepare_report$/);assert.equal(await page.locator('.canvas-code-editor[data-status="ready"]').count(),1,'mouse selection keeps editor open');
  await page.setViewportSize({width:420,height:740});await page.evaluate(()=>window.completionFixture.setValue('pr'));await open();
  const narrow=await popup().boundingBox();assert.ok(narrow.x>=0&&narrow.x+narrow.width<=421,JSON.stringify(narrow));
- await page.keyboard.press('Escape');await page.evaluate(()=>{window.completionFixture.setLanguage('javascript');window.completionFixture.setValue('con');});await open();
+ await page.keyboard.press('Escape');await page.evaluate(()=>{window.completionFixture.setLanguage('javascript');window.completionFixture.setValue('con');});await page.waitForFunction(()=>document.querySelector('.canvas-code-editor-host')?.dataset.modeId==='javascript');await open();
  await popup().getByRole('option',{name:/^console/}).waitFor({timeout:15000});
  await page.evaluate(()=>window.completionFixture.setOpen(false));await page.locator('.agora-code-widgets').waitFor({state:'detached'});
  assert.deepEqual(errors,[]);console.log('PASS styled suggestions/docs, snippet insertion and placeholders, stable popup at 50%/200%, mouse selection, narrow viewport, native JavaScript completions and disposal');

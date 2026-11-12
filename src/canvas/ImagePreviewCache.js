@@ -1,3 +1,4 @@
+import {canvasFetch} from '../api/client.js';
 import { objectCornerRadius } from './objectCorners.js';
 // Small decoded previews are bounded independently of GPU atlas resources.
 // Eviction never invalidates pixels already copied into a layer's raster atlas.
@@ -56,7 +57,7 @@ export default class ImagePreviewCache {
 export async function loadImagePreview(source, token, apiUrl, signal, maxSide=96) {
   const url = new URL(/^(data|blob):/i.test(source) ? source : apiUrl(source));
   const apiOrigin = /^(data|blob):$/i.test(url.protocol) ? null : new URL(apiUrl('/')).origin;
-  const response = await fetch(url.href, { signal, cache: 'no-store', headers: url.origin === apiOrigin && token ? { Authorization: `Bearer ${token}` } : {} });
+  const response = await canvasFetch(url.href, { signal, cache: 'no-store', headers: url.origin === apiOrigin && token ? { Authorization: `Bearer ${token}` } : {} });
   if (!response.ok) throw Error('Image preview unavailable');
   const blob = await response.blob();
   let bitmap, objectUrl;

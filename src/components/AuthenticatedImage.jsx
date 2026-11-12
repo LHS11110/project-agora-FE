@@ -1,3 +1,4 @@
+import {canvasFetch} from '../api/client.js';
 import { useEffect, useState } from 'react';
 import { apiUrl } from '../api/client.js';
 
@@ -38,7 +39,7 @@ export default function AuthenticatedImage({ src, token, alt = '', className, fa
       return undefined;
     }
 
-    fetch(imageUrl.href, {
+    canvasFetch(imageUrl.href, {
       // Canvas representative-image URLs are stable by canvas ID, while the
       // backing file can be replaced (for example after restoring/reusing IDs).
       // Do not let the browser reuse a previous canvas's bytes for that URL.

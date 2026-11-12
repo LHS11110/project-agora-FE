@@ -3,7 +3,7 @@
 .notebook-content header,.notebook-content nav,.notebook-content footer{display:flex;gap:7px;align-items:center;padding:10px 12px;flex-shrink:0;border-bottom:1px solid #dce1e940;flex-wrap:wrap}
 .notebook-content header strong{font-size:calc(14px * var(--object-font-factor,1))}.notebook-content header span{margin-right:auto;font-size:calc(10px * var(--object-font-factor,1));opacity:.6}
 .notebook-content button,.notebook-content select{font:inherit;color:inherit;border:1px solid #98a2b540;background:#8e9ab40c;border-radius:6px;padding:4px 8px;cursor:pointer}.notebook-content button:disabled{opacity:.4;cursor:default}
-.notebook-cells{min-height:0;overflow:auto;flex:1;padding:10px 12px;overscroll-behavior:contain}.notebook-cell{border:1px solid #9da6b43b;border-radius:8px;overflow:hidden;margin-bottom:12px}.notebook-cell-toolbar{display:flex;align-items:center;gap:7px;padding:6px 9px;background:#9da6b40a}.notebook-cell-toolbar small{margin-right:auto;font-family:monospace}.notebook-cell textarea{display:block;box-sizing:border-box;width:100%;border:0;resize:vertical;padding:10px 12px;color:inherit;background:transparent;outline:none;font:calc(13px * var(--object-font-factor,1))/calc(19px * var(--object-font-factor,1)) ui-monospace,monospace;user-select:text}.notebook-outputs{padding:0 12px;overflow:auto;max-height:540px}.notebook-outputs:empty{display:none}.notebook-outputs pre{white-space:pre-wrap;overflow-wrap:anywhere;font:calc(12px * var(--object-font-factor,1))/1.5 ui-monospace,monospace;user-select:text}.notebook-outputs img{max-width:100%;height:auto;display:block}.notebook-outputs iframe{border:0;width:100%;height:280px;background:#fff}.notebook-markdown{padding:12px;user-select:text}.notebook-error{color:#b43c4c}.notebook-content footer{border:0;border-top:1px solid #dce1e940}.notebook-content footer span{flex:1;white-space:pre-wrap;max-height:70px;overflow:auto;font-size:calc(11px * var(--object-font-factor,1));opacity:.75}.notebook-content.is-running{box-shadow:inset 0 0 0 2px #8d88dc}.notebook-cell.is-running{border-color:#8d88dc}
+.notebook-cells{min-height:0;overflow:auto;flex:1;padding:10px 12px;overscroll-behavior:contain}.notebook-cell{border:1px solid #9da6b43b;border-radius:8px;overflow:hidden;margin-bottom:12px}.notebook-cell-toolbar{display:flex;align-items:center;gap:7px;padding:6px 9px;background:#9da6b40a}.notebook-cell-toolbar small{margin-right:auto;font-family:monospace}.notebook-cell>textarea,.notebook-code-input>textarea{display:block;box-sizing:border-box;width:100%;border:0;resize:vertical;padding:10px 12px;color:inherit;background:transparent;outline:none;font:calc(13px * var(--object-font-factor,1))/calc(19px * var(--object-font-factor,1)) ui-monospace,monospace;user-select:text}.notebook-outputs{padding:0 12px;overflow:auto;max-height:540px}.notebook-outputs:empty{display:none}.notebook-outputs pre{white-space:pre-wrap;overflow-wrap:anywhere;font:calc(12px * var(--object-font-factor,1))/1.5 ui-monospace,monospace;user-select:text}.notebook-outputs img{max-width:100%;height:auto;display:block}.notebook-outputs iframe{border:0;width:100%;height:280px;background:#fff}.notebook-markdown{padding:12px;user-select:text}.notebook-error{color:#b43c4c}.notebook-content footer{border:0;border-top:1px solid #dce1e940}.notebook-content footer span{flex:1;white-space:pre-wrap;max-height:70px;overflow:auto;font-size:calc(11px * var(--object-font-factor,1));opacity:.75}.notebook-content.is-running{box-shadow:inset 0 0 0 2px #8d88dc}.notebook-cell.is-running{border-color:#8d88dc}
 
 .notebook-cell[data-status="success"]{border-color:#66a88c70}.notebook-cell[data-status="error"]{border-color:#c6677780}.notebook-cell.is-running{border-color:#8d88dc}.notebook-cell{content-visibility:auto;contain-intrinsic-size:auto 180px}
 /* Markdown reads as part of the document; source appears only while editing. */
@@ -11,3 +11,44 @@
 .notebook-cell.is-markdown .notebook-cell-toolbar{background:transparent;opacity:0;transition:opacity .15s}
 .notebook-cell.is-markdown:hover .notebook-cell-toolbar,.notebook-cell.is-markdown:focus-within .notebook-cell-toolbar{opacity:1}
 .notebook-cell.is-markdown .notebook-markdown{outline:none;cursor:text}.notebook-cell.is-markdown.is-editing .notebook-markdown{display:none}
+/* Separate canvas cells retain a solid surface and scroll inside their bounds. */
+.notebook-cell-object{overflow:visible}
+.notebook-cell-surface{--notebook-code-bg:var(--surface-soft,#f7f8fa);height:100%;min-height:0;display:flex;flex-direction:column;color:var(--text-color,#283044);font:calc(12px * var(--object-font-factor,1))/1.5 var(--font-sans,system-ui)}
+.notebook-cell-surface>.notebook-cell{position:relative;box-sizing:border-box;display:flex;flex:1;flex-direction:column;min-height:0;margin:0;background:var(--panel-bg,#fff);border:1px solid var(--border-color,#e0e3e7);border-radius:8px;content-visibility:visible;contain-intrinsic-size:none}
+.notebook-cell-surface .notebook-cell-toolbar{flex:0 0 auto;min-height:32px;gap:5px;padding:5px 10px 5px 48px;background:var(--notebook-code-bg);flex-wrap:wrap}
+.notebook-cell-surface .notebook-cell-toolbar small{font-size:10px;color:var(--ink-muted,#80868b)}
+.notebook-cell-surface :is(button,select){box-sizing:border-box;font:inherit;color:inherit;background:transparent;border:1px solid transparent;border-radius:5px;padding:3px 6px;cursor:pointer}
+.notebook-cell-surface :is(button,select):hover{background:var(--panel-soft,#e9edf3)}
+.notebook-cell-surface :is(button,select):focus-visible{outline:2px solid #7c9ed9;outline-offset:1px}
+.notebook-cell-surface :is(button,select):disabled{opacity:.4;cursor:default}
+.notebook-cell-surface .notebook-run-button{position:absolute;left:12px;top:10px;width:26px;height:26px;padding:0;border:1px solid var(--ink-muted,#80868b);border-radius:50%;display:grid;place-items:center;font-size:11px}
+.notebook-cell-surface>.notebook-cell>textarea{flex:1 1 0;min-height:0!important;resize:none;overflow:auto;padding:8px 14px 14px 48px;background:var(--notebook-code-bg);line-height:1.6;tab-size:4}
+.notebook-cell-surface>.notebook-cell .notebook-outputs{box-sizing:border-box;flex:0 1 auto;max-height:55%;min-height:0;overflow:auto;padding:10px 14px 10px 48px;background:var(--panel-bg,#fff);overscroll-behavior:contain}
+.notebook-cell-surface>.notebook-cell .notebook-outputs:not(:empty),
+.legacy-notebook-cells .notebook-outputs:not(:empty){border-top:1px solid var(--border-color,#e0e3e7)}
+.notebook-cell-surface .notebook-outputs pre{margin:0 0 6px}
+.notebook-cell-surface .notebook-markdown{min-height:0;overflow:auto;flex:1;padding:8px 14px}
+.notebook-cell-surface .notebook-cell.is-markdown{background:transparent}
+.notebook-cell-surface .notebook-cell.is-markdown .notebook-cell-toolbar{background:transparent;padding-left:10px}
+.notebook-cell-surface .notebook-cell.is-running{border-color:#7998cc;box-shadow:inset 3px 0 #7998cc}
+.notebook-cell-status{flex:0 0 auto;max-height:38px;overflow:auto;font-size:calc(11px * var(--object-font-factor,1));opacity:.75}
+.notebook-cell-status:empty{display:none}
+.notebook-controls-only{overflow:auto;overscroll-behavior:contain}
+.notebook-controls-only header,.notebook-controls-only nav,.notebook-controls-only footer{padding:5px 10px;gap:5px}
+.notebook-controls-only header strong{font-size:calc(12px * var(--object-font-factor,1))}
+.notebook-controls-only button{padding:3px 7px;white-space:nowrap}
+.notebook-controls-only footer span{font-size:calc(10px * var(--object-font-factor,1))}
+
+/* Multiple cells belong to one scrollable notebook. */
+.legacy-notebook-cells .notebook-cell{position:relative;background:var(--panel-bg,#fff);content-visibility:visible;contain-intrinsic-size:none}
+.legacy-notebook-cells .notebook-cell-toolbar{min-height:30px;flex-wrap:wrap;background:var(--surface-soft,#f7f8fa)}
+.legacy-notebook-cells .notebook-cell>textarea,.legacy-notebook-cells .notebook-code-input>textarea{background:var(--surface-soft,#f7f8fa);tab-size:4;line-height:1.6}
+.legacy-notebook-cells .notebook-outputs{padding:10px 12px;background:var(--panel-bg,#fff)}
+.legacy-notebook-cells .notebook-cell.is-markdown,.legacy-notebook-cells .notebook-cell.is-markdown .notebook-cell-toolbar{background:transparent}
+
+.notebook-code-input{font-family:var(--mono,ui-monospace,monospace);min-height:100px;flex-shrink:0;background:var(--surface-soft,#f7f8fa)}
+.notebook-code-input>.canvas-code-editor{height:100%;min-height:0}
+.notebook-code-input>textarea{height:100%;min-height:0!important;resize:none}
+.notebook-cell-surface>.notebook-cell>.notebook-code-input{flex:1;min-height:76px;overflow:hidden}
+
+.notebook-code-input>.canvas-code-editor{font:inherit}

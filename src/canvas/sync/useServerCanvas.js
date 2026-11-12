@@ -1,3 +1,4 @@
+import {operationForWire} from './itemDelta.js';
 import { TEXT_COLOR_MARK } from '../content/textColors.js';
 import { CanvasUndoHistory } from './CanvasUndoHistory.js';
 import { assertAccessOperations } from '../permissions/access.js';
@@ -25,7 +26,14 @@ export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsR
     send: message => {
       const socket = wsRef.current;
       if (socket?.readyState !== 1 || socket.bufferedAmount+(socket.pendingCodecBytes?.()||0) >= 256 * 1024) return false;
-      try { const {wireBytes,...rest}=message;const payload=message.type==='canvas_ops'?{...rest,operations:message.operations.map(({doc,base,...operation})=>operation)}:rest;if(socket.sendObject)return socket.sendObject(payload,wireBytes);socket.send(JSON.stringify(payload));return true; }catch{return false;}
+      try { const {wireBytes,...rest}=message;const payload=message.type==='canvas_ops'?{...rest,operations:message.operations.map(operation=>operationForWire(operation,sessionRef.current.deltaEdits))}:rest;if(socket.sendObject)return socket.sendObject(payload,wireBytes);socket.send(JSON.stringify(payload));return true; }catch{return false;}
+    },
+    rebaseOperations:(committed,operations)=>{
+      const ids=[...new Set(operations.flatMap(operationIds))];
+      const draft=view.current.rebase(committed,ids,operations);
+      const next=itemOperations(committed,draft,view.current.docs,ids);
+      for(const op of next)if(op.doc){const doc=loadEncodedDocument(op.doc),base=committed[op.id]?.automerge_snapshot||op.doc;op.patch.automerge_snapshot=base;op.patch.automerge_changes=Automerge.getChanges(loadEncodedDocument(base),doc).map(change=>({field:collaborativeField(draft[op.id]),change:encodeBase64(change)}));}
+      return next;
     },
     reject: message => callbacks.current.setToast(message), status: setStatus, receipt: setLastReceipt,
     publish: (committed, touched) => {

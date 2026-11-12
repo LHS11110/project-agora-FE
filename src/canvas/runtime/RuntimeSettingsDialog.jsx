@@ -5,14 +5,14 @@ import {useUiLocale} from '../../i18n/useUiLocale.js';
 import {runtimeSettingsApi,selectRuntimeEngine} from './runtimeSettings.js';
 import './runtime-settings.css';
 
-export default function RuntimeSettingsDialog({canvasId,token,user,initialLanguage='cpp',isRunning,onClose,canManage=true}) {
+export default function RuntimeSettingsDialog({canvasId,token,user,request,initialLanguage='cpp',isRunning,onClose,canManage=true}) {
   useUiLocale();
   const [snapshot,setSnapshot]=useState(null),[drafts,setDrafts]=useState({}),[language,setLanguage]=useState(initialLanguage);
   const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
   const [resource,setResource]=useState('');
   const [disk,setDisk]=useState(6);
   const alive=useRef(true),generation=useRef(0),closeRef=useRef(null);
-  const api=runtimeSettingsApi({canvasId,token,user});
+  const api=runtimeSettingsApi({request});
   const load=async()=>{
     const id=++generation.current;setLoading(true);setError('');setMessage('');
     try {const response=await api.load();if(alive.current&&generation.current===id){setSnapshot(response);setDrafts(response.languages);setResource(response.resourceTemplate);setDisk(response.diskGiB??6);if(!response.catalog[language])setLanguage('cpp');}}

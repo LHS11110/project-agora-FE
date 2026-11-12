@@ -1,3 +1,5 @@
+import {canvasApiRequest} from './canvasTransport.js';
+export {canvasFetch} from './canvasTransport.js';
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 export function apiUrl(path) {
@@ -18,6 +20,11 @@ export class ApiError extends Error {
 }
 
 export async function api(path, { method = 'GET', body, token, headers = {} } = {}) {
+  const routed=canvasApiRequest(apiUrl(path),{method,body,token,headers});
+  if(routed){try{return await routed;}catch(error){
+    if(error.status===401&&token)window.dispatchEvent(new CustomEvent('agora:unauthorized',{detail:{token,message:error.message}}));
+    throw new ApiError(error.message,error.status,error.code,error.payload);
+  }}
   const response = await fetch(apiUrl(path), {
     method,
     headers: {

@@ -27,8 +27,7 @@ const publicEndpoints = [
   ['PATCH', '/api/canvases/{canvasId}/description', 'Bearer JWT', '비활성 캔버스 설명 변경. JSON { description }; 성공 시 204.'],
   ['PATCH', '/api/canvases/{canvasId}/password', 'Bearer JWT', '비활성 캔버스 비밀번호 설정·해제. JSON { canvas_password }; 빈 값은 해제, 저장 전 해시화, 성공 시 204.'],
   ['POST · DELETE', '/api/canvases/{canvasId}/people', 'Bearer JWT', '참여자 추가(POST)·제외(DELETE). JSON { nickname, tag_number }; 성공 시 204. 활성 캔버스에는 WebSocket 설정을 사용합니다.'],
-  ['POST', '/api/canvases/{canvasId}/password-session', 'Bearer JWT', '접속 중 비밀번호 인증 갱신. { connectionId, proof, passwordGrant }로 살아 있는 브로커 연결을 증명하면 30분 토큰을 갱신합니다.'],
-  ['POST', '/api/canvases/{canvasId}/access', 'Bearer JWT', '접속 권한 확인. 보호된 캔버스는 JSON { password } 또는 30분간 유효한 { canvas_password_token }을 받습니다. { server_id, ws_port, canvas_access_token, canvas_password_token } 반환. 비밀번호 토큰은 사용자·캔버스·설정 revision에 묶입니다. 다른 캔버스에 활성 접속 중이면 409 CANVAS_003.'],
+  ['POST', '/api/canvases/{canvasId}/access', 'Bearer JWT', '접속 권한 확인. 보호된 캔버스는 JSON { password } 또는 최초 비밀번호 인증 후 4시간 동안 유효한 { canvas_password_token }을 받습니다. 토큰 재사용은 유효 기간을 연장하지 않습니다. { server_id, ws_port, canvas_access_token, canvas_password_token } 반환. 비밀번호 토큰은 사용자·캔버스·설정 revision에 묶입니다. 다른 캔버스에 활성 접속 중이면 409 CANVAS_003.'],
   ['DELETE', '/api/canvases/{canvasId}', 'Bearer JWT', '소유자 또는 관리자만 삭제할 수 있습니다. 활성 세션이 있으면 409, 성공은 204입니다.'],
 ];
 
@@ -54,6 +53,9 @@ const publicApiGroups = [
   ] },
   { id: 'api-users', title: '사용자·프로필', rows: publicEndpoints.slice(4, 9) },
   { id: 'api-canvases', title: '캔버스', rows: publicEndpoints.slice(9) },
+  { id: 'api-runtime', title: '실행 환경', rows: [
+    ['POST', '/api/canvases/{canvasId}/runtime/notebook', 'Bearer JWT', '환경 준비와 커널 초기화에 사용합니다. 셀 실행은 캔버스 WebSocket의 runtime_execute 이벤트로 브로커와 C++에 직접 전달합니다. 실행 결과도 runtime_result WebSocket 응답으로 돌아오며, API 실행 경로를 거치지 않습니다.'],
+  ] },
   { id: 'api-bots', title: '봇 참여자', rows: botEndpoints },
 ];
 
@@ -103,6 +105,7 @@ const socketEvents = [
   ['채팅 내역 조회', '양방향 · Canvas 소켓', '{ type: "chat_history", room_id, limit | from_sequence + to_sequence, request_id }', '기본 최근 50개(최대 200개) 또는 양 끝 포함 sequence 범위를 조회합니다. 오래된 순서로 messages, from/to_sequence, total, has_more를 반환합니다.'],
   ['항목 생성·수정', '클라이언트 → 서버 · Canvas 소켓', '{ type: "item_update", item_id, item }', 'ACL 검사를 거쳐 일반 그래픽·이미지 항목을 전달하고 Redis 저장 큐에 넣습니다. 텍스트·노트·코드·Automerge 데이터를 포함하면 ITEM_SAVE_REQUIRED로 거절됩니다.'],
   ['텍스트·노트·코드 저장', '클라이언트 → 서버 · Canvas 소켓', '{ type: "item_save", item_id, item: { automerge_snapshot, automerge_changes } }', '텍스트·코드는 Ctrl + S로 저장하고 포스트잇은 변경 후 자동 저장합니다. 공통 base 스냅샷과 변경 이력을 보내며, 같은 아이템 변경은 중복 제거해 합칩니다. JSON payload 상한은 12 MiB입니다.'],
+  ['코드 객체·노트북 셀 실행', '클라이언트 ↔ 브로커 ↔ C++ · Canvas 소켓', '{ type: "runtime_execute", action: "execute"|"build"|"notebook", object_id, language?, notebook_id?, cell_id?, code, stdin?, request_id }', '브로커는 실행 권한을 확인하고 비동기로 C++에 전달합니다. C++가 최신 캔버스 revision과 대상 객체 ACL을 다시 확인한 후 VM 관리자·커널로 중계합니다. 일반 코드의 출력 조각은 runtime_output, 최종 결과는 runtime_result WebSocket 이벤트로 요청자에게 반환됩니다. 실행 중에도 캔버스 편집 요청은 처리됩니다.'],
   ['WebRTC 신호 교환', '클라이언트 ↔ 서버 ↔ 지정 피어 · RTC 소켓', '{ type: "rtc_signal", peer_id, action, description|candidate }', '인증된 같은 캔버스의 대상 소켓 하나에만 SDP/ICE를 전달합니다. 통화 신호는 저장하지 않습니다. 캔버스 데이터는 별도의 canvas_relay 이벤트로 브로커가 중계합니다.'],
   ['커서·Automerge 변경', '클라이언트 ↔ 브로커 ↔ 사용자', 'canvas_relay: cursor · laser · editor_presence · host_*', '인증된 브로커가 커서·레이저·편집 상태와 순서가 보장된 문서 변경을 같은 캔버스의 사용자에게 전달합니다.'],
   ['실시간 드로잉', '클라이언트 ↔ 브로커 ↔ 사용자', 'canvas_relay: host_proposal · host_commit', '그리는 동안 변경을 호스트 세션이 순서대로 확정하고 브로커가 사용자에게 전달합니다. 영속 저장 요청은 브로커에서 C++ 백엔드로 라우팅합니다.'],

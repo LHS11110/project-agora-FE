@@ -24,3 +24,16 @@ test('plain text preserves whitespace; code and Markdown files preserve their co
  assert.throws(()=>clipboardTextObject('가'.repeat(22000)),/64KiB/);
  assert.deepEqual(externalClipboardObjects({text:' \n '}),[]);
 });
+
+test('notebooks are recognized without filenames and from file-only transfer items',async()=>{
+ const {resolveExternalClipboardObjects,clipboardDataContent,readClipboardEntries}=await import('../src/canvas/clipboard/externalClipboard.js');
+ const source=JSON.stringify({nbformat:4,cells:[{cell_type:'code',source:['print(42)']}]});
+ const file=new File([source],'clipboard.json',{type:'application/json'});
+ assert.equal((await resolveExternalClipboardObjects({files:[file]}))[0].fileType,'notebook');
+ const transfer=clipboardDataContent({files:[],items:[{kind:'file',getAsFile:()=>file}],getData:()=>''});
+ assert.equal(transfer.files[0],file);
+ const rich=await readClipboardEntries([{types:['application/json'],getType:async()=>new Blob([source],{type:'application/json'})}]);
+ assert.equal((await resolveExternalClipboardObjects(rich))[0].notebookDocument.nbformat,4);
+ assert.equal((await resolveExternalClipboardObjects({files:[new File(['{"hello":1}'],'ordinary.json',{type:'application/json'})]}))[0].fileType,'text');
+ assert.equal((await resolveExternalClipboardObjects({files:[new File([source],'notebook.bin',{type:'application/octet-stream'})]}))[0].fileType,'notebook');
+});

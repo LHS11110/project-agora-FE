@@ -199,7 +199,9 @@
 
 /* Notebook dark mode high-contrast text and surface styling */
 .canvas-app-page[data-theme="dark"] .notebook-object,
-[data-theme="dark"] .notebook-object {
+[data-theme="dark"] .notebook-object,
+.canvas-app-page[data-theme="dark"] .notebook-cell-object,
+[data-theme="dark"] .notebook-cell-object {
   --panel-bg: var(--surface, #20212c);
   --border-color: var(--line, #363747);
   --text-color: var(--ink-strong, #ececf7);

@@ -134,3 +134,10 @@ test('unrelated/requestless RTC errors reach their own recovery handler without 
  assert.equal(session.receiveServer({type:'error',code:'RTC_ALREADY_JOINED',request_id:'rtc-membership'}),false);assert.equal(session.flight,flight);
  assert.equal(session.receiveServer({type:'error',request_id:sent[0].request_id,code:'ITEM_ACCESS_DENIED'}),true);assert.equal(session.flight,null);
 });
+
+test('a rejected text base is rebased after snapshot without consuming the durable sequence',()=>{
+ const {session,sent}=client();session.rebaseOperations=(items,operations)=>{assert.equal(items.box.x,7);return operations.map(op=>({...op,patch:{x:8}}));};
+ session.submit([{action:'patch',id:'box',patch:{x:3}}]);session.tick();const first=session.flight;
+ session.receiveServer({type:'error',request_id:first.request_id,code:'CANVAS_TEXT_CONFLICT'});assert.equal(session.ready,false);assert.equal(session.pendingOperations.length,1);
+ session.seed({box:{...box,x:7}},{sync_protocol:2,revision:1,accepted_count:0});assert.equal(session.flight.request_count,first.request_count);assert.notEqual(session.flight.request_id,first.request_id);assert.equal(session.flight.operations[0].patch.x,8);assert.equal(session.ready,true);
+});

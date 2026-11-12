@@ -6,6 +6,7 @@ import ProjectObject from './projects/ProjectObject.jsx';
 import {objectContentPropsEqual} from './objectContentCache.js';
 import {selectedScrollArea} from './editorWheel.js';
 import RawNotebookObject from './notebook/NotebookObject.jsx';
+import RawNotebookCellObject from './notebook/NotebookCellObject.jsx';
 import RawCanvasImageContent from './CanvasImageContent.jsx';
 import { supportsObjectCorners, objectCornerStyle } from './objectCorners.js';
 import './object-corners.css';
@@ -52,6 +53,7 @@ import { stickyNoteColors } from './canvasConstants.js';
 import { moveTextPosition, textSpliceBetween } from './collaborativeText.js';
 
 const NotebookObject=memo(RawNotebookObject,objectContentPropsEqual);
+const NotebookCellObject=memo(RawNotebookCellObject,objectContentPropsEqual);
 const CanvasImageContent=memo(RawCanvasImageContent,objectContentPropsEqual);
 const PdfDocumentContent=memo(RawPdfDocumentContent,objectContentPropsEqual);
 const UserGroupContent=memo(RawUserGroupContent,objectContentPropsEqual);
@@ -65,7 +67,7 @@ const QuestionCard=memo(RawQuestionCard,objectContentPropsEqual);
 const SharedMediaContent=memo(RawSharedMediaContent,objectContentPropsEqual);
 const ConnectorLabel=memo(RawConnectorLabel,objectContentPropsEqual);
 
-function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=false, canExecute=true, id, item, bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, token, runtimeStore, onUndo, onStartEditing, onTextChange, onTextColorChange, onMetadataChange, onFormulaChange, onTableChange, onQuestionChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
+function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=false, canExecute=true, id, item, notebookCells=[],notebookSiblingCells=[],notebookParent=null,notebookOrder=0,notebookCellCount=0,bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, token, runtimeStore, onUndo, onStartEditing, onTextChange, onTextColorChange, onMetadataChange, onFormulaChange, onTableChange, onQuestionChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
   useUiLocale();
   const presentation=useContext(PresentationContext);
   const contentLatest=useRef(null);contentLatest.current={id,onTableChange,onQuestionChange,onStartEditing,onStopEditing};
@@ -187,7 +189,8 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
     <svg className="portfolio-frame-outline" width="100%" height="100%"><rect x="1" y="1" width="calc(100% - 2px)" height="calc(100% - 2px)" fill="none"/><rect className="portfolio-frame-hit" x="1" y="1" width="calc(100% - 2px)" height="calc(100% - 2px)"/></svg>
     <span className="portfolio-frame-caption">{item.title||ui('프레임')}</span>
   </div>);
-  if (item.kind === 'shape' && item.runtimeRole==='notebook') return withResizeHandles(<div className={`${classes} notebook-object`} style={style} {...handlers}><NotebookObject id={id} item={item} store={runtimeStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} canExecute={canExecute} onChange={onQuestionChange}/></div>);
+  if (item.kind === 'shape' && item.runtimeRole==='notebook') return withResizeHandles(<div className={`${classes} notebook-object`} style={style} {...handlers}><NotebookObject id={id} item={item} cellItems={notebookCells} store={runtimeStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} canExecute={canExecute} onChange={onQuestionChange}/></div>);
+  if (item.kind === 'shape' && item.runtimeRole==='notebook-cell') return withResizeHandles(<div className={`${classes} notebook-cell-object`} style={style} {...handlers}><NotebookCellObject id={id} item={item} notebook={notebookParent} notebookSiblings={notebookSiblingCells} notebookOrder={notebookOrder} notebookCellCount={notebookCellCount} store={runtimeStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} canExecute={canExecute} onChange={onQuestionChange}/></div>);
   if (item.kind === 'shape' && item.runtimeRole==='terminal') return withResizeHandles(<div className={`${classes} terminal-object`} style={style} {...handlers}><TerminalObject id={id} item={item} store={runtimeStore} selected={selected && activeTool==='select'} canExecute={canExecute}/></div>);
   if (item.kind === 'shape' && ['executor', 'output'].includes(item.runtimeRole)) return withResizeHandles(<div className={`${classes} blueprint-object${item.runtimeRole==='executor'?' blueprint-executor-object':''}`} style={style} {...handlers}><BlueprintNode id={id} item={item} store={runtimeStore} selected={selected} canExecute={canExecute} canReset={canExecute&&!readOnly} /></div>);
   if (item.kind === 'pdf') return withResizeHandles(<div className={`${classes} pdf-object`} style={style} {...handlers}><PdfDocumentContent item={item} token={token} interactive={selected && activeTool === 'select'} canChangePage={mediaWritable??(!readOnly&&!item.locked)} onPageChange={contentActions.page}/></div>);

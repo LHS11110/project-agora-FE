@@ -11,7 +11,6 @@ import {useMediaUpload} from '../canvas/media/useMediaUpload.js';
 import {mediaFileType} from '../canvas/media/mediaModel.js';
 import {ProjectContext,createProjectStore} from '../canvas/projects/projectStore.js';
 import {validProject,validateProjectLinks,newIssue,removeProject} from '../canvas/projects/projectModel.js';
-import {ensureCanvasPasswordGrant} from '../canvas/canvasPasswordSession.js';
 import {useCanvasPasswordPrompt} from '../canvas/useCanvasPasswordPrompt.js';
 import CanvasPasswordDialog from '../components/canvas/CanvasPasswordDialog.jsx';
 import {useCanvasVoiceCall} from '../canvas/voice/CanvasVoicePanel.jsx';
@@ -19,6 +18,7 @@ import {objectContentCacheStats} from '../canvas/objectContentCache.js';
 import {CanvasGraphicsContext} from '../canvas/CanvasGraphicsContext.jsx';
 import '../canvas/graphics-quality.css';
 import {runtimeStateTtl} from '../canvas/runtime/useObjectRuntimeState.js';
+import {notebookCellItem,notebookCellObjectId,NOTEBOOK_LIMIT,validNotebookCells} from '../canvas/notebook/notebookData.js';
 import {api} from '../api/client.js';
 import {canvasPasswordGrantKey,readCanvasPasswordGrant} from '../canvas/canvasAccess.js';
 import {gridInterval, snapNewItem} from '../canvas/gridPlacement.js';
@@ -46,7 +46,7 @@ import SceneViewModel from '../canvas/SceneViewModel.js';
 import { itemCount } from '../canvas/itemSnapshots.js';
 import { useCanvasCamera } from '../canvas/useCanvasCamera.js';
 import { isRasterContent as isRasterText } from '../canvas/plainTextRaster.js';
-import CanvasLayerObjects from '../canvas/CanvasLayerObjects.jsx';
+const CanvasLayerObjects = lazy(() => import('../canvas/CanvasLayerObjects.jsx'));
 import { buildDepthLayers, itemDepth } from '../canvas/itemDepth.js';
 import { hitTestVector } from '../canvas/vectorHitTest.js';
 import { renderWindow } from '../canvas/renderWindow.js';
@@ -70,7 +70,7 @@ import CanvasVersionDialog from '../canvas/github/CanvasVersionDialog.jsx';
 import CanvasAsCodeDialog from '../canvas/asCode/CanvasAsCodeDialog.jsx';
 import { createBlueprintStore } from '../canvas/runtime/blueprintStore.js';
 import RuntimeSettingsDialog from '../canvas/runtime/RuntimeSettingsDialog.jsx';
-import { executeCanvasCode } from '../canvas/runtime/executeCanvasCode.js';
+import { executeCanvasCode, rejectRuntimeSocketRequests, settleRuntimeSocketResponse } from '../canvas/runtime/executeCanvasCode.js';
 import useCodeExecutionShortcut from '../canvas/runtime/useCodeExecutionShortcut.js';
 import { useCommentsAndMentions } from '../canvas/comments/useCommentsAndMentions.js';
 import ObjectCommentsPanel from '../canvas/comments/ObjectCommentsPanel.jsx';
@@ -85,14 +85,14 @@ import { useEraserSize } from '../canvas/useEraserSize.js';
 import { useCanvasPalette } from '../canvas/useCanvasPalette.js';
 import { useCanvasTouchNavigation } from '../canvas/useCanvasTouchNavigation.js';
 import { stagePointerHandlers } from '../canvas/stagePointerHandlers.js';
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import * as Automerge from '@automerge/automerge/slim';
 import automergeWasmUrl from '@automerge/automerge/automerge.wasm?url';
 import { Link, useNavigate, useParams } from '../routing.jsx';
 import Icon from '../components/Icon.jsx';
 import InteractiveAtmosphere from '../components/frelog/InteractiveAtmosphere.jsx';
 import ShareComposer from '../components/ShareComposer.jsx';
-import VectorLayer from '../canvas/DepthVectorLayer.jsx';
+const VectorLayer = lazy(() => import('../canvas/DepthVectorLayer.jsx'));
 import { SocketSendBudget } from '../canvas/socketSendBudget.js';
 import { GRAPHICS_QUALITY_KEY, normalizeGraphicsQuality } from '../canvas/graphicsQuality.js';
 import LaserLayer from '../components/LaserLayer.jsx';
@@ -105,7 +105,7 @@ import CanvasToolPanel from '../canvas/CanvasToolPanel.jsx';
 import RemoteCursorLayer from '../components/canvas/RemoteCursorLayer.jsx';
 import SettingsDialog from '../components/canvas/CanvasSettingsDialog.jsx';
 import CanvasParticipantsDialog from '../components/canvas/CanvasParticipantsDialog.jsx';
-import CanvasInspectorPanel from '../components/canvas/CanvasInspectorPanel.jsx';
+const CanvasInspectorPanel = lazy(() => import('../components/canvas/CanvasInspectorPanel.jsx'));
 import CanvasChatPanel from '../components/canvas/CanvasChatPanel.jsx';
 import CanvasLoadingStatus from '../components/canvas/CanvasLoadingStatus.jsx';
 import { CHAT_HISTORY_LIMIT, CHAT_ROOM_ID } from '../canvas/canvasChat.js';
@@ -165,10 +165,11 @@ function CanvasWorkspace() {
   const canWriteItem=useCallback(item=>!portfolioViewingRef.current&&canUseItem(item,accessRef.current,'write'),[]);
   const canExecuteItem=useCallback(item=>canUseItem(item,accessRef.current,'execute'),[]);
   const canWriteCanvas=!portfolioViewing&&canUseCanvas(capabilities,'write');
+  const runtimeSocketRequestsRef=useRef(new Map());
   const runtimeRequestRef = useRef(null);
-  runtimeRequestRef.current = request => {
+  runtimeRequestRef.current = (request,onOutput) => {
     if(!canUseCanvas(accessRef.current,'execute') || (request.action==='reset'&&!canUseCanvas(accessRef.current,'write')))return Promise.reject(new Error(EXECUTE_DENIED));
-    return executeCanvasCode({ ...request, canvasId, token, user });
+    return executeCanvasCode({ ...request, canvasId, token, user, sendRaw, pendingRequests:runtimeSocketRequestsRef.current },onOutput);
   };
   const saveBlueprintOutputRef = useRef(() => false);
   const saveRuntimeStateRef = useRef(() => false);
@@ -190,6 +191,7 @@ function CanvasWorkspace() {
   const canvasSnapshotLoadedRef = useRef(false);
   const reconnectAttemptsRef = useRef(0);
   const itemsRef = useRef({});
+  const notebookMigrationRef=useRef(new Set());
   const animationStore=useMemo(()=>createAnimationStore(()=>itemsRef.current),[]);
   const pendingItemChangesRef = useRef([]);
   const {
@@ -654,7 +656,7 @@ function CanvasWorkspace() {
     const key = String(id);
     const previous = itemsRef.current[key];
     const mediaOnly=(portfolioViewingRef.current&&['pdf','link'].includes(previous?.kind)&&update&&typeof update==='object'&&Object.keys(update).length>0&&Object.keys(update).every(key=>['mediaState','mediaLoop','pdfPage'].includes(key))||portfolioViewingRef.current&&previous?.kind==='value'&&update&&typeof update==='object'&&Object.keys(update).length>0&&Object.keys(update).every(key=>['valueNumber','valueText'].includes(key)))&&canUseItem(previous,accessRef.current,'write');
-    if (!(['table', 'chart', 'question', 'value', 'pdf', 'link'].includes(previous?.kind)||previous?.runtimeRole==='notebook') || !hostSessionRef.current.editable || isObjectLocked(previous) || (!canWriteItem(previous)&&!mediaOnly)) return false;
+    if (!(['table', 'chart', 'question', 'value', 'pdf', 'link'].includes(previous?.kind)||['notebook','notebook-cell'].includes(previous?.runtimeRole)) || !hostSessionRef.current.editable || isObjectLocked(previous) || (!canWriteItem(previous)&&!mediaOnly)) return false;
     const nextItem = typeof update === 'function' ? update(previous) : { ...previous, ...update };
     if (!nextItem || nextItem === previous) return false;
     itemsRef.current = { ...itemsRef.current, [key]: nextItem };
@@ -954,6 +956,17 @@ function CanvasWorkspace() {
       return patchItems(changes,removed);
     }
     if(previous?.kind==='project'){try{return projectStore.actions.remove(String(id));}catch(error){setToast(error.message);return false;}}
+    if(previous?.runtimeRole==='notebook'||previous?.runtimeRole==='notebook-cell'){
+      const key=String(id),rootId=previous.runtimeRole==='notebook'?key:String(previous.notebookId),root=itemsRef.current[rootId];
+      const removed=new Set([key]),changes={};
+      if(previous.runtimeRole==='notebook')for(const childId of root?.notebookCellIds||[])removed.add(String(childId));
+      else if(root?.runtimeRole==='notebook')changes[rootId]={...root,notebookCellIds:(root.notebookCellIds||[]).filter(childId=>String(childId)!==key)};
+      for(const removeId of removed){const object=itemsRef.current[removeId];if(object&&(!canWriteItem(object)||isObjectLocked(object))){setToast(WRITE_DENIED);return false;}}
+      for(const [connectorId,connector] of Object.entries(itemsRef.current))if(connector?.kind==='connector'&&(removed.has(String(connector.from))||removed.has(String(connector.to)))){
+        if(!canWriteItem(connector)||isObjectLocked(connector)){setToast(OBJECT_LOCK_MESSAGE);return false;}removed.add(connectorId);
+      }
+      return patchItems(changes,[...removed]);
+    }
     if(previous&&!canWriteItem(previous)){setToast(WRITE_DENIED);return false;}
     if (isObjectLocked(previous) || Object.values(itemsRef.current).some(item => item?.kind === 'connector' && isObjectLocked(item) && (String(item.from) === String(id) || String(item.to) === String(id)))) { setToast(OBJECT_LOCK_MESSAGE); return false; }
     if (!Object.hasOwn(itemsRef.current, String(id))) return true;
@@ -1070,6 +1083,7 @@ function CanvasWorkspace() {
       rejectedEventPongsRef,
       remoteCursorUpdaterRef,
       remoteDrawingStrokesRef,
+      runtimeSocketRequestsRef,
       rtcWsRef,
       serverReconnectRequestedRef,
       stageOfflineGeometryRef,
@@ -1597,24 +1611,91 @@ function CanvasWorkspace() {
     canPaste: canWriteCanvas, uploadMedia, uploadImage, uploadPdf, uploadSheet,
     isInteracting: () => Boolean(dragRef.current || panRef.current || drawingRef.current || selectionRef.current || eraserRef.current),
     selectItems, setActiveTool, setConnectionStartId, setToast, blocked: clipboardBlocked });
-  runtimeStore.notebook=async(id,{operation,code,cellId})=>{
-    const previous=itemsRef.current[id];if(!previous||previous.runtimeRole!=='notebook'||!canExecuteItem(previous)||!hostSessionRef.current.editable)throw Error(ui('이 그룹에는 실행 권한이 없습니다.'));
+  runtimeStore.focusCanvasObject=focusCanvasObject;
+  runtimeStore.notebookCellItems=id=>{
+    const root=itemsRef.current[String(id)];
+    if(!root||root.runtimeRole!=='notebook'||!Array.isArray(root.notebookCellIds))return [];
+    return root.notebookCellIds.map(objectId=>({id:objectId,item:itemsRef.current[objectId]})).filter(entry=>entry.item?.runtimeRole==='notebook-cell'&&entry.item.notebookId===String(id));
+  };
+  runtimeStore.notebookStructure=(id,action)=>{
+    const root=itemsRef.current[String(id)];
+    if(!root||root.runtimeRole!=='notebook'||!hostSessionRef.current.editable||!canWriteItem(root)||root.locked)return false;
+    const linked=Array.isArray(root.notebookCellIds),oldIds=linked?root.notebookCellIds:[];
+    const current=linked?oldIds.map(objectId=>{const child=itemsRef.current[objectId];return child?.runtimeRole==='notebook-cell'&&child.notebookId===String(id)?{objectId,item:child,cell:child.notebookCell,result:child.notebookResult}:null;}).filter(Boolean)
+      :(root.notebookCells||[]).map(cell=>{const objectId=notebookCellObjectId(id,cell.id),child=itemsRef.current[objectId];return {objectId,item:child?.runtimeRole==='notebook-cell'&&child.notebookId===String(id)?child:null,cell,result:root.notebookResults?.[cell.id]};});
+    let next=current;
+    if(action?.type==='add'){
+      if(current.length>=NOTEBOOK_LIMIT||!validNotebookCells([...current.map(entry=>entry.cell),action.cell]))return false;
+      next=[...current,{cell:action.cell,...(action.cellObjectId?{objectId:String(action.cellObjectId)}:{})}];
+    }else if(action?.type==='replace'){
+      if(!validNotebookCells(action.cells))return false;
+      next=action.cells.map(cell=>({cell}));
+    }else if(action?.type==='delete'){
+      next=current.filter(entry=>entry.objectId!==String(action.cellObjectId));
+      if(next.length===current.length)return false;
+    }else if(action?.type==='move'){
+      const index=current.findIndex(entry=>entry.objectId===String(action.cellObjectId)),target=index+Number(action.direction||0);
+      if(index<0||target<0||target>=current.length)return false;
+      next=current.slice();[next[index],next[target]]=[next[target],next[index]];
+    }else if(!['migrate','clear-results'].includes(action?.type))return false;
+    const rootNext={...root,groupId:String(id),height:.18,notebookCellIds:[]};delete rootNext.notebookCells;delete rootNext.notebookResults;
+    const changes={[String(id)]:rootNext},keep=new Set();
+    for(let index=0;index<next.length;index++){
+      const entry=next[index],cell=entry.cell;let objectId=entry.objectId;
+      if(!objectId)objectId=createId();
+      const collision=itemsRef.current[objectId];
+      if(collision&&!(collision.runtimeRole==='notebook-cell'&&collision.notebookId===String(id)&&collision.notebookCell?.id===cell.id))objectId=createId();
+      const existing=entry.item||itemsRef.current[objectId];
+      let cellItem=existing?.runtimeRole==='notebook-cell'&&existing.notebookId===String(id)
+        ?{...existing,notebookCell:cell,notebookId:String(id),groupId:rootNext.groupId,permission:rootNext.permission,x:Number(rootNext.x)||0,y:(Number(rootNext.y)||0)+rootNext.height+.025+index*.255,width:Number(rootNext.width)||.48,height:.235}
+        :notebookCellItem(String(id),rootNext,cell,index,entry.result,objectId).item;
+      if(action?.type==='clear-results'||action?.type==='replace'&&!entry.result)delete cellItem.notebookResult;
+      changes[objectId]=cellItem;keep.add(objectId);rootNext.notebookCellIds.push(objectId);
+    }
+    const removed=[...new Set([...oldIds,...current.filter(entry=>entry.item).map(entry=>entry.objectId)])].filter(objectId=>objectId&&!keep.has(objectId));
+    return patchItems(changes,removed,{history:!['migrate','clear-results'].includes(action.type)});
+  };
+  runtimeStore.notebook=async(id,{operation,code,cellId,cellObjectId})=>{
+    const previous=itemsRef.current[id];if(!previous||previous.runtimeRole!=='notebook'||!canExecuteItem(previous))throw Error(ui('이 그룹에는 실행 권한이 없습니다.'));
     if(operation==='prepare'&&(!canWriteCanvas||!canWriteItem(previous)))throw Error(ui('이 그룹에는 실행 환경을 변경할 권한이 없습니다.'));
     const active=previous.runtimeState;if(active?.running&&Date.now()-active.updatedAt<runtimeStateTtl(previous,active))throw Error(ui('노트북 실행 중…'));
+    const childEntry=cellId&&Array.isArray(previous.notebookCellIds)
+      ?previous.notebookCellIds.map(objectId=>[objectId,itemsRef.current[objectId]]).find(([,child])=>child?.runtimeRole==='notebook-cell'&&child.notebookId===String(id)&&child.notebookCell?.id===cellId)
+      :null;
+    const executionObjectId=cellObjectId||childEntry?.[0]||id;
+    const executionObject=itemsRef.current[executionObjectId];
+    if(operation==='execute'&&cellId&&Array.isArray(previous.notebookCellIds)&&(!childEntry||executionObjectId!==childEntry[0]||!canExecuteItem(executionObject)))throw Error(ui('이 셀을 실행할 권한이 없습니다.'));
     saveRuntimeStateRef.current(id,{running:true,status:'running',phase:operation,language:'python',detail:cellId||operation});
     try{
-      const result=await api(`/api/canvases/${canvasId}/runtime/notebook`,{method:'POST',token,body:{objectId:id,operation,code,passwordGrant:await ensureCanvasPasswordGrant(canvasPasswordGrantKey(canvasId,user))}});
+      const result=await executeCanvasCode({canvasId,token,user,action:'notebook',operation,objectId:executionObjectId,notebookId:id,cellId,code,sendRaw,pendingRequests:runtimeSocketRequestsRef.current});
       const current=itemsRef.current[id];
       if(current&&canExecuteItem(current)&&cellId){
         const entry={outputs:result.outputs||[],executionCount:result.executionCount??null,exitCode:result.exitCode??1,...(result.error?{error:result.error}:{}),...(result.truncated?{truncated:true}:{})};
-        const notebookResults={...(current.notebookResults||{}),[cellId]:entry};
-        if(JSON.stringify(notebookResults).length>524288)throw Error(ui('노트북 출력이 너무 큽니다. 출력 일부를 지운 뒤 다시 실행하세요.'));
-        patchItems({[id]:{...current,notebookResults}},[],{history:false});
+        if(Array.isArray(current.notebookCellIds)){
+          if(!childEntry||!canExecuteItem(childEntry[1]))throw Error(ui('이 셀을 실행할 권한이 없습니다.'));
+          if(JSON.stringify(entry).length>524288)throw Error(ui('셀 출력이 너무 큽니다. 출력을 지운 뒤 다시 실행하세요.'));
+          patchItems({[childEntry[0]]:{...childEntry[1],notebookResult:entry}},[],{history:false});
+        }else{
+          const notebookResults={...(current.notebookResults||{}),[cellId]:entry};
+          if(JSON.stringify(notebookResults).length>524288)throw Error(ui('노트북 출력이 너무 큽니다. 출력 일부를 지운 뒤 다시 실행하세요.'));
+          patchItems({[id]:{...current,notebookResults}},[],{history:false});
+        }
       }
       saveRuntimeStateRef.current(id,{running:false,status:result.exitCode?'error':'success',failed:Boolean(result.exitCode),completed:true,language:'python',...(result.error?{error:result.error}:{})});
       return result;
     }catch(error){saveRuntimeStateRef.current(id,{running:false,status:'error',failed:true,error:error.message});throw error;}
   };
+  useEffect(()=>{
+    if(!hostStatus.editable)return;
+    for(const [id,item] of Object.entries(items)){
+      if(item?.runtimeRole!=='notebook'||!Array.isArray(item.notebookCellIds)||item.locked||!canWriteItem(item))continue;
+      const children=item.notebookCellIds.map(childId=>({id:childId,item:items[childId]}));
+      if(children.some(entry=>entry.item?.runtimeRole!=='notebook-cell'||entry.item.notebookId!==id))continue;
+      const next={...item,height:Math.max(.65,Number(item.height)||0),notebookCells:children.map(entry=>entry.item.notebookCell),notebookResults:Object.fromEntries(children.filter(entry=>entry.item.notebookResult).map(entry=>[entry.item.notebookCell.id,entry.item.notebookResult]))};
+      delete next.notebookCellIds;delete next.groupId;
+      patchItems({[id]:next},children.map(entry=>entry.id),{history:false});
+    }
+  },[canvasId,hostStatus.editable,items,canWriteItem]);
   runtimeStore.connectTerminal = (objectId, request) => openTerminalSocket({canvasId,token,user,objectId,...request});
   const panelLayout = usePanelLayout();
   const canvasParticipants = useParticipantProfiles(settings?.participants, token, user);
@@ -1684,8 +1765,8 @@ function CanvasWorkspace() {
           <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true">{(showXAxis || showYAxis) && <CanvasAxisTicks boardRef={boardRef} camera={camera} showXAxis={showXAxis} showYAxis={showYAxis} />}{showXAxis && <span className="coordinate-x" />}{showYAxis && <span className="coordinate-y" />}{(showXAxis || showYAxis) && <i className="coordinate-origin">0</i>}</div>
           <div className="canvas-scene" ref={sceneRef} style={{clipPath:portfolioViewing&&presentationPage?.frameId?`inset(var(--frame-screen-top) calc(100% - var(--frame-screen-left) - var(--frame-screen-width)) calc(100% - var(--frame-screen-top) - var(--frame-screen-height)) var(--frame-screen-left))`:undefined, width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }}>
             {depthLayers.map((layer, index) => <div className="canvas-depth-layer" key={layer.depth} data-depth={layer.depth} style={{ position: 'absolute', inset: 0, zIndex: index + 1, pointerEvents: 'none' }}>
-              <VectorLayer token={token} graphicsQuality={graphicsQuality} style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }} worldSize={boardSize} items={layer.vectors} referenceItems={items} routingRevision={spatialIndex.stats.boundsCalculated} inkItems={layer.inkItems} previewStrokes={layer.depth === 0 ? remoteDrawingStrokes : undefined} camera={camera} onReady={layer.depth === 0 ? (setDraft) => { vectorDraftRef.current = setDraft; } : undefined} />
-            <div className="canvas-world-layer" style={{position:'absolute',width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`}}><PresentationContext.Provider value={portfolioViewing}><CanvasLayerObjects pendingEntrance={pendingEntrance} objects={layer.domObjects} domSelection={domSelection} editingId={editingId} connectionStartId={connectionStartId} world={boardSize} scale={representationScale} token={token} runtimeStore={runtimeStore} selected={selectedObjectIdSet} singleSelection={hasSingleSelection} activeTool={activeTool} dirtyItems={dirtyItems} editorsByItem={editorsByItem} actions={objectActions} access={capabilities} canWriteItem={canWriteItem} canExecuteItem={canExecuteItem} /></PresentationContext.Provider></div>
+              <Suspense fallback={null}><VectorLayer token={token} graphicsQuality={graphicsQuality} style={{ width: viewportSize.width, height: viewportSize.height, right: 'auto', bottom: 'auto' }} worldSize={boardSize} items={layer.vectors} referenceItems={items} routingRevision={spatialIndex.stats.boundsCalculated} inkItems={layer.inkItems} previewStrokes={layer.depth === 0 ? remoteDrawingStrokes : undefined} camera={camera} onReady={layer.depth === 0 ? (setDraft) => { vectorDraftRef.current = setDraft; } : undefined} /></Suspense>
+            <div className="canvas-world-layer" style={{position:'absolute',width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`}}><PresentationContext.Provider value={portfolioViewing}><Suspense fallback={null}><CanvasLayerObjects pendingEntrance={pendingEntrance} objects={layer.domObjects} allItems={items} domSelection={domSelection} editingId={editingId} connectionStartId={connectionStartId} world={boardSize} scale={representationScale} token={token} runtimeStore={runtimeStore} selected={selectedObjectIdSet} singleSelection={hasSingleSelection} activeTool={activeTool} dirtyItems={dirtyItems} editorsByItem={editorsByItem} actions={objectActions} access={capabilities} canWriteItem={canWriteItem} canExecuteItem={canExecuteItem} /></Suspense></PresentationContext.Provider></div>
             </div>)}
             <div className="canvas-world-layer" style={{ position: 'absolute', width:boardSize.width,height:boardSize.height,transformOrigin:'top left',transform:`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.scale})`, zIndex: depthLayers.length + 1, pointerEvents: 'none' }}>
             {selectedItem && canWriteItem(selectedItem) && !isObjectLocked(selectedItem) && !['connector','frame'].includes(selectedItem.kind) && activeTool === 'select' && !editingId && <RotationHandles sceneRef={sceneRef} id={String(primarySelectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startObjectRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
@@ -1700,7 +1781,7 @@ function CanvasWorkspace() {
           {activeTool === 'anchor' && <div className="draw-cursor-label"><Icon name="anchor" size={13}/> {ui('저장할 위치를 클릭하세요.')}</div>}{activeTool === 'laser' && <div className="draw-cursor-label laser-cursor-label"><Icon name="laser" size={13} />{" " + ui("가리키는 중 · 1.6초 후 사라짐") + ""}</div>}{activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} />{" " + ui("그리는 중") + ""}</div>}{activeTool === 'eraser' && <div className="draw-cursor-label"><Icon name="eraser" size={13} />{" " + ui("드로잉을 드래그해 지우기") + ""}</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? ui("도착 오브젝트 선택") : ui("시작 오브젝트 선택")}</div>}{activeTool === 'link' && !sharePosition && <div className="draw-cursor-label"><Icon name="link" size={13} />{" " + ui("공유 자료를 놓을 위치 선택") + ""}</div>}
         </div>
       </main>
-<ResizablePanel {...panelLayout.handle('inspector')}><CanvasInspectorPanel onSaveAnchor={ids=>window.dispatchEvent(new CustomEvent('canvas-open-anchors',{detail:{objectIds:[...ids]}}))} portfolioFrames={framePages} portfolioActions={portfolioActions} portfolioViewing={portfolioViewing} graphicsQuality={graphicsQuality} changeGraphicsQuality={changeGraphicsQuality} spatialIndex={spatialIndex} updateContentSetting={updateContentSetting} updateChartItem={updateTableItem} onNavigateObject={focusCanvasObject} onOpenComments={id => { finishEditing(editingId); comments.open(id); }} {...{
+      <ResizablePanel {...panelLayout.handle('inspector')}><Suspense fallback={null}><CanvasInspectorPanel onSaveAnchor={ids=>window.dispatchEvent(new CustomEvent('canvas-open-anchors',{detail:{objectIds:[...ids]}}))} portfolioFrames={framePages} portfolioActions={portfolioActions} portfolioViewing={portfolioViewing} graphicsQuality={graphicsQuality} changeGraphicsQuality={changeGraphicsQuality} spatialIndex={spatialIndex} updateContentSetting={updateContentSetting} updateChartItem={updateTableItem} onNavigateObject={focusCanvasObject} onOpenComments={id => { finishEditing(editingId); comments.open(id); }} {...{
         activeTool,
         canvasId,
         canvasParticipants: mentionParticipants,
@@ -1773,14 +1854,14 @@ function CanvasWorkspace() {
         updateNewShapeArrowHead,
         updateShapeArrowBend,
         zoomSensitivity
-      }} /></ResizablePanel>
+      }} /></Suspense></ResizablePanel>
 <ScreenShareViewer voice={voice}/><ResizablePanel {...panelLayout.handle('chat')} title={ui('채팅 · 통화')} callActive={voice.state.active}><CanvasChatPanel token={token} voice={voice} tab={communicationTab} onTabChange={setCommunicationTab} canWrite={canWriteCanvas} {...{ chatHistoryLoading, connection, hasOlderMessages, loadOlderMessages, message, messages, setMessage, submitMessage, chatMessageTotal }} participants={mentionParticipants} highlight={chatHighlight} onHighlightExpired={() => setChatHighlight(null)} onHighlightVisible={() => { if (chatJumpNote) { comments.dismiss(chatJumpNote); setChatJumpNote(null); } }} /></ResizablePanel>
     </div>}
     {passwordPrompt.prompt&&<CanvasPasswordDialog prompt={passwordPrompt.prompt} theme={theme}/>}
     {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{ui(toast)}</div>}
     {comments.activeId && <ObjectCommentsPanel token={token} comments={comments} participants={mentionParticipants} connection={connection} />}
     <MentionNotifications notifications={comments.notifications} onJump={jumpToMention} onDismiss={comments.dismiss} />
-    {showRuntimeSettings && <RuntimeSettingsDialog canManage={canWriteCanvas&&canUseCanvas(capabilities,'execute')} canvasId={canvasId} token={token} user={user} initialLanguage={selectedItem?.language || 'cpp'} isRunning={()=>runtimeStore.isRunning()} onClose={()=>setShowRuntimeSettings(false)} />}
+    {showRuntimeSettings && <RuntimeSettingsDialog request={management=>executeCanvasCode({canvasId,action:'manage',management,sendRaw,pendingRequests:runtimeSocketRequestsRef.current})} canManage={canWriteCanvas&&canUseCanvas(capabilities,'execute')} canvasId={canvasId} token={token} user={user} initialLanguage={selectedItem?.language || 'cpp'} isRunning={()=>runtimeStore.isRunning()} onClose={()=>setShowRuntimeSettings(false)} />}
     {versionsOpened.current&&<CanvasVersionDialog open={showVersions} api={canvasCodeApi} canvasId={canvasId} onClose={()=>setShowVersions(false)} onInspect={source=>{setCanvasCodeSource(source);setShowVersions(false);setShowCanvasCode(true);}}/>}
     {showCanvasCode && <CanvasAsCodeDialog api={canvasCodeApi} canvasId={canvasId} initialSource={canvasCodeSource} onClose={() => setShowCanvasCode(false)} />}
     {showSettings && <SettingsDialog backgroundColor={backgroundColor} setBackgroundColor={setBackgroundColor} favoriteColors={favoriteColors} saveFavoriteColor={saveFavoriteColor} theme={theme} canvasId={canvasId} image={canvas?.image} token={token} onImageSaved={(image) => setCanvas(current => ({ ...current, image }))} settings={settings} pending={settingsPending} onClose={() => setShowSettings(false)} onUpdate={sendSettings} onRequest={requestSettings} />}

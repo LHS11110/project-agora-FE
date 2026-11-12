@@ -1,18 +1,22 @@
 import GlobalYoutubePlayer from './media/GlobalYoutubePlayer.jsx';
-import QrApprovalPage from './pages/QrApprovalPage.jsx';
 import { ui } from './i18n/locale.js';
 import { useUiLocale } from './i18n/useUiLocale.js';
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes, useLocation, useParams } from './routing.jsx';
 import { useAuth } from './state/AuthContext.jsx';
 import AppShell from './components/AppShell.jsx';
-import HomePage from './pages/HomePage.jsx';
-import LoginPage from './pages/LoginPage.jsx';
-import ProfilePage from './pages/ProfilePage.jsx';
-import SearchPage from './pages/SearchPage.jsx';
+const HomePage = lazy(() => import('./pages/HomePage.jsx'));
+const LoginPage = lazy(() => import('./pages/LoginPage.jsx'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx'));
+const SearchPage = lazy(() => import('./pages/SearchPage.jsx'));
+const QrApprovalPage = lazy(() => import('./pages/QrApprovalPage.jsx'));
 const CanvasPage = lazy(() => import('./pages/CanvasPage.jsx'));
-import DocsPage from './pages/DocsPage.jsx';
+const DocsPage = lazy(() => import('./pages/DocsPage.jsx'));
 const TutorialPage = lazy(() => import('./pages/TutorialPage.jsx'));
+
+function PageLoading() {
+  return <div className="route-loading">{ui('페이지를 불러오고 있어요.')}</div>;
+}
 
 function Protected({ children }) {
 
@@ -29,15 +33,15 @@ function CanvasRoute() {
 
 export default function App() {
   useUiLocale();
-  return <><GlobalYoutubePlayer /><Routes>
+  return <><GlobalYoutubePlayer /><Suspense fallback={<PageLoading />}><Routes>
     <Route path="/" element={<HomePage />} />
     <Route path="/docs" element={<DocsPage />} />
-    <Route path="/tutorial" element={<Suspense fallback={<div className="route-loading">{ui("캔버스 체험을 준비하고 있어요.")}</div>}><TutorialPage /></Suspense>} />
+    <Route path="/tutorial" element={<TutorialPage />} />
     <Route path="/qr-login" element={<QrApprovalPage />} />
     <Route path="/login" element={<LoginPage />} />
     <Route path="/profile" element={<Protected><ProfilePage /></Protected>} />
     <Route path="/search" element={<Protected><SearchPage /></Protected>} />
     <Route path="/canvases/:canvasId" element={<Protected><Suspense fallback={<div className="canvas-app-page canvas-loading-state"><span className="loader" />{" " + ui("캔버스 화면을 불러오고 있어요.") + ""}</div>}><CanvasRoute /></Suspense></Protected>} />
     <Route path="*" element={<Navigate to="/" replace />} />
-  </Routes></>;
+  </Routes></Suspense></>;
 }

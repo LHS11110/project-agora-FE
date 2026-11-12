@@ -1,3 +1,4 @@
+import {applyItemDelta,operationForWire} from './itemDelta.js';
 import { OBJECT_LOCK_MESSAGE } from '../locks/objectLock.js';
 import { itemSnapshot, changeItems } from '../itemSnapshots.js';
 import { operationIds, translateItem } from '../host/hostOperations.js';
@@ -35,9 +36,13 @@ export class ServerCanvasSession {
       this.ready = false; this.needsSync = true; this.notify(); return;
     }
     if (this.seeded && (revision < this.revision || accepted < this.count)) return;
-    this.userId = data.sync_user_id;
+    this.userId = data.sync_user_id;this.deltaEdits=data.edit_protocol===2;
     if (this.flight && accepted >= this.flight.request_count) this.accept();
     this.count = accepted;
+    if(this.rebaseFlight&&this.flight&&this.rebaseOperations){
+      const operations=this.rebaseOperations(items,this.flight.operations);
+      this.flight={...this.flight,request_id:createId(),operations};this.rebaseFlight=false;
+    }
     const previousIds = Object.keys(this.items);
     this.items = itemSnapshot(Object.fromEntries(Object.entries(items).filter(([, item]) => item?.kind !== 'host-tombstone')));
     this.needsSync = false; this.revision = revision; this.ready = true; this.seeded = true; this.syncAt = 0;
@@ -49,7 +54,7 @@ export class ServerCanvasSession {
     if (!this.editable) return false;
     if (this.pendingOperations.length + operations.length > 20000) { this.reject('저장 대기 중인 변경이 많습니다. 서버 연결을 확인해주세요.'); return false; }
     const bytes = operation => {
-      const { doc, base, ...wire } = operation;
+      const wire=operationForWire(operation,this.deltaEdits);
       return new TextEncoder().encode(JSON.stringify(wire)).length;
     };
     const sizes = operations.map(bytes);
@@ -74,7 +79,7 @@ export class ServerCanvasSession {
         for (const key of operation.unset || []) delete patch[key];
         for (const key of Object.keys(operation.patch)) unset.delete(key);
         this.queuedBytes -= bytes(last);
-        this.queue[this.queue.length - 1] = { ...last, ...operation, patch, unset: [...unset] };
+        this.queue[this.queue.length - 1] = { ...last, ...operation, ...(last.notebookBase?{notebookBase:last.notebookBase}:{}),...(last.notebookResultBase?{notebookResultBase:last.notebookResultBase}:{}),textBase:{...operation.textBase,...last.textBase},knownChanges:last.knownChanges,snapshotKnown:last.snapshotKnown, patch, unset: [...unset] };
         this.queuedBytes += bytes(this.queue.at(-1));
       } else { this.queue.push(operation); this.queuedBytes += bytes(operation); }
     }
@@ -85,13 +90,13 @@ export class ServerCanvasSession {
   retryRejected() { this.blocked = ''; this.ready = false; this.syncAt = 0; this.tick(); }
   requestSync(now) {
     if (this.syncAt && now - this.syncAt < 2000) return;
-    if (this.send({ type: 'canvas_sync', client_id: this.clientId, request_id: createId() })) this.syncAt = now;
+    if (this.send({ type: 'canvas_sync', delta_commits:true, client_id: this.clientId, request_id: createId() })) this.syncAt = now;
   }
   accept() {
     const operations = this.flight?.operations || [];
     this.receipt?.({ status: 'accepted', summary: { created: operations.filter(o => o.action === 'create').length,
       updated: operations.filter(o => ['patch','translate'].includes(o.action)).length, deleted: operations.filter(o => o.action === 'delete').length } });
-    this.flight = null;
+    this.flight = null;this.rebaseFlight=false;
   }
   receive(_peer, message) { if (message) this.receiveServer(message); }
   receiveServer(data) {
@@ -105,6 +110,8 @@ export class ServerCanvasSession {
       if (data.revision <= this.revision) return true;
       if (data.revision !== this.revision + 1 || !this.ready) { this.ready = false; this.requestSync(Date.now()); this.notify(); return true; }
       const changes = new Map(Object.entries(data.items || {}));
+      try {for(const [id,delta] of Object.entries(data.patches||{}))changes.set(id,applyItemDelta(this.items[id],delta));}
+      catch {this.ready=false;this.requestSync(Date.now());this.notify();return true;}
       for (const move of data.translations || []) for (const id of move.ids) {
         const item = changes.has(id) ? changes.get(id) : this.items[id];
         if (item) changes.set(id, translateItem(item, move.dx, move.dy));
@@ -122,6 +129,8 @@ export class ServerCanvasSession {
         if (data.duplicate || data.server_revision > this.revision + 1) { this.ready = false; this.requestSync(Date.now()); }
       } else if (['BROKER_BUSY','BROKER_QUEUE_FULL','RATE_LIMITED','BROKER_BACKEND_UNAVAILABLE','QUERY_OUTCOME_UNKNOWN','QUERY_UNAVAILABLE','STORAGE_UNAVAILABLE','CANVAS_WRITE_CONFLICT'].includes(data.code)) {
         this.sentAt = Date.now();
+      } else if(data.code==='CANVAS_TEXT_CONFLICT'){
+        this.rebaseFlight=true;this.ready=false;this.requestSync(Date.now());
       } else if (data.code === 'CLIENT_SEQUENCE_CONFLICT') {
         this.ready = false; this.requestSync(Date.now());
       } else {

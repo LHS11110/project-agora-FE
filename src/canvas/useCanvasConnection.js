@@ -1,11 +1,11 @@
-import {startCanvasPasswordSession} from './canvasPasswordSession.js';
+import {installCanvasTransport} from '../api/canvasTransport.js';
 import {canvasCodecUrl,installSocketCodec} from './sync/socketCodec.js';
 import { registerGroupLayout } from './permissions/groupBits.js';
 import { RtcMembershipRecovery } from './RtcMembershipRecovery.js';
 import { useEffect, useRef } from 'react';
 import { retryableConnectionError } from './connectionRetry.js';
 import CanvasBrokerPeers from '../components/CanvasBrokerPeers.js';
-import { api, canvasSocketUrl, rtcSocketUrl } from '../api/client.js';
+import { api, apiUrl, canvasSocketUrl, rtcSocketUrl } from '../api/client.js';
 import { canvasPasswordGrantKey, readCanvasPasswordGrant, saveCanvasPasswordGrant } from './canvasAccess.js';
 import { mergeChatEntries, toChatEntry } from './canvasChat.js';
 import {
@@ -13,6 +13,7 @@ import {
   nextPeerSyncVersion,
 } from './collaborativeSync.js';
 import { createId } from './canvasIds.js';
+import { executeCanvasCode, rejectRuntimeSocketRequests, settleRuntimeSocketResponse } from './runtime/executeCanvasCode.js';
 
 export function useCanvasConnection(options) {
   const rtcMembershipRetryRef = useRef(0);
@@ -55,6 +56,7 @@ export function useCanvasConnection(options) {
       rejectedEventPongsRef,
       remoteCursorUpdaterRef,
       remoteDrawingStrokesRef,
+      runtimeSocketRequestsRef,
       rtcWsRef,
       serverReconnectRequestedRef,
       stageOfflineGeometryRef,
@@ -109,9 +111,9 @@ export function useCanvasConnection(options) {
 
   useEffect(() => {
     let cancelled = false;
+    let disposeCanvasTransport=null;
     const passwordAbort = new AbortController();
     const rtcMembershipRecovery = new RtcMembershipRecovery(sendRtcRaw);
-    let passwordSession=null;
     let socket;
     let rtcSocket;
     let reconnectTimer = null;
@@ -224,7 +226,9 @@ export function useCanvasConnection(options) {
               method: 'POST', token, ...(body ? { body } : {}),
             });
             serverAccessRetry = 0;
-            if (canvasSettings.password_protected) {
+            // Persist only a grant issued after direct password entry. Reusing
+            // the fixed four-hour grant must not restart its expiry window.
+            if (canvasSettings.password_protected && !usingPasswordGrant) {
               saveCanvasPasswordGrant(passwordGrantKey, access.canvas_password_token);
             }
           } catch (err) {
@@ -346,12 +350,17 @@ export function useCanvasConnection(options) {
           if(cancelled||wsRef.current!==socket)return;
           let data;
           try { data = typeof event.data==='string'?JSON.parse(event.data):event.data; } catch { return; }
+          if(settleRuntimeSocketResponse(runtimeSocketRequestsRef.current,data))return;
           if (receiveServerEvent(data)) return;
           if (data.type === 'server_reconnect') {
             requestServerReconnect(data);
             return;
           }
           if (data.type === 'init_items') {
+            disposeCanvasTransport?.();
+            disposeCanvasTransport=installCanvasTransport({canvasId:String(canvasId),token,origin:new URL(apiUrl('/')).origin,request:service=>executeCanvasCode({canvasId,action:'service',service,sendRaw,pendingRequests:runtimeSocketRequestsRef.current})});
+            const negotiation={type:'canvas_sync',delta_commits:true,client_id:hostSessionRef.current.clientId,request_id:crypto.randomUUID()};
+            if(socket.sendObject)socket.sendObject(negotiation);else socket.send(JSON.stringify(negotiation));
             strokeSaveFlushRef.current?.({ force: true });
             const initialItems = data.items && typeof data.items === 'object' ? data.items : {};
             replacePersistedItems(initialItems);
@@ -377,12 +386,6 @@ export function useCanvasConnection(options) {
             setCanvas((current) => ({ ...current, canvas_name: data.canvas_name || current?.canvas_name }));
             canvasConnectionId = data.rtc_canvas_connection_id == null ? '' : String(data.rtc_canvas_connection_id);
             canvasConnectionHash = typeof data.rtc_canvas_connection_hash === 'string' ? data.rtc_canvas_connection_hash : '';
-            if(access.canvas_password_token&&!passwordSession)passwordSession=startCanvasPasswordSession({
-              key:passwordGrantKey,grant:access.canvas_password_token,
-              connected:()=>!cancelled&&socket?.readyState===WebSocket.OPEN,
-              proof:()=>({connectionId:canvasConnectionId,proof:canvasConnectionHash}),
-              request:body=>api(`/api/canvases/${canvasId}/password-session`,{method:'POST',token,body}),
-            });
             if (!canvasConnectionId || !canvasConnectionHash) setToast('RTC 연결 증명값을 받지 못했습니다. 페이지를 새로고침해주세요.');
             joinRtcSocket();
             sendRaw({ type: 'canvas_settings_get' });
@@ -390,9 +393,9 @@ export function useCanvasConnection(options) {
             return;
           }
           if (data.type === 'canvas_access_revoked') {
+            rejectRuntimeSocketRequests(runtimeSocketRequestsRef.current,'캔버스 접근 권한이 회수되었습니다.');
             cancelled = true;
             passwordAbort.abort();
-            passwordSession?.dispose();
             autoReconnectRef.current = false;
             if (reconnectTimer !== null) { clearTimeout(reconnectTimer); reconnectTimer = null; }
             groupsRef.current = [];
@@ -555,6 +558,7 @@ export function useCanvasConnection(options) {
         };
         socket.onclose = (event) => {
           if(cancelled||wsRef.current!==socket)return;
+          rejectRuntimeSocketRequests(runtimeSocketRequestsRef.current,'캔버스 WebSocket 연결이 끊겨 실행 요청을 마치지 못했습니다.');
           if(event.code===1008){autoReconnectRef.current=false;serverReconnectRequestedRef.current=false;if(reconnectTimer!==null){clearTimeout(reconnectTimer);reconnectTimer=null;}}
           if (wsRef.current === socket) wsRef.current = null;
           if (!cancelled && event.code === 1012) requestServerReconnect({ retry_after_ms: 0 });
@@ -615,11 +619,12 @@ export function useCanvasConnection(options) {
     connect();
     return () => {
       strokeSaveFlushRef.current?.({ force: true });
+      disposeCanvasTransport?.();
+      rejectRuntimeSocketRequests(runtimeSocketRequestsRef.current,'캔버스 연결이 변경되어 실행 요청을 중단했습니다.');
       cancelled = true;
       passwordAbort.abort();
-      passwordSession?.dispose();
-      rtcMembershipRecovery.dispose();
       const preservePeerMesh = autoReconnectRef.current && canvasSnapshotLoadedRef.current && reconnectTimer === null;
+      rtcMembershipRecovery.dispose();
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       rtcReady = false;
       canvasConnectionId = '';

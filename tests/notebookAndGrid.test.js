@@ -48,3 +48,13 @@ test('notebook HTML uses a bounded numeric font size while keeping its sandbox p
  assert.match(notebookHtml('test','13; color:red'),/font:13px system-ui/);
  assert.match(notebookHtml('test',1024),/font:512px system-ui/);
 });
+
+test('notebook source limits count UTF-8 bytes and match server aggregate bounds',()=>{
+ const cell={id:'unicode',cellType:'code',source:'가'.repeat(21845)};
+ assert.equal(validNotebookCells([cell]),true);
+ assert.equal(validNotebookCells([{...cell,source:cell.source+'가'}]),false);
+ const ascii=Array.from({length:7},(_,i)=>({id:'cell'+i,cellType:'code',source:'x'.repeat(65536)}));
+ assert.equal(validNotebookCells(ascii),true);
+ assert.equal(validNotebookCells([...ascii,{...ascii[0],id:'cell7'}]),false);
+ assert.equal(validNotebookResults({cell:{outputs:[{output_type:'stream',text:'x'.repeat(600000)}],exitCode:0}}),true);
+});

@@ -22,7 +22,9 @@ export default function SyntaxCode({ value = '', language = 'text', title }) {
     let cancelled = false;
     // Full source remains visible; very large blocks use ordinary text.
     if (source.length > 200000) return undefined;
-    import('../../canvas/monacoRuntime.js').then(async ({ monaco, editorLanguage }) => {
+    import('../../canvas/monacoRuntime.js').then(async ({ monaco, ensureEditorLanguage, editorLanguage }) => {
+      await ensureEditorLanguage(language);
+      if (cancelled) return;
       const id = editorLanguage(language);
       await monaco.editor.colorize(source, id, { theme: 'frelog-night', tabSize: 2 });
       if (!cancelled) setHighlight({ source, language, tokens: monaco.editor.tokenize(source, id) });

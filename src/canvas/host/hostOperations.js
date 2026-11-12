@@ -67,6 +67,12 @@ export function itemOperations(previous, next, docs, changedIds = null) {
     }
     if (!before || Object.keys(patch).length || unset.length || documentChanged) {
       const operation = { id, action: before ? 'patch' : 'create', patch, unset };
+      if(before){
+        operation.textBase={};for(const field of ['text','code'])if(typeof before[field]==='string'&&typeof patch[field]==='string')operation.textBase[field]=before[field];
+        operation.knownChanges=before.automerge_changes||[];operation.snapshotKnown=Boolean(before.automerge_snapshot);
+      }
+      if(before&&patch.notebookResults)operation.notebookResultBase=before.notebookResults||{};
+      if(before&&patch.notebookCells)operation.notebookBase=before.notebookCells;
       if (isCollaborativeItem(after)) {
         const document = doc || loadItemDoc(after);
         operation.doc = encodeDocument(document);

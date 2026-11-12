@@ -6,25 +6,13 @@ const browser=await chromium.launch({executablePath:process.env.AGORA_E2E_CHROME
 try{
  const context=await browser.newContext({viewport:{width:1100,height:900},locale:'ko-KR',ignoreHTTPSErrors:process.env.AGORA_E2E_INSECURE_LOCAL_TLS === '1'});
  let javaInstalls=0;
- await context.route('**/api/canvases/123/runtime/java/dependencies',async route=>{
-  javaInstalls++;await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({installed:true,jarCount:1,cached:false})});
- });
- await context.route('**/api/canvases/123/runtime/disk',async route=>{
-  const body=route.request().postDataJSON();assert.equal(body.revision,snapshot.revision);assert.equal(body.sizeGiB,12);
-  snapshot.revision++;snapshot.diskGiB=body.sizeGiB;
-  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(snapshot)});
- });
- await context.route('**/api/canvases/123/runtime/resources',async route=>{
-  const body=route.request().postDataJSON();assert.equal(body.revision,snapshot.revision);
-  assert.equal(body.template,'medium');snapshot.revision++;snapshot.resourceTemplate=body.template;
-  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(snapshot)});
- });
- await context.route('**/api/canvases/123/runtime/settings',async route=>{
-  if(route.request().method()==='PUT'){
-   const body=route.request().postDataJSON();writes.push(body);assert.equal(body.revision,snapshot.revision);
-   snapshot.revision++;snapshot.languages[body.language]=body.config;
-  }
-  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(snapshot)});
+ await context.exposeFunction('runtimeManagement',async body=>{
+  if(body.action==='java_dependencies'){javaInstalls++;return {installed:true,jarCount:1,cached:false};}
+  if(body.action==='disk_set'){assert.equal(body.revision,snapshot.revision);assert.equal(body.sizeGiB,12);snapshot.revision++;snapshot.diskGiB=body.sizeGiB;}
+  else if(body.action==='resources_set'){assert.equal(body.revision,snapshot.revision);assert.equal(body.template,'medium');snapshot.revision++;snapshot.resourceTemplate=body.template;}
+  else if(body.action==='settings_set'){writes.push(body);assert.equal(body.revision,snapshot.revision);snapshot.revision++;snapshot.languages[body.language]=body.config;}
+  else assert.equal(body.action,'settings_get');
+  return structuredClone(snapshot);
  });
  const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.goto((process.env.AGORA_E2E_ORIGIN || 'https://localhost:5191')+'/tests/browser/runtime-settings.html');

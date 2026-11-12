@@ -21,9 +21,9 @@ test('expired/malformed grants are removed; rejected grants clear both stores',(
  try{localStorage.setItem('key','broken');sessionStorage.setItem('key',token(1));assert.equal(readCanvasPasswordGrant('key'),null);assert.equal(localStorage.getItem('key'),null);const grant=token(Math.floor(Date.now()/1000)+1800);saveCanvasPasswordGrant('key',grant);saveCanvasPasswordGrant('key',null);assert.equal(sessionStorage.getItem('key'),null);assert.equal(localStorage.getItem('key'),null);assert.equal(isUnexpiredJwt('bad'),false);}
  finally{globalThis.localStorage=oldLocal;globalThis.sessionStorage=oldSession;}
 });
-test('grant expires 30 minutes after authentication, without sliding renewal',()=>{
+test('grant expires four hours after password authentication and reuse does not slide expiry',()=>{
  const oldLocal=globalThis.localStorage,oldSession=globalThis.sessionStorage,now=Date.now;let clock=1700000000000;
  globalThis.localStorage=storage();globalThis.sessionStorage=storage();Date.now=()=>clock;
- try{const grant=token(clock/1000+1800);saveCanvasPasswordGrant('key',grant);clock+=1799999;assert.equal(readCanvasPasswordGrant('key'),grant);clock++;assert.equal(readCanvasPasswordGrant('key'),null);}
+ try{const grant=token(clock/1000+4*60*60);saveCanvasPasswordGrant('key',grant);clock+=4*60*60*1000-1;assert.equal(readCanvasPasswordGrant('key'),grant);clock++;assert.equal(readCanvasPasswordGrant('key'),null);}
  finally{Date.now=now;globalThis.localStorage=oldLocal;globalThis.sessionStorage=oldSession;}
 });

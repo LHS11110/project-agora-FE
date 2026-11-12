@@ -21,12 +21,6 @@ export default function AppShell({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const isCanvas=location.pathname.startsWith('/canvases/');
-  const activeCanvasId=isCanvas?location.pathname.split('/')[2]||'':'';
-  const proofStudioBase=(import.meta.env?.VITE_PROOF_STUDIO_URL||'http://127.0.0.1:8890').replace(/\/$/,'');
-  const proofStudioParams=new URLSearchParams();
-  if(token)proofStudioParams.set('token',token);
-  if(activeCanvasId)proofStudioParams.set('canvasId',activeCanvasId);
-  const proofStudioHref=`${proofStudioBase}/${proofStudioParams.toString()?`?${proofStudioParams.toString()}`:''}`;
   const [navigationCollapsed,setNavigationCollapsed]=useState(()=>{try{return localStorage.getItem('agora_canvas_navigation_collapsed')!=='false';}catch{return false;}});
   useEffect(()=>{try{localStorage.setItem('agora_canvas_navigation_collapsed',String(navigationCollapsed));}catch{/* Optional local preference. */}},[navigationCollapsed]);
   const collapsed=isCanvas && navigationCollapsed;
@@ -38,10 +32,6 @@ export default function AppShell({ children }) {
         <div className="sidebar-section-label">WORKSPACE</div>
         <nav className="side-nav" aria-label={ui("주요 메뉴")}>
           {navItems.map((item) => <NavLink key={item.to} to={item.to} className={({ isActive }) => `side-link${isActive ? ' active' : ''}`}><Icon name={item.icon} size={19} /><span>{ui(item.label)}</span>{item.to === '/search' && location.pathname.startsWith('/canvases/') && <span className="nav-live-dot" />}</NavLink>)}
-          <a href={proofStudioHref} target="_blank" rel="noopener noreferrer" className="side-link" title={ui("Lean 4 Proof Notebook R&D Studio 열기")}>
-            <Icon name="code" size={19} />
-            <span>{ui("∀ Lean 4 증명 스튜디오")}</span>
-          </a>
         </nav>
         {!isCanvas && <Link className="sidebar-create-link" to="/search"><Icon name="grid" size={17}/><span>{ui('아이디어에서 코드까지, 하나의 캔버스.')}</span><Icon name="arrow" size={15}/></Link>}
         {!isCanvas && <div className="sidebar-language-control"><LanguageSwitcher /></div>}<div className="sidebar-account">{!isCanvas && <><UserAvatar user={user} token={token} className="avatar-small" /><div className="account-copy"><strong>{user?.nickname || ui("FreLog 사용자")}</strong><small>#{user?.tag_number ?? '—'}</small></div></>}<button className="icon-button logout-button" onClick={() => { logout(); navigate('/'); }} aria-label={ui("로그아웃")} title={ui("로그아웃")}><Icon name="logout" size={18} /></button></div>

@@ -6,6 +6,38 @@ import { createReadStream, existsSync, mkdirSync, cpSync, copyFileSync, readFile
 import { Agent } from 'node:https';
 import { extname, resolve, sep } from 'node:path';
 
+function manualChunk(id) {
+  const monacoRoot = '/node_modules/monaco-editor/esm/vs/';
+  const monacoIndex = id.indexOf(monacoRoot);
+  if (monacoIndex >= 0) {
+    const parts = id.slice(monacoIndex + monacoRoot.length).split('/');
+    const [area, section, feature, detail] = parts;
+    if (area === 'editor') {
+      if (section === 'contrib') {
+        if (['snippet', 'suggest', 'inlineCompletions', 'hover', 'colorPicker', 'inlayHints', 'stickyScroll'].includes(feature)) return 'monaco-editor-completion-suite';
+        return `monaco-editor-contrib-${feature || 'core'}`;
+      }
+      if (section === 'common') return ['model', 'services'].includes(feature) ? 'monaco-editor-common-model-services' : `monaco-editor-common-${feature || 'core'}`;
+      if (section === 'browser') return ['services', 'editorExtensions.js'].includes(feature) ? 'monaco-editor-browser-services' : `monaco-editor-browser-${feature || 'core'}`;
+      if (section === 'standalone') return `monaco-editor-standalone-${feature || 'core'}`;
+      return `monaco-editor-${section || 'core'}`;
+    }
+    if (area === 'base') {
+      if (section === 'browser' && feature === 'ui' && ['iconLabel', 'highlightedlabel'].includes(detail)) return 'monaco-base-browser-ui-labels';
+      if (section === 'browser' && feature === 'ui') return `monaco-base-browser-ui-${detail || 'core'}`;
+      if (section === 'browser') return `monaco-base-browser-${feature || 'core'}`;
+      if (section === 'common') return `monaco-base-common-${feature || 'core'}`;
+      return `monaco-base-${section || 'core'}`;
+    }
+    if (area === 'platform') {
+      if (['actions', 'contextview'].includes(section)) return 'monaco-platform-actions-context';
+      if (['opener', 'hover', 'markdown'].includes(section)) return 'monaco-platform-markdown-hover';
+      return `monaco-platform-${section || 'core'}`;
+    }
+    if (area === 'features') return `monaco-features-${section || 'core'}`;
+  }
+}
+
 function localMathJaxAssets() {
   const source = resolve(process.cwd(), 'node_modules/mathjax');
   let outputRoot = resolve(process.cwd(), 'dist');
@@ -62,7 +94,13 @@ export default defineConfig(({ mode, command }) => {
   } : undefined;
   const agent = command === 'serve' ? new Agent({ minVersion: 'TLSv1.3', ca: readFileSync(env.SERVICE_TLS_CA || resolve(tlsRoot, 'ca.pem')) }) : undefined;
   return {
+    // Dynamic language modules must share the editor registry during development.
+    optimizeDeps: { exclude: ['monaco-editor'] },
     plugins: [react(), localMathJaxAssets(), localPdfAssets(), thirdPartyNotices()],
+    // Vite checks pre-compression bytes; the remaining 553 kB Monaco service
+    // chunk is lazy-loaded with the editor and compresses to about 145 kB.
+    // Keep the warning tight so materially larger chunks still trigger it.
+    build: { chunkSizeWarningLimit: 600, rollupOptions: { output: { manualChunks: manualChunk } } },
     server: { https, host: '0.0.0.0', allowedHosts: (env.VITE_ALLOWED_HOSTS || '').split(',').map((host) => host.trim()).filter(Boolean), proxy: { '/api': { target: apiTarget, agent, secure: true, changeOrigin: true, ws: true } } },
     preview: { https },
   };

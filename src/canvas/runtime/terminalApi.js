@@ -1,8 +1,7 @@
 import {api,apiUrl} from '../../api/client.js';
-import {canvasPasswordGrantKey} from '../canvasAccess.js';
-import {ensureCanvasPasswordGrant} from '../canvasPasswordSession.js';
+import {canvasPasswordGrantKey,readCanvasPasswordGrant} from '../canvasAccess.js';
 export async function openTerminalSocket({canvasId,token,user,objectId,cols,rows,offset,onFrame,onClose}){
- const issued=await api(`/api/canvases/${encodeURIComponent(canvasId)}/runtime/terminal/ticket`,{method:'POST',token,body:{objectId,passwordGrant:await ensureCanvasPasswordGrant(canvasPasswordGrantKey(canvasId,user))}});
+ const issued=await api(`/api/canvases/${encodeURIComponent(canvasId)}/runtime/terminal/ticket`,{method:'POST',token,body:{objectId,passwordGrant:readCanvasPasswordGrant(canvasPasswordGrantKey(canvasId,user))}});
  // Only a short-lived, single-use ticket goes in a WS frame; never in a URL.
  if(issued.path!=='/api/terminal/ws'||typeof issued.ticket!=='string')throw Error('Invalid terminal ticket');
  const address=new URL(apiUrl(issued.path));address.protocol='wss:';

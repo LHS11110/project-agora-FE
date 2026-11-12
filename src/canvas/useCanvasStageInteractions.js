@@ -1,7 +1,7 @@
 import {newFrame} from './portfolio/frameModel.js';
 import {ui} from '../i18n/locale.js';
 import {newProject} from './projects/projectModel.js';
-import {notebookCell} from './notebook/notebookData.js';
+import {notebookCell,notebookCellItem} from './notebook/notebookData.js';
 import { createValue } from './values/valueData.js';
 import { hasPolygonVertices } from './shapeAppearance.js';
 import { groupMember } from './userGroups/userGroupModel.js';
@@ -445,10 +445,14 @@ export function useCanvasStageInteractions(options) {
     }
     if (activeTool === 'notebook' || activeTool === 'terminal' || activeTool === 'executor' || activeTool === 'execution-output') {
       event.preventDefault();
-      const point = pointerPosition(event), id = createId(), width = activeTool === 'notebook' ? .48 : activeTool === 'terminal' ? .42 : .24, height = activeTool === 'notebook' ? .64 : activeTool === 'terminal' ? .4 : activeTool === 'executor' ? .22 : .24;
-      const item = { kind: 'shape', shapeType: 'rectangle', ...(activeTool==='notebook'?{notebookCells:[notebookCell()],notebookResults:{}}:{}), runtimeRole: activeTool === 'notebook' ? 'notebook' : activeTool === 'terminal' ? 'terminal' : activeTool === 'executor' ? 'executor' : 'output',
+      const point = pointerPosition(event), id = createId(), width = activeTool === 'notebook' ? .48 : activeTool === 'terminal' ? .42 : .24, height = activeTool === 'notebook' ? .18 : activeTool === 'terminal' ? .4 : activeTool === 'executor' ? .22 : .24;
+      const item = { kind: 'shape', shapeType: 'rectangle', runtimeRole: activeTool === 'notebook' ? 'notebook' : activeTool === 'terminal' ? 'terminal' : activeTool === 'executor' ? 'executor' : 'output',
         x: point.x - width / 2, y: point.y - height / 2, width, height, permission };
-      if (!addItem(id, item)) setToast('실시간 서버에 연결된 뒤 캔버스를 수정할 수 있어요.');
+      if(activeTool==='notebook'){
+        item.height=.65;item.notebookCells=[notebookCell()];item.notebookResults={};
+        if(!addItem(id,item))setToast('실시간 서버에 연결된 뒤 캔버스를 수정할 수 있어요.');
+        else{setActiveTool('select');selectItems([id]);}
+      }else if (!addItem(id, item)) setToast('실시간 서버에 연결된 뒤 캔버스를 수정할 수 있어요.');
       else { setActiveTool('select'); selectItems([id]); }
       return;
     }

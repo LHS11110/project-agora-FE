@@ -1,3 +1,4 @@
+import {canvasFetch} from '../../api/client.js';
 import {useCanvasGraphics} from '../CanvasGraphicsContext.jsx';
 import {graphicsDocumentRatio} from '../graphicsQuality.js';
 import { ui } from '../../i18n/locale.js';
@@ -61,7 +62,7 @@ export default function PdfDocumentContent({ item, token, interactive, canChange
     if (downloadPending.current) return;
     downloadPending.current = true;
     try {
-      const response = await fetch(apiUrl(item.src), { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const response = await canvasFetch(apiUrl(item.src), { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       if (!response.ok) throw new Error();
       const url = URL.createObjectURL(await response.blob());
       const link = document.createElement('a'); link.href = url; link.download = item.filename || 'document.pdf'; link.click();

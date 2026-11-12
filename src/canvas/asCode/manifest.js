@@ -1,7 +1,7 @@
 import {validFrame,validFrameField,validCursor} from '../portfolio/frameModel.js';
 import {validAnimation,validPlayback,validPortfolio} from '../portfolio/portfolioModel.js';
 import {PROJECT_FIELDS,validProject} from '../projects/projectModel.js';
-import {validNotebookCells,validNotebookResults} from '../notebook/notebookData.js';
+import {validNotebookCell,validNotebookCellResult,validNotebookCells,validNotebookResults} from '../notebook/notebookData.js';
 import {validMediaState,validRuntimeState} from '../runtime/sharedState.js';
 import { validValue } from '../values/valueData.js';
 import { validQuestion } from '../questions/questionData.js';
@@ -19,8 +19,8 @@ import { textSpliceBetween } from '../collaborativeText.js';
 
 const KINDS = new Set(['frame','portfolio','project','text', 'note', 'code', 'math', 'shape', 'table', 'chart', 'question', 'value', 'image', 'link', 'connector', 'stroke', 'pdf', 'user-group']);
 const NUMBERS = new Set(['valueNumber','valueMin','valueMax','valueStep','pdfPage','questionMaxScore', 'questionScore', 'shadowBlur', 'shadowOpacity', 'shadowOffsetX', 'shadowOffsetY', 'depth', 'x', 'y', 'width', 'height', 'rotation', 'fontSize', 'strokeWidth', 'bend', 'opacity', 'contentScale', 'contentScaleX', 'contentScaleY', 'bendPointCount', 'headSize', 'vertexCount', 'fillOpacity', 'sketchFillOpacity']);
-const STRINGS = new Set(['valueType','valueText','questionType', 'questionPrompt', 'questionAnswer', 'questionFeedback', 'questionVersion', 'questionGradedVersion', 'kind', 'text', 'code', 'formula', 'format', 'filename', 'language', 'shapeType', 'visualStyle', 'volumeStyle', 'chartType', 'color', 'fill', 'groupId', 'src', 'url', 'title', 'mediaType', 'from', 'to', 'fromPort', 'toPort', 'startHead', 'endHead', 'brush', 'embedUrl', 'videoId', 'renderMode', 'label', 'labelMode', 'groupTitle', 'thumbnail', 'cornerStyle', 'runtimeRole']);
-const FIELDS = new Set(['frameId','animationPriority','frameOrder','frameLinkPriority','portfolioCursor','animation','animationPlayback','portfolioPages','portfolioDescription',...PROJECT_FIELDS,...NUMBERS, ...STRINGS, 'notebookCells','notebookResults','valueOptions', 'mediaState', 'mediaLoop', 'runtimeState', 'permission', 'points', 'rows', 'columns', 'simulatePressure', 'complete', 'strokeEnabled', 'shadowEnabled', 'locked', 'imageFrameEnabled', 'bendPoints', 'members', 'textColors', 'runtimeResults', 'questionOptions', 'questionSubmitted']);
+const STRINGS = new Set(['valueType','valueText','questionType', 'questionPrompt', 'questionAnswer', 'questionFeedback', 'questionVersion', 'questionGradedVersion', 'kind', 'text', 'code', 'formula', 'format', 'filename', 'language', 'shapeType', 'visualStyle', 'volumeStyle', 'chartType', 'color', 'fill', 'groupId', 'src', 'url', 'title', 'mediaType', 'from', 'to', 'fromPort', 'toPort', 'startHead', 'endHead', 'brush', 'embedUrl', 'videoId', 'renderMode', 'label', 'labelMode', 'groupTitle', 'thumbnail', 'cornerStyle', 'runtimeRole','notebookId']);
+const FIELDS = new Set(['frameId','animationPriority','frameOrder','frameLinkPriority','portfolioCursor','animation','animationPlayback','portfolioPages','portfolioDescription',...PROJECT_FIELDS,...NUMBERS, ...STRINGS, 'notebookCells','notebookResults','notebookCellIds','notebookCell','notebookResult','valueOptions', 'mediaState', 'mediaLoop', 'runtimeState', 'permission', 'points', 'rows', 'columns', 'simulatePressure', 'complete', 'strokeEnabled', 'shadowEnabled', 'locked', 'imageFrameEnabled', 'bendPoints', 'members', 'textColors', 'runtimeResults', 'questionOptions', 'questionSubmitted']);
 export const CANVAS_ITEM_FIELDS = new Set([...FIELDS].filter(field => field !== 'textColors'));
 const unsafeId = id => !id || ['__proto__', 'constructor', 'prototype'].includes(id);
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -88,8 +88,11 @@ function validateItem(id, item) {
   if (item.volumeStyle != null && !['solid', 'wireframe'].includes(item.volumeStyle)) fail(`${id}.volumeStyle: solid 또는 wireframe이 필요합니다.`);
   if(item.notebookCells!==undefined&&(item.runtimeRole!=='notebook'||!validNotebookCells(item.notebookCells)))fail(`${id}.notebookCells: 올바른 노트북 셀이 필요합니다.`);
   if(item.notebookResults!==undefined&&(item.runtimeRole!=='notebook'||!validNotebookResults(item.notebookResults)))fail(`${id}.notebookResults: 올바른 노트북 출력이 필요합니다.`);
+  if(item.notebookCellIds!==undefined&&(item.runtimeRole!=='notebook'||!Array.isArray(item.notebookCellIds)||item.notebookCellIds.length>32||new Set(item.notebookCellIds).size!==item.notebookCellIds.length||item.notebookCellIds.some(cellId=>typeof cellId!=='string'||!/^[a-zA-Z0-9_-]{1,128}$/.test(cellId))))fail(`${id}.notebookCellIds: 올바른 노트북 셀 객체 ID 목록이 필요합니다.`);
+  if(item.runtimeRole==='notebook-cell'&&(!/^[a-zA-Z0-9_-]{1,128}$/.test(item.notebookId||'')||!validNotebookCell(item.notebookCell)||item.notebookResult!==undefined&&!validNotebookCellResult(item.notebookResult)))fail(`${id}: 올바른 노트북 셀 객체가 필요합니다.`);
+  if(item.runtimeRole!=='notebook-cell'&&(item.notebookId!==undefined||item.notebookCell!==undefined||item.notebookResult!==undefined))fail(`${id}: 노트북 셀 데이터는 셀 객체에만 설정할 수 있습니다.`);
   if (item.runtimeResults != null && (item.runtimeRole !== 'output' || !validRuntimeResults(item.runtimeResults))) fail(`${id}.runtimeResults: 올바른 실행 결과 배열이 필요합니다.`);
-  if (item.runtimeRole != null && (item.kind !== 'shape' || !['executor', 'output', 'terminal','notebook'].includes(item.runtimeRole))) fail(`${id}.runtimeRole: 도형에서 executor 또는 output을 선택해주세요.`);
+  if (item.runtimeRole != null && (item.kind !== 'shape' || !['executor', 'output', 'terminal','notebook','notebook-cell'].includes(item.runtimeRole))) fail(`${id}.runtimeRole: 도형에서 지원하는 실행 객체 종류를 선택해주세요.`);
   if (item.kind === 'question' && !validQuestion(item)) fail(`${id}: 올바른 문제·답안·수동 채점 데이터가 필요합니다.`);
   if (item.kind === 'chart') {
     if (!CHART_TYPES.includes(item.chartType)) fail(`${id}.chartType: 지원하는 그래프 종류가 필요합니다.`);

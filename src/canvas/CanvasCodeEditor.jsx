@@ -7,25 +7,27 @@ import './canvas-code-editor.css';
 import './code-completions.css';
 
 /** One model per open block; remote updates preserve selections and view state. */
-export default function CanvasCodeEditor({ value = '', language = 'javascript', inline = false, onChange, onUndo, onSave, onStopEditing }) {
+export default function CanvasCodeEditor({ value = '', language = 'javascript', inline = false, onChange, onUndo, onSave, onStopEditing, onRun, notebook = false }) {
   useUiLocale();
   const boundary = useEditingBoundary(true, onStopEditing, { pointerOnly: true });
   const hostRef = useRef(null);
   const editorRef = useRef(null);
   const runtimeRef = useRef(null);
   const applyingRemoteRef = useRef(false);
-  const latest = useRef({ value, language, onChange, onUndo, onSave, onStopEditing });
-  latest.current = { value, language, onChange, onUndo, onSave, onStopEditing };
+  const latest = useRef({ value, language, onChange, onUndo, onSave, onStopEditing, onRun, notebook });
+  latest.current = { value, language, onChange, onUndo, onSave, onStopEditing, onRun, notebook };
   const [status, setStatus] = useState('loading');
 
   useEffect(() => {
     let disposed = false;
     let editor, model, observer, widgetRoot;
     const subscriptions = [];
-    import('./monacoRuntime.js').then(runtime => {
+    import('./monacoRuntime.js').then(async runtime => {
       if (disposed) return;
       runtimeRef.current = runtime;
       const { monaco, editorLanguage } = runtime;
+      await runtime.ensureEditorLanguage(latest.current.language);
+      if (disposed) return;
       model = monaco.editor.createModel(String(latest.current.value), editorLanguage(latest.current.language), runtime.codeModelUri(monaco));
       model.setEOL(monaco.editor.EndOfLineSequence.LF);
       subscriptions.push(runtime.registerModelCompletions(monaco, model, () => latest.current.language));
@@ -36,7 +38,7 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
       widgetRoot.dataset.codeWidgetOwner=model.uri.toString();
       (hostRef.current.closest('.canvas-app-page')||document.body).appendChild(widgetRoot);
       editor = monaco.editor.create(hostRef.current, {
-        model, theme: 'frelog-night', automaticLayout: true,
+        model, theme: latest.current.notebook&&hostRef.current.closest('.canvas-app-page')?.dataset.theme!=='dark'?'frelog-notebook':'frelog-night', automaticLayout: true,
         fontSize: 13, lineHeight: 20,
         ...(inline ? { fontFamily: appearance.fontFamily, fontSize: parseFloat(appearance.fontSize) || 13, lineHeight: parseFloat(appearance.lineHeight) || 21, letterSpacing: 0 } : {}),
         fontLigatures: false, tabSize: 2, insertSpaces: true,
@@ -65,6 +67,7 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
       subscriptions.push(editor.onDidChangeModelContent(() => {
         if (!applyingRemoteRef.current) latest.current.onChange?.(model.getValue());
       }));
+      if(latest.current.onRun)editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Enter,()=>latest.current.onRun?.());
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => latest.current.onSave?.());
       if(latest.current.onUndo)subscriptions.push(editor.addAction({id:'undo',label:ui('실행 취소'),contextMenuGroupId:'9_cutcopypaste',contextMenuOrder:0.5,keybindings:[monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyZ],run:()=>latest.current.onUndo?.()}));
       // Monaco measures CSS pixels. Observing the host handles object resizing
@@ -72,7 +75,6 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
       observer = new ResizeObserver(() => editor.layout());
       observer.observe(hostRef.current);
       setStatus('ready');
-      editor.focus();
     }).catch(() => { if (!disposed) setStatus('failed'); });
     return () => {
       disposed = true;
@@ -82,6 +84,8 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
       editorRef.current = null;
     };
   }, []);
+
+  useEffect(() => { if (status === 'ready') editorRef.current?.focus(); }, [status]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -112,7 +116,13 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
 
   useEffect(() => {
     const model = editorRef.current?.getModel();
-    if (model && runtimeRef.current) runtimeRef.current.monaco.editor.setModelLanguage(model, runtimeRef.current.editorLanguage(language));
+    const runtime = runtimeRef.current;
+    if (!model || !runtime) return;
+    let cancelled = false;
+    runtime.ensureEditorLanguage(language).then(() => {
+      if (!cancelled && !model.isDisposed?.()) runtime.monaco.editor.setModelLanguage(model, runtime.editorLanguage(language));
+    }).catch(() => {});
+    return () => { cancelled = true; };
   }, [language, status]);
 
   // Monaco moves focus between its input, widgets and native editing context.

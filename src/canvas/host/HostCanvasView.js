@@ -1,3 +1,4 @@
+import {mergeNotebookCells} from '../sync/itemDelta.js';
 import { isObjectLocked, isLockOnlyOperation } from '../locks/objectLock.js';
 import { loadEncodedDocument, rememberItemDocument } from './documentCache.js';
 import * as Automerge from '@automerge/automerge/slim';
@@ -33,7 +34,17 @@ export class HostCanvasView {
         if(operation.action==='delete'){item=null;doc=null;base=null;continue;}
         // A queued patch must not resurrect an authoritative deletion/eviction.
         if(operation.action==='patch' && !item)continue;
-        item={...item,...operation.patch};for(const field of operation.unset||[])delete item[field];
+        let patch=operation.patch;
+        if(operation.notebookBase&&patch?.notebookCells&&Array.isArray(item?.notebookCells)){
+          patch={...patch,notebookCells:mergeNotebookCells(item.notebookCells,operation.notebookBase,patch.notebookCells)};
+        }
+        if(operation.notebookResultBase&&patch?.notebookResults){
+          const base=operation.notebookResultBase,after=patch.notebookResults,results={...item?.notebookResults};
+          for(const [key,value] of Object.entries(after))if(JSON.stringify(base[key])!==JSON.stringify(value))results[key]=value;
+          for(const key of Object.keys(base))if(!Object.hasOwn(after,key))delete results[key];
+          patch={...patch,notebookResults:results};
+        }
+        item={...item,...patch};for(const field of operation.unset||[])delete item[field];
         if(operation.doc)try{
           const incoming=loadEncodedDocument(operation.doc);
           doc=doc?Automerge.merge(doc,incoming):incoming;item[collaborativeField(item)]=doc.content;

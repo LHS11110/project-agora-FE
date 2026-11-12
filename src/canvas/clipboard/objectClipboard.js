@@ -15,6 +15,8 @@ export const rememberedObjects = () => localCopy;
 export function collectCopyObjects(items,selectedIds,canvasId,cut=false,connectionIndex=null){
  const ids=new Set(selectedIds.map(String).filter(id=>items[id]&&items[id].type!=='chat_room'));
  if(!ids.size)return null;
+ const selectedGroups=new Set([...ids].map(id=>items[id]?.groupId).filter(Boolean));
+ if(selectedGroups.size)for(const [id,item] of Object.entries(items))if(selectedGroups.has(item?.groupId)&&item?.kind!=='connector')ids.add(id);
  const frames=new Set([...ids].filter(id=>items[id]?.kind==='frame'));if(frames.size)for(const [id,item] of Object.entries(items))if(item.frameId&&frames.has(item.frameId))ids.add(id);
  if(ids.size>MAX_ITEMS)throw Error('한 번에 최대 10,000개 객체를 복사할 수 있습니다.');
  const candidates=connectionIndex?connectionIndex.update(items).iterate([...ids]):Object.keys(items);
@@ -66,6 +68,12 @@ export function preparePastePayload(payload, current, canvasId, permission, poin
       if (!groups.has(item.groupId)) groups.set(item.groupId, createId());
       item.groupId = groups.get(item.groupId);
     } else { delete item.groupId; }
+    if(item.runtimeRole==='notebook'&&Array.isArray(item.notebookCellIds))item.notebookCellIds=(item.notebookCellIds||[]).map(cellObjectId=>ids.get(String(cellObjectId))).filter(Boolean);
+    if(item.runtimeRole==='notebook-cell'){
+      const notebookId=ids.get(String(item.notebookId));
+      if(!notebookId){skipped++;continue;}
+      item.notebookId=notebookId;
+    }
     if(item.kind==='project'&&item.projectType==='issue'){
       const same=String(payload.canvasId)===String(canvasId),copiedBoard=ids.has(String(item.projectBoard));
       const resolve=ref=>ids.get(String(ref))||(!copiedBoard&&same&&Object.hasOwn(current,String(ref))?String(ref):'');

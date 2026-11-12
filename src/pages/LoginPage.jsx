@@ -12,7 +12,6 @@ import Icon from '../components/Icon.jsx';
 import FreLogBrand from '../components/frelog/FreLogBrand.jsx';
 import WorkspacePreview from '../components/home/WorkspacePreview.jsx';
 import { useAuth } from '../state/AuthContext.jsx';
-import '../frelog-auth.css';
 import { api, apiUrl } from '../api/client.js';
 import MfaLogin from '../components/account/MfaLogin.jsx';
 import { oauthReturnPath } from '../auth/oauthReturn.js';
