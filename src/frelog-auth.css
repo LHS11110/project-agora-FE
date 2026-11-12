@@ -17,3 +17,5 @@ body .auth-page .auth-provider-row svg{width:22px;height:22px;flex-shrink:0}
 body .auth-page .auth-secondary-signin .auth-divider{margin:24px 0 18px}
 body .auth-page .auth-other-methods{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:16px 0 0}
 body .auth-page .auth-other-methods :is(.auth-passkey-button,.auth-qr-button){width:100%;margin:0;min-height:43px}
+
+.auth-page .auth-orcid-button{background:#fff;border-color:#d9dce5;color:#293248}.auth-page .auth-orcid-button img{display:block;width:26px;height:26px}

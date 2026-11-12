@@ -28,14 +28,19 @@ export function AuthProvider({ children }) {
   }, []);
   const login = useCallback(async (email, password) => acceptLoginResponse(await api('/api/auth/login', { method: 'POST', body: { email, password } })), [acceptLoginResponse]);
   const oauthRequest = useRef(null);
+  const orcidRequest = useRef(null);
   const completeGoogleLogin = useCallback(() => {
     if (!oauthRequest.current) oauthRequest.current = api('/api/auth/oauth2/session').then(acceptLoginResponse);
     return oauthRequest.current;
   }, [acceptLoginResponse]);
+  const completeOrcidLogin = useCallback(() => {
+    if (!orcidRequest.current) orcidRequest.current = api('/api/irade/auth/session', {method:'POST',body:{}}).then(result => acceptLoginResponse(result.login));
+    return orcidRequest.current;
+  }, [acceptLoginResponse]);
   const completeOAuthEnrollment=useCallback(async(email,emailVerificationToken)=>acceptLoginResponse(await api('/api/auth/oauth2/enrollment',{method:'POST',body:{email,emailVerificationToken,enrollmentToken:pendingOAuthEnrollment?.enrollmentToken}})),[pendingOAuthEnrollment,acceptLoginResponse]);
-  const cancelOAuthEnrollment=useCallback(()=>{setPendingOAuthEnrollment(null);oauthRequest.current=null;},[]);
+  const cancelOAuthEnrollment=useCallback(()=>{setPendingOAuthEnrollment(null);oauthRequest.current=null;orcidRequest.current=null;},[]);
   const verifyMfa = useCallback(async code => acceptLoginResponse(await api('/api/auth/mfa/verify', {method:'POST',body:{challengeToken:pendingMfa?.challengeToken,code}})), [pendingMfa,acceptLoginResponse]);
-  const cancelMfa = useCallback(() => {setPendingMfa(null);oauthRequest.current=null;}, []);
+  const cancelMfa = useCallback(() => {setPendingMfa(null);oauthRequest.current=null;orcidRequest.current=null;}, []);
   const signup = useCallback(async ({ email, password, nickname, emailVerificationToken }) => {
     await api('/api/auth/signup', { method: 'POST', body: { email, password, nickname, emailVerificationToken } });
     return login(email, password);
@@ -48,7 +53,7 @@ export function AuthProvider({ children }) {
     });
   }, []);
   const logout = useCallback(() => {
-    setPendingMfa(null);setPendingOAuthEnrollment(null);oauthRequest.current=null;
+    setPendingMfa(null);setPendingOAuthEnrollment(null);oauthRequest.current=null;orcidRequest.current=null;
     localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); setToken(null); setUser(null);
   }, []);
   useEffect(() => {
@@ -90,8 +95,8 @@ export function AuthProvider({ children }) {
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [token, logout]);
-  const value = useMemo(() => ({ token, user, authError, isAuthenticated: Boolean(token && user && !tokenExpired(token)), login, signup, completeGoogleLogin, completeOAuthLogin:completeGoogleLogin, pendingOAuthEnrollment, completeOAuthEnrollment, cancelOAuthEnrollment, pendingMfa, verifyMfa, cancelMfa, acceptLoginResponse, updateUser, logout }),
-    [token, user, authError, login, signup, completeGoogleLogin, pendingOAuthEnrollment, completeOAuthEnrollment, cancelOAuthEnrollment, pendingMfa, verifyMfa, cancelMfa, acceptLoginResponse, updateUser, logout]);
+  const value = useMemo(() => ({ token, user, authError, isAuthenticated: Boolean(token && user && !tokenExpired(token)), login, signup, completeGoogleLogin, completeOAuthLogin:completeGoogleLogin, completeOrcidLogin, pendingOAuthEnrollment, completeOAuthEnrollment, cancelOAuthEnrollment, pendingMfa, verifyMfa, cancelMfa, acceptLoginResponse, updateUser, logout }),
+    [token, user, authError, login, signup, completeGoogleLogin, completeOrcidLogin, pendingOAuthEnrollment, completeOAuthEnrollment, cancelOAuthEnrollment, pendingMfa, verifyMfa, cancelMfa, acceptLoginResponse, updateUser, logout]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

@@ -171,3 +171,13 @@ GPU 렌더링은 PixiJS 8의 스프라이트를 1,024px 텍스처 아틀라스(�
 축소 화면에서는 텍스트 획과 실제 이미지 썸네일을 캐시해 단색 박스 표시를 완화합니다. 메모리·디코딩 제한과 GPU/2D 비교 결과는 [축소 미리보기 렌더링](docs/canvas-overview-rendering.md)에 기록합니다.
 
 다각형 꼭짓점 수·둥근 모서리·테두리 굵기·채우기 투명도·손그림 빗금 밀도와 방향키 픽셀 이동은 [도형 설정](docs/canvas-shape-appearance.md)에 설명합니다.
+
+## ORCID 로그인
+
+Agora 로그인 페이지(`/login`)의 **ORCID로 계속하기**는 IRADE와 같은 ORCID 연구자 계정을 사용합니다. ORCID에서 인증 후 Agora의 로그인 상태로 돌아오며, 처음 방문한 연구자는 ORCID 계정이 등록됩니다. 이메일 비공개 계정도 사용할 수 있고, 계정의 MFA가 설정되어 있으면 인증을 완료해야 로그인됩니다.
+
+`GET /api/auth/providers`의 `orcid`가 `true`일 때 버튼을 표시합니다. `/api/irade/auth/orcid/start?app=agora`에서 인증을 시작하고, 기존 등록 URI `https://frelog.p-e.kr/api/irade/auth/orcid/callback`을 사용합니다. 서버는 Agora로 복귀할 때 `/login?orcid=...`만 허용하며, 브라우저가 `POST /api/irade/auth/session`으로 일회성 로그인 결과를 받아 기존 `AuthContext`에 반영합니다. JWT를 URL에 넣지 않고, 로그인 전의 로컬 경로만 복원합니다. IRADE에서 시작한 로그인은 기존대로 IRADE로 돌아갑니다.
+
+ORCID 비밀키는 FE에 추가하지 않습니다. 설정은 BE의 보호된 환경 파일을 사용하며, 추가 Redirect URI 등록이나 DB 마이그레이션은 필요하지 않습니다. ORCID iD 아이콘은 ORCID의 공식 원본이며 [브랜드 지침](https://info.orcid.org/brand-guidelines/)에 따라 사용합니다.
+
+검증: `node --test tests/authSession.test.js tests/oauthReturn.test.js`; 브라우저 테스트는 `tests/integration/orcid-login.mjs`와 `tests/integration/social-oauth.mjs`입니다. `AGORA_E2E_PLAYWRIGHT_MODULE`로 설치된 Playwright 모듈 경로, `AGORA_E2E_ORIGIN`으로 검증할 HTTPS 앱 주소를 지정합니다. 브라우저 통합 테스트는 ORCID 제공자·로그인 결과를 fixture로 검증하며 실제 연구자의 로그인·동의를 대신하지 않습니다.

@@ -1,3 +1,4 @@
+import orcidIcon from '../assets/orcid-id.svg';
 import QrLoginPanel from '../components/account/QrLoginPanel.jsx';
 import OAuthEnrollment from '../components/account/OAuthEnrollment.jsx';
 import {authenticatePasskey,passkeyError,passkeysSupported} from '../auth/passkeys.js';
@@ -18,7 +19,7 @@ import { oauthReturnPath } from '../auth/oauthReturn.js';
 
 export default function LoginPage() {
   useUiLocale();
-  const { isAuthenticated, authError, login, signup, completeOAuthLogin, pendingOAuthEnrollment, cancelOAuthEnrollment, pendingMfa, verifyMfa, cancelMfa, acceptLoginResponse } = useAuth();
+  const { isAuthenticated, authError, login, signup, completeOAuthLogin, completeOrcidLogin, pendingOAuthEnrollment, cancelOAuthEnrollment, pendingMfa, verifyMfa, cancelMfa, acceptLoginResponse } = useAuth();
   const [emailProof, setEmailProof] = useState(null);
   const [mode, setMode] = useState('login');
   const [showQr,setShowQr]=useState(false);
@@ -28,7 +29,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
-  const [providers,setProviders]=useState({google:false,naver:false,kakao:false});
+  const [providers,setProviders]=useState({google:false,naver:false,kakao:false,orcid:false});
   const googleEnabled=providers.google;
   const [passkeyEnabled,setPasskeyEnabled]=useState(false);
   const passkeyRequest=useRef(null);
@@ -45,10 +46,12 @@ export default function LoginPage() {
     }catch(error){if(!controller.signal.aborted)setError(passkeyError(error));}
     finally{if(passkeyRequest.current===controller)passkeyRequest.current=null;if(!controller.signal.aborted)setBusy(false);}
   };
-  const oauth = new URLSearchParams(location.search).get('oauth');
+  const parameters = new URLSearchParams(location.search);
+  const orcid = parameters.get('orcid');
+  const oauth = orcid || parameters.get('oauth');
   useEffect(() => {
     let cancelled = false;
-    api('/api/auth/providers').then(result => { if (!cancelled) setProviders({google:result.google===true,naver:result.naver===true,kakao:result.kakao===true}); }).catch(() => {});
+    api('/api/auth/providers').then(result => { if (!cancelled) setProviders({google:result.google===true,naver:result.naver===true,kakao:result.kakao===true,orcid:result.orcid===true}); }).catch(() => {});
     return () => { cancelled = true; };
   }, []);
   useEffect(() => {
@@ -56,7 +59,7 @@ export default function LoginPage() {
     let cancelled = false;
     if (oauth === 'success') {
       setBusy(true);
-      completeOAuthLogin().then(result => {
+      (orcid ? completeOrcidLogin() : completeOAuthLogin()).then(result => {
         if (!cancelled) {
           if (result.mfaRequired||result.oauthEnrollmentRequired) {setBusy(false);navigate('/login', {replace:true});return;}
           const target = sessionStorage.getItem('frelog_oauth_return');
@@ -64,18 +67,18 @@ export default function LoginPage() {
           navigate(oauthReturnPath(target), { replace: true });
         }
       }).catch(() => {
-        if (!cancelled) { setError('간편 로그인을 완료하지 못했습니다. 다시 시도해주세요.'); setBusy(false); navigate('/login', { replace: true }); }
+        if (!cancelled) { setError(orcid ? 'ORCID 로그인을 완료하지 못했습니다. 다시 시도해주세요.' : '간편 로그인을 완료하지 못했습니다. 다시 시도해주세요.'); setBusy(false); navigate('/login', { replace: true }); }
       });
     } else {
-      setError(oauth === 'account_exists' ? '이미 존재하는 계정입니다. 기존 로그인 방식을 사용해주세요.' : '간편 로그인이 취소되었거나 실패했습니다. 다시 시도해주세요.');
+      setError(orcid ? 'ORCID 로그인이 취소되었거나 실패했습니다. 다시 시도해주세요.' : oauth === 'account_exists' ? '이미 존재하는 계정입니다. 기존 로그인 방식을 사용해주세요.' : '간편 로그인이 취소되었거나 실패했습니다. 다시 시도해주세요.');
       navigate('/login', { replace: true });
     }
     return () => { cancelled = true; };
-  }, [oauth, completeOAuthLogin, navigate]);
+  }, [oauth, orcid, completeOAuthLogin, completeOrcidLogin, navigate]);
   const startOAuth = (provider) => {
     sessionStorage.setItem('frelog_oauth_return', oauthReturnPath(location.state?.from));
     setBusy(true);
-    window.location.assign(apiUrl('/api/auth/oauth2/authorize/'+provider));
+    window.location.assign(apiUrl(provider === 'orcid' ? '/api/irade/auth/orcid/start?app=agora' : '/api/auth/oauth2/authorize/'+provider));
   };
   if (isAuthenticated && !oauth && !busy) return <Navigate to={location.state?.from || '/search'} replace />;
   const change = (event) => {
@@ -113,12 +116,13 @@ export default function LoginPage() {
           {error && <div className="form-error" role="alert">{ui(error)}</div>}
           <button className="button button-dark button-submit" type="submit" disabled={busy||(mode==='signup'&&!emailProof)}>{busy ? ui("잠시만요…") : mode === 'login' ? ui("로그인") : ui("계정 만들기")} <Icon name="arrow" size={17} /></button>
         </form>
-        {(providers.google||providers.naver||providers.kakao)&&<div className="auth-secondary-signin"><div className="auth-divider"><span>{ui('간편 로그인')}</span></div><div className="auth-provider-row" role="group" aria-label={ui('간편 로그인')}>
+        {(providers.google||providers.naver||providers.kakao||providers.orcid)&&<div className="auth-secondary-signin"><div className="auth-divider"><span>{ui('간편 로그인')}</span></div><div className="auth-provider-row" role="group" aria-label={ui('간편 로그인')}>
         {googleEnabled && <><button className="auth-google-button auth-provider-circle" aria-label={ui('Google로 계속하기')} title={ui('Google로 계속하기')} type="button" onClick={()=>startOAuth('google')} disabled={busy}>
           <svg aria-hidden="true" width="20" height="20" viewBox="0 0 48 48"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.2h6.6c3.9-3.6 6.1-8.9 6.1-15.1Z"/><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.9l-6.6-5.2c-1.8 1.2-4.1 2-6.9 2-5.3 0-9.8-3.6-11.4-8.4H5.8v5.4A20.4 20.4 0 0 0 24 44Z"/><path fill="#FBBC05" d="M12.6 27.5a12 12 0 0 1 0-7V15H5.8a20 20 0 0 0 0 18l6.8-5.5Z"/><path fill="#EA4335" d="M24 12.1c3 0 5.7 1 7.8 3.1l5.9-5.9A19.7 19.7 0 0 0 24 4 20.4 20.4 0 0 0 5.8 15l6.8 5.5c1.6-4.8 6.1-8.4 11.4-8.4Z"/></svg>
 </button></>}
         {providers.naver&&<button className="auth-social-button auth-naver-button auth-provider-circle" aria-label={ui('네이버로 계속하기')} title={ui('네이버로 계속하기')} type="button" disabled={busy} onClick={()=>startOAuth('naver')}><span className="naver-symbol" aria-hidden="true">N</span></button>}
         {providers.kakao&&<button className="auth-social-button auth-kakao-button auth-provider-circle" aria-label={ui('카카오로 계속하기')} title={ui('카카오로 계속하기')} type="button" disabled={busy} onClick={()=>startOAuth('kakao')}><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3C6.5 3 2 6.4 2 10.5c0 2.6 1.8 4.9 4.4 6.2l-.9 3.6a.3.3 0 0 0 .5.3l4-2.7 2 .1c5.5 0 10-3.4 10-7.5S17.5 3 12 3Z"/></svg></button>}
+        {providers.orcid&&<button className="auth-social-button auth-orcid-button auth-provider-circle" aria-label={ui('ORCID로 계속하기')} title={ui('ORCID로 계속하기')} type="button" disabled={busy} onClick={()=>startOAuth('orcid')}><img src={orcidIcon} width="24" height="24" alt="" /></button>}
         </div></div>}
         {mode==='login'&&<div className="auth-other-methods">
         {mode==='login'&&passkeyEnabled&&passkeysSupported()&&<button className="auth-passkey-button" type="button" onClick={startPasskey} disabled={busy}><Icon name="lock" size={18}/>{ui('패스키로 로그인')}</button>}

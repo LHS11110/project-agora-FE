@@ -2516,4 +2516,7 @@ export default {
   "앵커 삭제": "Delete anchor",
   "앵커 이름": "Anchor name",
   "예: 회의 보드": "e.g. Meeting board",
+  "ORCID로 계속하기": "Continue with ORCID",
+  "ORCID 로그인을 완료하지 못했습니다. 다시 시도해주세요.": "Could not complete ORCID sign-in. Please try again.",
+  "ORCID 로그인이 취소되었거나 실패했습니다. 다시 시도해주세요.": "ORCID sign-in was cancelled or failed. Please try again.",
 };
