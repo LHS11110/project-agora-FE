@@ -1,3 +1,4 @@
+import HtmlObject from './HtmlObject.jsx';
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
 import CodeSnippetHeader from './CodeSnippetHeader.jsx';
@@ -9,9 +10,10 @@ import RenderedContent from './RenderedContent.jsx';
 import { contentMode, contentSource } from './contentPresentation.js';
 import { textColorRanges } from './textColors.js';
 import './unified-content.css';
-export default function UnifiedTextContent({ id, item, editing, onUndo, onTextChange, onTextColorChange, onFormulaChange, onMetadataChange, onSave, onStopEditing, runtimeStore, canExecute }) {
+export default function UnifiedTextContent({ id, item, editing, onUndo, onTextChange, onTextColorChange, onFormulaChange, onMetadataChange, onSave, onStopEditing, runtimeStore, canExecute, onStartEditing }) {
   useUiLocale();
   const mode = contentMode(item), value = contentSource(item), colorRanges = textColorRanges(item);
+  if(mode==='code'&&item.language==='html')return <HtmlObject id={id} value={value} editing={editing} onStartEditing={onStartEditing} onChange={next=>onTextChange(id,next)} onUndo={onUndo?()=>onUndo(id):undefined} onSave={()=>onSave(id)} onStopEditing={()=>onStopEditing(id)}/>;
   return <>
     {mode === 'code' && <CodeSnippetHeader key="content-header" {...{ id, item, editing, onMetadataChange, runtimeStore, canExecute }} />}
     <div key="content-body" className="unified-content-body"><EditingSurface key={mode} editing={editing} className={mode === 'code' ? 'is-code' : ''} renderPreview={() => value ? <RenderedContent value={value} mode={mode} language={item.language || 'javascript'} colorRanges={colorRanges} /> : <p className="unified-content-empty">{ui("두 번 클릭해 내용을 작성하세요")}</p>}>

@@ -1,3 +1,5 @@
+import {createWebAssetStore} from '../canvas/content/webAssetStore.js';
+import {WebAssetsContext} from '../canvas/content/WebAssetsContext.js';
 import {graphicsLodScale} from '../canvas/graphicsQuality.js';
 import {isChessShape} from '../canvas/chessShapes.js';
 import usePersonalAnchors from '../canvas/usePersonalAnchors.js';
@@ -193,6 +195,7 @@ function CanvasWorkspace() {
   const reconnectAttemptsRef = useRef(0);
   const itemsRef = useRef({});
   const notebookMigrationRef=useRef(new Set());
+  const webAssetStore=useMemo(()=>createWebAssetStore(),[]);
   const animationStore=useMemo(()=>createAnimationStore(()=>itemsRef.current),[]);
   const pendingItemChangesRef = useRef([]);
   const {
@@ -354,7 +357,7 @@ function CanvasWorkspace() {
   useEffect(()=>()=>{for(const request of settingsRequestsRef.current.values()){clearTimeout(request.timer);request.reject(new Error('캔버스 연결이 종료되었습니다.'));}settingsRequestsRef.current.clear();},[]);
   const [toast, setToast] = useState('');
   const { beginObjectMove, previewObjectMove, finishObjectMove, undo, undoCount, items, setItems, patchItems, moveItems, flushMoves, committedItemsRef, status: hostStatus, sessionRef: hostSessionRef, receiveServerItems, receiveServerEvent } = useServerCanvas({
-    accessRef, itemsRef, peerMeshRef, wsRef, rtcWsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems, reconnectRequestRef, onItemsPublished:(draft,ids)=>{projectStore.update(draft,ids);frameStore.update(draft,ids);}, onCommittedItems:(committed,ids)=>animationStore.update(committed,ids),
+    accessRef, itemsRef, peerMeshRef, wsRef, rtcWsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems, reconnectRequestRef, onItemsPublished:(draft,ids)=>{webAssetStore.update(draft,ids);projectStore.update(draft,ids);frameStore.update(draft,ids);}, onCommittedItems:(committed,ids)=>animationStore.update(committed,ids),
   });
   projectStore.actions={
     admin:()=>accessRef.current?.is_admin===true,
@@ -1315,7 +1318,7 @@ function CanvasWorkspace() {
   });
   const sendSettings = (field,value,participant) => {requestSettings(field,value,participant).catch(()=>{});};
 
-  const { cancelStageGesture, pointerPosition, startPan, cancelPanInertia, centeredItemPosition, hideCursor, sendCursorPosition, startZoomHold, stopZoomHold, cancelZoomHold, clickZoom, startDrawing, moveDrawing, stopDrawing } = useCanvasStageInteractions({ presentation:portfolioViewing&&Boolean(presentationPage?.frameId),canWriteItem, canWriteCanvas,
+  const { cancelStageGesture, pointerPosition, startPan, cancelPanInertia, centeredItemPosition, hideCursor, sendCursorPosition, startZoomHold, stopZoomHold, cancelZoomHold, clickZoom, startDrawing, moveDrawing, stopDrawing } = useCanvasStageInteractions({ canCreateProject:accessRef.current?.is_admin===true,presentation:portfolioViewing&&Boolean(presentationPage?.frameId),canWriteItem, canWriteCanvas,
     boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth, eraserMode,
     addItem, setToast, setItems, patchItems, refreshSpatialIndex, spatialIndexRef,
     sendStrokeFrameChanges, pendingItemChangesRef, strokeSaveFlushRef,
@@ -1730,7 +1733,7 @@ function CanvasWorkspace() {
     .map(key=>[key,(...args)=>objectActionsRef.current[key](...args)])),[]);
 
 
-  return <AnimationContext.Provider value={animationStore}><ProjectContext.Provider value={projectStore}><CanvasGraphicsContext.Provider value={graphicsQuality}><div className={`canvas-app-page${portfolioViewing?' portfolio-view':''}`} data-presentation-settings={portfolioSettings} style={portfolioViewing&&presentationPage?.frame?{'--frame-screen-left':`${presentationPage.frame.x*boardSize.width*camera.scale+camera.x}px`,'--frame-screen-top':`${presentationPage.frame.y*boardSize.height*camera.scale+camera.y}px`,'--frame-screen-width':`${presentationPage.frame.width*boardSize.width*camera.scale}px`,'--frame-screen-height':`${presentationPage.frame.height*boardSize.height*camera.scale}px`,'--frame-view-fill':presentationPage.frame.fill||'#fff','--frame-content-color':isColorDark(presentationPage.frame.fill||'#fff')?'#f0f1f5':'#1e2029','--frame-content-muted':isColorDark(presentationPage.frame.fill||'#fff')?'#a3a4bb':'#5f6377'}:undefined} data-frame-view={Boolean(portfolioViewing&&presentationPage?.frameId)} data-graphics-quality={graphicsQuality} data-theme={theme} data-info-collapsed={chrome.collapsed.info}>
+  return <WebAssetsContext.Provider value={webAssetStore}><AnimationContext.Provider value={animationStore}><ProjectContext.Provider value={projectStore}><CanvasGraphicsContext.Provider value={graphicsQuality}><div className={`canvas-app-page${portfolioViewing?' portfolio-view':''}`} data-presentation-settings={portfolioSettings} style={portfolioViewing&&presentationPage?.frame?{'--frame-screen-left':`${presentationPage.frame.x*boardSize.width*camera.scale+camera.x}px`,'--frame-screen-top':`${presentationPage.frame.y*boardSize.height*camera.scale+camera.y}px`,'--frame-screen-width':`${presentationPage.frame.width*boardSize.width*camera.scale}px`,'--frame-screen-height':`${presentationPage.frame.height*boardSize.height*camera.scale}px`,'--frame-view-fill':presentationPage.frame.fill||'#fff','--frame-content-color':isColorDark(presentationPage.frame.fill||'#fff')?'#f0f1f5':'#1e2029','--frame-content-muted':isColorDark(presentationPage.frame.fill||'#fff')?'#a3a4bb':'#5f6377'}:undefined} data-frame-view={Boolean(portfolioViewing&&presentationPage?.frameId)} data-graphics-quality={graphicsQuality} data-theme={theme} data-info-collapsed={chrome.collapsed.info}>
     <div style={{ display: 'contents' }} inert={!hostStatus.editable && !error ? '' : undefined}>
     <header className={`canvas-topbar${chrome.collapsed.info?' is-collapsed':''}`}>
       <ChromeToggle label={ui("캔버스 정보")} collapsed={chrome.collapsed.info} onToggle={()=>chrome.toggle('info')} controls="canvas-info-content" />
@@ -1870,7 +1873,7 @@ function CanvasWorkspace() {
     </div>
     {!error && !hostStatus.editable && <CanvasLoadingStatus overlay message={hostStatus.message} />}
     {portfolioViewing&&presentationPage&&<PortfolioViewer portfolio={{...items[PORTFOLIO_ID],title:items[PORTFOLIO_ID]?.title||ui('포트폴리오'),portfolioPages:presentationPages}} index={portfolioIndex} onAdvance={advancePresentation} sending={presentationSending} busyUntil={presentationBusy.current} step={cursor?.frameId===presentationPage.frameId?cursor?.step||0:0} totalSteps={animationGroups(presentationPage,itemsRef.current).length} canAdvance={portfolioWritable(presentationPage.frame||itemsRef.current[PORTFOLIO_ID])&&portfolioWritable(itemsRef.current[PORTFOLIO_ID]||frameMeta())} remainingFrames={(()=>{let n=0,id=presentationPage.nextFrameId;const seen=new Set([presentationPage.frameId]);while(id&&!seen.has(id)){seen.add(id);n++;id=presentationPages.find(p=>p.frameId===id)?.nextFrameId;}return n;})()} locked={portfolioLocked} onExit={exitPortfolio}/>}
-  </div></CanvasGraphicsContext.Provider></ProjectContext.Provider></AnimationContext.Provider>;
+  </div></CanvasGraphicsContext.Provider></ProjectContext.Provider></AnimationContext.Provider></WebAssetsContext.Provider>;
 }
 
 export default function CanvasPage() {

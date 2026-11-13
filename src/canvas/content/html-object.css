@@ -1,0 +1,4 @@
+.html-object-content{display:flex;flex-direction:column;min-height:220px;height:100%;overflow:hidden;background:var(--surface,#fff);border-radius:inherit}
+.html-object-content>header{display:flex;align-items:center;gap:10px;flex:0 0 36px;padding:0 12px;border-bottom:1px solid var(--line,#ddd);font:12px system-ui;color:var(--ink-muted,#666)}
+.html-object-content>header>strong{color:var(--ink-strong,#29243b)}.html-object-content>header>button{margin-left:auto;padding:4px 9px;border:1px solid var(--line,#ddd);border-radius:6px;background:var(--surface,#fff);color:var(--ink-strong,#29243b);font:inherit;cursor:pointer}
+.html-object-content>iframe{display:block;flex:1 1 220px;min-height:100px;width:100%;border:0;background:white}.html-object-editor{height:220px;min-height:100px;flex:1 1 220px;overflow:hidden;border-bottom:1px solid var(--line,#ddd)}.html-object-editor>.canvas-code-editor{height:100%;min-height:0}

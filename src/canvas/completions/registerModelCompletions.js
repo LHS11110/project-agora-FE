@@ -1,3 +1,4 @@
+import {contextualSnippet} from './snippetContext.js';
 import { ui } from '../../i18n/locale.js';
 import { snippetPreview, vocabularyPresentation } from './presentation.js';
 import { completionKeywords } from './keywords.js';
@@ -25,8 +26,10 @@ export function registerModelCompletions(monaco, model, getLanguage) {
       const detail = codeLanguageLabel(language);
       const snippetLabels=new Set(snippets.map(([label])=>label));
       const suggestions = [];
-      for (const [label, insertText, documentation] of snippets) {
+      for (const [label, template, documentation] of snippets) {
         if (prefix && !label.toLowerCase().startsWith(prefix)) continue;
+        const before=['cpp','c++'].includes(language)?model.getLineContent(position.lineNumber).slice(0,word.startColumn-1):'';
+        const insertText=contextualSnippet(language,before,template);if(insertText===null)continue;
         const preview=snippetPreview(insertText), first=preview.split('\n')[0];
         suggestions.push({ label:{label,detail:first.startsWith(label)?first.slice(label.length):'',description:ui('템플릿')}, insertText, documentation:{value:`\`\`\`${language}\n${preview}\n\`\`\`\n\n${ui('Tab으로 삽입하고 다음 입력칸으로 이동하세요.')}`,isTrusted:false,supportHtml:false}, detail:`${ui(documentation)} · ${detail}`, kind: monaco.languages.CompletionItemKind.Snippet, insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range, sortText: `0_${label}` });
       }

@@ -230,7 +230,7 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
     const mode = contentMode(item);
     const textColor = item.kind === 'text' && mode !== 'code' && /^#[0-9a-f]{6}$/i.test(item.color || '') ? item.color : undefined;
     return withResizeHandles(<div key={id} className={`${classes} unified-content-object ${mode === 'code' ? 'code-object' : 'text-object'}${mode === 'markdown' ? ' markdown-text-object' : ''}`} style={{ ...style, color: textColor, '--text-color': textColor }} {...handlers}>
-      <UnifiedTextContent {...{ id, item, editing, dirty, remoteEditorLabel, onUndo, onTextChange, onTextColorChange, onFormulaChange, onMetadataChange, onSave, onStopEditing, runtimeStore, canExecute }} />
+      <UnifiedTextContent onStartEditing={readOnly?undefined:contentActions.start} {...{ id, item, editing, dirty, remoteEditorLabel, onUndo, onTextChange, onTextColorChange, onFormulaChange, onMetadataChange, onSave, onStopEditing, runtimeStore, canExecute }} />
     </div>);
   }
   if (item.kind === 'note') return withResizeHandles(<div key={id} className={`${classes} sticky-note-object`} style={{ ...style, '--sticky-note-color': item.color || stickyNoteColors[0], '--sticky-note-rotation': `${Number(item.rotation) || -1}deg` }} data-item-id={id} {...handlers} onBlur={editingBoundary.onBlur} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}>

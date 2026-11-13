@@ -16,6 +16,7 @@ export function assertAccessOperations(items,operations,identity){
   const ids=operation.action==='translate'?operation.ids:[operation.id];
   for(const id of ids){
    const previous=items[id];
+   if(!previous&&operation.patch?.kind==='project'&&operation.patch.projectType==='board'&&identity.is_admin!==true)throw new Error('프로젝트 생성은 캔버스 관리자만 가능합니다.');
    const output=isRuntimeOnlyOperation(previous,operation);
    const capability=output?'execute':'write';
    if(previous&&!canUseItem(previous,identity,capability))throw new Error(output?EXECUTE_DENIED:WRITE_DENIED);

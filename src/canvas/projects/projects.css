@@ -32,3 +32,16 @@
 .project-editor label{min-width:0;line-height:1.5}.project-editor :is(input,select,textarea){width:100%;min-height:2.2em}.project-editor input[type=checkbox]{width:auto;min-height:0;flex-shrink:0}
 .project-editor fieldset{flex-shrink:0}.project-edit-fields{flex-shrink:0}.project-workflow-row{flex-wrap:wrap}.project-workflow-row>input{flex:1 1 120px;width:120px}
 @container(max-width:420px){.project-header>div{margin-left:0;flex-basis:100%}.project-form-grid{grid-template-columns:minmax(0,1fr)}.project-rank-controls{flex-basis:100%}}
+/* Override generic canvas controls: project cards contain normal form controls. */
+.canvas-stage .project-object :is(button,input,select,textarea){box-sizing:border-box;font-family:inherit;font-size:inherit;line-height:1.5;letter-spacing:normal}
+.canvas-stage .project-object button{height:auto;min-height:28px;white-space:normal;flex-shrink:0}
+.canvas-stage .project-object .project-task-title{display:block;width:100%;height:auto;text-align:left;overflow-wrap:anywhere;word-break:normal;line-height:1.55;padding:6px 0;min-height:0}
+.canvas-stage .project-object .project-task>div:first-child{display:flex;align-items:center;gap:5px;flex-wrap:wrap;line-height:1.5}
+.canvas-stage .project-object .project-task footer{display:flex;flex-wrap:wrap;justify-content:space-between;gap:5px 12px;font-size:.9em}
+.canvas-stage .project-object .project-kanban{align-items:stretch}.canvas-stage .project-object .project-kanban>section{min-width:200px;min-height:120px}
+.project-column-empty{padding:18px 8px;color:#748096;font-size:.9em;text-align:center;border:1px dashed #d4dce8;border-radius:8px}
+.canvas-stage .project-object .project-rank-controls{flex:0 1 230px;display:flex;flex-wrap:wrap;gap:5px;align-self:center}.canvas-stage .project-object .project-rank-controls select{width:100%;max-width:100%;min-width:0}
+.project-dialog .project-editor{box-sizing:border-box;max-height:calc(100dvh - 32px);font:13px/1.55 var(--display,system-ui)}
+.project-dialog .project-editor :is(button,input,select,textarea){box-sizing:border-box;font:inherit;line-height:1.5;max-width:100%}.project-dialog .project-editor button{height:auto;min-height:30px;white-space:normal}
+.project-dialog .project-edit-fields{display:flex;flex-direction:column;gap:12px;padding:12px}.project-dialog .project-workflow-row{gap:8px;margin-bottom:8px}
+@container(max-width:540px){.canvas-stage .project-object .project-header{flex-wrap:wrap}.canvas-stage .project-object .project-toolbar>*{flex:1 1 130px;min-width:0}.canvas-stage .project-object .project-rank-controls{flex:1 1 100%}}

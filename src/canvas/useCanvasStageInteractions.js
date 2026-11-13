@@ -29,7 +29,7 @@ import { DEFAULT_SHAPE_ARROW_BEND } from '../components/shapeArrowGeometry.js';
 
 export function useCanvasStageInteractions(options) {
   const {
-    presentation=false,canWriteItem = () => true, canWriteCanvas = true, boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth = ERASER_RADIUS * 2, eraserMode,
+    canCreateProject=false,presentation=false,canWriteItem = () => true, canWriteCanvas = true, boardRef, camera, setCamera, activeTool, eraserRef, eraserCursorRef, itemsRef, boardSize, eraserWidth = ERASER_RADIUS * 2, eraserMode,
     addItem, setToast, setItems, patchItems, refreshSpatialIndex, spatialIndexRef,
     sendStrokeFrameChanges, pendingItemChangesRef, strokeSaveFlushRef,
     lastCursorSentAtRef, peerMeshRef, panRef, zoomHoldRef, zoomPointerPressRef,
@@ -420,7 +420,7 @@ export function useCanvasStageInteractions(options) {
       return;
     }
     if(activeTool==='frame'){event.preventDefault();const point=pointerPosition(event),id=createId(),item={...newFrame(),title:ui('프레임'),frameOrder:Date.now()%1000000,depth:-1000};if(addItem(id,{...item,x:point.x-item.width/2,y:point.y-item.height/2,permission})){setActiveTool('select');selectItems([id]);}return;}
-    if(activeTool==='project'){event.preventDefault();const point=pointerPosition(event),id=createId(),item={...newProject(),title:ui('프로젝트')};if(addItem(id,{...item,x:point.x-item.width/2,y:point.y-item.height/2,permission})){setActiveTool('select');selectItems([id]);}return;}
+    if(activeTool==='project'){event.preventDefault();if(!canCreateProject){setToast(ui('프로젝트 생성은 캔버스 관리자만 가능합니다.'));return;}const point=pointerPosition(event),id=createId(),item={...newProject(),title:ui('프로젝트')};if(addItem(id,{...item,x:point.x-item.width/2,y:point.y-item.height/2,permission})){setActiveTool('select');selectItems([id]);}return;}
     if (activeTool === 'question') {
       event.preventDefault();
       const point=pointerPosition(event),id=createId(),width=.28,height=.4;
@@ -456,7 +456,7 @@ export function useCanvasStageInteractions(options) {
       else { setActiveTool('select'); selectItems([id]); }
       return;
     }
-    if (activeTool === 'shape' || activeTool === 'text' || activeTool === 'markdown' || activeTool === 'math' || activeTool === 'code' || activeTool === 'note') {
+    if (['html','css','js'].includes(activeTool) || activeTool === 'shape' || activeTool === 'text' || activeTool === 'markdown' || activeTool === 'math' || activeTool === 'code' || activeTool === 'note') {
       event.preventDefault();
       const point = pointerPosition(event);
       const shapeSize = shapeCreationSize(shapeType, boardSize);
@@ -467,13 +467,15 @@ export function useCanvasStageInteractions(options) {
       if (activeTool === 'shape') item = { kind: 'shape', strokeWidth: shapeBorderWidth, shapeType, fillOpacity: shapeFillOpacity, sketchFillOpacity: shapeSketchFillOpacity, cornerStyle: shapeCornerStyle, ...(hasPolygonVertices(shapeType) ? { vertexCount: shapeVertexCount } : {}), visualStyle: shapeVisualStyle, strokeEnabled: shapeStrokeEnabled, fill: shapeType === 'arrow' ? '' : shapeFillColor, ...(shapeType === 'arrow' ? { bend: DEFAULT_SHAPE_ARROW_BEND, headSize: shapeArrowHeadSize, startHead: shapeArrowStartHead, shapeArrowHeadSize, endHead: shapeArrowEndHead } : {}), x, y, width: itemWidth, height: shapeSize.height, color, permission };
       else if (activeTool === 'text' || activeTool === 'markdown') item = { kind: 'text', text: '', renderMode: 'markdown', ...(activeTool === 'markdown' ? { format: 'markdown' } : {}), x, y, width: itemWidth, permission };
       else if (activeTool === 'note') item = { kind: 'note', text: '', x, y, width: itemWidth, color: noteColor, rotation: Math.random() * 3 - 1.5, permission };
+      else if(['css','js'].includes(activeTool))item={kind:'text',renderMode:'code',language:activeTool==='css'?'css':'javascript',filename:activeTool==='css'?'style.css':'script.js',text:activeTool==='css'?'h1 { color: #7055d6; }':'document.querySelector("h1")?.addEventListener("click", () => { document.querySelector("h1").textContent = "Hello, JavaScript!"; });',x,y,width:.36,height:.28,permission};
+      else if(activeTool==='html')item={kind:'text',renderMode:'code',language:'html',filename:'index.html',text:'<style>body{background:#f4f1ff;color:#30244e}h1{color:#7055d6}</style>\n<h1>Hello, HTML!</h1>\n<p>HTML과 CSS로 화면을 만들어 보세요.</p>',x,y,width:.4,height:.5,permission};
       else if (activeTool === 'code') item = { kind: 'text', text: '', renderMode: 'code', filename: 'idea.js', language: 'javascript', x, y, width: itemWidth, permission };
       else item = { kind: 'text', text: '', renderMode: 'latex', x, y, width: itemWidth, permission };
       const id = createId();
       if (!addItem(id, item)) setToast('실시간 서버에 연결된 뒤 캔버스를 수정할 수 있어요.');
       else {
         setActiveTool('select');
-        if (activeTool === 'text' || activeTool === 'markdown' || activeTool === 'code' || activeTool === 'note' || activeTool === 'math') startEditing(id);
+        if (['html','css','js'].includes(activeTool) || activeTool === 'text' || activeTool === 'markdown' || activeTool === 'code' || activeTool === 'note' || activeTool === 'math') startEditing(id);
       }
       return;
     }

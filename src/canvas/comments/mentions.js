@@ -23,3 +23,11 @@ export function mentionSuggestions(text, cursor, participants) {
     && `${person.nickname}#${Number(person.tag_number)}`.toLocaleLowerCase().startsWith(query)).slice(0, 8);
   return matches.length ? { start, end: cursor, matches } : null;
 }
+
+export function mentionRanges(text){
+ const ranges=[];
+ for(const match of String(text||'').matchAll(/(^|[\s([{])(@[^@\n#]{1,100}#[0-9]+)(?=$|[\s.,!?;:)}\]])/gu)){
+  const start=match.index+match[1].length;ranges.push({start,end:start+match[2].length});
+ }
+ return ranges;
+}

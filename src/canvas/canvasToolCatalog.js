@@ -16,6 +16,9 @@ export const canvasToolCategories = [
     { id: 'connect', label: '연결', description: '오브젝트 연결', icon: 'connect' },
   ] },
   { id: 'write', label: '글쓰기', tools: [
+    {id:'css',label:'CSS',description:'HTML에 연결할 스타일',icon:'code'},
+    {id:'js',label:'JavaScript',description:'HTML에 연결할 스크립트',icon:'code'},
+    {id:'html',label:'HTML',description:'HTML 코드 편집 및 미리보기',icon:'code'},
     { id: 'text', label: '내용', description: '텍스트 · Markdown · LaTeX · 코드', icon: 'text' },
     { id: 'note', label: '포스트잇', icon: 'sticky' },
   ] },
