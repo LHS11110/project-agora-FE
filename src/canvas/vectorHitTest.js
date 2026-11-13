@@ -1,4 +1,4 @@
-import {hasAnimation} from './portfolio/portfolioModel.js';
+import {hasRenderedAnimation} from './portfolio/portfolioModel.js';
 import {isRasterCode,codePreviewHeight} from './codePreviewMetrics.js';
 import { shapeStrokeWidth } from './shapeAppearance.js';
 import { shapeOutlinePaths } from './shapeGeometry.js';
@@ -10,8 +10,8 @@ import { isRasterContent as isRasterText } from './plainTextRaster.js';
 import { isOverviewProxy } from './sceneRepresentation.js';
 
 export const isVectorItem = item => !item?.runtimeRole && (['shape', 'stroke', 'connector'].includes(item?.kind) || isRasterText(item));
-export const needsVectorDom = (id, item, selected, editingId, connectionStartId, world = {width:1600,height:1000}, scale = 1) =>
-  hasAnimation(item) || (!isVectorItem(item) && !isOverviewProxy(item,world,scale)) || selected.has(String(id)) || editingId === id || connectionStartId === id
+export const needsVectorDom = (id, item, selected, editingId, connectionStartId, world = {width:1600,height:1000}, scale = 1, quality = 'low') =>
+  hasRenderedAnimation(item) || (!isVectorItem(item) && !isOverviewProxy(item,world,scale,quality)) || selected.has(String(id)) || editingId === id || connectionStartId === id
   || (item.kind === 'connector' && Boolean(item.label));
 
 function distance(point, a, b) {

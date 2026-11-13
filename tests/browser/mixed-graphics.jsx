@@ -1,0 +1,7 @@
+import React,{useState} from 'react';import {createRoot} from 'react-dom/client';
+import DepthVectorLayer from '../../src/canvas/DepthVectorLayer.jsx';import SceneViewModel from '../../src/canvas/SceneViewModel.js';import {itemSnapshot} from '../../src/canvas/itemSnapshots.js';import {graphicsLodScale} from '../../src/canvas/graphicsQuality.js';
+const world={width:1600,height:1000},count=Number(new URLSearchParams(location.search).get('count'))||200000;
+const entries=Array.from({length:count},(_,i)=>{const kind=['shape','code','image','link','link'][i%5],item={kind,shapeType:'rectangle',x:(i%500)*.02,y:Math.floor(i/500)*.02,width:.018,height:.016,fill:'#8e9bdf',code:'print(42)',renderMode:'code',src:'https://example.invalid/image.png',mediaType:i%5===3?'youtube':'video',url:'https://example.invalid/video.mp4',shadowEnabled:false};return {id:String(i),item,bounds:{minX:item.x,minY:item.y,maxX:item.x+item.width,maxY:item.y+item.height}};});
+const items=itemSnapshot(Object.fromEntries(entries.map(e=>[e.id,e.item]))),scene=new SceneViewModel();scene.update(entries,items,world,graphicsLodScale(.04,count,'low'),new Set(),new Set());
+function App(){const [camera,setCamera]=useState({x:0,y:0,scale:.04});window.mixedFixture={setCamera,count};return <div style={{width:1100,height:750,position:'relative',overflow:'hidden'}}><DepthVectorLayer items={scene.depthLayers[0].vectors} referenceItems={items} worldSize={world} camera={camera} graphicsQuality="low"/></div>;}
+createRoot(document.getElementById('root')).render(<App/>);

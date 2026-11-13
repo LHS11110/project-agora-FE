@@ -8,3 +8,10 @@ export function validPortfolio(p){return Boolean(p?.kind==='portfolio'&&typeof p
 export const newPortfolio=permission=>({kind:'portfolio',title:'포트폴리오',portfolioDescription:'',portfolioPages:[],permission,x:0,y:0,width:.01,height:.01});
 export function animationFrames(a){switch(a.effect){case'fade':return [{opacity:0},{opacity:1}];case'slide-up':return [{opacity:0,translate:`0 ${a.distance}px`},{opacity:1,translate:'0 0'}];case'slide-left':return [{opacity:0,translate:`${a.distance}px 0`},{opacity:1,translate:'0 0'}];case'zoom':return [{opacity:0,scale:'.8'},{opacity:1,scale:'1'}];case'pulse':return [{scale:'1'},{scale:'1.08'},{scale:'1'}];case'float':return [{translate:'0 0'},{translate:`0 -${a.distance}px`},{translate:'0 0'}];case'spin':return [{rotate:'0deg'},{rotate:'360deg'}];default:return[];}}
 export function playbackOffset(p,now=Date.now()){return now-p.startedAt;}
+
+// Merely assigning an effect must not allocate a DOM/raster surface for every
+// dormant object in a large document. Shared playback still uses the full renderer.
+export function hasRenderedAnimation(item){
+ const p=item?.animationPlayback;
+ return hasAnimation(item)&&p?.action==='play'&&p.startedAt>0;
+}

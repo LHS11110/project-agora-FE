@@ -1,3 +1,4 @@
+import {graphicsLodScale} from '../canvas/graphicsQuality.js';
 import {isChessShape} from '../canvas/chessShapes.js';
 import usePersonalAnchors from '../canvas/usePersonalAnchors.js';
 import ScreenShareViewer from '../canvas/voice/ScreenShareViewer.jsx';
@@ -1191,14 +1192,14 @@ function CanvasWorkspace() {
   }, [boardSize.height, boardSize.width, editingId, items, spatialIndex, spatialRevision, sceneWindow.key]);
   const portfolioEntries=useMemo(()=>{if(!portfolioViewing)return visibleEntries;const ids=new Set(presentationPage?.objectIds||[]);return visibleEntries.filter(entry=>ids.has(entry.id));},[visibleEntries,portfolioViewing,presentationPage]);
   const pendingEntrance=useMemo(()=>portfolioViewing?new Set(animationGroups(presentationPage,items).slice(cursor?.frameId===presentationPage?.frameId?cursor?.step||0:0).flatMap(g=>g.ids).filter(id=>['fade','slide-up','slide-left','zoom'].includes(items[id]?.animation?.effect))):null,[portfolioViewing,presentationPage,cursor,items]);
-  const usesOverview=useMemo(()=>portfolioEntries.some(({item})=>!['shape','stroke','connector'].includes(item.kind) && !isRasterText(item)),[portfolioEntries,items[selectedItemId]?.renderMode]);
-  const representationScale=usesOverview?overviewScale(Math.min(camera.scale,camera.detailScale??camera.scale)):1;
+  const usesOverview=useMemo(()=>portfolioEntries.some(({item})=>Boolean(item.runtimeRole)||!['shape','stroke','connector'].includes(item.kind)),[portfolioEntries,items[selectedItemId]?.renderMode]);
+  const representationScale=usesOverview?overviewScale(graphicsLodScale(Math.min(camera.scale,camera.detailScale??camera.scale),portfolioEntries.length,graphicsQuality)):1;
   const selectedObjectIdsKey=selectedItemIds.filter(id=>Boolean(items[id])).join('|');
   const selectedObjectIds=useMemo(()=>selectedItemIds.filter(id=>Boolean(items[id])),[selectedObjectIdsKey]);
   const selectedObjectIdSet = useMemo(() => new Set(selectedObjectIds), [selectedObjectIds]);
   const domSelection = useMemo(() => selectedObjectIdSet.size<=64 ? selectedObjectIdSet : new Set(),[selectedObjectIdSet]);
   const sceneModelRef=useRef(null);if(!sceneModelRef.current)sceneModelRef.current=new SceneViewModel();
-  const sceneModel=sceneModelRef.current.update(portfolioEntries,items,boardSize,representationScale,new Set([...domSelection,editingId,connectionStartId].filter(Boolean)),selectedObjectIdSet,spatialIndex.stats.boundsCalculated,spatialIndex);
+  const sceneModel=sceneModelRef.current.update(portfolioEntries,items,boardSize,representationScale,new Set([...domSelection,editingId,connectionStartId].filter(Boolean)),selectedObjectIdSet,spatialIndex.stats.boundsCalculated,spatialIndex,graphicsQuality);
   if(sceneRef.current){sceneRef.current.__agoraSceneStats=sceneModel.stats;sceneRef.current.__agoraContentCacheStats=objectContentCacheStats;sceneRef.current.__agoraSpatialStats=spatialIndex.stats;}
   const depthLayers=sceneModel.depthLayers,vectorHitOrder=sceneModel.hitOrder;
   const hasSingleSelection = selectedObjectIds.length === 1;

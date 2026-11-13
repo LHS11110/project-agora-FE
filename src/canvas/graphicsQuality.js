@@ -21,3 +21,10 @@ export function graphicsDocumentRatio(quality,width,height,deviceRatio=1){
  return Math.min(graphicsRasterRatio(quality,1,deviceRatio),4096/Math.max(1,width,height),Math.sqrt(profile.documentPixelBudget/Math.max(1,width*height)));
 }
 export function graphicsRasterItem(item,quality){return normalizeGraphicsQuality(quality)==='low'&&item.shadowEnabled!==false?{...item,shadowEnabled:false}:item;}
+
+// Bound rich-object detail as visible density grows; selected objects keep their
+// full renderer. This affects presentation only, never stored object data.
+export function graphicsLodScale(scale,visibleCount,quality){
+ const budget={low:256,medium:512,high:1024}[normalizeGraphicsQuality(quality)];
+ return scale*Math.min(1,Math.sqrt(budget/Math.max(budget,visibleCount)));
+}
