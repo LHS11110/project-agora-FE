@@ -1,10 +1,14 @@
-export function stagePointerHandlers({ activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, sendCursorPosition, pickVector, touchNavigation }) {
+export function stagePointerHandlers({ disabled=false, activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, sendCursorPosition, pickVector, touchNavigation }) {
+  if(disabled)return {};
+  const isCanvasUi = event => Boolean(event.target.closest?.('[data-canvas-ui]'));
   const finish = (event) => {
+    if(isCanvasUi(event))return;
     if (dragRef.current) stopObjectDrag(event);
     else stopDrawing(event);
   };
   return {
     onPointerDownCapture: (event) => {
+      if(isCanvasUi(event))return;
       if (touchNavigation?.down(event)) return;
       if (event.target.closest?.('.canvas-minimap')) return;
       cancelCameraMotion?.();
@@ -14,6 +18,7 @@ export function stagePointerHandlers({ activeTool, dragRef, panRef, spacePressed
       else pickVector?.(event, false, true);
     },
     onPointerMoveCapture: (event) => {
+      if(isCanvasUi(event))return;
       if (touchNavigation?.move(event)) return;
       if (!event.target.closest?.('.canvas-minimap')) sendCursorPosition?.(event);
       if (!panRef.current) return;
@@ -21,20 +26,23 @@ export function stagePointerHandlers({ activeTool, dragRef, panRef, spacePressed
       moveDrawing(event);
     },
     onPointerUpCapture: (event) => {
+      if(isCanvasUi(event))return;
       if (touchNavigation?.up(event)) return;
       if (!panRef.current) return;
       event.stopPropagation();
       stopDrawing(event);
     },
     onPointerCancelCapture: (event) => {
+      if(isCanvasUi(event))return;
       if (touchNavigation?.up(event)) return;
       if (!panRef.current) return;
       event.stopPropagation();
       stopDrawing(event);
     },
-    onPointerDown: event => { if (!pickVector?.(event)) startDrawing(event); },
-    onDoubleClick: event => pickVector?.(event, true),
+    onPointerDown: event => { if(isCanvasUi(event))return;if (!pickVector?.(event)) startDrawing(event); },
+    onDoubleClick: event => {if(!isCanvasUi(event))pickVector?.(event, true);},
     onPointerMove: (event) => {
+      if(isCanvasUi(event))return;
       if (dragRef.current) moveObject(event);
       else moveDrawing(event);
     },

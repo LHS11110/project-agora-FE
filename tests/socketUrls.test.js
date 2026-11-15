@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 async function client(env) {
-  const source = (await readFile(new URL('../src/api/client.js', import.meta.url), 'utf8')).replaceAll('import.meta.env', JSON.stringify(env));
+  const transportUrl = new URL('../src/api/canvasTransport.js', import.meta.url).href;
+  const source = (await readFile(new URL('../src/api/client.js', import.meta.url), 'utf8'))
+    .replaceAll('import.meta.env', JSON.stringify(env))
+    .replaceAll("'./canvasTransport.js'", JSON.stringify(transportUrl));
   return import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 }
 

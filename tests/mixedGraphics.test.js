@@ -29,5 +29,9 @@ test('dormant animation effects do not force individual DOM renderers',()=>{cons
 test('zooming restores text detail instead of retaining the tiny-object silhouette',()=>{
  const item={kind:'code',renderMode:'code',code:'print(42)',width:.1,height:.1},entry={id:'code',item,bounds:{minX:0,minY:0,maxX:.1,maxY:.1}},items={code:item},scene=new SceneViewModel(),entries=[entry];
  scene.update(entries,items,world,.02,new Set(),new Set());assert.equal(scene.depthLayers[0].vectors.code.kind,'shape');
+ const tinyVectors=scene.depthLayers[0].vectors;
+ scene.update(entries,items,world,.01,new Set(),new Set());assert.equal(scene.depthLayers[0].vectors,tinyVectors,'zooming within same tiny proxy tier retains vector snapshot identity');
  scene.update(entries,items,world,.04,new Set(),new Set());assert.equal(scene.depthLayers[0].vectors.code.kind,'text');
+ const plainVectors=scene.depthLayers[0].vectors;
+ scene.update(entries,items,world,.08,new Set(),new Set());assert.equal(scene.depthLayers[0].vectors,plainVectors,'zooming within same overview proxy tier retains vector snapshot identity');
 });

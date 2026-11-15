@@ -117,10 +117,25 @@ export function useCanvasConnection(options) {
     let socket;
     let rtcSocket;
     let reconnectTimer = null;
+    let keepaliveTimer = null;
+    let lastCanvasActivityAt = Date.now();
+    let lastRtcActivityAt = Date.now();
+    let rtcJoined = false;
+    let pendingKeepalivePongs = 0;
     let rtcReady = false;
     let canvasConnectionId = '';
     let canvasConnectionHash = '';
     let joinedCanvasConnectionId = '';
+    const trackSocketWrites = (ws, onWrite) => {
+      if (!ws?.send) return ws;
+      const rawSend = ws.send.bind(ws);
+      ws.send = (data) => { onWrite(); return rawSend(data); };
+      if (ws.sendObject) {
+        const rawSendObject = ws.sendObject.bind(ws);
+        ws.sendObject = (data, size) => { onWrite(); return rawSendObject(data, size); };
+      }
+      return ws;
+    };
     const nextReconnectDelay = () => {
       const attempt = Math.min(reconnectAttemptsRef.current, 5);
       reconnectAttemptsRef.current += 1;
@@ -255,15 +270,53 @@ export function useCanvasConnection(options) {
           }
         }
         if (cancelled) return;
-        socket = installSocketCodec(new WebSocket(canvasCodecUrl(`${canvasSocketUrl(canvasId, access.ws_port, access.canvas_access_token)}&client_id=${encodeURIComponent(hostSessionRef.current.clientId)}`)));
+        socket = trackSocketWrites(
+          installSocketCodec(new WebSocket(canvasCodecUrl(`${canvasSocketUrl(canvasId, access.ws_port, access.canvas_access_token)}&client_id=${encodeURIComponent(hostSessionRef.current.clientId)}`))),
+          () => { lastCanvasActivityAt = Date.now(); },
+        );
         wsRef.current = socket;
-        rtcSocket = installSocketCodec(new WebSocket(canvasCodecUrl(rtcSocketUrl(canvasId, access.ws_port, access.canvas_access_token))));
+        rtcSocket = trackSocketWrites(
+          installSocketCodec(new WebSocket(canvasCodecUrl(rtcSocketUrl(canvasId, access.ws_port, access.canvas_access_token)))),
+          () => { lastRtcActivityAt = Date.now(); },
+        );
         rtcWsRef.current = rtcSocket;
+        lastCanvasActivityAt = Date.now();
+        lastRtcActivityAt = Date.now();
+        rtcJoined = false;
+        pendingKeepalivePongs = 0;
+        if (keepaliveTimer !== null) window.clearInterval(keepaliveTimer);
+        keepaliveTimer = window.setInterval(() => {
+          if (cancelled) return;
+          const now = Date.now();
+          if (
+            wsRef.current === socket &&
+            socket?.readyState === WebSocket.OPEN &&
+            canvasSnapshotLoadedRef.current &&
+            pendingItemChangesRef.current.length === 0 &&
+            rejectedEventPongsRef.current === 0 &&
+            pendingKeepalivePongs === 0 &&
+            now - lastCanvasActivityAt >= 20000
+          ) {
+            pendingKeepalivePongs += 1;
+            try { socket.send(JSON.stringify({ type: 'ping' })); } catch { pendingKeepalivePongs = 0; }
+          }
+          if (
+            rtcWsRef.current === rtcSocket &&
+            rtcSocket?.readyState === WebSocket.OPEN &&
+            rtcReady &&
+            rtcJoined &&
+            now - lastRtcActivityAt >= 20000
+          ) {
+            try { rtcSocket.send(JSON.stringify({ type: 'rtc_list' })); } catch { /* Socket closed mid-send. */ }
+          }
+        }, 25000);
         const handleRtcMessage = (event) => {
           if(cancelled||rtcWsRef.current!==rtcSocket)return;
+          lastRtcActivityAt = Date.now();
           let data;
           try { data = typeof event.data==='string'?JSON.parse(event.data):event.data; } catch { return; }
           voiceCallRef?.current?.handle(data);
+          if(data.type==='agent_sessions_changed'){window.dispatchEvent(new CustomEvent('agora:agent-sessions-changed',{detail:{canvasId:String(canvasId),revision:data.session_revision}}));return;}
           if (receiveServerEvent(data)) return;
           if (data.type === 'server_reconnect') {
             requestServerReconnect(data);
@@ -275,6 +328,7 @@ export function useCanvasConnection(options) {
             return;
           }
           if (data.type === 'rtc_peers') {
+            rtcJoined = true;
             rtcMembershipRetryRef.current=0;
             let mesh = peerMeshRef.current;
             if (!mesh) {
@@ -330,6 +384,7 @@ export function useCanvasConnection(options) {
           if (!cancelled && !autoReconnectRef.current && wsRef.current?.readyState === WebSocket.OPEN) setToast('캔버스 브로커에 연결할 수 없습니다.');
         };
         rtcSocket.onclose = (event) => {
+          rtcJoined = false;
           if(cancelled||rtcWsRef.current!==rtcSocket)return;
           const recoverable=event.code!==1008&&canvasSnapshotLoadedRef.current;
           if(recoverable){voiceCallRef?.current?.reconnect();requestServerReconnect({retry_after_ms:500});}
@@ -348,9 +403,12 @@ export function useCanvasConnection(options) {
         };
         socket.onmessage = (event) => {
           if(cancelled||wsRef.current!==socket)return;
+          lastCanvasActivityAt = Date.now();
           let data;
           try { data = typeof event.data==='string'?JSON.parse(event.data):event.data; } catch { return; }
           if(settleRuntimeSocketResponse(runtimeSocketRequestsRef.current,data))return;
+          if(data.type?.startsWith('canvas_watch_')||(data.type==='error'&&data.code?.startsWith('WATCH_'))){window.dispatchEvent(new CustomEvent('agora:canvas-watch',{detail:{canvasId:String(canvasId),data}}));return;}
+          if(data.type==='agent_sessions_changed'){window.dispatchEvent(new CustomEvent('agora:agent-sessions-changed',{detail:{canvasId:String(canvasId),revision:data.session_revision}}));return;}
           if (receiveServerEvent(data)) return;
           if (data.type === 'server_reconnect') {
             requestServerReconnect(data);
@@ -365,6 +423,7 @@ export function useCanvasConnection(options) {
             const initialItems = data.items && typeof data.items === 'object' ? data.items : {};
             replacePersistedItems(initialItems);
             pendingItemChangesRef.current = [];
+            pendingKeepalivePongs = 0;
             itemSyncVersionsRef.current = new Map();
             deletedItemSyncVersionsRef.current.clear();
             collaborativeDocsRef.current.clear();
@@ -378,6 +437,7 @@ export function useCanvasConnection(options) {
             autoReconnectRef.current = false;
             reconnectAttemptsRef.current = 0;
             setConnection('connected');
+            window.dispatchEvent(new CustomEvent('agora:agent-sessions-changed',{detail:{canvasId:String(canvasId)}}));
             const currentGroups = Array.isArray(data.groups) ? data.groups : [];
             registerGroupLayout(currentGroups,data.group_bits);
             groupsRef.current = currentGroups;
@@ -403,6 +463,7 @@ export function useCanvasConnection(options) {
             setCapabilities?.({groups:[],member_groups:[],write_groups:[],execute_groups:[],is_admin:false});
             replacePersistedItems({});
             pendingItemChangesRef.current = [];
+            pendingKeepalivePongs = 0;
             setItems({});
             resetPeerMesh();
             setConnection('error');
@@ -474,7 +535,8 @@ export function useCanvasConnection(options) {
           if (data.type === 'mentions_changed') { chatEventsRef.current?.refreshMentions(); return; }
           if (data.type === 'mention_read') { chatEventsRef.current?.receiveMentionRead(data); return; }
           if (data.type === 'pong') {
-            if (rejectedEventPongsRef.current > 0) rejectedEventPongsRef.current -= 1;
+            if (pendingKeepalivePongs > 0) pendingKeepalivePongs -= 1;
+            else if (rejectedEventPongsRef.current > 0) rejectedEventPongsRef.current -= 1;
             else {
               const accepted = pendingItemChangesRef.current.shift();
               acknowledgeServerChange(accepted);
@@ -625,6 +687,7 @@ export function useCanvasConnection(options) {
       passwordAbort.abort();
       const preservePeerMesh = autoReconnectRef.current && canvasSnapshotLoadedRef.current && reconnectTimer === null;
       rtcMembershipRecovery.dispose();
+      if (keepaliveTimer !== null) { window.clearInterval(keepaliveTimer); keepaliveTimer = null; }
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       rtcReady = false;
       canvasConnectionId = '';

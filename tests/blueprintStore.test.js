@@ -89,7 +89,7 @@ test('prebuild traverses the graph without running programs or overwriting resul
  items.out.runtimeResults=[{output:'keep me'}];
  const store=createBlueprintStore({getItems:()=>items,execute:async request=>{requests.push(request);return {exitCode:0,output:'built'};},saveOutput:(...args)=>writes.push(args)});
  await store.build('run');
- assert.deepEqual(requests,[{action:'build',language:'python',code:'print(1)'}]);
+ assert.deepEqual(requests,[{objectId:'code',action:'build',language:'python',code:'print(1)'}]);
  assert.deepEqual(writes,[]);assert.equal(items.out.runtimeResults[0].output,'keep me');
  assert.equal(store.getActivity().phase,'build');assert.equal(store.get('run').built,true);
  await store.buildCode('code');assert.equal(requests[1].action,'build');

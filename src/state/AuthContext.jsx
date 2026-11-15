@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { tokenExpired, isCurrentAccountFailure } from './authSession.js';
 import { api } from '../api/client.js';
+import {saveAgentKey} from '../components/agentCredentials.js';
 
 const AuthContext = createContext(null);
 const TOKEN_KEY = 'agora_token';
@@ -21,6 +22,7 @@ export function AuthProvider({ children }) {
     if(result.oauthEnrollmentRequired){setPendingOAuthEnrollment(result);setPendingMfa(null);return result;}
     if (result.mfaRequired) { setPendingOAuthEnrollment(null); setPendingMfa({ challengeToken: result.challengeToken }); return result; }
     if (!result.accessToken || !result.user) throw new Error('로그인을 완료하지 못했습니다. 다시 시도해주세요.');
+    if(readUser()?.user_id!==result.user.user_id)saveAgentKey('');
     localStorage.setItem(TOKEN_KEY, result.accessToken);
     localStorage.setItem(USER_KEY, JSON.stringify(result.user));
     setAuthError(''); setPendingOAuthEnrollment(null); setPendingMfa(null);setToken(result.accessToken);setUser(result.user);
@@ -53,6 +55,7 @@ export function AuthProvider({ children }) {
     });
   }, []);
   const logout = useCallback(() => {
+    saveAgentKey('');
     setPendingMfa(null);setPendingOAuthEnrollment(null);oauthRequest.current=null;orcidRequest.current=null;
     localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); setToken(null); setUser(null);
   }, []);
@@ -64,6 +67,8 @@ export function AuthProvider({ children }) {
     };
     const syncStoredAccount = (event) => {
       if (event.storageArea !== localStorage || (event.key !== null && ![TOKEN_KEY, USER_KEY].includes(event.key))) return;
+      if(event.key===USER_KEY){try{if(JSON.parse(event.oldValue||'null')?.user_id!==readUser()?.user_id)saveAgentKey('');}catch{saveAgentKey('');}}
+      if(event.key===null)saveAgentKey('');
       setToken(localStorage.getItem(TOKEN_KEY));
       setUser(readUser());
     };

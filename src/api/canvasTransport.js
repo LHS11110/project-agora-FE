@@ -18,7 +18,7 @@ export function installCanvasTransport(options){
   entry.queue.push({request,resolve,reject});pump();
  });
  entry.dispose=()=>{if(active===entry)active=null;for(const task of entry.queue.splice(0))task.reject(Error('캔버스 연결이 변경되었습니다.'));};
- active=entry;return entry.dispose;
+ active=entry;if(typeof window!=='undefined'&&typeof window.dispatchEvent==='function'&&typeof CustomEvent==='function')window.dispatchEvent(new CustomEvent('agora:canvas-transport-ready'));return entry.dispose;
 }
 function target(path){
  if(!active)return null;const url=new URL(path,window.location.href);

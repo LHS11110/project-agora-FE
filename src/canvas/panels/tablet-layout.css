@@ -1,0 +1,277 @@
+/* Tablet & medium-viewport layout safeguards for canvas chrome, panels, dock, and minimap. */
+
+@media (min-width: 651px) {
+  .canvas-app-page .canvas-workspace {
+    --tablet-tools-w: var(--tools-width, 112px);
+    --tablet-inspector-w: var(--inspector-width, 292px);
+    --tablet-left-lane: calc(var(--tablet-tools-w) + 24px);
+    --tablet-right-lane: calc(var(--tablet-inspector-w) + 24px);
+    /* Resolve against viewport width (100vw) so calc() never inherits the 44px launcher button width. */
+    --tablet-chat-w: min(380px, calc(100vw - var(--tablet-left-lane) - var(--tablet-right-lane)));
+    --tablet-chat-h: min(var(--chat-expanded-height, 220px), max(168px, calc(100dvh - var(--canvas-panel-top, 84px) - var(--studio-panel-bottom, 98px) - 70px)));
+  }
+
+  .canvas-app-page .canvas-workspace:has(> .canvas-panel-slot-tools.is-collapsed) {
+    --tablet-left-lane: 68px;
+  }
+
+  .canvas-app-page .canvas-workspace:has(> .canvas-panel-slot-inspector.is-collapsed) {
+    --tablet-right-lane: 68px;
+  }
+
+  /* Keep the tool sidebar content strictly inside its narrow column without horizontal scrollbars. */
+  .canvas-app-page .canvas-tools {
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+
+  .canvas-app-page .categorized-tools {
+    padding: 8px 6px;
+  }
+
+  .canvas-app-page .tool-folder-toolbar {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .canvas-app-page .canvas-tool-fold-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 3px;
+  }
+
+  .canvas-app-page .canvas-tool-fold-actions button,
+  .canvas-app-page .canvas-folder-color-reset {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 4px 2px;
+    font-size: 8px;
+    letter-spacing: -0.2px;
+  }
+
+  .canvas-app-page .categorized-tools .tool-button,
+  .canvas-app-page .canvas-tool-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Keep the chat toggle anchored in the bottom-left corner while its expanded body sits in the center lane above the dock. */
+  .canvas-app-page .canvas-panel-slot.canvas-panel-slot-chat,
+  .canvas-app-page .canvas-panel-slot.canvas-panel-slot-chat.is-collapsed {
+    top: auto;
+    left: 12px;
+    right: auto;
+    bottom: 20px;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    pointer-events: none;
+    overflow: visible;
+  }
+
+  .canvas-app-page .canvas-panel-slot.canvas-panel-slot-chat:not(.is-collapsed) .canvas-panel-heading {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    top: auto;
+    right: auto;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface);
+    box-shadow: var(--studio-shadow);
+    pointer-events: auto;
+  }
+
+  .canvas-app-page .canvas-panel-slot.canvas-panel-slot-chat:not(.is-collapsed) .canvas-panel-title {
+    display: none;
+  }
+
+  .canvas-app-page .canvas-panel-slot.canvas-panel-slot-chat:not(.is-collapsed) .canvas-panel-content {
+    position: absolute;
+    top: auto;
+    right: auto;
+    left: calc(var(--tablet-left-lane) - 12px);
+    bottom: calc(var(--studio-panel-bottom, 98px) - 20px);
+    width: var(--tablet-chat-w);
+    height: var(--tablet-chat-h);
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: var(--studio-shadow);
+    pointer-events: auto;
+    overflow: hidden;
+  }
+
+  .canvas-app-page .canvas-panel-slot.canvas-panel-slot-chat:not(.is-collapsed) .canvas-panel-resize-chat {
+    top: auto;
+    right: auto;
+    left: calc(var(--tablet-left-lane) - 12px);
+    bottom: calc(var(--studio-panel-bottom, 98px) - 20px + var(--tablet-chat-h) - 4px);
+    width: var(--tablet-chat-w);
+    height: 9px;
+  }
+
+  @media (pointer: coarse) {
+    .canvas-app-page .canvas-panel-slot.canvas-panel-slot-chat:not(.is-collapsed) .canvas-panel-resize-chat {
+      bottom: calc(var(--studio-panel-bottom, 98px) - 20px + var(--tablet-chat-h) - 8px);
+      height: 17px;
+    }
+  }
+}
+
+@media (min-width: 651px) and (max-width: 1180px) {
+  .canvas-app-page {
+    --canvas-panel-top: 76px;
+    --studio-panel-bottom: 148px;
+    --studio-map-gap: 160px;
+  }
+
+  .canvas-app-page[data-info-collapsed="true"] {
+    --canvas-panel-top: 74px;
+  }
+
+  /* Neutralize workspace-docs <=820px min-height:97px & resizable-panels height:102px on tablet. */
+  .canvas-app-page .canvas-topbar {
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    height: 50px;
+    min-height: 50px;
+    padding: 0;
+    flex-wrap: nowrap;
+  }
+
+  .canvas-app-page .canvas-topbar.is-collapsed {
+    height: 50px;
+    min-height: 50px;
+    width: 204px;
+    padding: 5px 42px 5px 78px;
+  }
+
+  body .app-shell.is-canvas-shell .app-navigation-toggle {
+    top: 21px;
+    left: 20px;
+  }
+
+  .canvas-app-page .canvas-title-group {
+    flex: initial;
+    height: 50px;
+    max-width: calc(100% - 460px);
+    padding: 8px 12px 8px 78px;
+  }
+
+  .canvas-app-page .canvas-header-right {
+    width: auto;
+    flex: initial;
+    height: 50px;
+    min-width: 0;
+    max-width: none;
+    flex-direction: row;
+    align-items: center;
+    padding: 6px 8px;
+  }
+
+  .canvas-app-page .canvas-top-right {
+    gap: 6px;
+  }
+
+  .canvas-app-page .canvas-workspace {
+    --tablet-tools-w: clamp(96px, var(--tools-width, 110px), 114px);
+    --tablet-inspector-w: clamp(220px, var(--inspector-width, 260px), 276px);
+    --tablet-chat-w: min(360px, calc(100vw - var(--tablet-left-lane) - var(--tablet-right-lane)));
+  }
+
+  .canvas-app-page .canvas-workspace:has(> .canvas-panel-slot-chat:not(.is-collapsed)):has(.canvas-minimap:not(.is-collapsed)) {
+    --tablet-chat-w: min(360px, calc(100vw - var(--tablet-left-lane) - var(--tablet-right-lane) - 180px));
+  }
+
+  .canvas-app-page .canvas-panel-slot-tools:not(.is-collapsed) {
+    width: var(--tablet-tools-w);
+  }
+
+  .canvas-app-page .canvas-panel-slot-inspector:not(.is-collapsed) {
+    width: var(--tablet-inspector-w);
+  }
+
+  .canvas-app-page .canvas-quick-dock {
+    bottom: 76px;
+    max-width: calc(100% - 24px);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .canvas-app-page .board-topline {
+    left: auto;
+    right: 12px;
+    bottom: 20px;
+    max-width: calc(100% - 76px);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .canvas-app-page .canvas-minimap {
+    right: var(--tablet-right-lane);
+    bottom: var(--studio-panel-bottom, 148px);
+    width: min(168px, max(120px, calc(100% - var(--tablet-left-lane) - var(--tablet-right-lane))));
+    max-width: calc(100% - var(--tablet-left-lane) - var(--tablet-right-lane));
+  }
+
+  .canvas-app-page .canvas-minimap.is-collapsed {
+    width: max-content;
+    right: var(--tablet-right-lane);
+    bottom: var(--studio-panel-bottom, 148px);
+  }
+
+  .canvas-app-page .canvas-agent-panel {
+    max-width: calc(100% - 24px);
+    max-height: calc(100dvh - var(--canvas-panel-top, 76px) - var(--studio-panel-bottom, 148px));
+  }
+}
+
+@media (min-width: 651px) and (max-width: 960px) {
+  .canvas-app-page .canvas-settings-button span {
+    display: none;
+  }
+
+  .canvas-app-page .canvas-settings-button {
+    min-width: 32px;
+    padding: 0 8px;
+  }
+
+  .canvas-app-page .canvas-title-group {
+    max-width: calc(100% - 335px);
+  }
+
+  .canvas-app-page .canvas-workspace {
+    --tablet-tools-w: 104px;
+    --tablet-inspector-w: clamp(210px, var(--inspector-width, 240px), 248px);
+    --tablet-chat-w: min(380px, calc(100vw - var(--tablet-left-lane) - var(--tablet-right-lane)));
+  }
+
+  /* Portrait / compact tablets stack minimap directly above expanded chat instead of beside it. */
+  .canvas-app-page .canvas-workspace:has(> .canvas-panel-slot-chat:not(.is-collapsed)):has(.canvas-minimap:not(.is-collapsed)) {
+    --tablet-chat-w: min(380px, calc(100vw - var(--tablet-left-lane) - var(--tablet-right-lane)));
+    --tablet-chat-h: min(var(--chat-expanded-height, 220px), max(168px, calc(100dvh - var(--canvas-panel-top, 76px) - var(--studio-panel-bottom, 148px) - 210px)));
+  }
+
+  .canvas-app-page .canvas-workspace:has(> .canvas-panel-slot-chat:not(.is-collapsed)) .canvas-minimap {
+    bottom: calc(var(--studio-panel-bottom, 148px) + var(--tablet-chat-h) + 12px);
+  }
+
+  .canvas-app-page .quick-dock-tool {
+    width: 34px;
+    flex-basis: 34px;
+    height: 38px;
+  }
+}

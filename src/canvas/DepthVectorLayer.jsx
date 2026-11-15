@@ -15,7 +15,7 @@ import { hasHardwareWebGL } from './gpuCapability.js';
 import { cachedCameraProjection } from './cachedCameraProjection.js';
 import { useLayoutEffect, useRef } from 'react';
 import { Application, Sprite } from 'pixi.js';
-import { createInkStrokeRenderer } from './inkStrokeRenderer.js';
+import { createInkStrokeRenderer, hasStrokeItems } from './inkStrokeRenderer.js';
 import { CONNECTOR_METRICS_EVENT } from './connectors/objectMetrics.js';
 import { acquireGpuSlot, rasterDescriptor, rasterizeObject, sameRasterInput } from './rasterObjectCache.js';
 import { RasterTextureAtlas } from './textureAtlas.js';
@@ -39,7 +39,7 @@ export default function DepthVectorLayer(props) {
     const buffer=document.createElement('canvas'),bufferContext=buffer.getContext('2d',{alpha:true,desynchronized:true});
     const margin=256;
     buffer.className='vector-composite-surface';element.insertBefore(buffer,canvas);
-    let compositor=null,bufferVersion=0,surfaceChanged=false,worldPaintBounds=null,bufferCamera=null,sceneInputs=null,lastCamera=null,cameraIdleTimer=null,budgetIdleTimer=null,refreshCamera=false,cameraActive=false,viewportMetrics=null,textAppearanceCache=null;
+    let compositor=null,bufferVersion=0,surfaceChanged=false,worldPaintBounds=null,bufferCamera=null,sceneInputs=null,lastCamera=null,cameraIdleTimer=null,budgetIdleTimer=null,refreshCamera=false,cameraActive=false,viewportMetrics=null,textAppearanceCache=null,inkHasContent=false,settledDesiredRatio=null,settledQuality=null;
     const ink = createInkStrokeRenderer(element, canvas);
     const records = new Map();
     const preparationQueue = new ScenePreparationQueue();
@@ -145,7 +145,13 @@ export default function DepthVectorLayer(props) {
       const pixelWidth = Math.round(width*ratio), pixelHeight = Math.round(height*ratio);
       const gpu = app && !gpuFailed;
       if (gpu && (app.renderer.width !== pixelWidth || app.renderer.height !== pixelHeight || app.renderer.resolution !== ratio)) app.renderer.resize(width,height,ratio);
-      const desiredRatio = graphicsRasterRatio(quality,camera.scale,window.devicePixelRatio);
+      const cameraZooming = Boolean(element.closest?.('.canvas-stage')?.classList?.contains('camera-zooming'));
+      const rawDesiredRatio = graphicsRasterRatio(quality,camera.scale,window.devicePixelRatio);
+      if(!cameraZooming || settledDesiredRatio===null || settledQuality!==quality || rawDesiredRatio/settledDesiredRatio>1.5 || settledDesiredRatio/rawDesiredRatio>1.5){
+        settledDesiredRatio=rawDesiredRatio;
+        settledQuality=quality;
+      }
+      const desiredRatio = settledDesiredRatio;
       const projection=cachedCameraProjection(bufferCamera,camera,width,height,margin,worldPaintBounds);
       const bufferFits=Boolean(projection);
       const blitBuffer=()=>{
@@ -171,11 +177,17 @@ export default function DepthVectorLayer(props) {
         if(changed===null){types={items,kinds:new Map(),texts:0,connectors:0};for(const [id,item] of Object.entries(items||{})){const kind=isRasterText(item)?'rasterText':item.kind;types.kinds.set(id,kind);if(kind==='rasterText')types.texts++;if(kind==='connector')types.connectors++;}}
         else{for(const id of changed){const before=types.kinds.get(id),item=items[id],after=isRasterText(item)?'rasterText':item?.kind;if(before==='rasterText')types.texts--;if(before==='connector')types.connectors--;if(item)types.kinds.set(id,after);else types.kinds.delete(id);if(after==='rasterText')types.texts++;if(after==='connector')types.connectors++;}types.items=items;}
       }
-      const nextInkKey=`${quality}:${ratio}:${width}:${height}:${world.width}:${world.height}:${camera.x}:${camera.y}:${camera.scale}`;
-      if(nextInkKey!==inkKey || previousPreviews!==previewStrokes || previousDraft!==draft || previousInkItems!==inkItems){
-        ink.render({items:inkItems,previews:previewStrokes,draft,width:world.width,height:world.height,viewportWidth:width,viewportHeight:height,camera,pixelRatio:ratio});
-        inkKey=nextInkKey;previousPreviews=previewStrokes;previousDraft=draft;previousInkItems=inkItems;
-        stats.inkFrames=(stats.inkFrames||0)+1;
+      const hasAnyInk=Boolean(draft || previewStrokes?.length || hasStrokeItems(inkItems));
+      if(hasAnyInk || inkHasContent){
+        const nextInkKey=`${quality}:${ratio}:${width}:${height}:${world.width}:${world.height}:${camera.x}:${camera.y}:${camera.scale}`;
+        if(nextInkKey!==inkKey || previousPreviews!==previewStrokes || previousDraft!==draft || previousInkItems!==inkItems){
+          ink.render({items:inkItems,previews:previewStrokes,draft,width:world.width,height:world.height,viewportWidth:width,viewportHeight:height,camera,pixelRatio:ratio});
+          inkKey=nextInkKey;previousPreviews=previewStrokes;previousDraft=draft;previousInkItems=inkItems;
+          inkHasContent=hasAnyInk;
+          stats.inkFrames=(stats.inkFrames||0)+1;
+        }
+      }else if(previousPreviews!==previewStrokes || previousDraft!==draft || previousInkItems!==inkItems){
+        previousPreviews=previewStrokes;previousDraft=draft;previousInkItems=inkItems;
       }
       const hiddenKey=[...previewStrokes.map(stroke=>String(stroke.id)),...(draft?.id?[String(draft.id)]:[])].filter(id=>items[id]).sort().join('|');
       const inputs=[items,types.connectors?routingRevision:0,world.width,world.height,types.connectors?routingRevision:0,types.connectors?metricsRevision:0,hiddenKey,null,ratio,width,height,types.texts?textAppearance.font:'',types.texts?textAppearance.color:'',Boolean(gpu),quality,types.texts?fontRevision:0];
@@ -184,9 +196,12 @@ export default function DepthVectorLayer(props) {
       const qualityRefresh = sceneInputs && !cameraActive && desiredRatio > sceneInputs.quality * 1.25;
       const pending = preparationQueue.pending;
       const imagesChanged = readyImageIds.size > 0;
-      if(unchanged && !pending && !imagesChanged && !qualityRefresh && !surfaceChanged && !moved && !settling && (gpu || bufferFits))return;
+      const zoomRatio=bufferCamera && camera.scale>0 && bufferCamera.scale>0 ? camera.scale/bufferCamera.scale : 0;
+      const keepZoomedBuffer=cameraZooming && bufferFits && zoomRatio>=0.33 && zoomRatio<=3.5;
+      const scaleSettling=!gpu && !cameraZooming && Boolean(bufferCamera && (zoomRatio<0.98 || zoomRatio>1.02));
+      if(unchanged && !pending && !imagesChanged && !qualityRefresh && !surfaceChanged && !moved && !settling && !scaleSettling && (gpu || bufferFits))return;
       surfaceChanged=false;
-      if(unchanged && !pending && !imagesChanged && !qualityRefresh && (gpu || bufferFits)){
+      if(unchanged && (!pending || (!gpu && keepZoomedBuffer)) && !imagesChanged && !qualityRefresh && !scaleSettling && (gpu || bufferFits)){
         if(gpu){app.stage.position.set(camera.x,camera.y);app.stage.scale.set(camera.scale);try { app.renderer.render(app.stage); } catch { fallBackToCanvas(); return; }}
         else blitBuffer();
         stats.frames++;stats.cachedPanFrames=(stats.cachedPanFrames||0)+1;stats.lastDrawnObjects=gpu?preparation.count:0;
@@ -334,9 +349,9 @@ export default function DepthVectorLayer(props) {
       } else {
         const bufferWidth=Math.round((width+margin*2)*ratio),bufferHeight=Math.round((height+margin*2)*ratio);
         if(buffer.width!==bufferWidth || buffer.height!==bufferHeight){buffer.width=bufferWidth;buffer.height=bufferHeight;bufferCamera=null;}
-        if(!bufferFits || !bufferCamera || bufferCamera.scale!==camera.scale){bufferCamera={...camera};previousPaintKey='';}
+        if(!bufferFits || !bufferCamera || (!cameraZooming && (zoomRatio<0.98 || zoomRatio>1.02))){bufferCamera={...camera};previousPaintKey='';}
         const paintCamera={...bufferCamera,x:bufferCamera.x+margin,y:bufferCamera.y+margin};
-        const bufferKey=`${width}:${height}:${ratio}:${bufferCamera.x}:${bufferCamera.y}:${camera.scale}`;
+        const bufferKey=`${width}:${height}:${ratio}:${bufferCamera.x}:${bufferCamera.y}:${bufferCamera.scale}`;
         const region = mergeDamage(damage,2/Math.max(.01,camera.scale));
         const fullPaint = bufferKey !== previousPaintKey || (region && (region.maxX-region.minX)*(region.maxY-region.minY)*camera.scale**2 > width*height*.45);
         if (fullPaint || region) {
@@ -358,17 +373,28 @@ export default function DepthVectorLayer(props) {
             bufferContext.clearRect(left,top,right-left,bottom-top);
           }
           bufferContext.setTransform(ratio*camera.scale,0,0,ratio*camera.scale,ratio*paintCamera.x,ratio*paintCamera.y);
+          const bufferWorldBounds={minX:-paintCamera.x/bufferCamera.scale,minY:-paintCamera.y/bufferCamera.scale,maxX:(width+margin*2-paintCamera.x)/bufferCamera.scale,maxY:(height+margin*2-paintCamera.y)/bufferCamera.scale};
+          const clipRegion=fullPaint?bufferWorldBounds:region;
+          let activeAlpha=1,activeFill;
           for (const record of ordered) {
             if (!record) continue;
-            if (!fullPaint && !overlaps(record.paintedBounds,region)) continue;
-            const descriptor=record.descriptor,raster=record.raster;
-            bufferContext.save(); bufferContext.translate(descriptor.x+descriptor.centerX,descriptor.y+descriptor.centerY);
-            bufferContext.rotate(descriptor.rotation*Math.PI/180);
-            const handle=record.resource.textureHandle;
-            if(record.tint!==null){bufferContext.globalAlpha=shapeFillOpacity(record.item);bufferContext.fillStyle=record.item.fill;bufferContext.fillRect(-descriptor.centerX,-descriptor.centerY,Number(record.item.width)*world.width,Number(record.item.height)*world.height);}
-            else if(handle?.page)bufferContext.drawImage(handle.page.canvas,handle.slot.x+2,handle.slot.y+2,raster.pixelWidth,raster.pixelHeight,raster.left-descriptor.centerX,raster.top-descriptor.centerY,raster.width,raster.height);
-            else bufferContext.drawImage(raster.canvas,raster.left-descriptor.centerX,raster.top-descriptor.centerY,raster.width,raster.height);
-            bufferContext.restore(); drawn++;
+            if (!overlaps(record.paintedBounds,clipRegion)) continue;
+            const descriptor=record.descriptor,raster=record.raster,handle=record.resource.textureHandle;
+            const rotated=Boolean(descriptor.rotation);
+            if(rotated){bufferContext.save(); bufferContext.translate(descriptor.x+descriptor.centerX,descriptor.y+descriptor.centerY); bufferContext.rotate(descriptor.rotation*Math.PI/180);}
+            if(record.tint!==null){
+              const alpha=shapeFillOpacity(record.item),fill=record.item.fill;
+              if(rotated || alpha!==activeAlpha){bufferContext.globalAlpha=alpha;if(!rotated)activeAlpha=alpha;}
+              if(rotated || fill!==activeFill){bufferContext.fillStyle=fill;if(!rotated)activeFill=fill;}
+              bufferContext.fillRect(rotated?-descriptor.centerX:descriptor.x,rotated?-descriptor.centerY:descriptor.y,Number(record.item.width)*world.width,Number(record.item.height)*world.height);
+            }else{
+              if(!rotated && activeAlpha!==1){bufferContext.globalAlpha=1;activeAlpha=1;}
+              const dx=rotated?raster.left-descriptor.centerX:descriptor.x+raster.left;
+              const dy=rotated?raster.top-descriptor.centerY:descriptor.y+raster.top;
+              if(handle?.page)bufferContext.drawImage(handle.page.canvas,handle.slot.x+2,handle.slot.y+2,raster.pixelWidth,raster.pixelHeight,dx,dy,raster.width,raster.height);
+              else bufferContext.drawImage(raster.canvas,dx,dy,raster.width,raster.height);
+            }
+            if(rotated)bufferContext.restore(); drawn++;
           }
           bufferContext.restore();bufferVersion++;
         }

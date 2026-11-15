@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { collectCopyObjects, serializeCopyObjects, rememberObjects, rememberedObjects, hasLocalOnlyObjects } from './objectClipboard.js';
 import { createId } from '../canvasIds.js';
 import { clipboardTextObject, resolveExternalClipboardObjects, clipboardDataContent, readClipboardEntries } from './externalClipboard.js';
+import { initialVideoFields } from '../media/mediaModel.js';
 import { importNotebook, notebookCellItem, NOTEBOOK_FILE_LIMIT_BYTES } from '../notebook/notebookData.js';
 import { isCollaborativeItem } from '../collaborativeSync.js';
 
@@ -19,15 +20,20 @@ export function useObjectClipboard(options) {
   useEffect(() => {
     pending.current = false; pointer.current = null; copyCache.current=null;setBusy(false);
     const move = event => {
-      const board = latest.current.boardRef.current;
-      const bounds = board?.getBoundingClientRect();
-      pointer.current = bounds && event.clientX >= bounds.left && event.clientX <= bounds.right && event.clientY >= bounds.top && event.clientY <= bounds.bottom
-        ? { clientX: event.clientX, clientY: event.clientY } : null;
+      pointer.current = { clientX: event.clientX, clientY: event.clientY };
     };
+    const clearPointer = () => { pointer.current = null; };
     window.addEventListener('pointermove', move, { passive: true, capture: true });
     window.addEventListener('pointerdown', move, { passive: true, capture: true });
-    return () => { generation.current++;copyJob.current.dispose();copyCache.current=null;window.removeEventListener('pointermove', move, true); window.removeEventListener('pointerdown', move, true); };
+    window.addEventListener('pointerleave', clearPointer, { passive: true });
+    return () => { generation.current++;copyJob.current.dispose();copyCache.current=null;window.removeEventListener('pointermove', move, true); window.removeEventListener('pointerdown', move, true); window.removeEventListener('pointerleave', clearPointer); };
   }, [options.canvasId]);
+  const resolvePastePointer = (board) => {
+    const bounds = board.getBoundingClientRect();
+    const pt = pointer.current;
+    const inside = pt && pt.clientX >= bounds.left && pt.clientX <= bounds.right && pt.clientY >= bounds.top && pt.clientY <= bounds.bottom;
+    return inside ? pt : { clientX: bounds.left + bounds.width / 2, clientY: bounds.top + bounds.height / 2 };
+  };
   const disabled = () => latest.current.blocked || latest.current.isInteracting?.() || pending.current;
   const capture = cut => collectCopyObjects(latest.current.itemsRef.current,latest.current.selectedIds,latest.current.canvasId,cut,latest.current.spatialIndex?.connectionIndex);
   const cutOriginals = (snapshot, localOnly = false) => {
@@ -44,7 +50,7 @@ export function useObjectClipboard(options) {
   const pasteText = async text => {
     const c=latest.current;if(c.blocked||c.isInteracting?.()||!c.canvasSnapshotLoadedRef.current||pending.current)return;
     const board=c.boardRef.current;if(!board)return;
-    const bounds=board.getBoundingClientRect(),point=c.pointerPosition(pointer.current||{clientX:bounds.left+bounds.width/2,clientY:bounds.top+bounds.height/2});
+    const point=c.pointerPosition(resolvePastePointer(board));
     const repeat=lastPaste.current.text===text?lastPaste.current.repeat:0,turn=generation.current,canvasId=c.canvasId,pasted=[];
     const canInsert=()=>generation.current===turn&&latest.current.canvasId===canvasId&&!latest.current.blocked&&latest.current.canPaste!==false&&!latest.current.isInteracting?.()&&latest.current.canvasSnapshotLoadedRef.current;
     pending.current=true;setBusy(true);
@@ -69,8 +75,7 @@ export function useObjectClipboard(options) {
     if (content.text?.includes('"frelog.canvas.objects"') && !content.files?.length) { await pasteText(content.text); return; }
     const board = c.boardRef.current;
     if (!board) return;
-    const bounds = board.getBoundingClientRect();
-    const point = c.pointerPosition(pointer.current || {clientX:bounds.left+bounds.width/2,clientY:bounds.top+bounds.height/2});
+    const point = c.pointerPosition(resolvePastePointer(board));
     const turn = generation.current, canvasId = c.canvasId;
     const canInsert = () => generation.current === turn && latest.current.canvasId === canvasId && !latest.current.blocked && latest.current.canPaste !== false && !latest.current.isInteracting?.() && latest.current.canvasSnapshotLoadedRef.current;
     pending.current = true; setBusy(true);
@@ -100,7 +105,8 @@ export function useObjectClipboard(options) {
               if (!canInsert()) break;
             }
             id = createId();
-            const value = {...item,x:position.x-item.width/2,y:position.y-(item.height||.2)/2,permission:c.permission};
+            const mediaFields = item.kind === 'link' && !item.mediaState ? initialVideoFields(item) : {};
+            const value = {...item,...mediaFields,x:position.x-item.width/2,y:position.y-(item.height||.2)/2,permission:c.permission};
             if (!c.addItem(id,value)) { skipped++; continue; }
             if (isCollaborativeItem(value)) c.saveCollaborativeItem(id,{silent:true});
           }
@@ -155,6 +161,10 @@ export function useObjectClipboard(options) {
     const handle = event => {
       const c = latest.current, a = actions.current;
       if (a.disabled() || editable(event.target)) return;
+      if (event.type !== 'paste') {
+        const selection = window.getSelection?.();
+        if (selection && !selection.isCollapsed && selection.toString()) return;
+      }
       const board = c.boardRef.current;
       const canvasPaste = event.type === 'paste' && board?.closest('.canvas-app-page')?.contains(event.target);
       if (!canvasPaste && !board?.contains(event.target) && !event.target?.closest?.('.object-clipboard-controls') && event.target !== document.body) return;

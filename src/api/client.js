@@ -1,6 +1,6 @@
 import {canvasApiRequest} from './canvasTransport.js';
 export {canvasFetch} from './canvasTransport.js';
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const API_BASE = ((import.meta.env && import.meta.env.VITE_API_BASE_URL) || '').replace(/\/$/, '');
 
 export function apiUrl(path) {
   const address = /^[a-z][a-z\d+.-]*:/i.test(path) || path.startsWith('//') ? path : `${API_BASE}${path}`;
@@ -50,7 +50,7 @@ export async function api(path, { method = 'GET', body, token, headers = {} } = 
 
 function socketUrl(canvasId, wsPort, token, channel) {
   if (window.location.protocol !== 'https:') throw new Error('HTTPS 주소로 접속해주세요.');
-  const base = import.meta.env.VITE_WS_BASE_URL?.replace(/\/$/, '') || `wss://${window.location.host}`;
+  const base = (import.meta.env && import.meta.env.VITE_WS_BASE_URL)?.replace(/\/$/, '') || `wss://${window.location.host}`;
   const origin = new URL(base);
   if (origin.protocol !== 'wss:' || origin.username || origin.password || origin.search || origin.hash || origin.pathname !== '/') {
     throw new Error('실시간 연결에는 WSS origin만 사용할 수 있습니다.');

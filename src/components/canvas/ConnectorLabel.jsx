@@ -1,4 +1,5 @@
 import RenderedContent from '../../canvas/content/RenderedContent.jsx';
+import { readObjectStyle } from '../../canvas/styling/objectStyleModel.js';
 import './connector-label.css';
 function midpoint(points) {
   let total = 0;
@@ -14,5 +15,17 @@ function midpoint(points) {
 export default function ConnectorLabel({ item, geometry, offsetX, offsetY }) {
   if (!item.label || !geometry?.curvePoints?.length) return null;
   const point = midpoint(geometry.curvePoints);
-  return <div className="connector-name-label" style={{ left: point.x - offsetX, top: point.y - offsetY }}><RenderedContent value={item.label} mode={item.labelMode || 'markdown'} /></div>;
+  const style = readObjectStyle(item);
+  const ls = style.connector?.labelStyle || {};
+  const labelCss = {
+    left: point.x - offsetX,
+    top: point.y - offsetY,
+    ...(ls.background ? { background: ls.background } : {}),
+    ...(ls.color ? { color: ls.color } : {}),
+    ...(ls.borderColor ? { borderColor: ls.borderColor } : {}),
+    ...(ls.pill === false ? { borderRadius: '4px' } : { borderRadius: '999px' }),
+    ...(style.typography?.explicit && style.typography.fontFamily ? { fontFamily: style.typography.fontFamily } : {}),
+    ...(style.typography?.explicit && style.typography.fontWeight !== 400 ? { fontWeight: style.typography.fontWeight } : {}),
+  };
+  return <div className="connector-name-label" style={labelCss}><RenderedContent value={item.label} mode={item.labelMode || 'markdown'} /></div>;
 }

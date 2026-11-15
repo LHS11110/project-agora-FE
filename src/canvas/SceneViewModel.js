@@ -3,7 +3,7 @@ import { isDrawableCanvasItem } from './drawableItems.js';
 import { itemSnapshot,changeItems,changedItemIds } from './itemSnapshots.js';
 import { itemDepth } from './itemDepth.js';
 import { isRasterContent as isRasterText } from './plainTextRaster.js';
-import { isOverviewProxy,overviewProxy } from './sceneRepresentation.js';
+import { overviewProxy, overviewProxyTier } from './sceneRepresentation.js';
 import { needsVectorDom } from './vectorHitTest.js';
 import { connectorGeometry } from '../components/connectorGeometry.js';
 
@@ -100,13 +100,13 @@ export default class SceneViewModel {
   }
   entry(entry,items,world){const item=items[entry.id]||entry.item;return [entry.id,item,entry.bounds,item.kind==='connector'?connectorGeometry(item,items,world.width,world.height):null];}
   representation(id,item,domIds,selected,world,scale){
-    const overview=isOverviewProxy(item,world,scale,this.quality),imageTier=item.kind==='image'&&overview&&(Math.min(item.width*world.width,item.height*world.height)*scale<2||item.width*world.width*item.height*world.height*scale*scale<16),worldKey=world.width+':'+world.height,dom=domIds.has(String(id)),selection=selected.has(String(id)),old=this.representations.get(id);
-    if(old&&old.item===item&&old.overview===overview&&old.detailScale===(overview?scale:0)&&old.imageTier===imageTier&&old.worldKey===worldKey&&old.dom===dom&&old.selection===selection)return old.result;
+    const proxyTier=overviewProxyTier(item,world,scale,this.quality),worldKey=world.width+':'+world.height,dom=domIds.has(String(id)),selection=selected.has(String(id)),old=this.representations.get(id);
+    if(old&&old.item===item&&old.proxyTier===proxyTier&&old.worldKey===worldKey&&old.dom===dom&&old.selection===selection)return old.result;
     if(item.kind==='stroke' && item.complete===false)return {ink:true};
     if(hasRenderedAnimation(item))return {vector:null};
-    let vector=!item.runtimeRole && ['stroke','shape','connector'].includes(item.kind) || (isRasterText(item)&&!domIds.has(String(id)))?item:null;
-    if(!domIds.has(String(id)) && isOverviewProxy(item,world,scale,this.quality))vector=overviewProxy(item,world,scale);
-    if(vector && selected.has(String(id)) && !domIds.has(String(id)))vector={...vector,__selectionOutline:true};
-    const result={vector};this.representations.set(id,{item,overview,detailScale:overview?scale:0,imageTier,worldKey,dom,selection,result});return result;
+    let vector=!item.runtimeRole && ['stroke','shape','connector'].includes(item.kind) || (isRasterText(item)&&!dom)?item:null;
+    if(!dom && proxyTier!=='full')vector=overviewProxy(item,world,scale);
+    if(vector && selection && !dom)vector={...vector,__selectionOutline:true};
+    const result={vector};this.representations.set(id,{item,proxyTier,worldKey,dom,selection,result});return result;
   }
 }

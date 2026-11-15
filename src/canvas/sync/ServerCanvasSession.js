@@ -24,7 +24,7 @@ export class ServerCanvasSession {
     this.status({ ready: this.ready, editable: this.editable, queued: this.pendingOperations.length,
       blocked: Boolean(this.blocked), message: this.blocked || '서버에서 최신 캔버스를 불러오고 있습니다.' });
   }
-  redraw(touched = []) { this.publish(this.items, touched); this.notify(); }
+  redraw(touched = [], motion = null) { this.publish(this.items, touched, motion); this.notify(); }
   seed(items, data = {}) {
     if (data.sync_protocol !== 2) { this.blocked = '서버와 클라이언트의 동기화 버전이 다릅니다. 배포 상태를 확인해주세요.'; this.notify(); return; }
     if (data.client_id && data.client_id !== this.clientId) return;
@@ -116,11 +116,12 @@ export class ServerCanvasSession {
         const item = changes.has(id) ? changes.get(id) : this.items[id];
         if (item) changes.set(id, translateItem(item, move.dx, move.dy));
       }
+      const before=this.items;
       this.items = changeItems(this.items, changes); this.revision = data.revision;
       if (data.client_id === this.clientId && data.author_id === this.userId && this.flight?.request_count === data.request_count) {
         this.count = data.request_count; this.accept();
       }
-      this.redraw([...changes.keys()]); return true;
+      this.redraw([...changes.keys()],data.client_id===this.clientId?null:{before,ids:[...changes.keys()]}); return true;
     }
     if (data.type === 'canvas_result' || (data.type === 'error' && this.flight && typeof data.request_id === 'string' && data.request_id === this.flight.request_id)) {
       if (!this.flight || data.request_id !== this.flight.request_id) return true;

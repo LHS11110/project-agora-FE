@@ -24,9 +24,13 @@
 .canvas-stage.object-gesture-active .canvas-object,
 .canvas-stage.object-gesture-active .canvas-object * { pointer-events: none !important; }
 
-/* Panning also shields embedded players, handles and the minimap from taking input. */
+/* Panning cursor and iframe/HUD shield (pointer capture handles canvas objects without subtree style recalc). */
+/* Unselected HTML iframes yield wheel/touch/pointer events to the canvas stage; once selected, the rendered frame handles them. */
+.canvas-stage .canvas-object:not(.selected) .html-object-content > iframe { pointer-events: none !important; }
+.canvas-stage.space-panning { cursor: grab; }
+.canvas-stage.space-panning :is(.canvas-minimap, .canvas-floating-context-bar, iframe) { pointer-events: none !important; }
 .canvas-stage.panning { cursor: grabbing !important; }
-.canvas-stage.panning * { pointer-events: none !important; }
+.canvas-stage.panning :is(.canvas-minimap, .canvas-floating-context-bar, iframe) { pointer-events: none !important; }
 .shared-media-preview { position: relative; }
 .shared-media-activate { position: absolute; inset: 0; display: grid; place-items: center; background: #29254122; color: #fff; text-shadow: 0 1px 4px #000; font-size: 11px; cursor: default; }
 

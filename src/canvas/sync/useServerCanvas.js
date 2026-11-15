@@ -1,3 +1,4 @@
+import {RemoteMoveAnimator} from './RemoteMoveAnimator.js';
 import {operationForWire} from './itemDelta.js';
 import { TEXT_COLOR_MARK } from '../content/textColors.js';
 import { CanvasUndoHistory } from './CanvasUndoHistory.js';
@@ -16,6 +17,8 @@ export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsR
   const history=useRef(new CanvasUndoHistory()), undoing=useRef(false);
   const [undoCount,setUndoCount]=useState(0);
   const [items, publishItems] = useState({});
+  const motion=useRef(null);if(!motion.current)motion.current=new RemoteMoveAnimator(publishItems);
+  useEffect(()=>()=>motion.current.stop(),[]);
   const [status, setStatus] = useState({ ready: false, editable: false, queued: 0, blocked: false, message: '서버에서 최신 캔버스를 불러오고 있습니다.' });
   const [lastReceipt, setLastReceipt] = useState(null);
   const view = useRef(null); if (!view.current) view.current = new HostCanvasView();
@@ -36,7 +39,7 @@ export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsR
       return next;
     },
     reject: message => callbacks.current.setToast(message), status: setStatus, receipt: setLastReceipt,
-    publish: (committed, touched) => {
+    publish: (committed, touched, animation) => {
       callbacks.current.onCommittedItems?.(committed,touched);
       const draft = view.current.rebase(committed, touched, sessionRef.current.viewOperations);
       collaborativeDocsRef.current = view.current.docs; collaborativeBaseDocsRef.current = view.current.bases;
@@ -44,7 +47,7 @@ export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsR
       const pendingIds = new Set(sessionRef.current.pendingOperations.flatMap(operationIds));
       callbacks.current.setDirtyItems?.(current => current.size === pendingIds.size && [...pendingIds].every(id => current.has(id)) ? current : pendingIds);
       callbacks.current.onItemsPublished?.(draft,[...new Set([...(touched||[]),...pendingIds])]);
-      publishItems(draft);
+      motion.current.show(draft,animation?.before,animation&&!sessionRef.current.pendingOperations.length?animation.ids:[]);
     },
   });
   const setItems = useCallback((update, knownIds = null, options = {}) => {

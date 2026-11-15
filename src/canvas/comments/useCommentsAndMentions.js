@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createId } from '../canvasIds.js';
 import { CHAT_HISTORY_LIMIT, mergeChatEntries, toChatEntry } from '../canvasChat.js';
+import { mentionsUser } from './mentions.js';
 
-export function useCommentsAndMentions({ sendRaw, connection, user, canvasId }) {
+export function useCommentsAndMentions({ sendRaw, connection, user, canvasId, onMention }) {
   const [activeId, setActiveId] = useState(null);
   const [threads, setThreads] = useState({});
   const [notifications, setNotifications] = useState([]);
@@ -11,9 +12,13 @@ export function useCommentsAndMentions({ sendRaw, connection, user, canvasId }) 
   const [highlight, setHighlight] = useState(null);
   const pending = useRef(new Map());
   const latest = useRef({});
-  latest.current = { user, canvasId };
+  latest.current = { user, canvasId, onMention };
   const mentionRequest = useRef(null), mentionDirty = useRef(false);
   const pendingReads = useRef(new Map());
+  const seenMentionsRef = useRef({ canvasId: String(canvasId), initialized: false, mentionIds: new Set(), messageKeys: new Set() });
+  if (seenMentionsRef.current.canvasId !== String(canvasId)) {
+    seenMentionsRef.current = { canvasId: String(canvasId), initialized: false, mentionIds: new Set(), messageKeys: new Set() };
+  }
   const [jumpSequence, setJumpSequence] = useState(null);
   const [jumpNotification, setJumpNotification] = useState(null);
   const refreshMentions = useCallback(() => {
@@ -24,10 +29,24 @@ export function useCommentsAndMentions({ sendRaw, connection, user, canvasId }) 
   const receiveMentions = useCallback(data => {
     if (data.request_id !== mentionRequest.current) return;
     mentionRequest.current = null;
-    setNotifications((data.notifications || []).filter(note => note.unread === true).map(note => ({
+    const unread = (data.notifications || []).filter(note => note.unread === true).map(note => ({
       ...toChatEntry(note, latest.current.user), key: note.mention_id,
       objectId: note.object_id || null, sequence: Number(note.sequence),
-    })));
+    }));
+    const seen = seenMentionsRef.current;
+    let hasNewMention = false;
+    for (const note of unread) {
+      const scopeKey = note.objectId ? `object:${note.objectId}` : 'general';
+      const msgKey = Number.isFinite(note.sequence) && note.sequence > 0 ? `${scopeKey}:${note.sequence}` : null;
+      if (seen.initialized && !note.own && !seen.mentionIds.has(note.key) && !(msgKey && seen.messageKeys.has(msgKey))) {
+        hasNewMention = true;
+      }
+      if (note.key != null) seen.mentionIds.add(note.key);
+      if (msgKey) seen.messageKeys.add(msgKey);
+    }
+    seen.initialized = true;
+    setNotifications(unread);
+    if (hasNewMention) latest.current.onMention?.({ source: 'snapshot' });
     if (mentionDirty.current) { mentionDirty.current = false; refreshMentions(); }
   }, [refreshMentions]);
   const dismiss = useCallback(notification => {
@@ -42,7 +61,17 @@ export function useCommentsAndMentions({ sendRaw, connection, user, canvasId }) 
     refreshMentions();
   }, [refreshMentions]);
   // Only the server decides which notifications exist and whether they were read.
-  const notify = refreshMentions;
+  const notify = useCallback((entry) => {
+    if (entry && !entry.own && mentionsUser(entry.text, latest.current.user)) {
+      const msgKey = entry.sequence != null ? `general:${entry.sequence}` : entry.id;
+      const seen = seenMentionsRef.current;
+      if (!seen.messageKeys.has(msgKey)) {
+        seen.messageKeys.add(msgKey);
+        latest.current.onMention?.({ source: 'chat', entry });
+      }
+    }
+    refreshMentions();
+  }, [refreshMentions]);
   useEffect(() => {
     mentionRequest.current = null; mentionDirty.current = false; pendingReads.current.clear();
     if (connection !== 'connected') return;
@@ -88,6 +117,14 @@ export function useCommentsAndMentions({ sendRaw, connection, user, canvasId }) 
     const objectId = String(data.object_id);
     const entry = toChatEntry(data, latest.current.user);
     setThreads(current => ({ ...current, [objectId]: { ...current[objectId], entries: mergeChatEntries(current[objectId]?.entries || [], [entry]) } }));
+    if (!entry.own && mentionsUser(entry.text, latest.current.user)) {
+      const msgKey = entry.sequence != null ? `object:${objectId}:${entry.sequence}` : entry.id;
+      const seen = seenMentionsRef.current;
+      if (!seen.messageKeys.has(msgKey)) {
+        seen.messageKeys.add(msgKey);
+        latest.current.onMention?.({ source: 'comment', objectId, entry });
+      }
+    }
     refreshMentions();
   }, [refreshMentions]);
   const receiveError = useCallback(data => {

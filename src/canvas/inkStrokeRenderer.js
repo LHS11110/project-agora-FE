@@ -7,6 +7,25 @@ import { INK_BRUSH, inkStrokeOutline, strokePaintSize } from './inkStroke.js';
 import { addPenOutline } from './penStroke.js';
 
 const completedPaths = new WeakMap();
+const strokeItemsCache = new WeakMap();
+
+function cachedStrokeEntries(items) {
+  if (!items || typeof items !== 'object') return [];
+  let cached = strokeItemsCache.get(items);
+  if (!cached) {
+    cached = [];
+    for (const id of Object.keys(items)) {
+      const stroke = items[id];
+      if (stroke?.kind === 'stroke') cached.push([id, stroke]);
+    }
+    strokeItemsCache.set(items, cached);
+  }
+  return cached;
+}
+
+export function hasStrokeItems(items) {
+  return cachedStrokeEntries(items).length > 0;
+}
 
 function strokePath(stroke, width, height) {
   const key = `${width}:${height}`;
@@ -118,7 +137,10 @@ export function createInkStrokeRenderer(host, vectorCanvas) {
     render(next) {
       state = next;
       const hidden=new Set(state.previews.map(p=>String(p.id)));if(state.draft?.id)hidden.add(String(state.draft.id));
-      const entries=Object.entries(state.items || {}).filter(([id,stroke])=>stroke?.kind==='stroke' && !hidden.has(id) && (!state.visibleItemIds || state.visibleItemIds.has(id)));
+      const strokeEntries=cachedStrokeEntries(state.items);
+      const entries=(hidden.size || state.visibleItemIds)
+        ? strokeEntries.filter(([id])=>!hidden.has(id) && (!state.visibleItemIds || state.visibleItemIds.has(id)))
+        : strokeEntries;
       if(entries.length || savedPainted)prepare(saved,savedContext);
       savedPainted=entries.length>0;
       for(const [,stroke] of entries)drawStroke(savedContext,stroke,state.width,state.height);

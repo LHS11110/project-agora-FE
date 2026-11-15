@@ -33,17 +33,28 @@ export function usePanelLayout() {
     latest.current = { ...c, raw: next, sizes: fitPanelSizes(next[c.mode], c.mode, c.bounds, c.collapsed) };
     setRaw(next);
   };
-  const toggle = key => {
-    const opening = latest.current.collapsed[key];
-    const next = mobile && opening ? {tools:true,inspector:true,chat:true,[key]:false} : { ...latest.current.collapsed, [key]: !latest.current.collapsed[key] };
+  const setPanelCollapsed = (key, value, { persist = true } = {}) => {
+    const opening = !value;
+    const next = mobile && opening
+      ? { tools: true, inspector: true, chat: true, [key]: false }
+      : { ...latest.current.collapsed, [key]: Boolean(value) };
+    if (latest.current.collapsed[key] === next[key]) return false;
     latest.current.collapsed = next;
     setCollapsed(next);
-    try { localStorage.setItem(PANEL_VISIBILITY_KEY, JSON.stringify(next)); } catch {}
+    if (persist) {
+      try { localStorage.setItem(PANEL_VISIBILITY_KEY, JSON.stringify(next)); } catch {}
+    }
+    return true;
+  };
+  const toggle = key => {
+    setPanelCollapsed(key, !latest.current.collapsed[key], { persist: true });
   };
   const expandedChatHeight=fitPanelSizes(raw[mode],mode,bounds,{...effectiveCollapsed,chat:false}).chat;
   const reset = key => { change(key, PANEL_DEFAULTS[latest.current.mode][key]); persist(); };
   return {
     ref: setNode, mobile,
+    isCollapsed: key => latest.current.collapsed[key],
+    setCollapsedState: setPanelCollapsed,
     style: { '--tools-width': `${sizes.tools}px`, '--inspector-width': `${sizes.inspector}px`, '--chat-height': `${sizes.chat}px`, '--chat-expanded-height': `${expandedChatHeight}px`, '--tools-height': `${sizes.tools}px`, '--inspector-height': `${sizes.inspector}px` },
     handle: key => ({ panel: key, collapsed: effectiveCollapsed[key], onToggle: () => toggle(key), mobile, value: sizes[key], limits: panelLimits(mode, key, bounds, sizes), onChange: value => change(key, value), onFinish: persist, onReset: () => reset(key) }),
   };

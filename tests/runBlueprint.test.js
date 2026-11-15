@@ -36,7 +36,7 @@ test('kernel resets are visible and persisted using the broker result schema', a
 test('result to code edges schedule producers first and use fresh outputs as stdin',async()=>{
  const items={run:{runtimeRole:'executor'},a:{kind:'code',language:'python',code:'produce'},b:{kind:'code',language:'cpp',code:'consume'},out:{runtimeRole:'output',runtimeResults:[{output:'stale'}]},final:{runtimeRole:'output'},e1:{kind:'connector',from:'run',to:'a'},e2:{kind:'connector',from:'a',to:'out'},e3:{kind:'connector',from:'out',to:'b'},e4:{kind:'connector',from:'b',to:'final'}};
  const calls=[];await runBlueprint(items,'run',async request=>{calls.push(request);return {exitCode:0,output:request.code==='produce'?'10\n20\n':'30\n'};},()=>{});
- assert.deepEqual(calls,[{language:'python',code:'produce'},{language:'cpp',code:'consume',stdin:'10\n20\n'}]);
+ assert.deepEqual(calls,[{objectId:'a',language:'python',code:'produce'},{objectId:'b',language:'cpp',code:'consume',stdin:'10\n20\n'}]);
 });
 test('stored result records become sequential lines; empty connected results differ from no input',async()=>{
  const items={code:{kind:'code',code:'read',language:'python'},top:{runtimeRole:'output',y:10,runtimeResults:[{output:'one'},{output:'two\nthree\n'},{exitCode:0}]},bottom:{runtimeRole:'output',y:20,runtimeResults:[{output:'four'}]},a:{kind:'connector',from:'bottom',to:'code'},b:{kind:'connector',from:'top',to:'code'}};

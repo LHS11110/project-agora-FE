@@ -25,17 +25,46 @@ function ScalableObjectContent({ children, className, scaleX, scaleY, fixedHeigh
 }
 
 /** Keep manipulation handles in world space while the entire content scales. */
+const OUTER_FRAME_ONLY_CLASSES = new Set([
+  'canvas-object',
+  'tutorial-item',
+  'selected',
+  'movable',
+  'resizeable',
+  'connection-source',
+  'object-locked',
+  'presentation-entrance-pending',
+  'canvas-object-hidden',
+  'canvas-object-hidden-preview',
+  'has-auto-layout-hug-w',
+  'has-auto-layout-hug-h',
+  'has-styled-filter',
+]);
+
+const OUTER_CONTROL_CLASSES = new Set([
+  'object-move-handle',
+  'object-lock-badge',
+  'object-hidden-badge',
+  'portfolio-frame-outline',
+  'portfolio-frame-caption',
+  'shape-arrow-bend-handle',
+  'connector-bend-handles',
+]);
+
 export function scaleObjectElement(element, item) {
   if (!isValidElement(element) || !isContentScalable(item)) return element;
-  const content = [], controls = [];
+  const backdrops = [], content = [], controls = [];
   const split = children => Children.toArray(children).forEach(child => {
     if (isValidElement(child) && child.type === Fragment) split(child.props.children);
-    else if (isValidElement(child) && (child.type === ResizeHandles || child.props.className === 'object-move-handle')) controls.push(child);
+    else if (isValidElement(child) && (child.type?.isStyleBackdrop || String(child.key || '').includes('canvas-object-style-backdrop'))) backdrops.push(child);
+    else if (isValidElement(child) && (child.type === ResizeHandles || String(child.props?.className || '').split(/\s+/).some(cls => OUTER_CONTROL_CLASSES.has(cls)))) controls.push(child);
     else content.push(child);
   });
   split(element.props.children);
-  const className = String(element.props.className || '').split(' ').filter(name =>
-    !['canvas-object', 'tutorial-item', 'selected', 'movable', 'resizeable', 'connection-source'].includes(name)).join(' ');
+  const className = String(element.props.className || '').split(/\s+/).filter(name =>
+    name && !OUTER_FRAME_ONLY_CLASSES.has(name)).join(' ');
   return cloneElement(element, { className: `${element.props.className} scalable-object-frame` },
-    <ScalableObjectContent className={className} scaleX={objectContentScale(item, 'X')} scaleY={objectContentScale(item, 'Y')} fixedHeight={Boolean(item.height)} fillSpace={isTextContent(item) && contentMode(item) === 'code' ? 'code' : hasIndependentContentSize(item) ? item.kind : null} fontScale={hasIndependentContentSize(item) ? objectFontSize(item) / objectBaseFontSize(item) : undefined}>{content}</ScalableObjectContent>, controls);
+    backdrops,
+    <ScalableObjectContent className={className} scaleX={objectContentScale(item, 'X')} scaleY={objectContentScale(item, 'Y')} fixedHeight={Boolean(item.height)} fillSpace={isTextContent(item) && contentMode(item) === 'code' ? 'code' : hasIndependentContentSize(item) ? item.kind : null} fontScale={hasIndependentContentSize(item) ? objectFontSize(item) / objectBaseFontSize(item) : undefined}>{content}</ScalableObjectContent>,
+    controls);
 }

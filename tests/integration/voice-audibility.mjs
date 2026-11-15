@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,readFileSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 const {chromium}=await import(process.env.AGORA_E2E_PLAYWRIGHT_MODULE||'playwright-core');
@@ -12,6 +12,7 @@ const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',arg
 try{
  const context=await browser.newContext({ignoreHTTPSErrors:true,permissions:['microphone']});
  await context.route('**/voice-test',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><title>Audible voice regression</title>'}));
+ await context.route('**/src/canvas/voice/CanvasVoiceCall.js',route=>route.fulfill({contentType:'text/javascript; charset=utf-8',body:readFileSync(new URL('../../src/canvas/voice/CanvasVoiceCall.js',import.meta.url))}));
  const page=await context.newPage();await page.goto(origin+'/voice-test');
  await page.evaluate(async()=>{
   const {default:Call}=await import('/src/canvas/voice/CanvasVoiceCall.js');const calls=new Map(),states=new Map();window.calls=calls;window.states=states;
@@ -39,13 +40,14 @@ try{
  await page.waitForFunction(()=>rms().every(level=>level.post>.05));
  console.log('PASS decoded audible output on both peers',await page.evaluate(()=>rms()));
  await page.evaluate(async()=>{const receiver=calls.get('b');receiver.links.get('a').audio.pause();await receiver.audioContext.suspend();});
- await page.evaluate(async()=>{const canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;const ctx=canvas.getContext('2d');ctx.fillStyle='red';ctx.fillRect(0,0,320,180);window.screenStream=canvas.captureStream(15);const call=calls.get('a');call.media={...call.media,getDisplayMedia:async()=>screenStream};await call.startScreen();});
+ await page.evaluate(async()=>{const canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;const ctx=canvas.getContext('2d');ctx.fillStyle='red';ctx.fillRect(0,0,320,180);window.screenStream=canvas.captureStream(15);const call=calls.get('a');const osc=call.audioContext.createOscillator(),level=call.audioContext.createGain(),dest=call.audioContext.createMediaStreamDestination();osc.frequency.value=880;level.gain.value=.2;osc.connect(level);level.connect(dest);osc.start();window.screenTone=osc;screenStream.addTrack(dest.stream.getAudioTracks()[0]);call.media={...call.media,getDisplayMedia:async()=>screenStream};await call.startScreen();});
  await page.waitForFunction(()=>calls.get('b').links.get('a').screenStream?.getVideoTracks().length);
  await page.waitForFunction(()=>rms().every(level=>level.post>.05));
  await page.waitForFunction(()=>!calls.get('b').links.get('a').audio.paused&&calls.get('b').audioContext.state==='running');
  await page.waitForTimeout(1500);assert.ok((await page.evaluate(()=>rms())).every(level=>level.post>.05),'audio remains audible during screen sharing');
+ await page.evaluate(()=>calls.get('a').mute());await page.waitForFunction(()=>rms().find(v=>v.id==='b').post>.03);await page.waitForTimeout(500);assert.ok((await page.evaluate(()=>rms())).find(v=>v.id==='b').post>.03,'screen audio stays audible with microphone muted');await page.evaluate(()=>calls.get('a').setScreenAudioVolume(0));await page.waitForFunction(()=>rms().find(v=>v.id==='b').post<.00001);await page.evaluate(()=>calls.get('a').setScreenAudioVolume(40));await page.waitForFunction(()=>rms().find(v=>v.id==='b').post>.01);await page.evaluate(()=>{calls.get('a').setScreenAudioVolume(100);calls.get('a').mute();});
  await page.evaluate(()=>calls.get('a').stopScreen());await page.waitForTimeout(1500);await page.waitForFunction(()=>rms().every(level=>level.post>.05));assert.ok((await page.evaluate(()=>rms())).every(level=>level.post>.05),'audio remains audible after sharing stops');
- console.log('PASS audible audio during and after screen sharing');
+ console.log('PASS screen audio transmitted with microphone muted; normal call survives screen stop');
  const primed=()=>page.evaluate(()=>[...calls.values()].every(c=>[...c.links.values()].every(l=>l.audio.srcObject&&!l.audio.paused&&l.audio.muted&&l.audio.volume===0)));
  assert.equal(await primed(),true,'native playout is running but silent to prevent doubled audio');
  await page.evaluate(()=>calls.get('a').setPeerVolume('b',25));

@@ -1,7 +1,7 @@
 
 const RUNTIME_TIMEOUT_MS = 260_000;
 
-export async function executeCanvasCode({ canvasId, token, user, objectId, notebookId, cellId, language, code, stdin, action, sendRaw, pendingRequests, management, operation, service }, onOutput) {
+export async function executeCanvasCode({ canvasId, token, user, objectId, notebookId, cellId, language, code, stdin, action, sendRaw, pendingRequests, management, operation, service, agent }, onOutput) {
 
   if (typeof sendRaw !== 'function' || !(pendingRequests instanceof Map)) {
     throw new Error('실시간 캔버스 연결에서 실행 요청을 보낼 수 없습니다.');
@@ -10,10 +10,11 @@ export async function executeCanvasCode({ canvasId, token, user, objectId, noteb
   const request = {
     type: 'runtime_execute',
     request_id: requestId,
-    action: action === 'service' ? 'service' : action === 'manage' || action === 'reset' ? 'manage' : action === 'build' ? 'build' : action === 'notebook' ? 'notebook' : 'execute',
+    action: action === 'agent' ? 'agent' : action === 'service' ? 'service' : action === 'manage' || action === 'reset' ? 'manage' : action === 'build' ? 'build' : action === 'notebook' ? 'notebook' : 'execute',
     ...(action === 'manage' ? {management} : action === 'reset' ? {management:{action:'reset'}} : {}),
     ...(action === 'notebook' ? {operation:operation||'execute'} : {}),
     ...(action==='service'?{service}:{}),
+    ...(action==='agent'?{operation:operation||'run',message:String(agent?.message||''),selected_ids:agent?.selected_ids||[],history:agent?.history||[],anchor:agent?.anchor,allow_delete:agent?.allow_delete===true,options:agent?.options||{},api_key:typeof agent?.api_key==='string'?agent.api_key:'',session_id:agent?.session_id,turn_id:agent?.turn_id,include_history:agent?.include_history!==false,offset:agent?.offset,before:agent?.before,limit:agent?.limit}:{}),
     object_id: String(objectId || ''),
     code: String(code || ''),
     ...(action === 'notebook'
@@ -24,7 +25,7 @@ export async function executeCanvasCode({ canvasId, token, user, objectId, noteb
   return new Promise((resolve, reject) => {
     const timer = window.setTimeout(() => {
       pendingRequests.delete(requestId);
-      reject(new Error('C++ 브로커의 실행 응답 시간이 초과되었습니다.'));
+      const error=new Error('C++ 브로커의 실행 응답 시간이 초과되었습니다.');error.code='RUNTIME_RESPONSE_TIMEOUT';reject(error);
     }, RUNTIME_TIMEOUT_MS);
     pendingRequests.set(requestId, { resolve, reject, timer, onOutput });
     let sent;
@@ -32,7 +33,7 @@ export async function executeCanvasCode({ canvasId, token, user, objectId, noteb
     if (!sent) {
       window.clearTimeout(timer);
       pendingRequests.delete(requestId);
-      reject(new Error('캔버스 WebSocket 연결이 열려 있지 않습니다.'));
+      const error=new Error('캔버스 WebSocket 연결이 열려 있지 않습니다.');error.code='CANVAS_SOCKET_UNAVAILABLE';reject(error);
     }
   });
 }
@@ -55,7 +56,19 @@ export function settleRuntimeSocketResponse(pendingRequests, event) {
   if (event.type === 'runtime_result' && event.ok === true && event.result && typeof event.result === 'object') {
     request.resolve(event.result);
   } else {
-    const error = new Error(event.message || event.code || '코드 실행에 실패했습니다.');
+    const busyMessages = {
+      AGENT_SESSION_STORAGE_ERROR: '대화 저장소에 연결하지 못했습니다. 잠시 후 다시 확인해주세요. 실행 중이던 작업은 자동으로 다시 실행하지 않습니다.',
+      AGENT_REQUEST_BUSY: '이 캔버스에서 AI 에이전트가 작업 중입니다. 작업이 끝난 뒤 다시 시도해주세요.',
+      WATCH_READ_ONLY: '관전을 종료하면 편집과 코드 실행을 할 수 있습니다.',
+      AGENT_SESSION_DELETE_DENIED: '대화 작성자 또는 캔버스 관리자만 삭제할 수 있습니다.',
+      AGENT_SESSION_DRAFT_REQUIRED: '사용자별 새 대화는 하나씩 유지됩니다.',
+      AGENT_SESSION_READ_ONLY: '다른 사용자의 대화는 조회만 가능합니다. 새 대화를 시작하거나 프롬프트를 다시 사용해주세요.',
+      AGENT_SESSION_ACCESS_DENIED: '이 대화에 포함된 객체를 볼 수 있는 권한이 없습니다.',
+      AGENT_SESSION_RUNNING: '이 대화에서 작업이 진행 중입니다. 완료 후 다시 시도해주세요.',
+      AGENT_STATUS_BUSY: '에이전트 상태 조회 요청이 많습니다. 잠시 후 다시 시도해주세요.',
+      RUNTIME_BUSY: '다른 실행 요청을 처리하고 있습니다. 완료 후 다시 시도해주세요.',
+    };
+    const error = new Error(event.message || busyMessages[event.code] || event.code || '코드 실행에 실패했습니다.');
     error.code = event.code;error.status=event.status;error.payload=event;
     request.reject(error);
   }
@@ -65,7 +78,7 @@ export function settleRuntimeSocketResponse(pendingRequests, event) {
 export function rejectRuntimeSocketRequests(pendingRequests, message) {
   for (const [requestId, request] of pendingRequests) {
     window.clearTimeout(request.timer);
-    request.reject(new Error(message || '캔버스 WebSocket 연결이 종료되었습니다.'));
+    const error=new Error(message || '캔버스 WebSocket 연결이 종료되었습니다.');error.code='CANVAS_SOCKET_CLOSED';request.reject(error);
     pendingRequests.delete(requestId);
   }
 }

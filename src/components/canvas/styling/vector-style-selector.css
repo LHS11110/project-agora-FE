@@ -1,0 +1,84 @@
+.vector-style-options.vector-style-selector {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.vector-style-options.vector-style-selector button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 8px 8px 7px;
+  border: 1px solid var(--line, #e7e7f0);
+  border-radius: 10px;
+  background: var(--surface-soft, #f7f7fb);
+  color: var(--ink-muted, #77798d);
+  font: 500 11px/1.2 var(--display, system-ui, sans-serif);
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s, transform 0.12s;
+}
+
+.vector-style-options.vector-style-selector button:hover {
+  border-color: var(--studio-accent, #799580);
+  color: var(--ink-strong, #292b3c);
+}
+
+.vector-style-options.vector-style-selector button.selected {
+  background: var(--studio-accent-soft, var(--panel-soft, #e6eee5));
+  border-color: var(--studio-accent, #799580);
+  color: var(--studio-accent, var(--ink-strong, #292b3c));
+  font-weight: 600;
+}
+
+.vector-style-options.vector-style-selector button:focus-visible {
+  outline: 2px solid var(--studio-accent, var(--ink-strong));
+  outline-offset: 2px;
+}
+
+.vector-style-options.vector-style-selector .vector-style-preview {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 32px;
+  border-radius: 7px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--line, #e7e7f0);
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.vector-style-options.vector-style-selector button:hover .vector-style-preview {
+  border-color: color-mix(in srgb, currentColor 24%, var(--line, #e7e7f0));
+}
+
+.vector-style-options.vector-style-selector button.selected .vector-style-preview {
+  border-color: color-mix(in srgb, currentColor 32%, transparent);
+  box-shadow: 0 1px 3px color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.vector-style-options.vector-style-selector svg {
+  width: 44px;
+  height: 26px;
+  display: block;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.vector-style-options.vector-style-selector .vector-style-label {
+  display: block;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vector-style-options.vector-style-selector button,
+  .vector-style-options.vector-style-selector .vector-style-preview {
+    transition: none;
+  }
+}

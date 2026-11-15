@@ -64,4 +64,4 @@
   }
 }
 
-.canvas-stage.camera-moving .motion-field--canvas{visibility:hidden}
+.canvas-stage.camera-moving .motion-field--canvas{opacity:0}

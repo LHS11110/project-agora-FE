@@ -84,7 +84,8 @@ export function shapeOutlinePaths(type, width, height, options = {}) {
   const chess = chessShapeGeometry(type, width, height);
   if (chess) return chess.paths;
   let paths = createShapeOutlinePaths(type, width, height, options);
-  if (options.cornerStyle === 'rounded' && hasShapeCorners(type)) paths = paths.map(roundPolygonCorners);
+  const maxCornerCut = type === 'rectangle' || type === 'square' ? 24 : Infinity;
+  if (options.cornerStyle === 'rounded' && hasShapeCorners(type)) paths = paths.map(path => roundPolygonCorners(path, maxCornerCut));
   if (type === 'arrow') return paths;
   const vertices = paths.flat();
   const minX = Math.min(...vertices.map(point => point.x)), maxX = Math.max(...vertices.map(point => point.x));
@@ -113,13 +114,13 @@ export function shapeFillPaths(type, width, height, options = {}) {
 
 // Cut each corner by a fixed fraction of its shorter adjacent edge. Quadratic
 // curves stay inside the polygon; bounded samples are shared by all renderers.
-function roundPolygonCorners(path) {
+function roundPolygonCorners(path, maxCut = Infinity) {
   const vertices = path.slice(0, -1);
   const result = [];
   for (let i = 0; i < vertices.length; i++) {
     const p = vertices[(i + vertices.length - 1) % vertices.length], v = vertices[i], n = vertices[(i + 1) % vertices.length];
     const before = Math.hypot(p.x - v.x, p.y - v.y), after = Math.hypot(n.x - v.x, n.y - v.y);
-    const cut = Math.min(before, after) * .18;
+    const cut = Math.min(maxCut, before * .18, after * .18);
     const a = { x: v.x + (p.x - v.x) * cut / (before || 1), y: v.y + (p.y - v.y) * cut / (before || 1) };
     const b = { x: v.x + (n.x - v.x) * cut / (after || 1), y: v.y + (n.y - v.y) * cut / (after || 1) };
     for (let step = 0; step <= 8; step++) {

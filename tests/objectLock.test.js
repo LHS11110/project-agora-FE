@@ -20,7 +20,7 @@ test('lock persists in manifests and typed patches; invalid lock metadata reject
  const manifest=exportManifest(state);assert.equal(manifest.items.box.locked,true);
  assert.equal(planManifest(manifest,{},'default').creates[0].item.locked,true);
  const wrong=structuredClone(manifest);wrong.items.box.locked='true';assert.throws(()=>planManifest(wrong,{},'default'),/locked/);
- const ops=itemOperations({box:{...box,locked:false}},state);assert.deepEqual(ops,[{id:'box',action:'patch',patch:{locked:true},unset:[]}]);
+ const ops=itemOperations({box:{...box,locked:false}},state);assert.deepEqual(ops,[{id:'box',action:'patch',patch:{locked:true},unset:[],textBase:{},knownChanges:[],snapshotKnown:false}]);
 });
 test('remote lock cancels stale optimistic changes without losing committed data',()=>{
  const view=new HostCanvasView();const result=view.rebase(state,['box'],[{action:'patch',id:'box',patch:{x:9}},{action:'translate',ids:['box'],dx:3,dy:2}]);

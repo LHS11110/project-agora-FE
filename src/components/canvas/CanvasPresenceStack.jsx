@@ -5,7 +5,7 @@ import UserAvatar from '../account/UserAvatar.jsx';
 import Icon from '../Icon.jsx';
 import './canvas-presence-stack.css';
 
-export default function CanvasPresenceStack({ participants, token, onManage }) {
+export default function CanvasPresenceStack({ participants, token, onManage, watch }) {
   useUiLocale();
   const root = useRef(null), id = useId();
   const [hovered, setHovered] = useState(false), [focused, setFocused] = useState(false), [pinned, setPinned] = useState(false);
@@ -31,8 +31,9 @@ export default function CanvasPresenceStack({ participants, token, onManage }) {
     </button>
     <section id={id} className="presence-fanout" aria-label={ui('현재 접속 중인 사용자')} aria-hidden={!open} inert={open ? undefined : ''}>
       <ul>{participants.map((person,index) => <li className="presence-person-card" style={{'--presence-order':Math.min(index,6)}} key={`${person.nickname}#${person.tag_number}`}>
-        <UserAvatar user={person} token={token} /><span className="presence-person-name"><strong>{person.nickname}{person.isSelf && <small>{ui('나')}</small>}</strong><span>#{person.tag_number}</span></span><i aria-hidden="true" />
+        <UserAvatar user={person} token={token} /><span className="presence-person-name"><strong>{person.nickname}{person.isSelf && <small>{ui('나')}</small>}</strong><span>#{person.tag_number}</span></span><i aria-hidden="true" />{!person.isSelf&&watch&&(()=>{const target=watch.state.users.find(value=>value.nickname===person.nickname&&Number(value.tag_number)===Number(person.tag_number)&&!value.watching_id);return target?<button type="button" className="presence-watch-button" disabled={Boolean(watch.state.users.find(value=>value.id===watch.state.self_id)?.presenting)} onClick={()=>{watch.follow(target.id,'manual');close();}}>{ui(watch.state.watching_id===target.id?'관전 중':'관전하기')}</button>:null;})()}
       </li>)}</ul>
+      {watch&&<div className="presence-watch-actions"><span>{ui(watch.state.watching_id?'다른 사용자의 시점을 보고 있습니다.':'참가자에게 내 시점을 공유합니다.')}</span><button type="button" onClick={()=>{watch.state.watching_id?watch.leave():watch.state.users.find(value=>value.id===watch.state.self_id)?.presenting?watch.stop():watch.start();close();}}>{ui(watch.state.watching_id?'관전 종료':watch.state.users.find(value=>value.id===watch.state.self_id)?.presenting?'발표 종료':'발표 시작')}</button></div>}
       <button type="button" className="presence-manage-button" onClick={() => { close(); onManage(); }}><Icon name="user" size={14} />{ui('참여자 관리')}</button>
     </section>
   </div>;

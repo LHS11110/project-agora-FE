@@ -109,3 +109,111 @@ test('leaving while screen picker is open stops late capture',async()=>{let fini
 test('negotiation requested during an offer is retried after signaling becomes stable',async()=>{
  const {call,events}=fixture();try{await call.join();const link=call.links.get('b'),pc=link.pc;pc.setLocalDescription=async()=>{pc.localDescription={type:'offer',toJSON:()=>({type:'offer',sdp:'test'})};};pc.signalingState='have-local-offer';pc.onnegotiationneeded();await link.serial;assert.equal(link.needsNegotiation,true);pc.signalingState='stable';pc.onsignalingstatechange();await link.serial;assert.equal(link.needsNegotiation,false);assert.ok(events.some(e=>e.type==='rtc_signal'&&e.action==='offer'));}finally{call.close();}
 });
+test('screen audio volume changes only the screen gain and retains bounded preference',()=>{
+ const {call}=fixture();let target;call.audioContext={currentTime:7,close:async()=>{}};call.screenMix={gain:{gain:{setTargetAtTime:value=>target=value}}};
+ call.setScreenAudioVolume(25);assert.equal(target,.25);assert.equal(call.snapshot.screenAudioVolume,25);assert.equal(call.muted,false);
+ call.setScreenAudioVolume(-1);assert.equal(target,0);call.setScreenAudioVolume(200);assert.equal(target,1);call.setScreenAudioVolume(NaN);assert.equal(call.screenAudioVolume,100);
+ call.screenMix=null;call.close();
+});
+test('remote mute or DTX track mute while connected does not trigger spurious ICE restarts',async()=>{
+ const {call}=fixture({disconnectDelay:10,muteRepairDelay:15});
+ try{
+  await call.join();
+  const link=call.links.get('b'),pc=link.pc;
+  const remoteTrack={kind:'audio',muted:false};
+  pc.connectionState='connected';pc.iceConnectionState='connected';pc.onconnectionstatechange();
+  pc.ontrack({streams:[{}],track:remoteTrack});
+  remoteTrack.muted=true;
+  remoteTrack.onmute();
+  call.handle({type:'voice_state',peer_id:'b',active:true,muted:true});
+  await wait(40);
+  assert.equal(pc.restarts,0);
+  assert.equal(call.snapshot.error,'');
+  // Unmuted DTX silence while transport remains connected must also not restart ICE.
+  call.handle({type:'voice_state',peer_id:'b',active:true,muted:false});
+  remoteTrack.onmute();
+  await wait(40);
+  assert.equal(pc.restarts,0);
+  assert.equal(call.snapshot.error,'');
+ }finally{call.close();}
+});
+test('failed peer connection rebuilds RTCPeerConnection instead of keeping a dead transport',async()=>{
+ const {call}=fixture({disconnectDelay:1});
+ try{
+  await call.join();
+  const originalPc=call.links.get('b').pc;
+  originalPc.connectionState='failed';
+  originalPc.iceConnectionState='failed';
+  originalPc.oniceconnectionstatechange();
+  await wait(350);
+  const currentLink=call.links.get('b');
+  assert.ok(currentLink);
+  assert.notEqual(currentLink.pc,originalPc);
+  assert.equal(originalPc.connectionState,'closed');
+  assert.equal(currentLink.recovering,true);
+ }finally{call.close();}
+});
+test('receiving an answer after glare collision resets ignoreOffer so later candidates apply',async()=>{
+ const added=[];
+ class SignalPeer extends FakePeer{
+  setRemoteDescription(desc){this.remoteDescription=desc;if(desc.type==='offer')this.signalingState='have-remote-offer';else this.signalingState='stable';}
+  setLocalDescription(){this.localDescription={type:'answer',toJSON:()=>({type:'answer',sdp:'v=0\r\na=ice-ufrag:ans\r\n'})};}
+  addIceCandidate(candidate){added.push(candidate);}
+ }
+ const {call}=fixture({Peer:SignalPeer});
+ try{
+  await call.join();
+  const link=call.links.get('b'),pc=link.pc;
+  pc.signalingState='have-local-offer';
+  call.handle({type:'rtc_signal',from_peer_id:'b',action:'offer',description:{type:'offer',sdp:'v=0\r\na=ice-ufrag:peer\r\n'}});
+  await link.serial;
+  assert.equal(link.ignoreOffer,true);
+  call.handle({type:'rtc_signal',from_peer_id:'b',action:'answer',description:{type:'answer',sdp:'v=0\r\na=ice-ufrag:peer\r\n'}});
+  await link.serial;
+  assert.equal(link.ignoreOffer,false);
+  call.handle({type:'rtc_signal',from_peer_id:'b',action:'candidate',candidate:{candidate:'candidate:1 1 UDP 1 127.0.0.1 9999 typ host',usernameFragment:'peer'}});
+  await link.serial;
+  assert.equal(added.length,1);
+ }finally{call.close();}
+});
+
+test('voice call emits join, screen share, and leave sound cues only for genuine state transitions',async()=>{
+ const cues=[];
+ const tracks=[{kind:'audio',enabled:true,stop(){},getSettings(){return {channelCount:1};}}];
+ const screenTracks=[{kind:'video',stop(){}},{kind:'audio',stop(){}}];
+ const fakeScreen={getVideoTracks:()=>[screenTracks[0]],getAudioTracks:()=>[screenTracks[1]],getTracks:()=>screenTracks};
+ const media={
+  getUserMedia:async()=>({getAudioTracks:()=>tracks,getTracks:()=>tracks}),
+  getDisplayMedia:async()=>fakeScreen,
+ };
+ const call=new CanvasVoiceCall({send:()=>true,media,Peer:FakePeer,audio:()=>({muted:false,volume:1,pause(){},play:async()=>{}}),AudioContext:null,onCue:cue=>cues.push(cue)});
+ try{
+  call.handle({type:'rtc_peers',self_peer_id:'a',peers:[]});
+  await call.join();
+  assert.deepEqual(cues,['voice_join']);
+
+  // Temporary broker reconnect and session restoration do not replay join or leave.
+  call.reconnect();
+  call.handle({type:'rtc_peers',self_peer_id:'a',peers:[]});
+  assert.deepEqual(cues,['voice_join']);
+
+  // Cancelled screen share does not fire cue.
+  media.getDisplayMedia=async()=>{const err=new Error('cancelled');err.name='NotAllowedError';throw err;};
+  await call.startScreen();
+  assert.deepEqual(cues,['voice_join']);
+
+  // Active screen share fires cue.
+  media.getDisplayMedia=async()=>fakeScreen;
+  await call.startScreen();
+  assert.deepEqual(cues,['voice_join','screen_share_start']);
+
+  call.leave();
+  assert.deepEqual(cues,['voice_join','screen_share_start','voice_leave']);
+
+  // Leaving when not active or unmount close() does not fire extra leave cues.
+  call.leave();
+  await call.join();
+  call.close();
+  assert.deepEqual(cues,['voice_join','screen_share_start','voice_leave','voice_join']);
+ }finally{call.close();}
+});

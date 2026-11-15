@@ -8,8 +8,11 @@ import {selectedScrollArea} from './editorWheel.js';
 import RawNotebookObject from './notebook/NotebookObject.jsx';
 import RawNotebookCellObject from './notebook/NotebookCellObject.jsx';
 import RawCanvasImageContent from './CanvasImageContent.jsx';
-import { supportsObjectCorners, objectCornerStyle } from './objectCorners.js';
+import { supportsObjectCorners, objectCornerStyle, objectCornerRadius } from './objectCorners.js';
 import './object-corners.css';
+import { hasAdvancedStyle, buildDomSurfaceStyle, buildStrokeDashArray, filtersEqualDefault } from './styling/objectStyleModel.js';
+import { ObjectStyleBackdrop, AdvancedShapeSurface, AdvancedConnectorSvg } from './styling/ObjectStyleSurface.jsx';
+import './styling/object-styling.css';
 import EditingSurface from './content/EditingSurface.jsx';
 import { ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
@@ -29,13 +32,14 @@ import RuntimeCodeFrame from './runtime/RuntimeCodeFrame.jsx';
 import { contentMode, isTextContent } from './content/contentPresentation.js';
 import RawConnectorLabel from '../components/canvas/ConnectorLabel.jsx';
 import ConnectorSelectionEffect from '../components/canvas/ConnectorSelectionEffect.jsx';
-import { measureConnectorObject } from './connectors/objectMetrics.js';
+import { observeConnectorObject, updateConnectorObjectObservation, unobserveConnectorObject } from './connectors/objectMetrics.js';
 import { useEditingBoundary } from './useEditingBoundary.js';
 import './image-object.css';
 import { scaleObjectElement } from './ScalableObjectContent.jsx';
 import { handleObjectDoubleClick } from './objectDoubleClick.js';
-import { cloneElement, memo, useContext, useMemo, useLayoutEffect, useRef } from 'react';
+import { cloneElement, memo, useContext, useEffect, useMemo, useLayoutEffect, useRef, useState } from 'react';
 import {PresentationContext} from './portfolio/presentationContext.js';
+import { getObjectRevealPhase, useVisibilityPreview } from './portfolio/animationReveal.js';
 import Icon from '../components/Icon.jsx';
 import MarkdownText from '../components/MarkdownText.jsx';
 import RawEditableTable from '../components/EditableTable.jsx';
@@ -80,15 +84,34 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
   }),[]);
   const collaborativeValue = String(item.kind === 'code' ? item.code || '' : item.text || '');
   const geometryElementRef = useRef(null);
+  const observedMetricsElRef = useRef(null);
+  const measuredItemRef = useRef(null);
   useLayoutEffect(() => {
     const element = geometryElementRef.current;
-    if (!element || ['stroke', 'connector'].includes(item.kind)) return undefined;
-    const measure = () => measureConnectorObject(item, element);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
+    if (!element || ['stroke', 'connector'].includes(item.kind)) {
+      if (observedMetricsElRef.current) {
+        unobserveConnectorObject(observedMetricsElRef.current);
+        observedMetricsElRef.current = null;
+      }
+      measuredItemRef.current = item;
+      return undefined;
+    }
+    if (observedMetricsElRef.current !== element) {
+      if (observedMetricsElRef.current) unobserveConnectorObject(observedMetricsElRef.current);
+      observedMetricsElRef.current = element;
+      observeConnectorObject(element, item);
+    } else {
+      updateConnectorObjectObservation(element, measuredItemRef.current, item);
+    }
+    measuredItemRef.current = item;
+    return undefined;
   }, [item]);
+  useEffect(() => () => {
+    if (observedMetricsElRef.current) {
+      unobserveConnectorObject(observedMetricsElRef.current);
+      observedMetricsElRef.current = null;
+    }
+  }, []);
   const collaborativeEditorRef = useRef(null);
   const selectingPointerRef = useRef(false);
   const collaborativeSelectionRef = useRef(null);
@@ -144,10 +167,56 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
   const shadowStyle = item?.kind === 'user-group' && item.shadowEnabled !== true
     ? { '--object-shadow-box': 'none', '--object-shadow-filter': 'none' }
     : objectShadowStyle(item);
-  const style = { ...objectFontStyle(item), ...shadowStyle, left: `${(Number(item.x) || 0) * 100}%`, top: `${(Number(item.y) || 0) * 100}%`, width: `${width * 100}%`, '--object-color': item.color || '#617d68', '--object-rotation': `${Number(item.rotation) || 0}deg` };
+  const isVectorShape = item.kind === 'shape' && !item.runtimeRole;
+  const isDomStylable = !['connector', 'stroke'].includes(item.kind) && !isVectorShape;
+  const { parsed: parsedStyle, inline: domSurfaceStyle } = buildDomSurfaceStyle(item);
+  const advancedStyled = hasAdvancedStyle(item);
+  const hasStyledFilter = Boolean(domSurfaceStyle['--styled-filter']) && isDomStylable;
+  const hasCustomFillOrCorner = parsedStyle.explicitFills || parsedStyle.cornerRadius?.explicit;
+  const style = {
+    ...objectFontStyle(item),
+    ...shadowStyle,
+    ...(!['connector', 'stroke'].includes(item.kind) ? domSurfaceStyle : {}),
+    left: `${(Number(item.x) || 0) * 100}%`,
+    top: `${(Number(item.y) || 0) * 100}%`,
+    width: `${width * 100}%`,
+    '--object-color': item.color || '#617d68',
+    '--object-rotation': `${Number(item.rotation) || 0}deg`,
+  };
+  if (item.kind === 'connector' && domSurfaceStyle.opacity != null) style.opacity = domSurfaceStyle.opacity;
   if (item.height) style.height = `${height * 100}%`;
   const movable = activeTool === 'select' && selected && !item.locked && !readOnly;
-  const classes = `canvas-object${presentationHidden?' presentation-entrance-pending':''} canvas-object-${item.kind}${movable ? ' movable' : ''}${selected ? ' selected' : ''}${connectionStartId === id ? ' connection-source' : ''}${item.height ? ' has-custom-height' : ''}`;
+  const { previewHidden } = useVisibilityPreview();
+  const [, setRevealClockTick] = useState(0);
+  const reveal = getObjectRevealPhase(item);
+  useEffect(() => {
+    if (!reveal.hiddenFlag || !reveal.revealAfterAnimation) return undefined;
+    const now = Date.now();
+    let nextTarget = 0;
+    if (reveal.phase === 'delayed' && reveal.revealAt > now) nextTarget = reveal.revealAt;
+    else if (reveal.phase === 'animating' && reveal.completeAt > now) nextTarget = reveal.completeAt;
+    if (!nextTarget) return undefined;
+    const timer = setTimeout(() => setRevealClockTick((n) => n + 1), Math.max(16, nextTarget - now + 12));
+    return () => clearTimeout(timer);
+  }, [reveal.hiddenFlag, reveal.revealAfterAnimation, reveal.phase, reveal.revealAt, reveal.completeAt]);
+  const hiddenNow = reveal.phase === 'hidden' || reveal.phase === 'delayed';
+  const showHiddenPreview = hiddenNow && previewHidden && !presentation;
+  const domVisiblyHidden = hiddenNow && !showHiddenPreview;
+  const styleClasses = [
+    advancedStyled && isDomStylable ? 'canvas-object-styled' : '',
+    advancedStyled && isDomStylable && parsedStyle.explicitFills ? 'has-styled-fills' : '',
+    advancedStyled && isDomStylable && parsedStyle.stroke?.explicit ? 'has-styled-stroke' : '',
+    advancedStyled && isDomStylable && parsedStyle.cornerRadius?.explicit ? 'has-styled-radius' : '',
+    isDomStylable && domSurfaceStyle.backdropFilter ? 'has-backdrop-blur' : '',
+    parsedStyle.typography?.explicit ? 'has-custom-typography' : '',
+    parsedStyle.typography?.explicit && parsedStyle.typography.overflowMode === 'truncate' ? 'has-typo-truncate' : '',
+    parsedStyle.autoLayout?.enabled ? 'has-auto-layout' : '',
+    parsedStyle.autoLayout?.widthMode === 'hug' ? 'has-auto-layout-hug-w' : '',
+    parsedStyle.autoLayout?.heightMode === 'hug' ? 'has-auto-layout-hug-h' : '',
+    hasStyledFilter ? 'has-styled-filter' : '',
+    item.kind === 'note' && hasCustomFillOrCorner ? 'has-custom-note-style' : '',
+  ].filter(Boolean).join(' ');
+  const classes = `canvas-object${presentationHidden?' presentation-entrance-pending':''}${domVisiblyHidden ? ' canvas-object-hidden' : ''}${showHiddenPreview ? ' canvas-object-hidden-preview' : ''} canvas-object-${item.kind}${movable ? ' movable' : ''}${selected ? ' selected' : ''}${connectionStartId === id ? ' connection-source' : ''}${item.height ? ' has-custom-height' : ''}${styleClasses ? ` ${styleClasses}` : ''}`;
   const handlers = {
     ...(supportsObjectCorners(item) ? { 'data-corner-style': objectCornerStyle(item) } : {}),
     ...(item?.kind === 'user-group' ? { 'data-shadow': item.shadowEnabled === true ? 'true' : 'false' } : {}),
@@ -173,22 +242,25 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
     onPointerDown: (event) => { if (editing || (selected && selectedScrollArea(event.target))) { event.stopPropagation(); return; } onPointerDown(event, id, item); },
     onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onLostPointerCapture: onPointerUp,
   };
-  useObjectAnimation(id,geometryElementRef,editing);
+  useObjectAnimation(id, geometryElementRef, editing, Boolean(reveal.hiddenFlag && reveal.revealAfterAnimation));
   const resizeHandles = selected && !item.locked && !readOnly && allowSingleSelectionControls && movable && !editing && item.kind !== 'connector'
     ? <ResizeHandles onPointerDown={(event, handle) => onResizeStart(event, id, item, handle)} />
     : null;
   // Keep content mounted when selection adds controls, preserving double-click targets.
+  const styleBackdrop = advancedStyled && isDomStylable
+    ? <ObjectStyleBackdrop key="canvas-object-style-backdrop" item={item} />
+    : null;
   const withResizeHandles = (element) => { const framed=scaleObjectElement(cloneElement(element,
     { ref: node => { geometryElementRef.current = node; editingBoundary.ref.current = node; }, className: `${element.props.className}${item.locked ? ' object-locked' : ''}${resizeHandles ? ' resizeable' : ''}` },
-    <>{element.props.children}{selected && item.locked && <span className="object-lock-badge" title={ui("잠긴 객체")}><Icon name="lock" size={12}/></span>}{resizeHandles && <button type="button" className="object-move-handle" aria-label={ui("선택한 객체 이동")} title={ui("잡고 끌어 객체 이동")} onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onPointerDown(event, id, item); }}><Icon name="move" size={16} /></button>}{resizeHandles}</>), item);
+    <>{styleBackdrop}{element.props.children}{showHiddenPreview && <span className="object-hidden-badge" title={ui("숨겨진 객체")}><Icon name="eyeOff" size={11} /></span>}{selected && item.locked && <span className="object-lock-badge" title={ui("잠긴 객체")}><Icon name="lock" size={12}/></span>}{resizeHandles && <button type="button" className="object-move-handle" aria-label={ui("선택한 객체 이동")} title={ui("잡고 끌어 객체 이동")} onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onPointerDown(event, id, item); }}><Icon name="move" size={16} /></button>}{resizeHandles}</>), item);
     return isTextContent(item)&&contentMode(item)==='code'?<RuntimeCodeFrame id={id} item={item} store={runtimeStore}>{framed}</RuntimeCodeFrame>:framed;
   };
 
 
-  if(item.kind==='frame')return withResizeHandles(<div className={`${classes} portfolio-frame-object`} style={{...style,pointerEvents:'none'}} {...handlers}>
-    <svg className="portfolio-frame-outline" width="100%" height="100%"><rect x="1" y="1" width="calc(100% - 2px)" height="calc(100% - 2px)" fill="none"/><rect className="portfolio-frame-hit" x="1" y="1" width="calc(100% - 2px)" height="calc(100% - 2px)"/></svg>
+  if(item.kind==='frame'){const frameRadius=objectCornerRadius(item, width * viewSize.width, height * viewSize.height);const frameStroke=parsedStyle.stroke;const frameDash=frameStroke.explicit?buildStrokeDashArray(frameStroke):undefined;return withResizeHandles(<div className={`${classes} portfolio-frame-object`} style={{...style,pointerEvents:'none'}} {...handlers}>
+    <svg className="portfolio-frame-outline" width="100%" height="100%"><rect x="1" y="1" width="calc(100% - 2px)" height="calc(100% - 2px)" rx={frameRadius} ry={frameRadius} fill="none" style={frameStroke.explicit?{stroke:frameStroke.enabled?frameStroke.color:'none',strokeWidth:frameStroke.width,strokeDasharray:frameDash}:undefined}/><rect className="portfolio-frame-hit" x="1" y="1" width="calc(100% - 2px)" height="calc(100% - 2px)" rx={frameRadius} ry={frameRadius}/></svg>
     <span className="portfolio-frame-caption">{item.title||ui('프레임')}</span>
-  </div>);
+  </div>);}
   if (item.kind === 'shape' && item.runtimeRole==='notebook') return withResizeHandles(<div className={`${classes} notebook-object`} style={style} {...handlers}><NotebookObject id={id} item={item} cellItems={notebookCells} store={runtimeStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} canExecute={canExecute} onChange={onQuestionChange}/></div>);
   if (item.kind === 'shape' && item.runtimeRole==='notebook-cell') return withResizeHandles(<div className={`${classes} notebook-cell-object`} style={style} {...handlers}><NotebookCellObject id={id} item={item} notebook={notebookParent} notebookSiblings={notebookSiblingCells} notebookOrder={notebookOrder} notebookCellCount={notebookCellCount} store={runtimeStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} canExecute={canExecute} onChange={onQuestionChange}/></div>);
   if (item.kind === 'shape' && item.runtimeRole==='terminal') return withResizeHandles(<div className={`${classes} terminal-object`} style={style} {...handlers}><TerminalObject id={id} item={item} store={runtimeStore} selected={selected && activeTool==='select'} canExecute={canExecute}/></div>);
@@ -201,7 +273,7 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
     const strokeStyle = { ...style, left: `${geometry.x / viewSize.width * 100}%`, top: `${geometry.y / viewSize.height * 100}%`, width: `${geometry.width / viewSize.width * 100}%`, height: `${geometry.height / viewSize.height * 100}%` };
     const point = geometry.points[0];
     return withResizeHandles(<div className={classes} style={strokeStyle} {...handlers} aria-label={ui("드로잉 객체")}>
-      {hasAnimation(item)&&<AnimatedVector id={id} item={item} world={viewSize} origin={{x:geometry.x,y:geometry.y}}/>}
+      {(hasAnimation(item) || showHiddenPreview)&&<AnimatedVector id={id} item={item} world={viewSize} origin={{x:geometry.x,y:geometry.y}}/>}
       <svg className="stroke-selection-path" fill="none" stroke="transparent" viewBox={`0 0 ${geometry.width} ${geometry.height}`} preserveAspectRatio="none" aria-hidden="true">
         {geometry.points.length === 1 ? <circle cx={point.x} cy={point.y} r=".1" strokeWidth={geometry.hitWidth} />
           : <polyline points={geometry.points.map(p => `${p.x},${p.y}`).join(' ')} strokeWidth={geometry.hitWidth} />}
@@ -220,16 +292,19 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
     const bendHandle = selected && !item.locked && !readOnly && allowSingleSelectionControls && movable && !editing
       ? <ConnectorBendHandles geometry={connectorCurve} offsetX={offsetX} offsetY={offsetY} width={geometryWidth} height={geometryHeight} onStart={(event, index) => onArrowBendStart(event, id, item, index)} />
       : null;
-    return withResizeHandles(<div key={id} className={`${classes} vector-object-hit`} style={vectorStyle} data-item-id={id} {...handlers} title={ui("한 번 클릭해 선택 · 두 번 클릭해 연결된 객체로 이동")}>{curvePath && <svg className="connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} />{connectorEnds.map((point, index) => <circle key={index} cx={point.x - offsetX} cy={point.y - offsetY} r="9" />)}<ConnectorArrowheads visualStyle={item.visualStyle} seed={id} geometry={connectorCurve} offsetX={offsetX} offsetY={offsetY} strokeWidth={Number(item.strokeWidth) || 1.5} /></svg>}{selected && <ConnectorSelectionEffect geometry={connectorCurve} offsetX={offsetX} offsetY={offsetY} width={geometryWidth} height={geometryHeight} color={item.color} strokeWidth={item.strokeWidth} />}<ConnectorLabel item={item} geometry={connectorCurve} offsetX={offsetX} offsetY={offsetY} />{bendHandle}</div>);
+    return withResizeHandles(<div key={id} className={`${classes} vector-object-hit`} style={vectorStyle} data-item-id={id} {...handlers} title={ui("한 번 클릭해 선택 · 두 번 클릭해 연결된 객체로 이동")}>{(advancedStyled || showHiddenPreview || (reveal.hiddenFlag && reveal.revealAfterAnimation && (reveal.phase === 'delayed' || reveal.phase === 'animating')))
+      ? <AdvancedConnectorSvg id={id} item={item} geometry={connectorCurve} offsetX={offsetX} offsetY={offsetY} width={geometryWidth} height={geometryHeight} />
+      : (curvePath && <svg className="connector-hit-path" viewBox={`0 0 ${geometryWidth} ${geometryHeight}`} preserveAspectRatio="none" aria-hidden="true"><path d={curvePath} />{connectorEnds.map((point, index) => <circle key={index} cx={point.x - offsetX} cy={point.y - offsetY} r="9" />)}<ConnectorArrowheads visualStyle={item.visualStyle} seed={id} geometry={connectorCurve} offsetX={offsetX} offsetY={offsetY} strokeWidth={Number(item.strokeWidth) || 1.5} /></svg>)}{selected && <ConnectorSelectionEffect geometry={connectorCurve} offsetX={offsetX} offsetY={offsetY} width={geometryWidth} height={geometryHeight} color={item.color} strokeWidth={item.strokeWidth} />}<ConnectorLabel item={item} geometry={connectorCurve} offsetX={offsetX} offsetY={offsetY} />{bendHandle}</div>);
   }
   if (item.kind === 'image') return withResizeHandles(<div key={id} className={`${classes} image-object image-frame-hidden frameless-media-object`} style={style} {...handlers}><CanvasImageContent item={item} token={token} /></div>);
   if (item.kind === 'link') return withResizeHandles(<div key={id} className={`${classes} media-link-object${item.mediaType === 'link' ? ' external-link-object' : ' video-link-object frameless-media-object'}`} style={style} data-item-id={id} {...handlers}>
-    {['video','gif'].includes(item.mediaType)?<UploadedMedia item={item} token={token} selected={selected} interactive={activeTool==='select'} writable={mediaWritable??(!readOnly&&!item.locked)} onChange={contentActions.change}/>:<SharedMediaContent token={token} item={item} interactive={selected && (editing || (item.mediaType === 'youtube' && activeTool === 'select'))} writable={mediaWritable??(!readOnly&&!item.locked)} onChange={contentActions.change} />}
+    {['video','gif'].includes(item.mediaType)?<UploadedMedia item={item} token={token} selected={selected} interactive={activeTool==='select'} writable={mediaWritable??(!readOnly&&!item.locked)} onChange={contentActions.change}/>:<SharedMediaContent playbackKey={id} token={token} item={item} interactive={selected && (editing || (item.mediaType === 'youtube' && activeTool === 'select'))} writable={mediaWritable??(!readOnly&&!item.locked)} onChange={contentActions.change} />}
   </div>);
   if (isTextContent(item)) {
     const mode = contentMode(item);
-    const textColor = item.kind === 'text' && mode !== 'code' && /^#[0-9a-f]{6}$/i.test(item.color || '') ? item.color : undefined;
-    return withResizeHandles(<div key={id} className={`${classes} unified-content-object ${mode === 'code' ? 'code-object' : 'text-object'}${mode === 'markdown' ? ' markdown-text-object' : ''}`} style={{ ...style, color: textColor, '--text-color': textColor }} {...handlers}>
+    const hasExplicitTypoColor = Boolean(parsedStyle.typography?.explicit && parsedStyle.typography?.textColor);
+    const textColor = !hasExplicitTypoColor && item.kind === 'text' && mode !== 'code' && /^#[0-9a-f]{6}$/i.test(item.color || '') ? item.color : undefined;
+    return withResizeHandles(<div key={id} className={`${classes} unified-content-object ${mode === 'code' ? 'code-object' : 'text-object'}${mode === 'markdown' ? ' markdown-text-object' : ''}`} style={{ ...style, ...(textColor ? { color: textColor, '--text-color': textColor } : {}) }} {...handlers}>
       <UnifiedTextContent onStartEditing={readOnly?undefined:contentActions.start} {...{ id, item, editing, dirty, remoteEditorLabel, onUndo, onTextChange, onTextColorChange, onFormulaChange, onMetadataChange, onSave, onStopEditing, runtimeStore, canExecute }} />
     </div>);
   }
@@ -251,7 +326,7 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
   v0: index + 1
 })} onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onArrowBendStart(event, id, item, index); }} />)
       : null;
-    return withResizeHandles(<div key={id} className={`${classes} shape-object shape-vector-hit shape-${item.shapeType || 'rectangle'}`} style={style} {...handlers}>{hasAnimation(item)&&<AnimatedVector id={id} item={item} world={viewSize} origin={{x:(Number(item.x)||0)*viewSize.width,y:(Number(item.y)||0)*viewSize.height}}/>}{bendHandle}</div>);
+    return withResizeHandles(<div key={id} className={`${classes} shape-object shape-vector-hit${advancedStyled ? ' canvas-object-vector-dom' : ''} shape-${item.shapeType || 'rectangle'}`} style={style} {...handlers}>{advancedStyled && <AdvancedShapeSurface id={id} item={item} widthPx={width * viewSize.width} heightPx={height * viewSize.height} />}{(!advancedStyled && (hasAnimation(item) || showHiddenPreview))&&<AnimatedVector id={id} item={item} world={viewSize} origin={{x:(Number(item.x)||0)*viewSize.width,y:(Number(item.y)||0)*viewSize.height}}/>}{bendHandle}</div>);
   }
   return null;
 }

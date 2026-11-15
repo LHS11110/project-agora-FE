@@ -1,9 +1,10 @@
 import Icon from '../../components/Icon.jsx';
 import {useEffect,useMemo,useRef,useSyncExternalStore} from 'react';
 import CanvasVoiceCall from './CanvasVoiceCall.js';
+import { playSoundCue } from '../audio/soundEffects.js';
 import {ui} from '../../i18n/locale.js';
 import './voice.css';
-const errors={VOICE_MIC_DENIED:'마이크 접근을 허용해 주세요.',VOICE_MIC_FAILED:'마이크를 사용할 수 없습니다.',VOICE_CONNECTION_FAILED:'음성 연결을 복구하지 못했습니다. 다시 시도해 주세요.',VOICE_RECONNECT_TIMEOUT:'연결 복구 시간이 초과되어 통화를 종료했습니다. 다시 참여해 주세요.',VOICE_PLAY_BLOCKED:'소리를 재생하려면 클릭해 주세요.',VOICE_SCREEN_FAILED:'화면 공유를 시작할 수 없습니다.'};
+const errors={VOICE_MIC_DENIED:'마이크 접근을 허용해 주세요.',VOICE_MIC_FAILED:'마이크를 사용할 수 없습니다.',VOICE_CONNECTION_FAILED:'음성 연결을 복구하지 못했습니다. 다시 시도해 주세요.',VOICE_RECONNECT_TIMEOUT:'연결 복구 시간이 초과되어 통화를 종료했습니다. 다시 참여해 주세요.',VOICE_PLAY_BLOCKED:'소리를 재생하려면 클릭해 주세요.',VOICE_SCREEN_AUDIO_FAILED:'화면 공유 오디오를 전송하지 못했습니다. 화면 공유를 다시 시작해주세요.',VOICE_SCREEN_FAILED:'화면 공유를 시작할 수 없습니다.'};
 function VoiceMeter({call,peerId,muted=false,children,self=false}){
  const ref=useRef(null);
  useEffect(()=>{
@@ -22,10 +23,11 @@ function VoiceMeter({call,peerId,muted=false,children,self=false}){
  return <span ref={ref} className={`voice-avatar voice-meter${self?' is-self':''}`}>{children}</span>;
 }
 export function useCanvasVoiceCall(canvasId,send,identity){
- const call=useMemo(()=>{let iceServers;try{iceServers=JSON.parse(import.meta.env.VITE_WEBRTC_ICE_SERVERS||'null')||undefined;}catch{/* Use the default STUN configuration. */}return new CanvasVoiceCall({send,iceServers});},[canvasId,send,identity]);
+ const sendRef=useRef(send);sendRef.current=send;
+ const call=useMemo(()=>{let iceServers;try{iceServers=JSON.parse(import.meta.env.VITE_WEBRTC_ICE_SERVERS||'null')||undefined;}catch{/* Use the default STUN configuration. */}return new CanvasVoiceCall({send:event=>sendRef.current(event),iceServers,onCue:playSoundCue});},[canvasId,identity]);
  const ref=useRef(call);ref.current=call;
  const state=useSyncExternalStore(call.subscribe,call.getSnapshot);
- useEffect(()=>{call.resume();const online=()=>call.retry();window.addEventListener('online',online);return()=>{window.removeEventListener('online',online);call.close();};},[call]);
+ useEffect(()=>{call.resume();const wake=()=>{if(document.visibilityState!=='hidden'){call.resumeAudio();call.retry();}};window.addEventListener('online',wake);document.addEventListener('visibilitychange',wake);return()=>{window.removeEventListener('online',wake);document.removeEventListener('visibilitychange',wake);call.close();};},[call]);
  return {call,ref,state};
 }
 export default function CanvasVoicePanel({voice}){
@@ -35,7 +37,7 @@ export default function CanvasVoicePanel({voice}){
   <div className="voice-controls">
    {!state.active?<div className="voice-join-row"><button className="voice-join" disabled={!state.ready||state.pending} onClick={()=>call.join()}><Icon name="microphone" size={16}/>{ui(state.pending?'마이크 연결 중…':'통화 참여')}</button>{state.pending&&<button className="voice-join-cancel" onClick={()=>call.leave()}>{ui('취소')}</button>}</div>:<div className="voice-actions"><button className={state.muted?'is-toggled':''} aria-pressed={state.muted} onClick={()=>call.mute()}><Icon name="microphone" size={16}/>{ui(state.muted?'마이크 켜기':'마이크 끄기')}</button><button className={state.deafened?'is-toggled':''} aria-pressed={state.deafened} onClick={()=>call.deafen()}><Icon name={state.deafened?'volumeOff':'volume'} size={16}/>{ui(state.deafened?'소리 켜기':'소리 끄기')}</button><button className="voice-leave" onClick={()=>call.leave()}><Icon name="logout" size={16}/>{ui('통화 나가기')}</button></div>}
   </div>
-  {state.active&&<button className="voice-screen-share" disabled={state.screenPending} onClick={()=>state.screenSharing?call.stopScreen():call.startScreen()}>{ui(state.screenPending?'화면 선택 중…':state.screenSharing?'화면 공유 중지':'화면 공유')}</button>}
+  {state.screenSharing&&<p className="voice-screen-audio-note" role="status">{ui(state.screenAudio?'화면 소리 공유 중 · 마이크 음소거와 별도로 전송됩니다.':'화면 소리 미포함 · 소리를 공유하려면 공유 선택 창에서 오디오 공유를 선택해주세요.')}</p>}{state.screenAudio&&<label className="voice-peer-volume voice-system-volume"><span>{ui('공유 소리 음량')}</span><input type="range" min="0" max="100" step="1" value={state.screenAudioVolume} aria-label={ui('시스템 오디오 공유 음량')} aria-valuetext={`${state.screenAudioVolume}%`} onChange={event=>call.setScreenAudioVolume(event.target.value)}/><output>{state.screenAudioVolume}%</output></label>}{state.active&&<button className="voice-screen-share" disabled={state.screenPending} onClick={()=>state.screenSharing?call.stopScreen():call.startScreen()}>{ui(state.screenPending?'화면 선택 중…':state.screenSharing?'화면 공유 중지':'화면 공유')}</button>}
   {state.error&&<p className="voice-error" role="alert">{ui(errors[state.error]||'마이크를 사용할 수 없습니다.')}{state.error==='VOICE_CONNECTION_FAILED'&&<button onClick={()=>call.retry()}>{ui('연결 다시 시도')}</button>}{state.error==='VOICE_PLAY_BLOCKED'&&<button onClick={()=>call.resumeAudio()}>{ui('소리 재생')}</button>}</p>}
   <ul className="voice-members">
    {state.active&&<li><VoiceMeter call={call} self muted={state.muted||state.reconnecting}><Icon name="microphone" size={15}/></VoiceMeter><strong>{ui('나')}</strong><small>{ui(state.muted?'음소거':'참여 중')}</small></li>}

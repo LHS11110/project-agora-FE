@@ -17,7 +17,7 @@ export default function CanvasMinimapObjects({ minimap, colors, selected }) {
       const projection=previous?minimapBitmapProjection(previous.bounds,overview,width,height,pad):null;
       const moving=canvas.closest('.canvas-stage')?.classList.contains('camera-moving');
       const sameScale=previous && Math.abs(previous.bounds.width-overview.width)<1e-6 && Math.abs(previous.bounds.height-overview.height)<1e-6;
-      if(previous && previous.items===minimap.items && previous.selected===selected && (sameScale || moving) && (projection.covers || previous.complete)){
+      if(previous && previous.selected===selected && ((previous.items===minimap.items && sameScale) || moving) && projection && (projection.covers || previous.complete)){
         ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(previous.canvas,projection.x*ratio,projection.y*ratio,previous.canvas.width*projection.scaleX,previous.canvas.height*projection.scaleY);return;
       }
       const bitmap=document.createElement('canvas');

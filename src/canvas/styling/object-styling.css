@@ -1,0 +1,1093 @@
+/* Advanced Figma-style rendering helpers, animations, floating toolbar, and inspector controls */
+
+.canvas-object-style-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: visible;
+  border-radius: inherit;
+}
+
+.canvas-object-fill-layer,
+.canvas-object-stroke-dash-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.canvas-object-stroke-ring {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+/* Lift text/content above custom style backdrop without altering existing card backgrounds or absolute overlays */
+.canvas-stage .canvas-object-styled > :not(.canvas-object-style-backdrop):not(.object-resize-handles):not(.object-resize-handle):not(.object-move-handle):not(.object-lock-badge):not(.object-hidden-badge):not(.runtime-code-border):not(.runtime-code-status):not(.portfolio-frame-outline):not(.portfolio-frame-caption):not(.shape-arrow-bend-handle):not(.connector-bend-handles) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Note objects opt out of notched clip-path when custom corner radius or multi-layer fill is set */
+.canvas-stage .sticky-note-object.has-custom-note-style {
+  clip-path: none !important;
+  background: transparent;
+}
+.canvas-stage .sticky-note-object.has-custom-note-style::before {
+  display: none;
+}
+
+/* Typography & Auto-Layout CSS hooks */
+.canvas-stage .canvas-object.has-custom-typography .unified-plain-preview,
+.canvas-stage .canvas-object.has-custom-typography .simple-markdown,
+.canvas-stage .canvas-object.has-custom-typography .sticky-note-content,
+.canvas-stage .canvas-object.has-custom-typography .sticky-note-input,
+.canvas-stage .canvas-object.has-custom-typography .inline-content-input {
+  font-family: inherit;
+  font-weight: inherit;
+  line-height: var(--typo-line-height, 1.5);
+  letter-spacing: inherit;
+  text-align: inherit;
+}
+
+.canvas-stage .canvas-object.has-custom-typography .simple-markdown p + p,
+.canvas-stage .canvas-object.has-custom-typography .simple-markdown p + ul,
+.canvas-stage .canvas-object.has-custom-typography .simple-markdown p + ol {
+  margin-top: var(--typo-paragraph-spacing, 6px);
+}
+
+.canvas-stage .canvas-object.has-typo-truncate .unified-content-body,
+.canvas-stage .canvas-object.has-typo-truncate .sticky-note-content {
+  overflow: hidden !important;
+}
+
+.canvas-stage .canvas-object.has-typo-truncate .unified-plain-preview,
+.canvas-stage .canvas-object.has-typo-truncate .simple-markdown {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+
+.canvas-stage .canvas-object.has-auto-layout {
+  display: flex;
+  flex-direction: var(--al-direction, column);
+  flex-wrap: var(--al-wrap, nowrap);
+  gap: var(--al-gap, 10px);
+  padding: var(--al-padding, 12px);
+  align-items: var(--al-align, stretch);
+  justify-content: var(--al-justify, flex-start);
+  box-sizing: border-box;
+}
+
+.canvas-stage .canvas-object.has-auto-layout-hug-w {
+  width: max-content !important;
+  min-width: 96px;
+}
+
+.canvas-stage .canvas-object.has-auto-layout-hug-h {
+  height: auto !important;
+  min-height: 44px;
+}
+
+/* Apply drop-shadow/layer-blur CSS filter uniformly without breaking existing scalable content filters */
+.canvas-stage .canvas-object.has-styled-filter:not(.scalable-object-frame):not(.canvas-object-shape) {
+  filter: var(--styled-filter);
+}
+
+/* Vector-in-DOM shape surface */
+.canvas-stage .canvas-object-shape.canvas-object-vector-dom {
+  background: transparent;
+  overflow: visible;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.canvas-shape-advanced-surface {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.canvas-shape-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.canvas-shape-fill-host {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.canvas-shape-text-overlay {
+  position: relative;
+  z-index: 1;
+  padding: 8px 12px;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+/* Connector visible stroke & animated dash flow */
+.connector-advanced-svg .connector-visible-stroke {
+  fill: none !important;
+  pointer-events: none !important;
+}
+
+@keyframes connectorFlowForward {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -28; }
+}
+
+@keyframes connectorFlowReverse {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: 28; }
+}
+
+.connector-flow-forward .connector-visible-stroke {
+  animation: connectorFlowForward var(--connector-flow-duration, 1.2s) linear infinite;
+}
+
+.connector-flow-reverse .connector-visible-stroke {
+  animation: connectorFlowReverse var(--connector-flow-duration, 1.2s) linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .connector-flow-forward .connector-visible-stroke,
+  .connector-flow-reverse .connector-visible-stroke {
+    animation: none;
+  }
+}
+
+/* Floating Quick Context Toolbar over selected objects */
+.canvas-floating-context-bar {
+  position: absolute;
+  z-index: 28;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16), 0 1px 3px rgba(15, 23, 42, 0.08);
+  color: var(--ink-strong);
+  transform: translateX(-50%);
+  pointer-events: auto;
+  user-select: none;
+  max-width: calc(100vw - 40px);
+  flex-wrap: nowrap;
+}
+
+.canvas-floating-context-bar .floating-bar-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--line);
+  margin: 0 1px;
+  flex-shrink: 0;
+}
+
+.canvas-floating-context-bar .floating-bar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-strong);
+  font: 500 11px/1 var(--display);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.canvas-floating-context-bar .floating-bar-btn:hover {
+  background: var(--surface-soft);
+  border-color: var(--line);
+}
+
+.canvas-floating-context-bar .floating-bar-btn.active {
+  background: var(--panel-soft);
+  border-color: var(--ink-muted);
+}
+
+.canvas-floating-context-bar .floating-bar-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  font-size: 10px;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.canvas-floating-context-bar .floating-bar-color input[type="color"] {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.canvas-floating-context-bar .floating-bar-num {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+
+.canvas-floating-context-bar .floating-bar-num input {
+  width: 44px;
+  height: 24px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--ink-strong);
+  text-align: center;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.canvas-floating-context-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 240px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  z-index: 32;
+}
+
+.canvas-floating-preset-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-soft);
+  color: var(--ink-strong);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.canvas-floating-preset-chip:hover {
+  border-color: var(--ink-muted);
+  background: var(--panel-soft);
+}
+
+.canvas-floating-preset-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+/* Inspector Style Sections */
+.inspector-style-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.inspector-style-tab {
+  min-height: 28px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-soft);
+  color: var(--ink-muted);
+  font: 600 10px/1.2 var(--display);
+  cursor: pointer;
+}
+
+.inspector-style-tab.active {
+  background: var(--ink-strong);
+  color: var(--surface);
+  border-color: var(--ink-strong);
+}
+
+.inspector-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.inspector-preset-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--ink-strong);
+  text-align: left;
+  cursor: pointer;
+}
+
+.inspector-preset-card:hover {
+  border-color: var(--ink-muted);
+}
+
+.inspector-preset-preview {
+  height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.inspector-preset-card strong {
+  font-size: 10px;
+}
+
+.inspector-palette-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.inspector-palette-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-soft);
+  cursor: pointer;
+  color: var(--ink-strong);
+  font-size: 10px;
+}
+
+.inspector-palette-swatches {
+  display: flex;
+  gap: 2px;
+}
+
+.inspector-palette-swatches i {
+  display: block;
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+.inspector-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.inspector-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.inspector-mini-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 9px;
+  color: var(--ink-muted);
+}
+
+.inspector-mini-field input,
+.inspector-mini-field select {
+  width: 100%;
+  box-sizing: border-box;
+  height: 26px;
+  padding: 2px 5px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--ink-strong);
+  font-size: 10px;
+}
+
+.inspector-layer-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.inspector-layer-card {
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inspector-layer-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  justify-content: space-between;
+}
+
+.inspector-layer-head select {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  font-size: 10px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-strong);
+}
+
+.inspector-icon-mini {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--ink-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.inspector-selection-colors {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.inspector-selection-color-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-soft);
+  font-size: 10px;
+}
+
+.inspector-selection-color-row code {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.inspector-token-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-soft);
+}
+
+.inspector-token-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.inspector-css-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 64px;
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-soft);
+  color: var(--ink-strong);
+  font: 10px/1.4 var(--mono);
+  resize: vertical;
+}
+
+.inspector-mixed-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--panel-soft);
+  color: var(--ink-muted);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+/* Object visibility (hide / preview / reveal after animation) */
+.canvas-stage .canvas-object.canvas-object-hidden {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.canvas-stage .canvas-object.canvas-object-hidden-preview {
+  opacity: 0.34 !important;
+  outline: 1.5px dashed var(--studio-accent, #7963ba);
+  outline-offset: 2px;
+}
+
+.object-hidden-badge {
+  position: absolute;
+  left: 5px;
+  top: 5px;
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--studio-accent, #7963ba);
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.14);
+}
+
+.portfolio-view .object-hidden-badge {
+  display: none !important;
+}
+
+.object-visibility-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.object-visibility-heading strong {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-strong);
+}
+
+.object-visibility-heading small {
+  font: 10px var(--mono);
+  color: var(--ink-muted);
+}
+
+.object-visibility-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.object-visibility-actions button {
+  flex: 1 1 0;
+  justify-content: center;
+}
+
+.object-visibility-actions button[aria-pressed="true"] {
+  background: var(--studio-accent-soft);
+  color: var(--studio-accent);
+  border-color: var(--studio-accent);
+}
+
+.object-reveal-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--ink-strong);
+  cursor: pointer;
+}
+
+.object-reveal-toggle input {
+  width: auto;
+  margin: 0;
+}
+
+.object-reveal-play-btn {
+  width: 100%;
+  margin-top: 8px;
+  justify-content: center;
+}
+
+.hidden-objects-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 196px;
+  overflow-y: auto;
+  margin: 8px 0;
+}
+
+.hidden-object-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.hidden-object-meta {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hidden-object-meta strong {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hidden-object-meta small {
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+
+.hidden-object-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.hidden-object-mini-btn {
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink-strong);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hidden-object-mini-btn:hover:not(:disabled) {
+  border-color: var(--studio-accent);
+  color: var(--studio-accent);
+}
+
+.hidden-object-mini-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+
+/* Keep resize handles, move handle, runtime badges, and frame chrome strictly positioned as absolute overlays */
+.canvas-stage .canvas-object > .object-resize-handles {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+}
+.canvas-stage .canvas-object > .object-move-handle {
+  position: absolute;
+  z-index: 22;
+}
+.canvas-stage .canvas-object > .object-lock-badge,
+.canvas-stage .canvas-object > .object-hidden-badge,
+.canvas-stage .canvas-object > .runtime-code-border,
+.canvas-stage .canvas-object > .runtime-code-status,
+.canvas-stage .portfolio-frame-object > .portfolio-frame-outline,
+.canvas-stage .portfolio-frame-object > .portfolio-frame-caption {
+  position: absolute;
+}
+
+/* Clip fills to rounded corners on fill-layer while keeping backdrop overflow visible for outside strokes and shadows */
+.canvas-object-style-backdrop > .canvas-object-fill-layer {
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+.canvas-stage .scalable-object-frame.canvas-object-styled .object-content-viewport,
+.canvas-stage .scalable-object-frame.canvas-object-styled .scalable-object-content,
+.canvas-stage .scalable-object-frame.has-styled-radius .object-content-viewport,
+.canvas-stage .scalable-object-frame.has-styled-radius .scalable-object-content {
+  border-radius: inherit;
+}
+.canvas-stage .scalable-object-frame.has-styled-stroke .scalable-object-content {
+  border-color: transparent !important;
+}
+.canvas-stage .scalable-object-frame .scalable-object-content.sticky-note-object {
+  clip-path: inherit;
+}
+
+/* Avoid double padding on scalable auto-layout containers */
+.canvas-stage .canvas-object.scalable-object-frame.has-auto-layout {
+  display: block;
+  padding: 0;
+  gap: 0;
+}
+
+/* Ensure custom CSS filters apply even over .frameless-media-object */
+.canvas-stage .canvas-object.canvas-object-styled.has-styled-filter,
+.canvas-stage .canvas-object.frameless-media-object.canvas-object-styled.has-styled-filter {
+  filter: var(--styled-filter) !important;
+}
+
+/* Image corners and fills */
+.canvas-stage .canvas-object.image-object.has-styled-radius .image-object-surface {
+  border-radius: var(--object-corner-radius, 0px);
+  overflow: hidden;
+}
+.canvas-stage .canvas-object.image-object.image-frame-hidden.has-styled-radius .image-object-media,
+.canvas-stage .canvas-object.image-object.image-frame-hidden.has-styled-radius .image-object-media > img {
+  border-radius: var(--object-corner-radius, 0px);
+  overflow: hidden;
+}
+.canvas-stage .canvas-object.image-object.has-styled-fills .image-object-surface {
+  background: transparent;
+}
+.canvas-stage .canvas-object.image-object.has-styled-stroke .image-object-surface {
+  border-color: transparent;
+}
+
+/* Code objects (JS/CSS/HTML snippets & editor surfaces) */
+.canvas-stage .canvas-object.code-object.has-styled-fills,
+.canvas-stage .canvas-object.code-object.has-styled-fills .scalable-object-content,
+.canvas-stage .canvas-object.code-object.has-styled-fills .unified-content-body,
+.canvas-stage .canvas-object.code-object.has-styled-fills pre.syntax-code-preview,
+.canvas-stage .canvas-object.code-object.has-styled-fills .code-editor-surface {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.canvas-stage .canvas-object.code-object.has-styled-fills .code-snippet-header,
+.canvas-stage .canvas-object.code-object.has-styled-fills .code-object-foot {
+  background: color-mix(in srgb, var(--text-color, currentColor) 8%, transparent) !important;
+  border-color: color-mix(in srgb, var(--text-color, currentColor) 16%, transparent) !important;
+  color: var(--text-color, inherit) !important;
+}
+.canvas-stage .canvas-object.code-object.has-styled-stroke,
+.canvas-stage .canvas-object.code-object.has-styled-stroke .scalable-object-content {
+  border-color: transparent !important;
+}
+.canvas-stage .canvas-object.code-object.has-custom-typography,
+.canvas-stage .canvas-object.code-object.has-custom-typography .scalable-object-content,
+.canvas-stage .canvas-object.code-object.has-custom-typography .code-snippet-header,
+.canvas-stage .canvas-object.code-object.has-custom-typography .code-file-heading > strong,
+.canvas-stage .canvas-object.code-object.has-custom-typography .code-filename-input,
+.canvas-stage .canvas-object.code-object.has-custom-typography .code-language-badge,
+.canvas-stage .canvas-object.code-object.has-custom-typography .code-language-badge > span,
+.canvas-stage .canvas-object.code-object.has-custom-typography .code-language-select,
+.canvas-stage .canvas-object.code-object.has-custom-typography .code-copy-button,
+.canvas-stage .canvas-object.code-object.has-custom-typography .code-copy-button > span,
+.canvas-stage .canvas-object.code-object.has-custom-typography .code-snippet-filename,
+.canvas-stage .canvas-object.code-object.has-custom-typography .code-snippet-lang,
+.canvas-stage .canvas-object.code-object.has-custom-typography .unified-content-body,
+.canvas-stage .canvas-object.code-object.has-custom-typography pre.syntax-code-preview,
+.canvas-stage .canvas-object.code-object.has-custom-typography .code-object-foot,
+.canvas-stage .canvas-object.code-object.has-custom-typography .code-object-foot > span,
+.canvas-stage .canvas-object.code-object.has-custom-typography .html-object-content > header,
+.canvas-stage .canvas-object.code-object.has-custom-typography .html-object-content > header > strong,
+.canvas-stage .canvas-object.code-object.has-custom-typography .html-object-content > header > span,
+.canvas-stage .canvas-object.code-object.has-custom-typography .html-object-content > header > button {
+  color: var(--text-color, inherit) !important;
+}
+.canvas-stage .canvas-object.code-object.has-custom-typography .syntax-code-preview {
+  --code-plain: var(--text-color, #dce6f5);
+  --code-keyword: color-mix(in srgb, var(--text-color, #c99bff) 55%, #7c3aed);
+  --code-string: color-mix(in srgb, var(--text-color, #a8d99b) 50%, #15803d);
+  --code-number: color-mix(in srgb, var(--text-color, #f2bd88) 50%, #b45309);
+  --code-type: color-mix(in srgb, var(--text-color, #73d5d0) 50%, #0e7490);
+  --code-function: color-mix(in srgb, var(--text-color, #8ec5ff) 60%, #2563eb);
+}
+.canvas-stage .canvas-object.code-object.has-styled-radius .html-object-content {
+  border-radius: inherit;
+}
+
+/* Runtime objects (terminal, notebook, notebook-cell, executor, output) */
+.canvas-stage .canvas-object.terminal-object.has-styled-fills .canvas-terminal,
+.canvas-stage .canvas-object.terminal-object.has-styled-fills .canvas-terminal-body,
+.canvas-stage .canvas-object.notebook-object.has-styled-fills,
+.canvas-stage .canvas-object.notebook-object.has-styled-fills .notebook-content,
+.canvas-stage .canvas-object.notebook-object.has-styled-fills .notebook-cell,
+.canvas-stage .canvas-object.notebook-object.has-styled-fills .notebook-outputs,
+.canvas-stage .canvas-object.notebook-cell-object.has-styled-fills .notebook-cell-surface > .notebook-cell,
+.canvas-stage .canvas-object.notebook-cell-object.has-styled-fills .notebook-cell-surface > .notebook-cell > .notebook-code-input,
+.canvas-stage .canvas-object.notebook-cell-object.has-styled-fills .notebook-cell-surface > .notebook-cell > textarea,
+.canvas-stage .canvas-object.notebook-cell-object.has-styled-fills .notebook-cell-surface > .notebook-cell .notebook-outputs,
+.canvas-stage .canvas-object.blueprint-object.has-styled-fills,
+.canvas-stage .canvas-object.blueprint-object.has-styled-fills .blueprint-executor {
+  background: transparent !important;
+}
+.canvas-stage .canvas-object.terminal-object.has-styled-fills .canvas-terminal > header,
+.canvas-stage .canvas-object.terminal-object.has-styled-fills .canvas-terminal > footer,
+.canvas-stage .canvas-object.notebook-object.has-styled-fills .notebook-content :is(header, footer, .notebook-cell-toolbar),
+.canvas-stage .canvas-object.notebook-cell-object.has-styled-fills .notebook-cell-toolbar,
+.canvas-stage .canvas-object.blueprint-object.has-styled-fills .blueprint-node :is(header, footer) {
+  background: color-mix(in srgb, var(--text-color, currentColor) 8%, transparent) !important;
+  border-color: color-mix(in srgb, var(--text-color, currentColor) 16%, transparent) !important;
+  color: var(--text-color, inherit) !important;
+}
+.canvas-stage .canvas-object.terminal-object.has-styled-stroke .canvas-terminal,
+.canvas-stage .canvas-object.notebook-object.has-styled-stroke,
+.canvas-stage .canvas-object.notebook-cell-object.has-styled-stroke .notebook-cell-surface > .notebook-cell,
+.canvas-stage .canvas-object.blueprint-object.has-styled-stroke {
+  border-color: transparent !important;
+}
+.canvas-stage .canvas-object.terminal-object.has-custom-typography .canvas-terminal,
+.canvas-stage .canvas-object.terminal-object.has-custom-typography .canvas-terminal :is(header, strong, span, footer, .canvas-terminal-empty),
+.canvas-stage .canvas-object.notebook-object.has-custom-typography .notebook-content,
+.canvas-stage .canvas-object.notebook-cell-object.has-custom-typography .notebook-cell-surface,
+.canvas-stage .canvas-object.notebook-cell-object.has-custom-typography .notebook-cell-toolbar :is(small, button, select),
+.canvas-stage .canvas-object.blueprint-object.has-custom-typography .blueprint-node,
+.canvas-stage .canvas-object.blueprint-object.has-custom-typography .blueprint-node :is(p, strong, span, pre, footer) {
+  color: var(--text-color, inherit) !important;
+}
+
+/* Sticky notes */
+.canvas-stage .sticky-note-object.has-styled-fills,
+.canvas-stage .sticky-note-object.has-styled-fills .scalable-object-content {
+  background: transparent !important;
+}
+.canvas-stage .sticky-note-object.has-styled-stroke,
+.canvas-stage .sticky-note-object.has-styled-stroke .scalable-object-content {
+  border-color: transparent !important;
+}
+.canvas-stage .sticky-note-object.has-custom-typography,
+.canvas-stage .sticky-note-object.has-custom-typography .scalable-object-content,
+.canvas-stage .sticky-note-object.has-custom-typography .sticky-note-head,
+.canvas-stage .sticky-note-object.has-custom-typography .sticky-note-content .simple-markdown,
+.canvas-stage .sticky-note-object.has-custom-typography .sticky-note-content .simple-markdown :is(p, h2, h3, h4, li, blockquote, span, strong, em),
+.canvas-stage .sticky-note-object.has-custom-typography textarea,
+.canvas-stage .sticky-note-object.has-custom-typography .sticky-note-empty {
+  color: var(--text-color, inherit) !important;
+}
+
+/* Tables */
+.canvas-stage .canvas-table-object.has-styled-fills,
+.canvas-stage .canvas-table-object.has-styled-fills .scalable-object-content {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.canvas-stage .canvas-table-object.has-styled-stroke,
+.canvas-stage .canvas-table-object.has-styled-stroke .scalable-object-content {
+  border-color: transparent !important;
+}
+.canvas-stage .canvas-table-object.has-styled-fills .canvas-data-table thead th,
+.canvas-stage .canvas-table-object.has-styled-fills .canvas-data-table .table-row-index-heading,
+.canvas-stage .canvas-table-object.has-styled-fills .canvas-data-table .table-row-index {
+  background: color-mix(in srgb, var(--text-color, currentColor) 8%, transparent) !important;
+  color: var(--text-color, inherit) !important;
+}
+.canvas-stage .canvas-table-object.has-styled-fills .canvas-data-table th,
+.canvas-stage .canvas-table-object.has-styled-fills .canvas-data-table td {
+  border-color: color-mix(in srgb, var(--text-color, currentColor) 18%, transparent) !important;
+}
+.canvas-stage .canvas-table-object.has-custom-typography,
+.canvas-stage .canvas-table-object.has-custom-typography .scalable-object-content,
+.canvas-stage .canvas-table-object.has-custom-typography .table-markdown-content,
+.canvas-stage .canvas-table-object.has-custom-typography .canvas-data-table :is(th, td, caption) {
+  color: var(--text-color, inherit) !important;
+}
+
+/* Charts, values, questions, links, pdfs, projects, user-groups */
+.canvas-stage .canvas-chart-object.has-styled-fills .chart-card,
+.canvas-stage .canvas-value-frame.has-styled-fills .canvas-value-object,
+.canvas-stage .canvas-question-object.has-styled-fills .question-card,
+.canvas-stage .media-link-object.has-styled-fills,
+.canvas-stage .media-link-object.has-styled-fills .scalable-object-content,
+.canvas-stage .pdf-object.has-styled-fills .pdf-document,
+.canvas-stage .canvas-project-frame.has-styled-fills .project-object,
+.canvas-stage .canvas-project-frame.has-styled-fills .project-body {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.canvas-stage .canvas-chart-object.has-styled-stroke .chart-card,
+.canvas-stage .canvas-value-frame.has-styled-stroke .canvas-value-object,
+.canvas-stage .canvas-question-object.has-styled-stroke .question-card,
+.canvas-stage .media-link-object.has-styled-stroke,
+.canvas-stage .media-link-object.has-styled-stroke .scalable-object-content,
+.canvas-stage .pdf-object.has-styled-stroke .pdf-document,
+.canvas-stage .canvas-project-frame.has-styled-stroke .project-object {
+  border-color: transparent !important;
+}
+.canvas-stage .canvas-question-object.has-styled-fills .question-card > header,
+.canvas-stage .canvas-question-object.has-styled-fills .question-card > footer,
+.canvas-stage .canvas-question-object.has-styled-fills .question-card :is(.question-option, button, input, textarea),
+.canvas-stage .media-link-object.has-styled-fills .shared-link-card,
+.canvas-stage .pdf-object.has-styled-fills .pdf-status {
+  background: transparent !important;
+  color: var(--text-color, inherit) !important;
+}
+.canvas-stage .pdf-object.has-styled-fills .pdf-status button,
+.canvas-stage .pdf-object.has-styled-fills .pdf-document-actions button,
+.canvas-stage .canvas-project-frame.has-styled-fills .project-header,
+.canvas-stage .canvas-project-frame.has-styled-fills .project-header :is(button, input),
+.canvas-stage .canvas-project-frame.has-styled-fills .project-tabs,
+.canvas-stage .canvas-project-frame.has-styled-fills .project-tabs button,
+.canvas-stage .canvas-project-frame.has-styled-fills .project-toolbar,
+.canvas-stage .canvas-project-frame.has-styled-fills .project-toolbar :is(input, select, button),
+.canvas-stage .canvas-project-frame.has-styled-fills .project-kanban > section {
+  background: color-mix(in srgb, var(--text-color, currentColor) 10%, transparent) !important;
+  border-color: color-mix(in srgb, var(--text-color, currentColor) 22%, transparent) !important;
+  color: var(--text-color, inherit) !important;
+}
+.canvas-stage .media-link-object.has-styled-fills .shared-link-icon {
+  background: color-mix(in srgb, var(--text-color, currentColor) 16%, transparent) !important;
+  color: var(--text-color, inherit) !important;
+}
+.canvas-stage .canvas-chart-object.has-custom-typography .chart-card,
+.canvas-stage .canvas-chart-object.has-custom-typography .chart-card :is(header, strong, span, text, tspan),
+.canvas-stage .canvas-value-frame.has-custom-typography .canvas-value-object,
+.canvas-stage .canvas-value-frame.has-custom-typography .canvas-value-object :is(header, strong, span, output, label),
+.canvas-stage .canvas-question-object.has-custom-typography .question-card,
+.canvas-stage .canvas-question-object.has-custom-typography .question-card :is(header, strong, span, p, label, legend),
+.canvas-stage .media-link-object.has-custom-typography .shared-media-header,
+.canvas-stage .media-link-object.has-custom-typography .shared-link-copy strong,
+.canvas-stage .media-link-object.has-custom-typography .shared-link-copy small,
+.canvas-stage .media-link-object.has-custom-typography .shared-link-plain,
+.canvas-stage .media-link-object.has-custom-typography .shared-link-plain > a,
+.canvas-stage .media-link-object.has-custom-typography .link-preview-summary,
+.canvas-stage .media-link-object.has-custom-typography .link-preview-summary strong,
+.canvas-stage .media-link-object.has-custom-typography .link-preview-summary span,
+.canvas-stage .media-link-object.has-custom-typography .shared-media-invalid,
+.canvas-stage .pdf-object.has-custom-typography .pdf-document,
+.canvas-stage .pdf-object.has-custom-typography :is(.pdf-document-heading, .pdf-document-heading strong, .pdf-status, .pdf-status button, .pdf-document-actions, .pdf-document-actions button, .pdf-document-actions span),
+.canvas-stage .canvas-project-frame.has-custom-typography .project-object,
+.canvas-stage .canvas-project-frame.has-custom-typography .project-header :is(input, span, button),
+.canvas-stage .canvas-project-frame.has-custom-typography .project-tabs button,
+.canvas-stage .canvas-project-frame.has-custom-typography .project-toolbar :is(input, select, button),
+.canvas-stage .canvas-project-frame.has-custom-typography .project-kanban h4,
+.canvas-stage .canvas-project-frame.has-custom-typography .project-empty,
+.canvas-stage .canvas-object-user-group.has-custom-typography .user-group-content :is(h3, strong, small) {
+  color: var(--text-color, inherit) !important;
+}
+.canvas-stage .canvas-object.pdf-object.has-styled-fills .pdf-page-view {
+  background: transparent !important;
+  border-color: color-mix(in srgb, var(--text-color, currentColor) 16%, transparent) !important;
+}
+.canvas-stage .canvas-object.pdf-object.has-styled-fills .pdf-page-view:has(.pdf-status) canvas {
+  visibility: hidden !important;
+  background: transparent !important;
+}
+.canvas-stage .canvas-object.code-object.has-styled-fills .html-object-content {
+  background: transparent !important;
+}
+.canvas-stage .canvas-object.code-object.has-styled-fills .code-snippet-header,
+.canvas-stage .canvas-object.code-object.has-styled-fills .html-object-content > header {
+  border-bottom-color: color-mix(in srgb, var(--text-color, currentColor) 18%, transparent) !important;
+}
+.canvas-stage .canvas-object.code-object.has-styled-fills :is(.code-copy-button, .code-language-badge, .html-object-content > header > button) {
+  background: color-mix(in srgb, var(--text-color, currentColor) 10%, transparent) !important;
+  border-color: color-mix(in srgb, var(--text-color, currentColor) 22%, transparent) !important;
+}
+.canvas-stage .canvas-object.code-object.has-styled-radius .html-object-content {
+  border-radius: var(--object-corner-radius, 0px) !important;
+  overflow: hidden !important;
+}
+.canvas-stage .canvas-object.terminal-object.canvas-object-styled .canvas-terminal,
+.canvas-stage .canvas-object.code-object.canvas-object-styled .html-object-content {
+  min-height: 0 !important;
+}
+.canvas-floating-context-bar {
+  width: max-content !important;
+  max-width: calc(100vw - 24px) !important;
+  flex-wrap: nowrap !important;
+}
+.canvas-floating-context-bar :is(.floating-bar-btn, .floating-bar-color, .floating-bar-color span, .floating-bar-num, .floating-bar-num span) {
+  white-space: nowrap !important;
+  flex: none !important;
+}
+
+/* Pan & zoom GPU compositing fast path: keep the outer world layer promoted on GPU,
+ * isolate per-object layout/style subtrees, avoid per-frame child texture explosions,
+ * skip backdrop blur readbacks, and pause flowing SVG animations while actively moving. */
+.canvas-stage .canvas-scene .canvas-world-layer {
+  will-change: transform;
+}
+
+.canvas-stage .canvas-object {
+  contain: layout style;
+}
+
+.canvas-stage:is(.camera-moving, .camera-coasting) .canvas-minimap,
+.canvas-stage:is(.camera-moving, .camera-coasting) .has-backdrop-blur {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.canvas-stage:is(.camera-moving, .camera-coasting) .connector-flow-forward .connector-visible-stroke,
+.canvas-stage:is(.camera-moving, .camera-coasting) .connector-flow-reverse .connector-visible-stroke {
+  animation-play-state: paused !important;
+}
+
+/* Simplify multi-pass Skia blurs, SVG luminance masks, blend modes, and text stroke halos
+ * strictly while zoom scale is changing so re-rasterized GPU tiles stay fast at all zoom levels. */
+.canvas-stage.camera-zooming :is(.canvas-object, .canvas-object-style-backdrop, .canvas-shape-advanced-surface, .scalable-object-content) {
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.canvas-stage.camera-zooming :is(.canvas-object, .canvas-object-fill-layer) {
+  mix-blend-mode: normal !important;
+}
+
+.canvas-stage.camera-zooming .canvas-shape-svg [mask] {
+  mask: none !important;
+}
+
+.canvas-stage.camera-zooming .canvas-axis-ticks text {
+  stroke: none !important;
+}

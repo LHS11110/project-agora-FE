@@ -17,6 +17,15 @@ export function isOverviewProxy(item,world,scale,quality='low'){
 export function overviewScale(scale) {
   return 2 ** (Math.round(Math.log2(Math.max(.0001, Number(scale) || 1)) * 2) / 2);
 }
+export function overviewProxyTier(item, world, scale, quality = 'low') {
+  if (!isOverviewProxy(item, world, scale, quality)) return 'full';
+  if (!world || !scale) return 'ov';
+  const heightValue = Number(item?.height) > 0 ? item.height : isRasterCode(item) ? codePreviewHeight(item, world.height) / world.height : 0;
+  const w = item.width * world.width, h = heightValue * world.height, m = Math.min(w, h) * scale;
+  if (m < 3) return 'tiny';
+  if (item.kind === 'image' && (m < 2 || w * h * scale * scale < 16)) return 'img-s';
+  return item.kind === 'image' ? 'img-p' : 'ov';
+}
 export function overviewProxy(item, world, scale){
   if(world&&!(Number(item.height)>0)&&isRasterCode(item))item={...item,height:codePreviewHeight(item,world.height)/world.height};
   if(world&&scale&&Math.min(item.width*world.width,item.height*world.height)*scale<3) return {kind:'shape',shapeType:'rectangle',x:item.x,y:item.y,width:item.width,height:item.height,rotation:item.rotation,depth:item.depth,fill:colors[item.kind]||'#dce9df',strokeEnabled:false,shadowEnabled:false};

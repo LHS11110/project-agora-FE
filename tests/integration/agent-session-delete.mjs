@@ -1,0 +1,12 @@
+import {chromium} from '/tmp/agora-ui-verify/node_modules/playwright-core/index.mjs';
+import assert from 'node:assert/strict';
+const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox']});
+try{
+ const context=await browser.newContext({ignoreHTTPSErrors:true});const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('https://127.0.0.1:5191/tests/browser/agent-panel.html');const prompt=page.getByLabel('에이전트에게 요청');await prompt.fill('삭제 검증 대화');await page.getByRole('button',{name:/보내기/}).click();await page.getByText('코드를 수정했습니다. 객체 ID: code-a').waitFor();await page.waitForFunction(()=>!document.querySelector('textarea').disabled);
+ const id=await page.getByRole('button',{name:'대화 세션',exact:true}).getAttribute('data-active-id');
+ const peer=await context.newPage();peer.on('pageerror',e=>errors.push(e.message));await peer.goto('https://127.0.0.1:5191/tests/browser/agent-panel.html?user=8');await peer.getByRole('button',{name:'대화 세션',exact:true}).click();assert.equal(await peer.getByRole('button',{name:'삭제 검증 대화 삭제',exact:true}).count(),0);await peer.locator(`[data-session-id="${id}"]`).click();await peer.getByText('코드를 수정했습니다. 객체 ID: code-a').waitFor();
+ await page.getByRole('button',{name:'대화 세션',exact:true}).click();await page.getByRole('button',{name:'삭제 검증 대화 삭제',exact:true}).click();await page.getByRole('button',{name:'취소',exact:true}).click();assert(await page.locator(`[data-session-id="${id}"]`).count());await page.getByRole('button',{name:'삭제 검증 대화 삭제',exact:true}).click();await page.getByRole('button',{name:'삭제',exact:true}).click();await page.waitForFunction(id=>!window.agentFixture.read().sessions[id],id);await page.waitForFunction(id=>document.querySelector('[aria-label="대화 세션"]').dataset.activeId!==id,id);assert.equal(await page.locator(`[data-session-id="${id}"]`).count(),0);
+ await peer.evaluate(()=>window.agentFixture.notice());await peer.waitForFunction(id=>document.querySelector('[aria-label="대화 세션"]').dataset.activeId!==id,id);
+ await page.reload();await page.getByRole('button',{name:'대화 세션',exact:true}).click();assert.equal(await page.locator(`[data-session-id="${id}"]`).count(),0);assert.deepEqual(errors,[]);console.log('PASS: owner-only delete, cancel, selected-session fallback, peer invalidation and reload persistence');await context.close();
+}finally{await browser.close();}

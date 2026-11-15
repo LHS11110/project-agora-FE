@@ -9,6 +9,7 @@ import { api } from '../api/client.js';
 import { useAuth } from '../state/AuthContext.jsx';
 import { useNavigate } from '../routing.jsx';
 import AccountDeleteDialog from '../components/account/AccountDeleteDialog.jsx';
+import ProfileProgress from '../components/account/ProfileProgress.jsx';
 
 export default function ProfilePage() {
   const locale = useUiLocale();
@@ -46,6 +47,7 @@ export default function ProfilePage() {
         {notice && <div className={`inline-notice ${notice.kind}`} role="status">{ui(notice.text)}</div>}<div className="form-actions"><button className="button button-dark" type="submit" disabled={busy || imageBusy}>{busy ? ui("저장 중…") : ui("변경사항 저장")} <Icon name="check" size={17} /></button></div>
       </form></section>
     </div>
+    <ProfileProgress key={user?.user_id ?? user?.email ?? `${user?.nickname}#${user?.tag_number}`} />
     <MfaSettings />
     <PasskeySettings />
     <div className="profile-security-note"><span className="security-icon"><Icon name="lock" size={17} /></span><p><strong>{ui("계정은 안전하게 보호돼요.")}</strong><br />{ui("비밀번호는 암호화되어 저장되며, 사용자 태그는 공개 식별자로 사용됩니다.")}</p><Icon name="chevron" size={18} /></div>

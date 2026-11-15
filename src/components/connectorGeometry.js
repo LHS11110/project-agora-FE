@@ -6,9 +6,12 @@ import { connectorControlHandles, connectorPointCount, sampleControlCurve } from
 import { strokePaintSize } from '../canvas/inkStroke.js';
 import { obstacleRoute } from '../canvas/connectors/obstacleRoute.js';
 import { connectorObjectSize, connectorMetricsRevision } from '../canvas/connectors/objectMetrics.js';
+import { isRasterCode, codePreviewHeight } from '../canvas/codePreviewMetrics.js';
 import { CANVAS_SPACE } from '../canvas/canvasSpace.js';
 import { arrowPathGeometry } from './arrowheadGeometry.js';
+import { objectCornerRadius, supportsObjectCorners } from '../canvas/objectCorners.js';
 import { shapeOutlinePaths } from '../canvas/shapeGeometry.js';
+import { parseRawStyleEnvelope } from '../canvas/styling/objectStyleModel.js';
 
 export const OBJECT_SIZES = {
   value: [0.28,0.21],
@@ -43,13 +46,15 @@ function objectRect(item, width, height) {
   const y = (Number(item?.y) || 0) * height;
   const measured = connectorObjectSize(item);
   const objectWidth = (measured ? measured.width / CANVAS_SPACE.width : Number(item?.width) || defaultWidth) * width;
-  const objectHeight = (measured ? measured.height / CANVAS_SPACE.height : Number(item?.height) || defaultHeight) * height;
+  const objectHeight = (measured ? measured.height / CANVAS_SPACE.height : Number(item?.height) || (isRasterCode(item) ? codePreviewHeight(item, height) / height : defaultHeight)) * height;
   return {
     centerX: x + objectWidth / 2,
     centerY: y + objectHeight / 2,
     halfWidth: objectWidth / 2,
     halfHeight: objectHeight / 2,
     rotation: (Number(item?.rotation) || 0) * Math.PI / 180,
+    outlinePadding: item?.kind === 'shape' && !item.runtimeRole && item.strokeEnabled !== false ? Math.max(0, Number(item.strokeWidth) || 1.5) / 2 : 0,
+    cornerRadius: supportsObjectCorners(item) ? objectCornerRadius(item, objectWidth, objectHeight) : 0,
     isEllipse: item?.kind === 'shape' && item.shapeType === 'ellipse',
     shapePaths: item?.kind === 'shape' && item.shapeType !== 'arrow' && !researchSymbolUsesFrameAnchors(item.shapeType)
       ? shapeOutlinePaths(item.shapeType, objectWidth, objectHeight, item) : null,
@@ -82,7 +87,19 @@ function distanceToEdge(rect, directionX, directionY) {
   }
   const xDistance = Math.abs(localX) > 1e-8 ? rect.halfWidth / Math.abs(localX) : Infinity;
   const yDistance = Math.abs(localY) > 1e-8 ? rect.halfHeight / Math.abs(localY) : Infinity;
-  return Math.min(xDistance, yDistance);
+  const reach = Math.min(xDistance, yDistance);
+  const radius = rect.cornerRadius || 0;
+  // A ray near a rounded card corner meets its arc before the bounding box.
+  if (radius > 0) {
+    const x = Math.abs(localX), y = Math.abs(localY);
+    const cx = rect.halfWidth - radius, cy = rect.halfHeight - radius;
+    if (reach * x > cx && reach * y > cy) {
+      const projection = cx * x + cy * y;
+      const discriminant = projection * projection - (cx * cx + cy * cy - radius * radius);
+      if (discriminant >= 0) return projection + Math.sqrt(discriminant);
+    }
+  }
+  return reach;
 }
 
 function bezierPoint(points, t) {
@@ -128,17 +145,96 @@ function calculateConnectorGeometry(item, items, width, height) {
   const targetReach = distanceToEdge(to, -directionX, -directionY);
   const strokeWidth = Number(item.strokeWidth) || 1.5;
   const headSize = Number.isFinite(item.headSize) ? Math.max(2, Math.min(128, item.headSize)) : Math.max(8, Math.min(15, 6 + strokeWidth * 2.5));
-  const edgePadding = Math.min(headSize + strokeWidth / 2 + 4,
-    Math.max(0, (length - sourceReach - targetReach) / 3));
+  // Arrowheads extend backwards from their tips. Their size is obstacle
+  // clearance, not a gap between the tip and the connected object's boundary.
+  const availableGap = Math.max(0, (length - sourceReach - targetReach) / 3);
+  const attachmentPadding = rect => Math.min(2 + strokeWidth / 2 + (rect.outlinePadding || 0), availableGap);
+  const sourcePadding = attachmentPadding(from), targetPadding = attachmentPadding(to);
   const start = {
-    x: from.centerX + directionX * (sourceReach + edgePadding),
-    y: from.centerY + directionY * (sourceReach + edgePadding),
+    x: from.centerX + directionX * (sourceReach + sourcePadding),
+    y: from.centerY + directionY * (sourceReach + sourcePadding),
   };
   const end = {
-    x: to.centerX - directionX * (targetReach + edgePadding),
-    y: to.centerY - directionY * (targetReach + edgePadding),
+    x: to.centerX - directionX * (targetReach + targetPadding),
+    y: to.centerY - directionY * (targetReach + targetPadding),
   };
   const gap = Math.max(1, (end.x - start.x) * directionX + (end.y - start.y) * directionY);
+  const routingMode = parseRawStyleEnvelope(item)?.connector?.routing || 'curved';
+  if (routingMode === 'straight') {
+    const arrowPath = arrowPathGeometry([start, end], {
+      startHead: item.startHead,
+      endHead: item.endHead,
+      headSize,
+      strokeWidth,
+    });
+    const midPoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+    return {
+      ...arrowPath,
+      directionX,
+      directionY,
+      normalX,
+      normalY,
+      gap,
+      bend: 0,
+      bendStart: start,
+      bendEnd: end,
+      controlSourcePoints: [start, end],
+      controlHandles: [midPoint],
+      routed: false,
+    };
+  }
+  if (routingMode === 'orthogonal') {
+    const horizontalPrimary = Math.abs(dx) >= Math.abs(dy);
+    const axisShift = (Number(item.bend) || 0) * (item.rotation < 0 ? -1 : 1) * 40;
+    let orthoPoints;
+    if (horizontalPrimary) {
+      const signX = dx >= 0 ? 1 : -1;
+      const sx = from.centerX + signX * (distanceToEdge(from, signX, 0) + sourcePadding);
+      const ex = to.centerX - signX * (distanceToEdge(to, -signX, 0) + targetPadding);
+      const midX = (sx + ex) / 2 + axisShift;
+      orthoPoints = [
+        { x: sx, y: from.centerY },
+        { x: midX, y: from.centerY },
+        { x: midX, y: to.centerY },
+        { x: ex, y: to.centerY },
+      ];
+    } else {
+      const signY = dy >= 0 ? 1 : -1;
+      const sy = from.centerY + signY * (distanceToEdge(from, 0, signY) + sourcePadding);
+      const ey = to.centerY - signY * (distanceToEdge(to, 0, -signY) + targetPadding);
+      const midY = (sy + ey) / 2 + axisShift;
+      orthoPoints = [
+        { x: from.centerX, y: sy },
+        { x: from.centerX, y: midY },
+        { x: to.centerX, y: midY },
+        { x: to.centerX, y: ey },
+      ];
+    }
+    const arrowPath = arrowPathGeometry(orthoPoints, {
+      startHead: item.startHead,
+      endHead: item.endHead,
+      headSize,
+      strokeWidth,
+    });
+    const handlePoint = {
+      x: (orthoPoints[1].x + orthoPoints[2].x) / 2,
+      y: (orthoPoints[1].y + orthoPoints[2].y) / 2,
+    };
+    return {
+      ...arrowPath,
+      directionX,
+      directionY,
+      normalX,
+      normalY,
+      gap,
+      bend: Number(item.bend) || 0,
+      bendStart: orthoPoints[0],
+      bendEnd: orthoPoints[orthoPoints.length - 1],
+      controlSourcePoints: orthoPoints,
+      controlHandles: [handlePoint],
+      routed: false,
+    };
+  }
   const hasCustomBend = Number.isFinite(Number(item.bend));
   const bend = hasCustomBend
     ? gap * Math.max(0, Math.min(1.5, Number(item.bend)))
@@ -158,15 +254,15 @@ function calculateConnectorGeometry(item, items, width, height) {
     const attached = (rect, point, fallback) => {
       const dx = point.x - rect.centerX, dy = point.y - rect.centerY, length = Math.hypot(dx, dy);
       if (length < 1) return fallback;
-      const reach = distanceToEdge(rect, dx / length, dy / length) + edgePadding;
+      const reach = distanceToEdge(rect, dx / length, dy / length) + attachmentPadding(rect);
       return { x: rect.centerX + dx / length * reach, y: rect.centerY + dy / length * reach };
     };
     curvePoints = sampleControlCurve([attached(from, controls[0], start), ...controls, attached(to, controls.at(-1), end)]);
   }
   const routed = obstacleRoute({ preferred: curvePoints, rectangles, from, to,
     padding: headSize + strokeWidth / 2 + 4, preserveBend: bend > 0, guides: hasControls ? controls : null,
-    anchor: (rect, direction, padding) => {
-      const reach = distanceToEdge(rect, direction.x, direction.y) + padding;
+    anchor: (rect, direction) => {
+      const reach = distanceToEdge(rect, direction.x, direction.y) + attachmentPadding(rect);
       return { x: rect.centerX + direction.x * reach, y: rect.centerY + direction.y * reach };
     },
   });

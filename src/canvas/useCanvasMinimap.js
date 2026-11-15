@@ -20,7 +20,7 @@ export function useCanvasMinimap({ collapsed=false, boardRef, boardSize, viewpor
   const minimapPointerRef = useRef(null);
   const minimapMoveRef = useRef(null);
   const minimapPositionRef = useRef(null);
-  const queryRef=useRef(null),minimapEntriesRef=useRef(null);
+  const queryRef=useRef(null),minimapEntriesRef=useRef(null),cachedMinimapItemsRef=useRef(null);
   if(!queryRef.current)queryRef.current=new StableSpatialQuery();
   if(!minimapEntriesRef.current)minimapEntriesRef.current=new MinimapMarkers();
   const [minimapPosition, setMinimapPosition] = useState(() => {
@@ -53,12 +53,19 @@ export function useCanvasMinimap({ collapsed=false, boardRef, boardSize, viewpor
   const overviewBounds = useMemo(() => viewportOverview(visibleWorldBounds, MINIMAP_ASPECT, MINIMAP_OVERVIEW_SCALE), [visibleWorldBounds]);
   const worldWidth = Math.max(1, boardSize.width), worldHeight = Math.max(1, boardSize.height);
   const overviewWindow = renderWindow({minX:overviewBounds.minX/worldWidth,minY:overviewBounds.minY/worldHeight,maxX:overviewBounds.maxX/worldWidth,maxY:overviewBounds.maxY/worldHeight},boardSize,camera.scale);
+  const cameraZooming = Boolean(boardRef?.current?.classList?.contains('camera-zooming'));
   const minimapItems = useMemo(() => {
     if(collapsed)return [];
+    const prev = cachedMinimapItemsRef.current;
+    if (cameraZooming && prev && prev.items === items && prev.spatialIndex === spatialIndex && prev.spatialRevision === spatialRevision && prev.worldWidth === worldWidth && prev.worldHeight === worldHeight) {
+      return prev.value;
+    }
     const entries = spatialIndex ? queryRef.current.query(spatialIndex,overviewWindow.bounds)
       : Object.entries(items).map(([id,item])=>({id,item,bounds:objectBounds(item,items,worldWidth,worldHeight)}));
-    return minimapEntriesRef.current.update(entries,items,worldWidth,worldHeight,spatialIndex);
-  },[collapsed,worldWidth,worldHeight,items,spatialIndex,spatialRevision,overviewWindow.key]);
+    const value = minimapEntriesRef.current.update(entries,items,worldWidth,worldHeight,spatialIndex);
+    cachedMinimapItemsRef.current = { items, spatialIndex, spatialRevision, worldWidth, worldHeight, value };
+    return value;
+  },[collapsed,cameraZooming,worldWidth,worldHeight,items,spatialIndex,spatialRevision,overviewWindow.key]);
   const minimap = useMemo(() => ({bounds:overviewBounds,viewport:visibleWorldBounds,items:minimapItems}),[overviewBounds,visibleWorldBounds,minimapItems]);
 
   useEffect(() => {

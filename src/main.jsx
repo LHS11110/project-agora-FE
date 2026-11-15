@@ -11,6 +11,7 @@ import './chat-compose.css';
 import './image-display.css';
 import './frelog-auth.css';
 import './design-system.css';
+import './tablet-responsive.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

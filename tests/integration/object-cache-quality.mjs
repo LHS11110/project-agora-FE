@@ -34,6 +34,7 @@ const hits=await page.evaluate(()=>document.querySelector('.canvas-scene').__ago
 await page.evaluate(()=>{const d=window.frelogCanvas.read();d.items.notebook.x+=12;window.frelogCanvas.apply(window.frelogCanvas.plan(d));});await page.waitForTimeout(300);
 assert.ok(await page.evaluate(()=>document.querySelector('.canvas-scene').__agoraContentCacheStats.hits)>hits);assert.equal(await notebook.evaluate(e=>e.querySelector('.notebook-content')===window.keptNotebook),true);
 let lastPdf=0,lastRasters=before;
+await page.getByRole('button',{name:'환경 설정',exact:true}).click();
 for(const [quality,label] of [['low','낮음'],['medium','보통'],['high','높음']]){
  await page.getByRole('group',{name:'그래픽 품질 선택'}).getByRole('button',{name:label,exact:true}).click();
  await page.waitForFunction(q=>document.querySelector('.canvas-app-page').dataset.graphicsQuality===q,quality);

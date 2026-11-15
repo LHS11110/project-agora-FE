@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {loadAgentKey,saveAgentKey,normalizeAgentKey} from '../src/components/agentCredentials.js';
+test('personal agent credential uses tab session storage and can be cleared',()=>{const data=new Map();globalThis.sessionStorage={getItem:key=>data.get(key)||null,setItem:(key,value)=>data.set(key,value),removeItem:key=>data.delete(key)};globalThis.localStorage={setItem:()=>assert.fail('API key must not enter localStorage')};assert.equal(saveAgentKey(' fixture-key '),'fixture-key');assert.equal(loadAgentKey(),'fixture-key');saveAgentKey('');assert.equal(loadAgentKey(),'');assert.equal(data.size,0);});
+test('malformed credentials cannot enter requests through saved preferences',()=>{for(const value of ['a\nb','a b','한글','a'.repeat(4097),null])assert.equal(normalizeAgentKey(value),'');});

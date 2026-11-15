@@ -2519,4 +2519,9 @@ export default {
   "ORCID로 계속하기": "Continue with ORCID",
   "ORCID 로그인을 완료하지 못했습니다. 다시 시도해주세요.": "Could not complete ORCID sign-in. Please try again.",
   "ORCID 로그인이 취소되었거나 실패했습니다. 다시 시도해주세요.": "ORCID sign-in was cancelled or failed. Please try again.",
+  "채팅 복사": "Copy chat message",
+  "메시지 복사": "Copy message",
+  "유튜브 동영상": "YouTube video",
+  "유튜브 동영상 미리보기": "YouTube video preview",
+  "클릭하여 원본 페이지 열기": "Open link in new tab",
 };

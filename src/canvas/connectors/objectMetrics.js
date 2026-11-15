@@ -1,5 +1,7 @@
 const metrics = new WeakMap();
 const elementMetrics = new WeakMap();
+const observedStates = new WeakMap();
+let sharedResizeObserver = null;
 let revision = 0, frame = null;
 let dirtyIds=new Set(),unknown=false;
 export const CONNECTOR_METRICS_EVENT = 'frelog:connector-metrics';
@@ -9,9 +11,11 @@ export function inheritConnectorObjectSize(previous,next){
   const measured=previous && metrics.get(previous);
   if(measured && next && ['kind','imageFrameEnabled','width','height','fontSize','contentScale','contentScaleX','contentScaleY','text','code','formula'].every(key=>previous[key]===next[key]))metrics.set(next,measured);
 }
-export function measureConnectorObject(item, element) {
-  if (!element || ['stroke', 'connector'].includes(item.kind)) return;
-  const width = element.offsetWidth, height = element.offsetHeight;
+export function measureConnectorObject(item, element, resizeEntry = null) {
+  if (!element || !item || ['stroke', 'connector'].includes(item.kind)) return;
+  const box = resizeEntry?.borderBoxSize?.[0];
+  const width = box ? Math.round(box.inlineSize) : element.offsetWidth;
+  const height = box ? Math.round(box.blockSize) : element.offsetHeight;
   if (!(width > 0 && height > 0)) return;
   const previous = metrics.get(item);
   if (previous?.width === width && previous?.height === height) return;
@@ -26,4 +30,44 @@ export function measureConnectorObject(item, element) {
     frame=null;const event=new Event(CONNECTOR_METRICS_EVENT);event.changedItemIds=unknown?null:[...dirtyIds];
     dirtyIds=new Set();unknown=false;window.dispatchEvent(event);
   });
+}
+
+function ensureSharedResizeObserver() {
+  if (sharedResizeObserver || typeof ResizeObserver !== 'function') return sharedResizeObserver;
+  sharedResizeObserver = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      const state = observedStates.get(entry.target);
+      if (!state?.item) continue;
+      measureConnectorObject(state.item, entry.target, entry);
+    }
+  });
+  return sharedResizeObserver;
+}
+
+export function observeConnectorObject(element, item) {
+  if (!element || !item || ['stroke', 'connector'].includes(item.kind)) return;
+  const cached = elementMetrics.get(element);
+  if (cached) metrics.set(item, cached);
+  observedStates.set(element, { item });
+  const observer = ensureSharedResizeObserver();
+  if (observer) observer.observe(element);
+  else measureConnectorObject(item, element);
+}
+
+export function updateConnectorObjectObservation(element, previousItem, nextItem) {
+  if (!element || !nextItem || ['stroke', 'connector'].includes(nextItem.kind)) return;
+  const state = observedStates.get(element);
+  if (state) state.item = nextItem;
+  else observedStates.set(element, { item: nextItem });
+  inheritConnectorObjectSize(previousItem, nextItem);
+  if (!metrics.has(nextItem)) {
+    const cached = elementMetrics.get(element);
+    if (cached) metrics.set(nextItem, cached);
+  }
+}
+
+export function unobserveConnectorObject(element) {
+  if (!element) return;
+  observedStates.delete(element);
+  sharedResizeObserver?.unobserve(element);
 }
