@@ -1,8 +1,8 @@
 use bytemuck::{Pod, Zeroable};
 use std::collections::HashMap;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
 use wasm_bindgen::prelude::*;
-use web_sys::HtmlCanvasElement;
+use web_sys::{HtmlCanvasElement, OffscreenCanvas, ImageBitmap};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -64,18 +64,24 @@ pub struct WgpuCanvasRenderer {
     width: u32,
     height: u32,
     device_failed: Arc<AtomicBool>,
+    error_message: Arc<Mutex<Option<String>>>,
 }
 
 async fn try_init_backend(
-    canvas: &HtmlCanvasElement,
+    canvas: &JsValue,
     backends: wgpu::Backends,
 ) -> Result<(wgpu::Surface<'static>, wgpu::Adapter, wgpu::Device, wgpu::Queue), String> {
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends,
         ..Default::default()
     });
+    let target = if let Some(html) = canvas.dyn_ref::<HtmlCanvasElement>() {
+        wgpu::SurfaceTarget::Canvas(html.clone())
+    } else if let Some(offscreen) = canvas.dyn_ref::<OffscreenCanvas>() {
+        wgpu::SurfaceTarget::OffscreenCanvas(offscreen.clone())
+    } else { return Err("unsupported canvas".to_string()); };
     let surface = instance
-        .create_surface(wgpu::SurfaceTarget::Canvas(canvas.clone()))
+        .create_surface(target)
         .map_err(|e| format!("surface error: {e}"))?;
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
@@ -117,15 +123,18 @@ async fn try_init_backend(
 #[wasm_bindgen]
 impl WgpuCanvasRenderer {
     pub async fn create(
-        canvas: HtmlCanvasElement,
+        canvas: JsValue,
         width: u32,
         height: u32,
         prefer_webgl: bool,
     ) -> Result<WgpuCanvasRenderer, JsValue> {
         let width = width.max(1);
         let height = height.max(1);
-        canvas.set_width(width);
-        canvas.set_height(height);
+        if let Some(html) = canvas.dyn_ref::<HtmlCanvasElement>() {
+            html.set_width(width); html.set_height(height);
+        } else if let Some(offscreen) = canvas.dyn_ref::<OffscreenCanvas>() {
+            offscreen.set_width(width); offscreen.set_height(height);
+        } else { return Err(JsValue::from_str("unsupported canvas")); }
 
         let order = if prefer_webgl {
             [wgpu::Backends::GL, wgpu::Backends::BROWSER_WEBGPU]
@@ -361,10 +370,13 @@ impl WgpuCanvasRenderer {
         // Surface/context loss must return control to the cached Canvas2D path,
         // rather than letting wgpu's default uncaptured-error handler panic.
         let device_failed = Arc::new(AtomicBool::new(false));
+        let error_message = Arc::new(Mutex::new(None));
+        let lost_message=error_message.clone();
         let lost = device_failed.clone();
-        device.set_device_lost_callback(move |_, _| { lost.store(true, Ordering::Relaxed); });
+        device.set_device_lost_callback(move |reason, message| { *lost_message.lock().unwrap()=Some(format!("GPU device lost: {reason:?}: {message}"));lost.store(true, Ordering::Relaxed); });
         let failed = device_failed.clone();
-        device.on_uncaptured_error(Box::new(move |_| { failed.store(true, Ordering::Relaxed); }));
+        let failed_message=error_message.clone();
+        device.on_uncaptured_error(Box::new(move |error| { *failed_message.lock().unwrap()=Some(error.to_string());failed.store(true, Ordering::Relaxed); }));
 
         Ok(WgpuCanvasRenderer {
             surface,
@@ -386,8 +398,11 @@ impl WgpuCanvasRenderer {
             width: clamped_w,
             height: clamped_h,
             device_failed,
+            error_message,
         })
     }
+
+    pub fn last_error(&self) -> Option<String> { self.error_message.lock().unwrap().clone() }
 
     pub fn backend_kind(&self) -> String {
         self.backend_name.clone()
@@ -422,16 +437,21 @@ impl WgpuCanvasRenderer {
     pub fn upload_canvas_texture(
         &mut self,
         tex_id: u32,
-        source: &HtmlCanvasElement,
+        source: &JsValue,
         width: u32,
         height: u32,
     ) -> bool {
         let max_dim = self.device.limits().max_texture_dimension_2d.max(1);
         let w = width.max(1).min(max_dim);
         let h = height.max(1).min(max_dim);
-        if source.width() == 0 || source.height() == 0 {
-            return false;
-        }
+        let image = if let Some(bitmap) = source.dyn_ref::<ImageBitmap>() {
+            wgpu::ExternalImageSource::ImageBitmap(bitmap.clone())
+        } else if let Some(html) = source.dyn_ref::<HtmlCanvasElement>() {
+            wgpu::ExternalImageSource::HTMLCanvasElement(html.clone())
+        } else if let Some(offscreen) = source.dyn_ref::<OffscreenCanvas>() {
+            wgpu::ExternalImageSource::OffscreenCanvas(offscreen.clone())
+        } else { return false; };
+        if image.width() == 0 || image.height() == 0 { return false; }
 
         let recreate = match self.textures.get(&tex_id) {
             Some(existing) => existing.width != w || existing.height != h,
@@ -483,11 +503,12 @@ impl WgpuCanvasRenderer {
         }
 
         if let Some(entry) = self.textures.get(&tex_id) {
-            let copy_w = w.min(source.width());
-            let copy_h = h.min(source.height());
+            let premultiplied = self.backend_name != "webgl" || !matches!(&image, wgpu::ExternalImageSource::ImageBitmap(_));
+            let copy_w = w.min(image.width());
+            let copy_h = h.min(image.height());
             self.queue.copy_external_image_to_texture(
                 &wgpu::CopyExternalImageSourceInfo {
-                    source: wgpu::ExternalImageSource::HTMLCanvasElement(source.clone()),
+                    source: image,
                     origin: wgpu::Origin2d::ZERO,
                     flip_y: false,
                 },
@@ -497,7 +518,7 @@ impl WgpuCanvasRenderer {
                     origin: wgpu::Origin3d::ZERO,
                     aspect: wgpu::TextureAspect::All,
                     color_space: wgpu::PredefinedColorSpace::Srgb,
-                    premultiplied_alpha: true,
+                    premultiplied_alpha: premultiplied,
                 },
                 wgpu::Extent3d {
                     width: copy_w,

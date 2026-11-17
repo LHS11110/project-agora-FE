@@ -24,6 +24,7 @@ features = [
   "OffscreenCanvas",
   "CanvasRenderingContext2d",
   "ImageData",
+  "ImageBitmap",
   "WebGl2RenderingContext",
 ]
 

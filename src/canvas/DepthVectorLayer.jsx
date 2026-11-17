@@ -77,6 +77,7 @@ export default function DepthVectorLayer(props) {
       gpuFailed = true;
       if (gpuCanvas) gpuCanvas.style.display = 'none';
       stopGpuEvents();
+      if(app?.threaded)app.destroy();
       releaseGpu?.(); releaseGpu = null;
       canvas.style.display = 'none'; buffer.style.display = '';
       element.dataset.renderer = 'canvas2d';
@@ -100,13 +101,17 @@ export default function DepthVectorLayer(props) {
           candidate.destroy(); candidate.free(); releaseGpu?.(); releaseGpu = null;
           gpuFailed = true; element.dataset.renderer = 'canvas2d'; ensureWorker(); schedule(); return;
         }
-        app = candidate; stats.gpuAdapter = adapter; stats.engine = 'rust-wgpu';
-        const gl = surface.getContext('webgl2') || surface.getContext('webgl');
-        stats.contextAttributes = gl?.getContextAttributes?.() || { alpha: true, antialias: false, premultipliedAlpha: true };
+        app = candidate; element.__agoraGpuRenderer=app; stats.gpuAdapter = adapter; stats.engine = 'rust-wgpu';stats.renderThread=candidate.threaded?'worker':'main';
+        const gl = candidate.threaded?null:surface.getContext('webgl2') || surface.getContext('webgl');
+        stats.contextAttributes = candidate.contextAttributes || gl?.getContextAttributes?.() || { alpha: true, antialias: false, premultipliedAlpha: true };
         gpuCanvas = surface;
         element.insertBefore(surface, canvas);
-        compositor?.destroy(); compositor = null;
-        canvas.style.display = 'none'; buffer.style.display = 'none';
+        if(!candidate.threaded){compositor?.destroy();compositor=null;}
+        if(candidate.threaded){
+          surface.style.display='none';let first=true;
+          candidate.onError=error=>{stats.gpuError=error;fallBackToCanvas();};
+          candidate.onFrame=()=>{stats.gpuWorkerFrames=(stats.gpuWorkerFrames||0)+1;if(first){first=false;element.dataset.renderer=candidate.backend_kind();surface.style.display='';compositor?.destroy();compositor=null;canvas.style.display='none';buffer.style.display='none';sceneInputs=null;schedule();}};
+        }else{canvas.style.display = 'none'; buffer.style.display = 'none';}
         element.dataset.renderer = candidate.backend_kind();
         atlas.resetGpuState(); sceneInputs = null;
         stopGpuEvents = observeGpuContextLoss(surface, () => disposed, fallBackToCanvas);
@@ -140,7 +145,7 @@ export default function DepthVectorLayer(props) {
       const textAppearance=textAppearanceCache;
       const width = Math.max(1, viewportMetrics?.width || element.clientWidth), height = Math.max(1, viewportMetrics?.height || element.clientHeight);
       const pixelWidth = Math.round(width*ratio), pixelHeight = Math.round(height*ratio);
-      const gpu = app && !gpuFailed;
+      const gpu = app && !gpuFailed && (!app.threaded || app.hasFrame);
       if (gpu && (app.width() !== pixelWidth || app.height() !== pixelHeight)) app.resize(pixelWidth,pixelHeight);
       const presentGpu = () => {
         if (!app.render_frame(camera.x,camera.y,camera.scale,width,height)) throw new Error("GPU surface unavailable");
@@ -402,6 +407,9 @@ export default function DepthVectorLayer(props) {
         }
         previousPaintKey = bufferKey; element.dataset.renderer = 'canvas2d';blitBuffer();
       }
+      if(app?.threaded&&!app.hasFrame&&!gpuFailed){
+        try{atlas.flush(app);gpuBatcher.sync(app,ordered);presentGpu();}catch(error){stats.gpuError=String(error);fallBackToCanvas();}
+      }
       stats.drawnObjects += drawn; stats.lastDrawnObjects = drawn; stats.visibleObjects = preparation.count;
       stats.imagePreviews={scope:previewEpoch,active:imagePreviews.active,queued:imagePreviews.queued,entries:imagePreviews.entries.size,pixels:imagePreviews.pixels};
       stats.sharedRasters=resources.live.size;stats.retainedRasters=resources.idle.size;
@@ -428,7 +436,7 @@ export default function DepthVectorLayer(props) {
     document.fonts?.addEventListener('loadingdone',appearanceChanged);
     element.dataset.renderer = 'canvas2d';schedule();
     return () => {
-      disposed = true;cameraIdleTimer?.cancel();clearTimeout(budgetIdleTimer); if (frame !== null) cancelAnimationFrame(frame);
+      disposed = true;delete element.__agoraGpuRenderer;cameraIdleTimer?.cancel();clearTimeout(budgetIdleTimer); if (frame !== null) cancelAnimationFrame(frame);
       observer.disconnect();themeObserver.disconnect();stage?.removeEventListener('agora-camera',cameraChanged); window.removeEventListener(CONNECTOR_METRICS_EVENT,metricsChanged);
       document.fonts?.removeEventListener('loadingdone',appearanceChanged);
       latest.current.onReady?.(null); renderer.current = null;

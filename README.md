@@ -186,3 +186,5 @@ ORCID 비밀키는 FE에 추가하지 않습니다. 설정은 BE의 보호된 �
 Rust GPU 구현과 WASM 재빌드는 [Rust·wgpu 렌더링](docs/rust-wgpu-renderer.md)을 참고하세요.
 
 화면 크기·확대 배율에 맞춰 주변 객체와 이미지도 미리 준비합니다. 범위·우선순위·캐시 제한은 [화면 기반 사전 준비](docs/viewport-preloading.md)를 참고하세요.
+
+지원 환경에서는 Rust·wgpu GPU 렌더링을 별도 Worker로 분리합니다. 전송 방식·메인 스레드에 남는 작업·대체 경로는 [GPU 렌더링 스레드 분리](docs/gpu-render-worker.md)를 참고하세요.

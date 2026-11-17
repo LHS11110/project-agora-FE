@@ -1,21 +1,12 @@
-import initWasm, { WgpuCanvasRenderer } from './pkg/agora_wgpu_renderer.js';
-import wasmUrl from './pkg/agora_wgpu_renderer_bg.wasm?url';
-
-let wasmReadyPromise = null;
-
-export function ensureWgpuWasm() {
-  if (!wasmReadyPromise) {
-    wasmReadyPromise = initWasm({ module_or_path: wasmUrl }).catch(err => {
-      wasmReadyPromise = null;
-      throw err;
-    });
+import {createDirectWgpuRenderer} from './wgpuBindings.js';
+import WorkerGpuRenderer from './WorkerGpuRenderer.js';
+export async function createWgpuRenderer(canvas,width,height,preferWebgl=true){
+  if(typeof Worker!=='undefined'&&typeof OffscreenCanvas!=='undefined'&&typeof createImageBitmap==='function'){
+    try{return await WorkerGpuRenderer.create(canvas,width,height,preferWebgl);}catch{
+      // A failed worker initialization must leave the original GPU canvas usable.
+      canvas.className='';canvas.style.inset='';canvas.style.left='';canvas.style.top='';canvas.style.transformOrigin='';
+    }
   }
-  return wasmReadyPromise;
+  return createDirectWgpuRenderer(canvas,width,height,preferWebgl);
 }
-
-export async function createWgpuRenderer(canvas, width, height, preferWebgl = true) {
-  await ensureWgpuWasm();
-  return WgpuCanvasRenderer.create(canvas, Math.max(1, Math.round(width)), Math.max(1, Math.round(height)), preferWebgl);
-}
-
-export { WgpuSceneBatcher } from './WgpuSceneBatcher.js';
+export {WgpuSceneBatcher} from './WgpuSceneBatcher.js';

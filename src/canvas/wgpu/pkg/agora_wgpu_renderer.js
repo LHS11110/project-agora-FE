@@ -247,15 +247,15 @@ function passArray32ToWasm0(arg, malloc) {
     return ptr;
 }
 function __wbg_adapter_32(arg0, arg1, arg2) {
-    wasm.closure36_externref_shim(arg0, arg1, arg2);
+    wasm.closure42_externref_shim(arg0, arg1, arg2);
 }
 
 function __wbg_adapter_35(arg0, arg1, arg2) {
-    wasm.closure377_externref_shim(arg0, arg1, arg2);
+    wasm.closure382_externref_shim(arg0, arg1, arg2);
 }
 
-function __wbg_adapter_1133(arg0, arg1, arg2, arg3) {
-    wasm.closure1473_externref_shim(arg0, arg1, arg2, arg3);
+function __wbg_adapter_1138(arg0, arg1, arg2, arg3) {
+    wasm.closure1478_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 const __wbindgen_enum_GpuAddressMode = ["clamp-to-edge", "repeat", "mirror-repeat"];
@@ -336,6 +336,18 @@ export class WgpuCanvasRenderer {
         wasm.__wbg_wgpucanvasrenderer_free(ptr, 0);
     }
     /**
+     * @returns {string | undefined}
+     */
+    last_error() {
+        const ret = wasm.wgpucanvasrenderer_last_error(this.__wbg_ptr);
+        let v1;
+        if (ret[0] !== 0) {
+            v1 = getStringFromWasm0(ret[0], ret[1]).slice();
+            wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        }
+        return v1;
+    }
+    /**
      * @returns {string}
      */
     adapter_name() {
@@ -402,7 +414,7 @@ export class WgpuCanvasRenderer {
     }
     /**
      * @param {number} tex_id
-     * @param {HTMLCanvasElement} source
+     * @param {any} source
      * @param {number} width
      * @param {number} height
      * @returns {boolean}
@@ -419,7 +431,7 @@ export class WgpuCanvasRenderer {
         return ret >>> 0;
     }
     /**
-     * @param {HTMLCanvasElement} canvas
+     * @param {any} canvas
      * @param {number} width
      * @param {number} height
      * @param {boolean} prefer_webgl
@@ -1206,6 +1218,26 @@ function __wbg_get_imports() {
         const ret = result;
         return ret;
     };
+    imports.wbg.__wbg_instanceof_ImageBitmap_d093d508663e313d = function(arg0) {
+        let result;
+        try {
+            result = arg0 instanceof ImageBitmap;
+        } catch (_) {
+            result = false;
+        }
+        const ret = result;
+        return ret;
+    };
+    imports.wbg.__wbg_instanceof_OffscreenCanvas_d55760945f91bf51 = function(arg0) {
+        let result;
+        try {
+            result = arg0 instanceof OffscreenCanvas;
+        } catch (_) {
+            result = false;
+        }
+        const ret = result;
+        return ret;
+    };
     imports.wbg.__wbg_instanceof_WebGl2RenderingContext_2b6045efeb76568d = function(arg0) {
         let result;
         try {
@@ -1407,7 +1439,7 @@ function __wbg_get_imports() {
                 const a = state0.a;
                 state0.a = 0;
                 try {
-                    return __wbg_adapter_1133(a, state0.b, arg0, arg1);
+                    return __wbg_adapter_1138(a, state0.b, arg0, arg1);
                 } finally {
                     state0.a = a;
                 }
@@ -2405,12 +2437,12 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper1637 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 378, __wbg_adapter_35);
+    imports.wbg.__wbindgen_closure_wrapper1650 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 383, __wbg_adapter_35);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper748 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 37, __wbg_adapter_32);
+    imports.wbg.__wbindgen_closure_wrapper761 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 43, __wbg_adapter_32);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {

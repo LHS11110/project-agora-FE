@@ -52,6 +52,7 @@ try {
       const lost = await page.evaluate(() => {
         let count = 0;
         for (const layer of document.querySelectorAll('.vector-layer[data-renderer="webgl"]')) {
+          if(layer.__agoraGpuRenderer?.threaded){layer.__agoraGpuRenderer.lose_context();count++;continue;}
           for (const canvas of layer.querySelectorAll('canvas')) {
             const gl = canvas.getContext('webgl2');
             if (gl) { gl.getExtension('WEBGL_lose_context').loseContext(); count++; break; }
