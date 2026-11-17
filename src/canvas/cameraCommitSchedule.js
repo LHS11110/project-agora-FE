@@ -1,8 +1,10 @@
-// Camera transforms stay on rAF; expensive scene/React updates have their own cadence.
-export function shouldCommitCamera(previous,next,elapsed){
- const zooming=previous.scale!==next.scale;
- if (zooming) return elapsed>=140;
- // Pixel transforms still run each frame. Refresh membership before consuming
- // half of the 512px overscan, or periodically during slow continuous motion.
- return Math.max(Math.abs(next.x-previous.x),Math.abs(next.y-previous.y))>=256 || elapsed>=240;
+// Camera pixels update on every browser animation frame. Rebuild scene membership
+// only when the retained overscan is consumed, or a large zoom can trim the scene.
+export function shouldCommitCamera(previous,next,viewport) {
+  const width=Math.max(1,viewport?.width||1),height=Math.max(1,viewport?.height||1);
+  const ratio=previous.scale/next.scale;
+  const left=previous.x-next.x*ratio,top=previous.y-next.y*ratio;
+  const margin=256;
+  return left < -margin || top < -margin || left+width*ratio > width+margin || top+height*ratio > height+margin
+    || next.scale/previous.scale>=2;
 }

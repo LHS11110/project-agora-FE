@@ -58,6 +58,7 @@ pub struct WgpuCanvasRenderer {
     instance_capacity: usize,
     textures: HashMap<u32, TextureEntry>,
     cached_batches: Vec<DrawBatch>,
+    cached_bundle: Option<wgpu::RenderBundle>,
     backend_name: String,
     adapter_description: String,
     width: u32,
@@ -190,7 +191,7 @@ impl WgpuCanvasRenderer {
             format,
             width: clamped_w,
             height: clamped_h,
-            present_mode: wgpu::PresentMode::Fifo,
+            present_mode: wgpu::PresentMode::AutoNoVsync,
             alpha_mode,
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
@@ -379,6 +380,7 @@ impl WgpuCanvasRenderer {
             instance_capacity: initial_capacity,
             textures: HashMap::new(),
             cached_batches: Vec::new(),
+            cached_bundle: None,
             backend_name,
             adapter_description,
             width: clamped_w,
@@ -437,6 +439,7 @@ impl WgpuCanvasRenderer {
         };
 
         if recreate {
+            self.cached_bundle = None;
             let texture = self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("agora-atlas-texture"),
                 size: wgpu::Extent3d {
@@ -509,6 +512,7 @@ impl WgpuCanvasRenderer {
     }
 
     pub fn remove_texture(&mut self, tex_id: u32) {
+        self.cached_bundle = None;
         if let Some(entry) = self.textures.remove(&tex_id) {
             entry.texture.destroy();
         }
@@ -540,6 +544,7 @@ impl WgpuCanvasRenderer {
                 bytemuck::cast_slice(instance_words),
             );
         }
+        self.cached_bundle = None;
         self.cached_batches.clear();
         let n = batch_tex_ids
             .len()
@@ -579,6 +584,31 @@ impl WgpuCanvasRenderer {
         self.queue
             .write_buffer(&self.camera_buffer, 0, bytemuck::bytes_of(&cam));
 
+        // Record unchanged draw commands once. Camera motion only updates the
+        // uniform buffer; texture order and instance-buffer bindings stay valid.
+        if self.cached_bundle.is_none() && !self.cached_batches.is_empty() {
+            let formats = [Some(self.config.format)];
+            let mut bundle = self.device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
+                label: Some("agora-cached-scene"),
+                color_formats: &formats,
+                depth_stencil: None,
+                sample_count: 1,
+                multiview: None,
+            });
+            bundle.set_pipeline(&self.pipeline);
+            bundle.set_bind_group(0, &self.camera_bind_group, &[]);
+            bundle.set_vertex_buffer(0, self.instance_buffer.slice(..));
+            for batch in &self.cached_batches {
+                if let Some(tex) = self.textures.get(&batch.tex_id) {
+                    bundle.set_bind_group(1, &tex.bind_group, &[]);
+                    bundle.draw(0..6, batch.start..(batch.start + batch.count));
+                }
+            }
+            self.cached_bundle = Some(bundle.finish(&wgpu::RenderBundleDescriptor {
+                label: Some("agora-cached-scene"),
+            }));
+        }
+
         let output = match self.surface.get_current_texture() {
             Ok(frame) => frame,
             Err(wgpu::SurfaceError::Outdated | wgpu::SurfaceError::Lost) => {
@@ -616,16 +646,8 @@ impl WgpuCanvasRenderer {
                 occlusion_query_set: None,
             });
 
-            if !self.cached_batches.is_empty() {
-                pass.set_pipeline(&self.pipeline);
-                pass.set_bind_group(0, &self.camera_bind_group, &[]);
-                pass.set_vertex_buffer(0, self.instance_buffer.slice(..));
-                for batch in &self.cached_batches {
-                    if let Some(tex) = self.textures.get(&batch.tex_id) {
-                        pass.set_bind_group(1, &tex.bind_group, &[]);
-                        pass.draw(0..6, batch.start..(batch.start + batch.count));
-                    }
-                }
+            if let Some(bundle) = &self.cached_bundle {
+                pass.execute_bundles(std::iter::once(bundle));
             }
         }
 
@@ -635,6 +657,7 @@ impl WgpuCanvasRenderer {
     }
 
     pub fn destroy(&mut self) {
+        self.cached_bundle = None;
         for (_, entry) in self.textures.drain() {
             entry.texture.destroy();
         }

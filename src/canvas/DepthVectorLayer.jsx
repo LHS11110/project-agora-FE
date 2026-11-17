@@ -1,3 +1,4 @@
+import CameraIdleTask from './CameraIdleTask.js';
 import RasterPaintIndex from './RasterPaintIndex.js';
 import {isRasterCode} from './codePreviewMetrics.js';
 import { ui } from '../i18n/locale.js';
@@ -128,7 +129,7 @@ export default function DepthVectorLayer(props) {
         sceneInputs = null; previousPaintKey = ''; bufferCamera = null;
       }
       const moved=lastCamera && (lastCamera.x!==camera.x || lastCamera.y!==camera.y || lastCamera.scale!==camera.scale);
-      if(moved){cameraActive=true;clearTimeout(cameraIdleTimer);cameraIdleTimer=setTimeout(()=>{cameraActive=false;refreshCamera=true;schedule();},120);}
+      if(moved){cameraActive=true;cameraIdleTimer ||= new CameraIdleTask(()=>{cameraActive=false;refreshCamera=true;schedule();},120);cameraIdleTimer.touch();}
       lastCamera={...camera};
       const settling=refreshCamera;refreshCamera=false;
       const quality=normalizeGraphicsQuality(latest.current.graphicsQuality);
@@ -425,7 +426,7 @@ export default function DepthVectorLayer(props) {
     document.fonts?.addEventListener('loadingdone',appearanceChanged);
     element.dataset.renderer = 'canvas2d';schedule();
     return () => {
-      disposed = true;clearTimeout(cameraIdleTimer);clearTimeout(budgetIdleTimer); if (frame !== null) cancelAnimationFrame(frame);
+      disposed = true;cameraIdleTimer?.cancel();clearTimeout(budgetIdleTimer); if (frame !== null) cancelAnimationFrame(frame);
       observer.disconnect();themeObserver.disconnect();stage?.removeEventListener('agora-camera',cameraChanged); window.removeEventListener(CONNECTOR_METRICS_EVENT,metricsChanged);
       document.fonts?.removeEventListener('loadingdone',appearanceChanged);
       latest.current.onReady?.(null); renderer.current = null;

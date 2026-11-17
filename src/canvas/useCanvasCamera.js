@@ -1,20 +1,21 @@
+import CameraIdleTask from './CameraIdleTask.js';
 import { shouldCommitCamera } from './cameraCommitSchedule.js';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, startTransition } from 'react';
 import { applyGridProjection, gridProjection } from './gridProjection.js';
 import { CANVAS_SPACE, formatCanvasZoom } from './canvasSpace.js';
 
 // Camera motion is a compositor update. React refreshes scene membership at
-// a bounded cadence, sooner if the camera could leave the prepared overscan.
+// viewport coverage changes, without a fixed refresh interval.
 export function useCanvasCamera(boardRef, sceneRef) {
   const current = useRef({ x: 0, y: 0, scale: 1 }), committed = useRef(current.current);
   const [revision, setRevision] = useState(0);
   const work = useRef({
-    frame: 0, idle: 0, lastCommit: 0, detailScale: 1, observer: null, size: null,
+    frame: 0, idle: null, detailScale: 1, observer: null, size: null,
     refs: { stage: null, grid: null, axes: null, coordX: null, coordY: null, coordOrigin: null, laser: null, minimapRect: null, zoom: null },
     last: { x: NaN, y: NaN, scale: NaN, width: 0, height: 0, gx: 0, gy: 0, layers: 0, axisChildren: 0, gridSpec: '', gridTileKey: '', gridPending: false, wasActive: false, zoomText: '' },
   });
   const commit = useCallback((settled = false) => {
-    committed.current = { ...current.current }; work.current.lastCommit = performance.now();
+    committed.current = { ...current.current };
     if (settled) { work.current.detailScale = current.current.scale; setRevision(value => value + 1); }
     else startTransition(() => setRevision(value => value + 1));
   }, []);
@@ -114,13 +115,13 @@ export function useCanvasCamera(boardRef, sceneRef) {
     if (!work.current.frame) work.current.frame = requestAnimationFrame(() => {
       work.current.frame = 0; apply();
       const before = committed.current, now = current.current;
-      if (shouldCommitCamera(before, now, performance.now() - work.current.lastCommit)) commit();
+      if (shouldCommitCamera(before, now, work.current.size)) commit();
     });
-    clearTimeout(work.current.idle);
-    work.current.idle = setTimeout(() => { boardRef.current?.classList.remove('camera-moving', 'camera-zooming'); commit(true); }, 160);
+    work.current.idle ||= new CameraIdleTask(() => { boardRef.current?.classList.remove('camera-moving', 'camera-zooming'); commit(true); },160);
+    work.current.idle.touch();
   }, [apply, commit, boardRef]);
   const camera = useMemo(() => ({ get x() { return current.current.x }, get y() { return current.current.y }, get scale() { return current.current.scale }, get detailScale() { return work.current.detailScale } }), [revision]);
   useLayoutEffect(apply);
-  useLayoutEffect(() => () => { cancelAnimationFrame(work.current.frame); work.current.frame = 0; clearTimeout(work.current.idle); work.current.idle = 0; work.current.observer?.disconnect(); work.current.observer = null; work.current.size = null; boardRef.current?.classList.remove('camera-moving', 'camera-zooming'); }, [boardRef]);
+  useLayoutEffect(() => () => { cancelAnimationFrame(work.current.frame); work.current.frame = 0; work.current.idle?.cancel(); work.current.idle = null; work.current.observer?.disconnect(); work.current.observer = null; work.current.size = null; boardRef.current?.classList.remove('camera-moving', 'camera-zooming'); }, [boardRef]);
   return [camera, setCamera];
 }

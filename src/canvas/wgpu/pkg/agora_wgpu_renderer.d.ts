@@ -39,9 +39,9 @@ export interface InitOutput {
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_export_5: WebAssembly.Table;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
-  readonly closure28_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure362_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure1452_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure36_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure377_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure1473_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_start: () => void;
 }
 

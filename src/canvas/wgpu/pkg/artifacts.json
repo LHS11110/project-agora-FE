@@ -1,8 +1,8 @@
 {
   "rust/agora-wgpu-renderer/Cargo.toml": "7c64a7c31edfb525f1c219377864f2107162d86bb8823851566951183b9c5a8b",
   "rust/agora-wgpu-renderer/Cargo.lock": "d331300a64f98246e30e0f14cceb858fd9a59cf524084c248189b1cecbd628a2",
-  "rust/agora-wgpu-renderer/src/lib.rs": "b0f8cb4a4d0531c974e822499a6459101bfb658f2043ba564d933e22ba18a3a4",
+  "rust/agora-wgpu-renderer/src/lib.rs": "00c1f1c5dad839b5945e58200cbbc5ebc2c51bd6be62c6b219926d7dc988dbcd",
   "rust/agora-wgpu-renderer/src/shader.wgsl": "e1ce6e7b43174e832371bb6c247df7c54fd9654b3958e90855c7f485cc914bcf",
-  "src/canvas/wgpu/pkg/agora_wgpu_renderer.js": "d1e94b396f9e09d29a1f57816bbabe17d0853dbee4228c32f90dd516699fd7ee",
-  "src/canvas/wgpu/pkg/agora_wgpu_renderer_bg.wasm": "f295a6702dd35d98cda03db4eaec54eddc4418b95894a57c89c64aab10f7ac4e"
+  "src/canvas/wgpu/pkg/agora_wgpu_renderer.js": "243ceb6e1ae8b6fcc227bbd85ad2d588ea93215980becb819ffd69957c34aacb",
+  "src/canvas/wgpu/pkg/agora_wgpu_renderer_bg.wasm": "4c5f71f1b5a51e08d126bbf95755833f1561bc3e7a5c4a80bfc47e3cdfa94c77"
 }
