@@ -1,3 +1,4 @@
+import MinHeap from '../MinHeap.js';
 import { contentMode, isTextContent } from '../content/contentPresentation.js';
 export const isBlueprintCode = item => isTextContent(item) && contentMode(item) === 'code';
 export const isBlueprintNode = item => item?.kind === 'shape' && ['executor', 'output'].includes(item.runtimeRole);
@@ -13,8 +14,8 @@ function resolveGraph(items, executorId, codeOnly) {
   for (const [, edge] of Object.entries(items).filter(([, item]) => item?.kind === 'connector').sort(([a], [b]) => a.localeCompare(b))) {
     const from = String(edge.from), to = String(edge.to), source = items[from], target = items[to];
     const allowed = (!codeOnly && (from === executorId || isBlueprintCode(source)) && isBlueprintCode(target))
-      || (source?.runtimeRole === 'output' && isBlueprintCode(target))
-      || ((isBlueprintCode(source) || source?.runtimeRole === 'output') && target?.runtimeRole === 'output');
+      || ((source?.runtimeRole === 'output'||source?.kind==='value') && isBlueprintCode(target))
+      || ((isBlueprintCode(source) || source?.runtimeRole === 'output') && (target?.runtimeRole === 'output'||target?.kind==='value'));
     if (allowed) {
       if (!adjacent.has(from)) adjacent.set(from, new Set());
       adjacent.get(from).add(to);
@@ -33,10 +34,10 @@ function resolveGraph(items, executorId, codeOnly) {
   visit(executorId);
   const degree = new Map([...visited].map(id => [id, 0]));
   for (const id of visited) for (const next of adjacent.get(id) || []) degree.set(next, degree.get(next) + 1);
-  const queue = [...visited].filter(id => degree.get(id) === 0), order = [];
+  const queue = new MinHeap((a,b)=>rank.get(a)-rank.get(b)), order = [];
+  for(const id of visited)if(degree.get(id)===0)queue.push(id);
   while (queue.length) {
-    queue.sort((a, b) => rank.get(a) - rank.get(b));
-    const id = queue.shift(); order.push(id);
+    const id = queue.pop(); order.push(id);
     for (const next of adjacent.get(id) || []) { degree.set(next, degree.get(next) - 1); if (!degree.get(next)) queue.push(next); }
   }
   const codes = order.filter(id => isBlueprintCode(items[id]));
@@ -44,7 +45,7 @@ function resolveGraph(items, executorId, codeOnly) {
   return codes.map(codeId => {
     const outputIds = new Set();
     const collect = id => {
-      for (const next of adjacent.get(id) || []) if (items[next]?.runtimeRole === 'output' && !outputIds.has(next)) {
+      for (const next of adjacent.get(id) || []) if ((items[next]?.runtimeRole === 'output'||items[next]?.kind==='value') && !outputIds.has(next)) {
         outputIds.add(next); collect(next);
       }
     };

@@ -1,6 +1,6 @@
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import Icon from '../../components/Icon.jsx';
 export function ToolLabel({ tool }) {
   useUiLocale();
@@ -8,6 +8,7 @@ export function ToolLabel({ tool }) {
 }
 export default function FolderTool({ tool, activeTool, onSelectTool, onUploadMedia, onUploadImage, onUploadPdf, onUploadSheet, dragController, dragging, scattering, children }) {
   useUiLocale();
+  const fieldId = useId();
   const input = useRef(null);
   const [paletteOpen, setPaletteOpen] = useState(true);
   return <div className={`folder-tool${dragging ? ' is-dragging' : ''}${scattering ? ' is-scattering' : ''}`} data-folder-tool-id={tool.id}>
@@ -17,7 +18,7 @@ export default function FolderTool({ tool, activeTool, onSelectTool, onUploadMed
       else if (tool.palette) setPaletteOpen(open => !open);
       else onSelectTool(tool.id);
     }}><ToolLabel tool={tool} /></button>
-    {tool.upload && <input ref={input} type="file" accept={tool.accept || 'image/*'} hidden aria-label={ui(tool.description || tool.label)} onChange={tool.id === 'media-file' ? onUploadMedia : tool.id === 'pdf' ? onUploadPdf : tool.id === 'sheet' ? onUploadSheet : onUploadImage} />}
+    {tool.upload && <input id={`${fieldId}-upload`} name={`tool-upload-${tool.id}`} ref={input} type="file" accept={tool.accept || 'image/*'} hidden aria-label={ui(tool.description || tool.label)} onChange={tool.id === 'media-file' ? onUploadMedia : tool.id === 'pdf' ? onUploadPdf : tool.id === 'sheet' ? onUploadSheet : onUploadImage} />}
     {tool.palette && paletteOpen && children}
   </div>;
 }

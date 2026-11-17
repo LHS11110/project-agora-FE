@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
 import Icon from '../../components/Icon.jsx';
@@ -5,9 +6,10 @@ import CodeLanguageBadge from './CodeLanguageBadge.jsx';
 import { codeLanguageAppearance } from './codeLanguageAppearance.js';
 export default function CodeSnippetHeader({ id, item, editing, onMetadataChange, runtimeStore, canExecute }) {
   useUiLocale();
+  const fieldId = useId();
   const language = item.language || 'javascript';
   return <div className="code-object-head code-snippet-header" data-editing={editing} style={{ '--code-language-accent': codeLanguageAppearance(language).accent }}>
-    <div className="code-file-heading"><Icon name="code" size={15} />{editing ? <input className="code-filename-input" aria-label={ui("코드 파일 이름")} maxLength={80} value={item.filename || ''} placeholder={ui("파일 이름")} onPointerDown={event => event.stopPropagation()} onChange={event => onMetadataChange(id, 'filename', event.target.value)} /> : <strong title={item.filename || ui("코드 스니펫")}>{item.filename || ui("코드 스니펫")}</strong>}</div>
+    <div className="code-file-heading"><Icon name="code" size={15} />{editing ? <input id={`${fieldId}-filename`} name="code-filename" className="code-filename-input" aria-label={ui("코드 파일 이름")} maxLength={80} value={item.filename || ''} placeholder={ui("파일 이름")} onPointerDown={event => event.stopPropagation()} onChange={event => onMetadataChange(id, 'filename', event.target.value)} /> : <strong title={item.filename || ui("코드 스니펫")}>{item.filename || ui("코드 스니펫")}</strong>}</div>
     {runtimeStore&&canExecute&&<button type="button" className="code-prebuild-button" data-object-action="blueprint" title={ui('사전 빌드 모드에서 결과물을 준비합니다.')} onPointerDown={event=>event.stopPropagation()} onClick={event=>{event.stopPropagation();runtimeStore.buildCode(id);}}>{ui('사전 빌드')}</button>}
     <CodeLanguageBadge language={language} onChange={editing ? value => onMetadataChange(id, 'language', value) : undefined} />
   </div>;

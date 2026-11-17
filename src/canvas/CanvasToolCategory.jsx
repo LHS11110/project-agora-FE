@@ -22,7 +22,7 @@ export default function CanvasToolCategory({ label, open, onOpenChange, selected
       <span>{label}</span>
       {selectedTool && <><i className="canvas-category-selected" aria-hidden="true" /><span className="canvas-category-sr">{"" + ui("선택한 도구:") + " "}{selectedTool}</span></>}
     </button>
-      {onColorChange && <input type="color" className="canvas-category-color-input" value={categoryColor} aria-label={ui("{v0} 폴더 색상", {
+      {onColorChange && <input id={`${labelId}-color`} name="tool-category-color" type="color" className="canvas-category-color-input" value={categoryColor} aria-label={ui("{v0} 폴더 색상", {
   v0: label
 })} title={ui("{v0} 폴더 색상 변경", {
   v0: label

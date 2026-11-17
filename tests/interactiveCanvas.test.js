@@ -89,3 +89,13 @@ test('mixed acknowledgements and additions preserve the existing scene and minim
  const after=changeItems(before,{s0:{...shape},extra:{...shape,x:.2}});index.update(after,world);entries=query.query(index,bounds);scene.update(entries,after,world,1,new Set(),new Set(),0,index);markers.update(entries,after,1600,1000,index);
  assert.equal(scene.stats.resets,resets);assert.equal(scene.stats.appends,1);assert.equal(scene.layers.get(0).vectors.s9999,untouched);assert.ok(scene.layers.get(0).vectors.extra);assert.equal(markers.value.length,10001);
 });
+
+test('large plain snapshots defer collaborative documents until editing',()=>{
+ const view=new HostCanvasView({lazyPlainDocuments:true});
+ const items=itemSnapshot(Object.fromEntries(Array.from({length:10000},(_,i)=>['c'+i,{kind:'code',code:'print(1)'}])));
+ view.rebase(items,Object.keys(items),[]);
+ assert.equal(view.stats.documentsLoaded,0);assert.equal(view.docs.size,0);
+ const doc=Automerge.from({content:'print(2)'});
+ view.rebase(items,[],[{id:'c0',action:'patch',patch:{code:'print(2)'},doc:encodeBase64(Automerge.save(doc))}]);
+ assert.equal(view.items.c0.code,'print(2)');assert.equal(view.docs.get('c0').content,'print(2)');assert.equal(view.docs.size,1);
+});

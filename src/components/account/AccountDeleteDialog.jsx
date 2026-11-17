@@ -1,12 +1,13 @@
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { api } from '../../api/client.js';
 import Icon from '../Icon.jsx';
 import './account-delete.css';
 
 export default function AccountDeleteDialog({ user, token, onClose, onDeleted }) {
   useUiLocale();
+  const fieldId = useId();
   const dialog = useRef(null), request = useRef(false);
   const [confirmation, setConfirmation] = useState('');
   const [busy, setBusy] = useState(false);
@@ -39,7 +40,7 @@ export default function AccountDeleteDialog({ user, token, onClose, onDeleted })
     <p id="account-delete-description"><strong>{identity}</strong>{" " + ui("계정의 이메일, 프로필과 인증 정보가 삭제됩니다. 같은 이메일이나 간편 로그인으로 다시 가입할 수 있습니다.") + ""}</p>
     <p className="account-delete-note">{ui("계정 삭제는 캔버스를 자동으로 삭제하지 않습니다. 소유한 캔버스를 삭제하려면 탈퇴 전에 캔버스 목록에서 정리해주세요.")}</p>
     <form onSubmit={remove}>
-      <label className="form-field"><span>{ui("확인을 위해 닉네임과 태그를 입력하세요")}</span><input className="plain-input" autoFocus autoComplete="off" spellCheck={false} placeholder={identity} value={confirmation} disabled={busy} onChange={event => setConfirmation(event.target.value)} /></label>
+      <label className="form-field"><span>{ui("확인을 위해 닉네임과 태그를 입력하세요")}</span><input id={`${fieldId}-confirmation`} name="account-delete-confirmation" className="plain-input" autoFocus autoComplete="off" spellCheck={false} placeholder={identity} value={confirmation} disabled={busy} onChange={event => setConfirmation(event.target.value)} /></label>
       {error && <p className="account-delete-error" role="alert">{error}</p>}
       <div className="account-delete-actions"><button type="button" className="button button-outline" disabled={busy} onClick={onClose}>{ui("취소")}</button><button type="submit" className="button account-delete-button" disabled={busy || confirmation !== identity}><Icon name="trash" size={16} />{busy ? ui("삭제 중…") : ui("계정 삭제")}</button></div>
     </form>

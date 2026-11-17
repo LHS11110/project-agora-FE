@@ -114,11 +114,19 @@ export function reduceHostOperations(items, operations, peer, connectorDependenc
     for (const field of unset) delete item[field];
     if (previous && previous.kind !== item.kind) throw new Error('기존 객체 종류는 변경할 수 없습니다.');
     if (!canPeerAccessItem(item, peer)) throw new Error('객체 권한을 확인해주세요.');
-    if (!peer.is_admin && previous && stable(previous.permission) !== stable(item.permission)) throw new Error('객체 권한을 변경할 수 없습니다.');
+    if (!peer.is_admin && previous && stable(previous.permission) !== stable(item.permission)) {
+      const prevGroups = typeof previous.permission === 'string' ? [previous.permission]
+        : Array.isArray(previous.permission) ? previous.permission : Object.keys(previous.permission || {});
+      const required = typeof item.permission === 'string' ? [item.permission]
+        : Array.isArray(item.permission) ? item.permission : Object.keys(item.permission || {});
+      const allowed = new Set([...(peer.member_groups || peer.groups || []), ...prevGroups]);
+      if (!required.length || required.some(group => !allowed.has(group))) throw new Error('객체 권한을 변경할 수 없습니다.');
+    }
     if (!peer.is_admin && !previous) {
       const required = typeof item.permission === 'string' ? [item.permission]
         : Array.isArray(item.permission) ? item.permission : Object.keys(item.permission || {});
-      if (required.some(group => !peer.groups?.includes(group))) throw new Error('소속되지 않은 그룹에 객체를 생성할 수 없습니다.');
+      const allowed = peer.member_groups || peer.groups || [];
+      if (required.some(group => !allowed.includes(group))) throw new Error('소속되지 않은 그룹에 객체를 생성할 수 없습니다.');
     }
     if (isCollaborativeItem(item)) {
       if (typeof operation.doc !== 'string') throw new Error('텍스트 변경 문서가 필요합니다.');

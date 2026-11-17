@@ -1,8 +1,9 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { ui } from '../../i18n/locale.js';
 import { mentionSuggestions, mentionToken } from './mentions.js';
 
 export default function MentionComposer({ value, onChange, onSubmit, participants, disabled, placeholder, label }) {
+  const fieldId = useId();
   const input = useRef(null);
   const pendingPosition = useRef(null);
   const composing = useRef(false);
@@ -24,7 +25,7 @@ export default function MentionComposer({ value, onChange, onSubmit, participant
     onChange(next); setCursor(position); setDismissed(true); setSelected(0);
   };
   return <form className="mention-composer" onSubmit={event => { event.preventDefault(); if(!disabled&&!composing.current&&value.trim())onSubmit(); }}>
-    <div className="mention-input-wrap"><textarea ref={input} rows="2" aria-label={ui(label)} placeholder={ui(placeholder)} value={value} disabled={disabled}
+    <div className="mention-input-wrap"><textarea ref={input} id={`${fieldId}-message`} name="mention-message" rows="2" aria-label={ui(label)} placeholder={ui(placeholder)} value={value} disabled={disabled}
       onCompositionStart={()=>{composing.current=true;}}
       onCompositionEnd={()=>{composing.current=false;}}
       onChange={event => { onChange(event.target.value); setCursor(event.target.selectionStart); setDismissed(false); setSelected(0); }}

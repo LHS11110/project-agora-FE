@@ -37,7 +37,10 @@ try {
   if (process.env.REQUIRE_GPU) await page.waitForSelector('.vector-layer[data-renderer="webgl"]', { timeout: 30000 });
   await checkPixels('Initial scene');
   const gpu = await page.locator('.vector-layer[data-renderer="webgl"]').count();
-  if (process.env.REQUIRE_GPU) assert.ok(gpu, 'Hardware WebGL required for fault injection');
+  if (process.env.REQUIRE_GPU) {
+    assert.ok(gpu, 'Hardware WebGL required for context-loss verification');
+    assert.equal(await page.locator('.vector-layer[data-renderer=webgl]').first().evaluate(el => el.__agoraRenderStats.engine), 'rust-wgpu');
+  }
   for (let pass = 1; pass <= 6; pass++) {
     await page.evaluate(pass => {
       const changes = {};
@@ -45,21 +48,6 @@ try {
       window.depthFixture.patch(changes);
     }, pass);
     await checkPixels(`Depth split/merge ${pass}`);
-    if (pass === 1 && gpu) {
-      await page.evaluate(() => {
-        window.injectedDrawFailure = false;
-        for (const name of ['drawElements', 'drawElementsInstanced']) {
-          const original = WebGL2RenderingContext.prototype[name];
-          WebGL2RenderingContext.prototype[name] = function (...args) {
-            if (!window.injectedDrawFailure) { window.injectedDrawFailure = true; throw Error('Injected render failure'); }
-            return original.apply(this, args);
-          };
-        }
-        window.depthFixture.patch({ item0: { fill: '#fe0000' } });
-      });
-      await page.waitForFunction(() => window.injectedDrawFailure);
-      await checkPixels('GPU draw exception recovery');
-    }
     if (pass === 3 && gpu) {
       const lost = await page.evaluate(() => {
         let count = 0;

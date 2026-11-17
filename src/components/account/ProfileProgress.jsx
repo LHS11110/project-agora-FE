@@ -1,10 +1,11 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useId,useState} from 'react';
 import {api} from '../../api/client.js';
 import {useAuth} from '../../state/AuthContext.jsx';
 import {useUiLocale} from '../../i18n/useUiLocale.js';
 import {activityStats,calendarDays} from './profileActivity.js';
 import './profile-progress.css';
 export default function ProfileProgress(){
+ const fieldId=useId();
  const {user,token}=useAuth(),en=useUiLocale()==='en',t=(ko,english)=>en?english:ko;
  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul'}).format(new Date()),now=new Date(`${today}T12:00:00`),currentYear=now.getFullYear();
  const [year,setYear]=useState(currentYear),[days,setDays]=useState({}),[saved,setSaved]=useState(null),[error,setError]=useState(''),[loading,setLoading]=useState(true),[refresh,setRefresh]=useState(0);
@@ -16,7 +17,7 @@ export default function ProfileProgress(){
  const all=Object.values(days).reduce((n,value)=>n+Number(value.count||0),0);
  return <div className="profile-progress">
   <section className="profile-card progress-card"><div className="progress-heading"><div><span className="section-kicker">MILESTONES</span><h2>{t('나의 도전과제','My achievements')}</h2></div><span>{achievements.filter(([,goal])=>all>=goal).length} / {achievements.length}</span></div><div className="profile-achievements">{achievements.map(([name,goal])=><article key={goal} className={all>=goal?'achievement unlocked':'achievement'}><span className="achievement-symbol" aria-hidden="true">{all>=goal?'✓':'◇'}</span><div><strong>{name}</strong><p>{goal} {t('회 편집','edits')}</p><progress value={Math.min(all,goal)} max={goal}/><small>{Math.min(all,goal)} / {goal}</small></div></article>)}</div></section>
-  <section className="profile-card progress-card"><div className="progress-heading"><div><span className="section-kicker">CANVAS ACTIVITY</span><h2>{t('나의 캔버스 활동','My canvas activity')}</h2></div><div className="progress-heading-actions"><select aria-label={t('활동 연도','Activity year')} value={year} onChange={event=>setYear(Number(event.target.value))}>{[0,1,2].map(n=><option key={n}>{currentYear-n}</option>)}</select><button type="button" disabled={loading} onClick={()=>setRefresh(n=>n+1)}>{t('새로고침','Refresh')}</button></div></div>
+  <section className="profile-card progress-card"><div className="progress-heading"><div><span className="section-kicker">CANVAS ACTIVITY</span><h2>{t('나의 캔버스 활동','My canvas activity')}</h2></div><div className="progress-heading-actions"><select id={`${fieldId}-year`} name="profile-activity-year" aria-label={t('활동 연도','Activity year')} value={year} onChange={event=>setYear(Number(event.target.value))}>{[0,1,2].map(n=><option key={n}>{currentYear-n}</option>)}</select><button type="button" disabled={loading} onClick={()=>setRefresh(n=>n+1)}>{t('새로고침','Refresh')}</button></div></div>
    <div className="progress-stats"><span><strong>{total}</strong> {t('선택 연도 편집 수','edits in selected year')}</span><span><strong>{stats.streak}</strong> {t('연속 활동일','day streak')}</span><span><strong>{stats.activeDays}</strong> {t('활동일','active days')}</span></div>
    {loading&&<p role="status">{t('활동 기록을 불러오는 중…','Loading activity…')}</p>}{error&&<p role="alert">{error}</p>}
    <div className="profile-grass-scroll" tabIndex={0} aria-label={t('캔버스 활동 달력','Canvas activity calendar')}><div className="grass-months">{Array.from({length:12},(_,month)=><span key={month}>{new Date(year,month,1).toLocaleDateString(en?'en-US':'ko-KR',{month:'short'})}</span>)}</div><div className="profile-grass" style={{'--weeks':Math.ceil((calendar[0].weekday+calendar.length)/7)}}>{calendar.map((day,index)=>{

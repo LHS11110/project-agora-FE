@@ -59,7 +59,7 @@ export function useCanvasObjectInteractions(options) {
 
   const startObjectDrag = (event, id, item) => {
     if (activeTool === 'hand' && event.button === 0) { startPan(event); return; }
-    if (event.target.closest?.('.canvas-code-editor')) { event.stopPropagation(); return; }
+    if (event.target.closest?.('.canvas-code-editor') && !(activeTool === 'connect' && item?.kind === 'frame')) { event.stopPropagation(); return; }
     if (event.button === 1 || spacePressedRef.current) { startPan(event); return; }
     if (event.button !== 0) return;
     const objectElement = event.currentTarget.closest?.('.canvas-object') || event.currentTarget;

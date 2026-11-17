@@ -1,0 +1,134 @@
+{
+  "date": "2026-11-16",
+  "environment": "Headless Chrome, Vite development build, mocked broker (no production canvas mutations), 2100x1450, code overview workload; FPS is environment-specific",
+  "baseline_10000": {
+    "objects": 10000,
+    "scene": {
+      "resets": 2,
+      "appends": 32,
+      "updates": 2,
+      "reasons": {
+        "entries:lod:no-delta:no-parent:0:0:all": 2
+      }
+    },
+    "zoom": {
+      "fps": 59.3,
+      "p95": 16.8,
+      "max": 33.4,
+      "counts": [
+        10001
+      ],
+      "duration": 3539
+    },
+    "paste": {
+      "fps": 44.4,
+      "p95": 33.4,
+      "max": 100,
+      "counts": [
+        10001,
+        10033,
+        10065,
+        10097,
+        10129,
+        10161,
+        10193,
+        10225,
+        10257,
+        10289,
+        10321,
+        10353,
+        10385,
+        10417,
+        10449,
+        10481,
+        10513,
+        10545,
+        10577,
+        10609,
+        10641,
+        10673,
+        10705,
+        10737,
+        10769,
+        10801,
+        10833,
+        10865,
+        10897,
+        10929,
+        10961,
+        10993,
+        11001
+      ],
+      "duration": 2005
+    },
+    "drag": {
+      "during": 0,
+      "packets": 0
+    },
+    "errors": []
+  },
+  "final_100000": {
+    "objects": 100000,
+    "scene": {
+      "resets": 2,
+      "appends": 32,
+      "updates": 17,
+      "reasons": {
+        "entries:lod:no-delta:no-parent:0:0:all": 2
+      }
+    },
+    "zoom": {
+      "fps": 59.5,
+      "p95": 16.8,
+      "max": 16.8,
+      "counts": [
+        100001
+      ],
+      "duration": 3531
+    },
+    "paste": {
+      "fps": 51.5,
+      "p95": 16.8,
+      "max": 50,
+      "counts": [
+        100001,
+        100033,
+        100065,
+        100097,
+        100129,
+        100161,
+        100193,
+        100225,
+        100289,
+        100321,
+        100353,
+        100385,
+        100417,
+        100449,
+        100481,
+        100513,
+        100545,
+        100577,
+        100641,
+        100673,
+        100705,
+        100737,
+        100769,
+        100801,
+        100833,
+        100865,
+        100897,
+        100929,
+        100961,
+        100993,
+        101001
+      ],
+      "duration": 1436
+    },
+    "drag": {
+      "during": 0,
+      "packets": 0
+    },
+    "errors": []
+  }
+}

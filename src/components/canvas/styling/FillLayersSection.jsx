@@ -1,9 +1,11 @@
+import { useId } from 'react';
 import { ui } from '../../../i18n/locale.js';
 import { useUiLocale } from '../../../i18n/useUiLocale.js';
 import { BLEND_MODES, readObjectStyle, writeObjectStylePatch, normalizeFillLayer } from '../../../canvas/styling/objectStyleModel.js';
 
 export default function FillLayersSection({ items, targetIds, onPatchStyle }) {
   useUiLocale();
+  const fieldId = useId();
   if (!targetIds.length) return null;
   const primaryItem = items[targetIds[0]];
   const style = readObjectStyle(primaryItem);
@@ -87,6 +89,8 @@ export default function FillLayersSection({ items, targetIds, onPatchStyle }) {
                 {layer.visible === false ? '○' : '●'}
               </button>
               <select
+                id={`${fieldId}-fill-${idx}-type`}
+                name={`style-fill-${idx}-type`}
                 aria-label={ui('채우기 유형')}
                 value={layer.type}
                 onChange={(e) => {
@@ -116,6 +120,8 @@ export default function FillLayersSection({ items, targetIds, onPatchStyle }) {
                 <label className="inspector-mini-field">
                   <span>{ui('색상')}</span>
                   <input
+                    id={`${fieldId}-fill-${idx}-color`}
+                    name={`style-fill-${idx}-color`}
                     type="color"
                     aria-label={ui('레이어 색상')}
                     value={layer.color}
@@ -125,6 +131,8 @@ export default function FillLayersSection({ items, targetIds, onPatchStyle }) {
                 <label className="inspector-mini-field">
                   <span>{ui('Hex')}</span>
                   <input
+                    id={`${fieldId}-fill-${idx}-hex`}
+                    name={`style-fill-${idx}-hex`}
                     type="text"
                     aria-label={ui('레이어 Hex')}
                     value={layer.color}
@@ -142,6 +150,8 @@ export default function FillLayersSection({ items, targetIds, onPatchStyle }) {
                   <div className="inspector-mini-field">
                     <span>{ui('각도')} ({layer.angle}°)</span>
                     <input
+                      id={`${fieldId}-fill-${idx}-angle`}
+                      name={`style-fill-${idx}-angle`}
                       type="range"
                       min="0"
                       max="360"
@@ -157,6 +167,8 @@ export default function FillLayersSection({ items, targetIds, onPatchStyle }) {
                       <span>{ui('색상 점')} {sIdx + 1} ({stop.pos}%)</span>
                       <div style={{ display: 'flex', gap: 4 }}>
                         <input
+                          id={`${fieldId}-fill-${idx}-stop-${sIdx}-color`}
+                          name={`style-fill-${idx}-stop-${sIdx}-color`}
                           type="color"
                           aria-label={ui('그라디언트 색상')}
                           value={stop.color}
@@ -166,6 +178,8 @@ export default function FillLayersSection({ items, targetIds, onPatchStyle }) {
                           }}
                         />
                         <input
+                          id={`${fieldId}-fill-${idx}-stop-${sIdx}-pos`}
+                          name={`style-fill-${idx}-stop-${sIdx}-pos`}
                           type="number"
                           min="0"
                           max="100"
@@ -188,6 +202,8 @@ export default function FillLayersSection({ items, targetIds, onPatchStyle }) {
                 <label className="inspector-mini-field" style={{ gridColumn: '1 / -1' }}>
                   <span>{ui('이미지 · GIF 주소')}</span>
                   <input
+                    id={`${fieldId}-fill-${idx}-image-url`}
+                    name={`style-fill-${idx}-image-url`}
                     type="text"
                     aria-label={ui('이미지 채우기 URL')}
                     placeholder="https://... or /api/..."
@@ -198,6 +214,8 @@ export default function FillLayersSection({ items, targetIds, onPatchStyle }) {
                 <label className="inspector-mini-field" style={{ gridColumn: '1 / -1' }}>
                   <span>{ui('채우기 방식')}</span>
                   <select
+                    id={`${fieldId}-fill-${idx}-image-size`}
+                    name={`style-fill-${idx}-image-size`}
                     aria-label={ui('이미지 채우기 방식')}
                     value={layer.size || 'cover'}
                     onChange={(e) => updateLayer(idx, { size: e.target.value })}
@@ -214,6 +232,8 @@ export default function FillLayersSection({ items, targetIds, onPatchStyle }) {
               <label className="inspector-mini-field">
                 <span>{ui('투명도')} ({Math.round(layer.opacity * 100)}%)</span>
                 <input
+                  id={`${fieldId}-fill-${idx}-opacity`}
+                  name={`style-fill-${idx}-opacity`}
                   type="range"
                   min="0"
                   max="100"
@@ -225,6 +245,8 @@ export default function FillLayersSection({ items, targetIds, onPatchStyle }) {
               <label className="inspector-mini-field">
                 <span>{ui('블렌드')}</span>
                 <select
+                  id={`${fieldId}-fill-${idx}-blend`}
+                  name={`style-fill-${idx}-blend`}
                   aria-label={ui('레이어 블렌드 모드')}
                   value={layer.blendMode}
                   onChange={(e) => updateLayer(idx, { blendMode: e.target.value })}

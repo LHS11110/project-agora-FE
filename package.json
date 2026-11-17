@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "build:wasm": "sh scripts/build-wgpu.sh",
+    "preview": "vite preview",
+    "prebuild": "node scripts/wgpu-artifacts.mjs"
   },
   "dependencies": {
     "@automerge/automerge": "^3.5.0",
@@ -19,7 +21,6 @@
     "papaparse": "5.7.0",
     "pdfjs-dist": "6.4.299",
     "perfect-freehand": "1.2.3",
-    "pixi.js": "^8.21.0",
     "qrcode": "^1.5.4",
     "rbush": "4.0.1",
     "react": "^18.3.1",

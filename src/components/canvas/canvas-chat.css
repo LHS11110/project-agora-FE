@@ -31,8 +31,20 @@
   user-select: none;
 }
 
+.canvas-chat-panel .message-list {
+  padding: 8px 6px 10px;
+}
+
 .canvas-chat-panel .chat-entry {
+  box-sizing: border-box;
+  padding: 8px 10px;
+  margin: 2px 0;
   border-radius: 10px;
+}
+
+.canvas-chat-panel .chat-entry-content {
+  min-width: 0;
+  max-width: min(78%, calc(100% - 32px), 300px);
 }
 
 .canvas-chat-panel .chat-entry.own .chat-message-bubble {

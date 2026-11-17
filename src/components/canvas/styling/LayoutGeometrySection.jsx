@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { ui } from '../../../i18n/locale.js';
 import { useUiLocale } from '../../../i18n/useUiLocale.js';
 import { BLEND_MODES, readObjectStyle, writeObjectStylePatch } from '../../../canvas/styling/objectStyleModel.js';
@@ -11,6 +12,7 @@ export default function LayoutGeometrySection({
   onApplyAutoLayout,
 }) {
   useUiLocale();
+  const fieldId = useId();
   if (!targetIds.length) return null;
   const primaryItem = items[targetIds[0]];
   const style = readObjectStyle(primaryItem);
@@ -47,6 +49,8 @@ export default function LayoutGeometrySection({
         <span>{opacityPct}%</span>
       </div>
       <input
+        id={`${fieldId}-opacity`}
+        name="style-object-opacity"
         type="range"
         min="0"
         max="100"
@@ -63,6 +67,8 @@ export default function LayoutGeometrySection({
         <div className="inspector-mini-field" style={{ marginTop: 6 }}>
           <span>{ui('블렌드 모드')}</span>
           <select
+            id={`${fieldId}-blend-mode`}
+            name="style-blend-mode"
             aria-label={ui('객체 블렌드 모드')}
             value={style.blendMode}
             onChange={(e) => onPatchStyle(targetIds, (item) => writeObjectStylePatch(item, (cur) => ({ ...cur, blendMode: e.target.value })))}
@@ -95,6 +101,8 @@ export default function LayoutGeometrySection({
                 <label className="inspector-mini-field" style={{ gridColumn: '1 / -1' }}>
                   <span>{ui('전체 둥글기')}</span>
                   <input
+                    id={`${fieldId}-corner-all`}
+                    name="style-corner-all"
                     type="number"
                     min="0"
                     max="240"
@@ -108,6 +116,8 @@ export default function LayoutGeometrySection({
                 </label>
               </div>
               <input
+                id={`${fieldId}-corner-slider`}
+                name="style-corner-slider"
                 type="range"
                 min="0"
                 max="120"
@@ -126,6 +136,8 @@ export default function LayoutGeometrySection({
                 <label key={key} className="inspector-mini-field">
                   <span>{label}</span>
                   <input
+                    id={`${fieldId}-corner-${key}`}
+                    name={`style-corner-${key}`}
                     type="number"
                     min="0"
                     max="240"
@@ -167,6 +179,8 @@ export default function LayoutGeometrySection({
                 <label className="inspector-mini-field">
                   <span>{ui('방향')}</span>
                   <select
+                    id={`${fieldId}-autolayout-direction`}
+                    name="style-autolayout-direction"
                     aria-label={ui('오토 레이아웃 방향')}
                     value={al.direction}
                     onChange={(e) => updateAutoLayout({ direction: e.target.value })}
@@ -179,6 +193,8 @@ export default function LayoutGeometrySection({
                 <label className="inspector-mini-field">
                   <span>{ui('요소 간격 (Gap)')}</span>
                   <input
+                    id={`${fieldId}-autolayout-gap`}
+                    name="style-autolayout-gap"
                     type="number"
                     min="0"
                     max="120"
@@ -198,6 +214,8 @@ export default function LayoutGeometrySection({
                   <label key={field} className="inspector-mini-field">
                     <span>{label}</span>
                     <input
+                      id={`${fieldId}-autolayout-${field}`}
+                      name={`style-autolayout-${field}`}
                       type="number"
                       min="0"
                       max="120"
@@ -212,6 +230,8 @@ export default function LayoutGeometrySection({
                 <label className="inspector-mini-field">
                   <span>{ui('교차 정렬')}</span>
                   <select
+                    id={`${fieldId}-autolayout-align`}
+                    name="style-autolayout-align"
                     aria-label={ui('오토 레이아웃 교차 정렬')}
                     value={al.alignItems}
                     onChange={(e) => updateAutoLayout({ alignItems: e.target.value })}
@@ -225,6 +245,8 @@ export default function LayoutGeometrySection({
                 <label className="inspector-mini-field">
                   <span>{ui('주축 분배')}</span>
                   <select
+                    id={`${fieldId}-autolayout-justify`}
+                    name="style-autolayout-justify"
                     aria-label={ui('오토 레이아웃 분배')}
                     value={al.justifyContent}
                     onChange={(e) => updateAutoLayout({ justifyContent: e.target.value })}
@@ -240,6 +262,8 @@ export default function LayoutGeometrySection({
                 <label className="inspector-mini-field">
                   <span>{ui('너비 크기')}</span>
                   <select
+                    id={`${fieldId}-autolayout-width-mode`}
+                    name="style-autolayout-width-mode"
                     aria-label={ui('오토 레이아웃 너비 동작')}
                     value={al.widthMode}
                     onChange={(e) => updateAutoLayout({ widthMode: e.target.value })}
@@ -252,6 +276,8 @@ export default function LayoutGeometrySection({
                 <label className="inspector-mini-field">
                   <span>{ui('높이 크기')}</span>
                   <select
+                    id={`${fieldId}-autolayout-height-mode`}
+                    name="style-autolayout-height-mode"
                     aria-label={ui('오토 레이아웃 높이 동작')}
                     value={al.heightMode}
                     onChange={(e) => updateAutoLayout({ heightMode: e.target.value })}

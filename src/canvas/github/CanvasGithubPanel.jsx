@@ -2,7 +2,7 @@ import {splitCanvas} from './canvasRepository.js';
 import {stable} from '../asCode/manifest.js';
 import CanvasRepositoryPreview from './CanvasRepositoryPreview.jsx';
 import CanvasCommitGraph from './CanvasCommitGraph.jsx';
-import {useEffect,useMemo,useRef,useState} from 'react';
+import {useEffect,useId,useMemo,useRef,useState} from 'react';
 import {ui} from '../../i18n/locale.js';
 import {canvasSnapshot,githubCanvasClient,normalizeRepositoryIdentity} from './githubCanvas.js';
 import './canvas-github.css';
@@ -14,6 +14,7 @@ import {syncBranchCanvas} from './canvasBranchSync.js';
 import {useAuth} from '../../state/AuthContext.jsx';
 import {api as request} from '../../api/client.js';
 export default function CanvasGithubPanel({api,canvasId,onLoad,active=true}){
+ const fieldId=useId();
  const {token:agoraToken,user}=useAuth();
  const [config,setConfig]=useState(()=>{try{return {...{owner:'',repo:'',branch:'',path:`canvases/${canvasId}.canvas.json`},...JSON.parse(localStorage.getItem(`frelog.github.canvas.${canvasId}`)||'{}')};}catch{return {owner:'',repo:'',branch:'',path:`canvases/${canvasId}.canvas.json`};}});
  const [tab,setTab]=useState('history');
@@ -104,15 +105,15 @@ export default function CanvasGithubPanel({api,canvasId,onLoad,active=true}){
   <section id="version-panel-connection" role="tabpanel" aria-labelledby="version-tab-connection" hidden={tab!=='connection'}>
    <fieldset disabled={busy}>
     <div className="canvas-github-fields">
-     {[['owner','GitHub 소유자'],['repo','저장소 이름 또는 URL']].map(([field,label])=><label key={field}>{ui(label)}<input value={config[field]} disabled={!allowed('manage')} onChange={e=>update(field,e.target.value)} placeholder={field==='owner'?'octocat':ui('Hello-World 또는 저장소 URL')} onBlur={()=>{try{const normalized=normalizeRepositoryIdentity(config.owner,config.repo);setConfig(c=>({...c,...normalized}));}catch(e){setError(e.message);}}} autoComplete="off" spellCheck={false}/></label>)}
-     <label className="canvas-github-token">{ui('GitHub 토큰')}<input type="password" autoComplete="off" value={token} onChange={e=>{tokenEdited.current=true;setTokenExpiry(null);setTokenNotice('');setToken(e.target.value);setConnection(null);setPrepared(null);setHistory([]);}}/></label>
+     {[['owner','GitHub 소유자'],['repo','저장소 이름 또는 URL']].map(([field,label])=><label key={field}>{ui(label)}<input id={`${fieldId}-${field}`} name={`github-${field}`} value={config[field]} disabled={!allowed('manage')} onChange={e=>update(field,e.target.value)} placeholder={field==='owner'?'octocat':ui('Hello-World 또는 저장소 URL')} onBlur={()=>{try{const normalized=normalizeRepositoryIdentity(config.owner,config.repo);setConfig(c=>({...c,...normalized}));}catch(e){setError(e.message);}}} autoComplete="off" spellCheck={false}/></label>)}
+     <label className="canvas-github-token">{ui('GitHub 토큰')}<input id={`${fieldId}-token`} name="github-token" type="password" autoComplete="off" value={token} onChange={e=>{tokenEdited.current=true;setTokenExpiry(null);setTokenNotice('');setToken(e.target.value);setConnection(null);setPrepared(null);setHistory([]);}}/></label>
     </div>
     <small>{ui('예: github.com/octocat/Hello-World → GitHub 소유자 octocat · 저장소 Hello-World')}</small>
     <small>{ui('대상 저장소의 Contents 읽기·쓰기 권한이 있는 Fine-grained 토큰을 사용하세요. 토큰은 이 출처의 브라우저 저장소에 24시간 암호화하여 보관합니다.')}</small>
     {!allowed('manage')&&<p>{ui('저장소 설정은 관리자만 변경할 수 있습니다. 연결된 저장소를 불러와 작업하세요.')}</p>}
     {tokenNotice&&<small>{ui(tokenNotice)}{tokenExpiry?' · '+new Date(tokenExpiry).toLocaleString():''}</small>}
     <button type="button" onClick={forgetToken}>{ui('저장된 GitHub 토큰 삭제')}</button>
-    <details className="canvas-github-advanced"><summary>{ui('고급 연결 설정')}</summary><div className="canvas-github-fields">{[['branch','브랜치'],['path','파일 경로']].map(([field,label])=><label key={field}>{ui(label)}<input value={config[field]} disabled={!allowed('manage')} onChange={e=>update(field,e.target.value)} placeholder={field==='branch'?ui('기본 브랜치'):undefined}/></label>)}</div></details>
+    <details className="canvas-github-advanced"><summary>{ui('고급 연결 설정')}</summary><div className="canvas-github-fields">{[['branch','브랜치'],['path','파일 경로']].map(([field,label])=><label key={field}>{ui(label)}<input id={`${fieldId}-${field}`} name={`github-${field}`} value={config[field]} disabled={!allowed('manage')} onChange={e=>update(field,e.target.value)} placeholder={field==='branch'?ui('기본 브랜치'):undefined}/></label>)}</div></details>
     <button type="button" className="canvas-github-save" onClick={connect} aria-busy={busy}>{ui(busy?'GitHub 요청 중…':allowed('manage')?'저장소 연결 · 새로고침':'연결된 저장소 불러오기')}</button>
    </fieldset>
    {allowed('manage')&&<GithubGroupPermissions context={context} busy={busy} onSave={savePolicy}/>}
@@ -122,14 +123,14 @@ export default function CanvasGithubPanel({api,canvasId,onLoad,active=true}){
     <section className="canvas-version-save-card"><strong>{ui('현재 캔버스 저장')}</strong><p>{ui('현재 보이는 객체를 JSON 스냅샷으로 저장합니다. 이미지·PDF 원본, VM 파일과 계정 설정은 포함하지 않습니다.')}</p>
      <fieldset disabled={busy}><button disabled={!allowed('commit')} onClick={prepare}>{ui('현재 캔버스 검토')}</button>
       {prepared&&<CanvasRepositoryPreview source={prepared} previous={connection.file?.source} previousSplit={connection.file?.split} path={connection.target.path}/>}
-      <label>{ui('커밋 메시지')}<input value={message} onChange={e=>setMessage(e.target.value)} maxLength={500}/></label>
+      <label>{ui('커밋 메시지')}<input id={`${fieldId}-commit-message`} name="github-commit-message" value={message} onChange={e=>setMessage(e.target.value)} maxLength={500}/></label>
       <button onClick={saveLocal} disabled={!allowed('commit')||!prepared||!message.trim()}>{ui('로컬 커밋 저장')}</button>
       <button className="canvas-github-save" onClick={save} disabled={!allowed('commit')||!allowed('push')||!prepared||!message.trim()}>{ui('검토한 캔버스를 GitHub에 커밋')}</button>
      </fieldset>
      {drafts.length>0&&<div className="canvas-github-drafts"><strong>{ui('푸시 대기 중인 로컬 커밋')}</strong>{drafts.map(draft=><div key={draft.id}><span>{draft.message}</span><button disabled={busy||!allowed('push')} onClick={()=>pushDraft(draft)}>{ui('푸시')}</button><button onClick={()=>discardDraft(draft.id)}>{ui('로컬 커밋 삭제')}</button></div>)}</div>}
     </section>
     <section className="canvas-github-history"><div className="canvas-commit-graph-heading"><strong>{ui('저장 이력')}</strong><button disabled={busy||connection.empty} onClick={refresh}>{ui('새로고침')}</button></div><small>{ui('공통 조상부터 커밋 수에 따라 아래에서 위로 배치합니다. 브랜치마다 필요한 행만 사용합니다.')}</small><small>{ui(historyPath?'선택한 파일의 변경 이력입니다. 복구 시에는 해당 커밋의 전체 캔버스를 적용합니다.':'현재 브랜치의 이력만 표시합니다. 이미 병합된 커밋은 포함됩니다.')}</small>
-     <label>{ui('변경 이력 범위')}<select aria-label={ui('변경 이력 범위')} value={historyPath} disabled={busy} onChange={e=>filterHistory(e.target.value)}><option value="">{ui('전체 파일')}</option>{historyFiles.map(path=><option key={path} value={path}>{path.endsWith('/permissions.json')?ui('객체 그룹 권한'):path.includes('/objects/')?path.split('/').at(-1):ui('캔버스 구성')}</option>)}</select></label>
+     <label>{ui('변경 이력 범위')}<select id={`${fieldId}-history-path`} name="github-history-path" aria-label={ui('변경 이력 범위')} value={historyPath} disabled={busy} onChange={e=>filterHistory(e.target.value)}><option value="">{ui('전체 파일')}</option>{historyFiles.map(path=><option key={path} value={path}>{path.endsWith('/permissions.json')?ui('객체 그룹 권한'):path.includes('/objects/')?path.split('/').at(-1):ui('캔버스 구성')}</option>)}</select></label>
      {!history.length&&<p className="canvas-version-history-empty">{ui(historyPath?'이 파일의 변경 이력이 없습니다.':'저장된 버전이 없습니다. 첫 캔버스 버전을 커밋해보세요.')}</p>}
      <CanvasCommitGraph entries={history} refs={graphRefs} branch={connection.target.branch} busy={busy} canRestore={allowed('restore')} onRestore={restore} onInspect={load}/>
      {more&&<button disabled={busy} onClick={next}>{ui('이전 커밋 더 보기')}</button>}

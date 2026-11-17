@@ -16,3 +16,6 @@ npm-debug.log*
 **/service-account*.json
 **/application_default_credentials.json
 **/.ssh/
+
+# Reuse checked-in WASM; exclude local Rust compiler caches
+rust/**/target

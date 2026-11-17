@@ -1,3 +1,4 @@
+import RawInkQueue from './RawInkQueue.js';
 import { ui } from '../i18n/locale.js';
 import { cursorDeadline, cursorIsDue, CURSOR_INTERVAL_MS } from './cursorSchedule.js';
 import { useEffect, useRef } from 'react';
@@ -31,6 +32,14 @@ export function useCanvasStageInteractions(options) {
     drawingRef, drawingSessionRef, draftRef, vectorDraftRef,
   } = options;
   const creationDragRef = useRef(null);
+  const rawInk=useRef(null),latestInkMove=useRef(null),rawSession=useRef(null);
+  if(!rawInk.current)rawInk.current=new RawInkQueue(event=>latestInkMove.current?.(event));
+  useEffect(()=>{
+    const stage=boardRef.current;if(!stage||!('onpointerrawupdate' in stage))return;
+    const receive=event=>{const session=drawingSessionRef.current;if(!drawingRef.current||!session||session.pointerId!==event.pointerId)return;rawSession.current=session;rawInk.current.push(event);};
+    stage.addEventListener('pointerrawupdate',receive,{passive:true});
+    return()=>{stage.removeEventListener('pointerrawupdate',receive);rawInk.current.clear();rawSession.current=null;};
+  },[boardRef,boardRef.current,drawingRef,drawingSessionRef]);
 
   const { enqueue: enqueueStrokeChange, flush: flushStrokeChanges } = useCanvasStrokeSaveBatch({
     sendBatch: sendStrokeFrameChanges, pendingItemChangesRef, flushRef: strokeSaveFlushRef,
@@ -490,6 +499,7 @@ export function useCanvasStageInteractions(options) {
     }
   };
   const moveDrawing = (event) => {
+    if(event.type!=='pointerrawupdate'&&drawingRef.current&&rawSession.current===drawingSessionRef.current)return;
     if (drawingRef.current && drawingSessionRef.current?.pointerId !== event.pointerId) return;
     updateEraserCursor(event);
     if (creationDragRef.current) {
@@ -535,7 +545,8 @@ export function useCanvasStageInteractions(options) {
     if (!drawingRef.current) return;
     const session = drawingSessionRef.current;
     if (!session || session.pointerId !== event.pointerId) return;
-    const bounds = boardRef.current.getBoundingClientRect();
+    const bounds = getStageBounds();
+    if(!bounds)return;
     const added = appendInkInput(event, draftRef.current, {
       toPoint: sample => canvasPointAtPointer(sample, bounds, camera, boardSize),
       size: boardSize, scale: camera.scale, brush: session.brush, maxPoints: MAX_REALTIME_STROKE_POINTS,
@@ -554,7 +565,9 @@ export function useCanvasStageInteractions(options) {
       session.lastSentAt = now;
     }
   };
+  latestInkMove.current=moveDrawing;
   const stopDrawing = (event) => {
+    rawInk.current.flush();rawSession.current=null;
     if (creationDragRef.current && creationDragRef.current.pointerId === event.pointerId) {
       const drag = creationDragRef.current;
       creationDragRef.current = null;

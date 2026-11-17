@@ -20,11 +20,20 @@ test('panning, offscreen origins and numeric extremes have bounded finite work',
   const result=axisTickLayout({x:-1000,y:-200,scale},view);
   for(const ticks of [result.x,result.y]){assert.ok(ticks.length<=MAX_AXIS_TICKS);assert.ok(ticks.every(t=>Number.isFinite(t.position)&&Number.isFinite(t.value)));}
  }
- assert.equal(axisTickLayout({x:0,y:2000,scale:1},view).x.length,0);
- assert.equal(axisTickLayout({x:2000,y:0,scale:1},view).y.length,0);
+ assert.ok(axisTickLayout({x:0,y:2000,scale:1},view).x.length>0);
+ assert.ok(axisTickLayout({x:2000,y:0,scale:1},view).y.length>0);
  assert.equal(axisTickLayout({x:0,y:0,scale:0},view).step,null);
 });
 test('coordinate labels preserve fractional units without floating point noise',()=>{
  assert.equal(formatAxisValue(.1+.2),'0.3');assert.equal(formatAxisValue(-0),'0');
  assert.equal(formatAxisValue(.00002),'0.00002');assert.equal(formatAxisValue(Infinity),'');
+});
+
+test('offscreen axes pin to each edge without changing coordinate values',()=>{
+ for(const [x,y,edgeX,edgeY] of [[-3000,-3000,8,8],[3000,3000,1432,892]]){
+  const c={x,y,scale:1},layout=axisTickLayout(c,view);assert.equal(layout.displayX,edgeX);assert.equal(layout.displayY,edgeY);
+  assert.ok(layout.x.length&&layout.y.length);
+  for(const t of layout.x)assert.ok(Math.abs(t.position-layout.originX-t.value)<1e-8);
+  for(const t of layout.y)assert.ok(Math.abs(t.position-layout.originY+t.value)<1e-8);
+ }
 });

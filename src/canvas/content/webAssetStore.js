@@ -1,3 +1,4 @@
+import {displayedValue} from '../values/valueData.js';
 import {contentMode,contentSource} from './contentPresentation.js';
 export const webLanguage=item=>['text','code'].includes(item?.kind)&&contentMode(item)==='code'?item.language:null;
 export function createWebAssetStore(){
@@ -8,13 +9,14 @@ export function createWebAssetStore(){
  return {
   subscribe(id,fn){add(listeners,id,fn);return()=>remove(listeners,id,fn);},
   get(id){if(cache.has(id))return cache.get(id);if(webLanguage(items[id])!=='html')return empty;
-   const css=[],js=[],seen=new Set();
+   const css=[],js=[],values=Object.create(null),seen=new Set();
    for(const key of [...(incoming.get(id)||[])].sort()){
     const edge=connections.get(key),source=edge&&items[edge.from],language=webLanguage(source);
     if(!source||seen.has(edge.from))continue;seen.add(edge.from);
+    if(source.kind==='value'&&source.title?.trim()){const name=source.title.trim();if(!Object.hasOwn(values,name))values[name]=displayedValue(source);}
     if(language==='css')css.push(contentSource(source));else if(['javascript','js'].includes(language))js.push(contentSource(source));
    }
-   const value={css,js};cache.set(id,value);return value;
+   const value={css,js,...(Object.keys(values).length?{values}:{})};cache.set(id,value);return value;
   },
   update(next,ids){const changed=ids||[...new Set([...Object.keys(items),...Object.keys(next)])],affected=new Set();
    for(const id of changed){

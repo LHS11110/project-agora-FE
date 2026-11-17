@@ -2,7 +2,7 @@ import { resolveBlueprint, resolveCode } from './blueprintGraph.js';
 import { contentSource } from '../content/contentPresentation.js';
 import { runBlueprint } from './runBlueprint.js';
 
-export function createBlueprintStore({ getItems, execute, saveOutput, saveState }) {
+export function createBlueprintStore({ getItems, execute, saveOutput, saveState, saveValue }) {
   const states = new Map(), listeners = new Map();
   let active = null, disposed = false, activity = null;
   const activityListeners = new Set();
@@ -65,6 +65,7 @@ export function createBlueprintStore({ getItems, execute, saveOutput, saveState 
           // connected to this source receive the snapshot's result.
           const current = getItems();
           if (!resolve(current, id).find(step => step.codeId === entry.codeId)?.outputIds.includes(outputId)) return;
+          if(entry.valuePatch){if(!saveValue?.(outputId,entry.valuePatch))throw Error('값 객체를 수정할 권한이 없거나 저장하지 못했습니다.');return;}
           const previous = output.get(outputId) || [];
           const existing = previous.find(record => record.runId === runId && record.codeId === entry.codeId);
           const record = {runId, codeId:entry.codeId, createdAt:existing?.createdAt??Date.now(), ...entry.result};

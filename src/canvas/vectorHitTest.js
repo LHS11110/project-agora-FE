@@ -24,6 +24,19 @@ function unrotate(point, cx, cy, degrees) {
   return {x:cx+dx*Math.cos(angle)-dy*Math.sin(angle), y:cy+dx*Math.sin(angle)+dy*Math.cos(angle)};
 }
 
+// When connecting frames, their border stays reachable even if content overlaps it.
+export function hitTestFrameBorder(index, point, world, scale = 1) {
+  const pad=10/Math.max(.01,scale), pixel={x:point.x*world.width,y:point.y*world.height};
+  const candidates=index.query({minX:point.x-pad/world.width,minY:point.y-pad/world.height,maxX:point.x+pad/world.width,maxY:point.y+pad/world.height});
+  return candidates.filter(({item})=>{
+    if(item?.kind!=='frame')return false;
+    const x=(Number(item.x)||0)*world.width,y=(Number(item.y)||0)*world.height,w=(Number(item.width)||0)*world.width,h=(Number(item.height)||0)*world.height;
+    if(w<=0||h<=0)return false;
+    const p=unrotate(pixel,x+w/2,y+h/2,item.rotation),dx=Math.abs(p.x-(x+w/2)),dy=Math.abs(p.y-(y+h/2));
+    return dx<=w/2+pad&&dy<=h/2+pad&&(Math.abs(dx-w/2)<=pad||Math.abs(dy-h/2)<=pad);
+  }).sort((a,b)=>itemDepth(b.item)-itemDepth(a.item))[0]||null;
+}
+
 // Query only nearby bounds, then test the actual hit area. Shadows are not clickable.
 export function hitTestVector(index, point, world, scale = 1, order = new Map(), representationScale = scale) {
   const pad = 10 / Math.max(.01, scale);

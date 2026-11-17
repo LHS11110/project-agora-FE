@@ -3,6 +3,7 @@ function legacyCopy(text) {
   const selection = window.getSelection();
   const ranges = selection ? Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index).cloneRange()) : [];
   const input = document.createElement('textarea');
+  input.name = 'clipboard-copy';
   input.value = text; input.readOnly = true; input.tabIndex = -1;
   input.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
   document.body.append(input);

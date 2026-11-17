@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useId,useRef,useState} from 'react';
 import {useAuth} from '../../state/AuthContext.jsx';
 import {useNavigate} from '../../routing.jsx';
 import {api} from '../../api/client.js';
@@ -8,6 +8,7 @@ import Icon from '../Icon.jsx';
 import './passkeys.css';
 
 export default function PasskeySettings(){
+ const fieldId=useId();
  const {token,logout}=useAuth(),navigate=useNavigate();
  const [keys,setKeys]=useState(null),[name,setName]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const pending=useRef(null),mounted=useRef(false);
@@ -21,7 +22,7 @@ export default function PasskeySettings(){
   {notice&&<p className="inline-notice success" role="status">{ui(notice)}</p>}
   {keys?.length>0?<ul className="passkey-list">{keys.map(key=><li key={key.id}><span className="passkey-device" aria-hidden="true"><Icon name="lock" size={16}/></span><div><strong>{key.name==='패스키'?ui('패스키'):key.name}</strong><small>{ui('등록일')}: {new Date(key.createdAt+'Z').toLocaleDateString()}{key.lastUsedAt&&<> · {ui('최근 사용')}: {new Date(key.lastUsedAt+'Z').toLocaleDateString()}</>}</small></div><button type="button" className="passkey-remove" disabled={busy} aria-label={`${key.name} ${ui('삭제')}`} onClick={()=>act(async()=>{await api('/api/auth/passkeys/'+encodeURIComponent(key.id),{method:'DELETE',token});setNotice('패스키를 삭제했습니다.');})}>{ui('삭제')}</button></li>)}</ul>:keys&&<p className="passkey-empty">{ui('등록된 패스키가 없습니다.')}</p>}
   <form className="passkey-register" onSubmit={e=>{e.preventDefault();act(async signal=>{await registerPasskey(token,name.trim(),signal);if(!signal.aborted&&mounted.current){setName('');setNotice('패스키를 등록했습니다. 다음 로그인부터 사용할 수 있습니다.');}});}}>
-   <label className="form-field"><span>{ui('패스키 이름')} <small>{ui('선택 사항')}</small></span><input className="plain-input" aria-label={ui('패스키 이름')} value={name} onChange={e=>setName(e.target.value)} maxLength={80} placeholder={ui('예: 개인 노트북')} disabled={busy}/></label>
+   <label className="form-field"><span>{ui('패스키 이름')} <small>{ui('선택 사항')}</small></span><input id={`${fieldId}-name`} name="passkey-name" className="plain-input" aria-label={ui('패스키 이름')} value={name} onChange={e=>setName(e.target.value)} maxLength={80} placeholder={ui('예: 개인 노트북')} disabled={busy}/></label>
    <button className="button button-dark" disabled={busy||!keys||keys.length>=10||!passkeysSupported()} type="submit"><Icon name="plus" size={15}/>{busy?ui('기기에서 인증해주세요…'):ui('패스키 추가')}</button>
   </form>
  </section>;

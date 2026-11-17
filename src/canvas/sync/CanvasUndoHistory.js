@@ -9,7 +9,7 @@ const colors='__undoColors';
 const snapshot=item=>item?.kind==='text'?{...item,[colors]:textColorRanges(item)}:item;
 const clean=item=>{const result={...item};delete result[colors];return result;};
 const fieldsToCheck=[...CANVAS_ITEM_FIELDS].filter(k=>!ignored.has(k));
-const same = (a,b) => a === b || stable(a) === stable(b);
+const same = (a, b) => a === b ? true : (a == null || b == null || (typeof a !== 'object' && typeof b !== 'object' && !Number.isNaN(a) && !Number.isNaN(b))) ? false : stable(a) === stable(b);
 
 // Sparse local history: retain touched objects, never entire canvas snapshots.
 export class CanvasUndoHistory {

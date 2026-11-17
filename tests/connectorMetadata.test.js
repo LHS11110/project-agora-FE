@@ -11,8 +11,8 @@ test('chat/comment metadata at the origin never bends an otherwise clear connect
  assert.deepEqual(path(metadata),path(items));
  const updated={...metadata,general:{...metadata.general,data:[{text:'new message'}]}};assert.deepEqual(path(updated),path(items));
 });
-test('real visible objects at the origin still obstruct connectors',()=>{
- const items=fixture();assert.notDeepEqual(path({...items,box:{kind:'shape',shapeType:'rectangle',x:0,y:0,width:.2,height:.12}}),path(items));
+test('visible objects do not reroute or block a connection',()=>{
+ const items=fixture();assert.deepEqual(path({...items,box:{kind:'shape',shapeType:'rectangle',x:0,y:0,width:.2,height:.12}}),path(items));
 });
 test('nonvisual records and tombstones are excluded from the spatial index and cannot be endpoints',()=>{
  const items={...fixture(),general:{type:'chat_room',kind:'shape'},unknown:{kind:'internal-metadata'},deleted:{kind:'host-tombstone'}};

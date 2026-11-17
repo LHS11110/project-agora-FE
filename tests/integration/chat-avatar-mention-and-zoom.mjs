@@ -198,7 +198,38 @@ try {
     assert.equal(highlightStyle.animationName, 'mention-target-highlight', `mention highlight must animate cleanly (${JSON.stringify(highlightStyle)})`);
     assert.equal(highlightStyle.outlineStyle, 'none', 'mention highlight must not draw harsh static outline');
     assert.ok(parseFloat(highlightStyle.animationDuration) >= 2.5, 'mention fade/pulse animation should span ~3s lifecycle');
+
+    const assertHighlightContainment = async (locator, label) => {
+      const box = await locator.evaluate(el => {
+        const entry = el.getBoundingClientRect();
+        const avatar = el.querySelector('.chat-entry-avatar').getBoundingClientRect();
+        const content = el.querySelector('.chat-entry-content').getBoundingClientRect();
+        return {
+          leftPad: avatar.left - entry.left,
+          rightPad: entry.right - avatar.right,
+          topPad: avatar.top - entry.top,
+          bottomAvatarPad: entry.bottom - avatar.bottom,
+          contentLeftPad: content.left - entry.left,
+          contentRightPad: entry.right - content.right,
+          contentBottomPad: entry.bottom - content.bottom,
+        };
+      });
+      for (const [edge, value] of Object.entries(box)) {
+        assert.ok(value >= 6, `${label} ${edge} must keep >= 6px inside highlight box (got ${value}, ${JSON.stringify(box)})`);
+      }
+    };
+    await assertHighlightContainment(target, 'other mention highlight');
+
     await target.waitFor({ state: 'detached', timeout: 5000 });
+
+    notes = [{ mention_id: 'm-own', unread: true, sequence: 11, text: 'My own reply message\nwith second line', sender: 'Alice', tag_number: 1, created_at: Date.now() }];
+    for (const peer of peers) peer.send(JSON.stringify({ type: 'mentions_changed' }));
+    await page.locator('.mention-notification-link').waitFor();
+    await page.locator('.mention-notification-link').click();
+    const ownTarget = page.locator('.chat-entry.own.mention-target');
+    await ownTarget.waitFor();
+    await assertHighlightContainment(ownTarget, 'own mention highlight');
+    await ownTarget.waitFor({ state: 'detached', timeout: 5000 });
 
     // Object comment mention highlight animation check on desktop.
     if (!viewport.mobile) {

@@ -1,3 +1,4 @@
+import RasterPaintIndex from './RasterPaintIndex.js';
 import {isRasterCode} from './codePreviewMetrics.js';
 import { ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
@@ -14,7 +15,7 @@ import { rasterViewportRegion } from './rasterViewportRegion.js';
 import { hasHardwareWebGL } from './gpuCapability.js';
 import { cachedCameraProjection } from './cachedCameraProjection.js';
 import { useLayoutEffect, useRef } from 'react';
-import { Application, Sprite } from 'pixi.js';
+import { createWgpuRenderer, WgpuSceneBatcher } from './wgpu/wgpuEngine.js';
 import { createInkStrokeRenderer, hasStrokeItems } from './inkStrokeRenderer.js';
 import { CONNECTOR_METRICS_EVENT } from './connectors/objectMetrics.js';
 import { acquireGpuSlot, rasterDescriptor, rasterizeObject, sameRasterInput } from './rasterObjectCache.js';
@@ -35,13 +36,14 @@ export default function DepthVectorLayer(props) {
     const element = host.current, canvas = document.createElement('canvas');
     element.appendChild(canvas);
     canvas.style.display='none';
-    const viewportContext=canvas.getContext('2d',{alpha:true,desynchronized:true});
+    const viewportContext=canvas.getContext('2d',{alpha:true,desynchronized:false});
     const buffer=document.createElement('canvas'),bufferContext=buffer.getContext('2d',{alpha:true,desynchronized:true});
     const margin=256;
     buffer.className='vector-composite-surface';element.insertBefore(buffer,canvas);
     let compositor=null,bufferVersion=0,surfaceChanged=false,worldPaintBounds=null,bufferCamera=null,sceneInputs=null,lastCamera=null,cameraIdleTimer=null,budgetIdleTimer=null,refreshCamera=false,cameraActive=false,viewportMetrics=null,textAppearanceCache=null,inkHasContent=false,settledDesiredRatio=null,settledQuality=null;
     const ink = createInkStrokeRenderer(element, canvas);
     const records = new Map();
+    const paintIndex = new RasterPaintIndex();
     const preparationQueue = new ScenePreparationQueue();
     let preparation = null;
     const readyImageIds = new Set();
@@ -60,11 +62,12 @@ export default function DepthVectorLayer(props) {
     const stats = element.__agoraRenderStats = { frames: 0, rasterizations: 0, cacheHits: 0, descriptorsUpdated: 0, drawnObjects: 0, texturePages: 0 };
     let stopGpuEvents = () => {};
     let gpuCanvas;
+    const gpuBatcher = new WgpuSceneBatcher();
     let app, pendingApp, releaseGpu, gpuFailed = false, disposed = false, frame = null, draft;
     let types={items:null,kinds:new Map(),texts:0,connectors:0};
     let fontRevision=0,metricsRevision = 0, inkKey = '', previousPreviews,previousDraft,previousInkItems, previousPaintKey = '', previousOrder = '';
     const destroyRecord = record => {
-      record.sprite?.destroy();
+      paintIndex.remove(record);
       resources.release(record.resource);
     };
     const ensureWorker=()=>{if(!compositor)compositor=new WorkerFrameCompositor(element,canvas,()=>{surfaceChanged=true;schedule();},stats);};
@@ -82,42 +85,35 @@ export default function DepthVectorLayer(props) {
     };
     const ensureGpu = () => {
       if (app || pendingApp || gpuFailed || disposed || !records.size) return;
-      if(!hasHardwareWebGL()){gpuFailed=true;element.dataset.renderer='canvas2d';ensureWorker();return;}
+      if(!navigator.gpu && !hasHardwareWebGL()){gpuFailed=true;element.dataset.renderer='canvas2d';ensureWorker();return;}
       releaseGpu = acquireGpuSlot();
       if (!releaseGpu){ensureWorker();return;}
-      const candidate = pendingApp = new Application();
-      candidate.init({ backgroundAlpha: 0, antialias: false, autoStart: false, preference: 'webgl', powerPreference: 'high-performance', resolution: graphicsResolution(latest.current.graphicsQuality, window.devicePixelRatio), eventMode: 'none' }).then(() => {
+      const surface = document.createElement('canvas');
+      pendingApp = true;
+      const ratio = graphicsResolution(latest.current.graphicsQuality, window.devicePixelRatio);
+      createWgpuRenderer(surface, element.clientWidth * ratio, element.clientHeight * ratio).then(candidate => {
         pendingApp = null;
-        if (disposed) { candidate.destroy(true,{children:true}); releaseGpu?.(); return; }
-        const gl = candidate.renderer.gl;
-        const debug = gl?.getExtension('WEBGL_debug_renderer_info');
-        const webgpuAdapter = candidate.renderer.gpu?.adapter;
-        const adapter = debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)
-          : [webgpuAdapter?.info?.description,webgpuAdapter?.info?.architecture,webgpuAdapter?.info?.vendor].join(' ');
-        // Software WebGL adds readback/driver overhead without hardware acceleration.
-        if ((!gl && !webgpuAdapter) || /swiftshader|llvmpipe|softpipe|software/i.test(adapter) || webgpuAdapter?.isFallbackAdapter || webgpuAdapter?.info?.isFallbackAdapter) {
-          candidate.destroy(true,{children:true}); releaseGpu?.(); releaseGpu = null;
-          gpuFailed = true; element.dataset.renderer = 'canvas2d';ensureWorker(); schedule(); return;
+        if (disposed) { candidate.destroy(); candidate.free(); releaseGpu?.(); return; }
+        const adapter = candidate.adapter_name();
+        if (/swiftshader|llvmpipe|softpipe|software/i.test(adapter)) {
+          candidate.destroy(); candidate.free(); releaseGpu?.(); releaseGpu = null;
+          gpuFailed = true; element.dataset.renderer = 'canvas2d'; ensureWorker(); schedule(); return;
         }
-        app = candidate;stats.gpuAdapter=adapter;
-        // Raster textures already contain antialiased edges. Avoid multisample
-        // framebuffer bandwidth, and apply camera transforms to one render group.
-        app.stage.enableRenderGroup();
-        app.stage.interactiveChildren = false;
-        app.stage.eventMode = 'none';
-        app.stage.sortableChildren = true;
-        element.insertBefore(app.canvas, canvas);
-        compositor?.destroy();compositor=null;canvas.style.display = 'none';buffer.style.display='none'; element.dataset.renderer = gl ? 'webgl' : 'webgpu';
-        gpuCanvas = app.canvas;
-        stopGpuEvents = observeGpuContextLoss(gpuCanvas, () => disposed, () => {
-          gpuCanvas.style.display = 'none';
-          fallBackToCanvas();
-        });
+        app = candidate; stats.gpuAdapter = adapter; stats.engine = 'rust-wgpu';
+        const gl = surface.getContext('webgl2') || surface.getContext('webgl');
+        stats.contextAttributes = gl?.getContextAttributes?.() || { alpha: true, antialias: false, premultipliedAlpha: true };
+        gpuCanvas = surface;
+        element.insertBefore(surface, canvas);
+        compositor?.destroy(); compositor = null;
+        canvas.style.display = 'none'; buffer.style.display = 'none';
+        element.dataset.renderer = candidate.backend_kind();
+        atlas.resetGpuState(); sceneInputs = null;
+        stopGpuEvents = observeGpuContextLoss(surface, () => disposed, fallBackToCanvas);
         schedule();
-      }).catch(() => {
-        try { if (candidate.renderer) candidate.destroy(true,{children:true}); } catch { /* A partial GPU init still falls back to 2D. */ }
+      }).catch(error => {
         pendingApp = null; gpuFailed = true; releaseGpu?.(); releaseGpu = null;
-        element.dataset.renderer = 'canvas2d';ensureWorker(); schedule();
+        stats.gpuError = String(error);
+        if (!disposed) { element.dataset.renderer = 'canvas2d'; ensureWorker(); schedule(); }
       });
     };
     const render = () => {
@@ -144,7 +140,11 @@ export default function DepthVectorLayer(props) {
       const width = Math.max(1, viewportMetrics?.width || element.clientWidth), height = Math.max(1, viewportMetrics?.height || element.clientHeight);
       const pixelWidth = Math.round(width*ratio), pixelHeight = Math.round(height*ratio);
       const gpu = app && !gpuFailed;
-      if (gpu && (app.renderer.width !== pixelWidth || app.renderer.height !== pixelHeight || app.renderer.resolution !== ratio)) app.renderer.resize(width,height,ratio);
+      if (gpu && (app.width() !== pixelWidth || app.height() !== pixelHeight)) app.resize(pixelWidth,pixelHeight);
+      const presentGpu = () => {
+        if (!app.render_frame(camera.x,camera.y,camera.scale,width,height)) throw new Error("GPU surface unavailable");
+        stats.presentedCamera={x:camera.x,y:camera.y,scale:camera.scale};
+      };
       const cameraZooming = Boolean(element.closest?.('.canvas-stage')?.classList?.contains('camera-zooming'));
       const rawDesiredRatio = graphicsRasterRatio(quality,camera.scale,window.devicePixelRatio);
       if(!cameraZooming || settledDesiredRatio===null || settledQuality!==quality || rawDesiredRatio/settledDesiredRatio>1.5 || settledDesiredRatio/rawDesiredRatio>1.5){
@@ -155,20 +155,20 @@ export default function DepthVectorLayer(props) {
       const projection=cachedCameraProjection(bufferCamera,camera,width,height,margin,worldPaintBounds);
       const bufferFits=Boolean(projection);
       const blitBuffer=()=>{
+        stats.presentedCamera={x:camera.x,y:camera.y,scale:camera.scale};
         buffer.style.display='none';
         const region=rasterViewportRegion(worldPaintBounds,camera,width,height);
         const projection=cachedCameraProjection(bufferCamera,camera,width,height,margin,worldPaintBounds);
-        const sourceCrop=rasterViewportRegion(worldPaintBounds,{...bufferCamera,x:bufferCamera.x+margin,y:bufferCamera.y+margin},buffer.width/ratio,buffer.height/ratio,1);
+        const sourceCrop=bufferCamera?rasterViewportRegion(worldPaintBounds,{...bufferCamera,x:bufferCamera.x+margin,y:bufferCamera.y+margin},buffer.width/ratio,buffer.height/ratio,1):null;
         const pixelCrop=sourceCrop?{x:Math.floor(sourceCrop.x*ratio),y:Math.floor(sourceCrop.y*ratio),width:Math.ceil(sourceCrop.width*ratio),height:Math.ceil(sourceCrop.height*ratio)}:null;
         if(compositor?.send({width,height,ratio,region,projection,sourceCrop:pixelCrop,version:bufferVersion},buffer)){canvas.style.display='none';return;}
-        if(!region){canvas.style.display='none';stats.outputPixels=0;return;}
+        if(!region||!projection){canvas.style.display='none';stats.outputPixels=0;return;}
         const outputWidth=Math.max(1,Math.round(region.width*ratio)),outputHeight=Math.max(1,Math.round(region.height*ratio));
         if(canvas.width!==outputWidth || canvas.height!==outputHeight){canvas.width=outputWidth;canvas.height=outputHeight;}
         canvas.style.display='';canvas.style.width=`${region.width}px`;canvas.style.height=`${region.height}px`;
         canvas.style.transform=`translate3d(${region.x}px,${region.y}px,0)`;
-        const transform=cachedCameraProjection(bufferCamera,camera,width,height,margin,worldPaintBounds);
         viewportContext.setTransform(1,0,0,1,0,0);viewportContext.clearRect(0,0,canvas.width,canvas.height);
-        viewportContext.drawImage(buffer,(region.x-transform.x)*ratio/transform.scale,(region.y-transform.y)*ratio/transform.scale,region.width*ratio/transform.scale,region.height*ratio/transform.scale,0,0,canvas.width,canvas.height);
+        viewportContext.drawImage(buffer,(region.x-projection.x)*ratio/projection.scale,(region.y-projection.y)*ratio/projection.scale,region.width*ratio/projection.scale,region.height*ratio/projection.scale,0,0,canvas.width,canvas.height);
         stats.outputPixels=canvas.width*canvas.height;
         stats.compositePanFrames=(stats.compositePanFrames||0)+1;
       };
@@ -202,7 +202,7 @@ export default function DepthVectorLayer(props) {
       if(unchanged && !pending && !imagesChanged && !qualityRefresh && !surfaceChanged && !moved && !settling && !scaleSettling && (gpu || bufferFits))return;
       surfaceChanged=false;
       if(unchanged && (!pending || (!gpu && keepZoomedBuffer)) && !imagesChanged && !qualityRefresh && !scaleSettling && (gpu || bufferFits)){
-        if(gpu){app.stage.position.set(camera.x,camera.y);app.stage.scale.set(camera.scale);try { app.renderer.render(app.stage); } catch { fallBackToCanvas(); return; }}
+        if(gpu){try { presentGpu(); } catch { fallBackToCanvas(); return; }}
         else blitBuffer();
         stats.frames++;stats.cachedPanFrames=(stats.cachedPanFrames||0)+1;stats.lastDrawnObjects=gpu?preparation.count:0;
         return;
@@ -244,10 +244,9 @@ export default function DepthVectorLayer(props) {
           if (!record) return;
           if (hidden.has(id)) {
             if (!record.hidden && record.paintedBounds) damage.push(record.paintedBounds);
-            record.hidden=true;if(record.sprite)record.sprite.visible=false;
+            record.hidden=true;paintIndex.remove(record);
           } else if (!record.hidden) {
-            preparation.slots[index]=record;preparation.count++;expandBounds(record.paintedBounds);
-            if(record.sprite)record.sprite.zIndex=index;
+            preparation.slots[index]=record;preparation.count++;expandBounds(record.paintedBounds);paintIndex.update(record,index);
           }
         });
         if (previousOrder !== preparationQueue.orderKey && !damage.length) {
@@ -256,6 +255,19 @@ export default function DepthVectorLayer(props) {
         previousOrder=preparationQueue.orderKey;
         sceneInputs=inputs;sceneInputs.quality=desiredRatio;
         stats.preparationPasses=(stats.preparationPasses||0)+1;
+        if(preparationQueue.entries.length>24&&camera.scale>0&&world.width>0&&world.height>0){
+          const nMinX=-camera.x/camera.scale/world.width,nMinY=-camera.y/camera.scale/world.height;
+          const nMaxX=(width-camera.x)/camera.scale/world.width,nMaxY=(height-camera.y)/camera.scale/world.height;
+          const onScreenIds=[];
+          for(const [id,item] of preparationQueue.entries){
+            if(hidden.has(id)||!item||records.has(id))continue;
+            const ix=Number(item.x),iy=Number(item.y);
+            if(!Number.isFinite(ix)||!Number.isFinite(iy))continue;
+            const iw=Math.max(.05,Number(item.width)||0),ih=Math.max(.05,Number(item.height)||0);
+            if(ix+iw>=nMinX&&ix<=nMaxX&&iy+ih>=nMinY&&iy<=nMaxY)onScreenIds.push(id);
+          }
+          if(onScreenIds.length)preparationQueue.invalidate(onScreenIds);
+        }
         }
       }
       readyImageIds.clear();
@@ -284,8 +296,7 @@ export default function DepthVectorLayer(props) {
         const rebuild = !deferPreview && (!record || record.key !== key || record.graphicsQuality !== quality || qualityNeeded
           || (record.pixelBudget > pixelBudget*1.1 && record.raster.pixelWidth*record.raster.pixelHeight > pixelBudget*1.1));
         if (rebuild) {
-          const sprite=gpu?record?.sprite:null;
-          if (record) {damage.push(record.paintedBounds);if(sprite)resources.release(record.resource);else destroyRecord(record);}
+          if (record) {paintIndex.remove(record);damage.push(record.paintedBounds);destroyRecord(record);}
           const resourceKey=key+':'+targetRatio+':'+Math.round(pixelBudget);
           const resource=resources.acquire(resourceKey,()=>{
             stats.rasterizations++;
@@ -300,8 +311,7 @@ export default function DepthVectorLayer(props) {
               resource.raster.canvas=null;
             }
           }
-          record = { key, graphicsQuality:quality, quality:targetRatio, pixelBudget, raster:resource.raster, resource,sprite };
-          if(sprite)sprite.texture=resource.textureHandle.texture;
+          record = { key, graphicsQuality:quality, quality:targetRatio, pixelBudget, raster:resource.raster, resource };
           records.set(id,record);
         } else stats.cacheHits++;
         if(paintChanged || rebuild || record.hidden){
@@ -313,26 +323,10 @@ export default function DepthVectorLayer(props) {
         record.descriptor=descriptor;record.tint=tint;record.hidden=false;
         preparation.lowestQuality=Math.min(preparation.lowestQuality,record.quality);
         const raster=record.raster;
-        if(gpu){
-          const newSprite=!record.sprite;
-          if(newSprite){
-            record.resource.textureHandle ||= atlas.allocate(raster.canvas);
-            record.sprite=new Sprite(record.resource.textureHandle.texture);
-            record.sprite.eventMode='none';app.stage.addChild(record.sprite);
-          }
-          const sprite=record.sprite;
-          if(changed || rebuild || newSprite){
-            sprite.tint=record.tint===null?0xffffff:record.tint;
-            sprite.width=raster.width;sprite.height=raster.height;
-            sprite.pivot.set((descriptor.centerX-raster.left)*raster.pixelWidth/raster.width,(descriptor.centerY-raster.top)*raster.pixelHeight/raster.height);
-            sprite.position.set(descriptor.x+descriptor.centerX,descriptor.y+descriptor.centerY);
-            sprite.rotation=descriptor.rotation*Math.PI/180;
-          }
-          sprite.visible=true;sprite.zIndex=index;
-        }
         if(!ordered[index])preparation.count++;
         ordered[index]=record;
-      });
+        paintIndex.update(record,index);
+      },cameraActive?2:4);
       const deferredQuality=preparationQueue.pending;
       stats.preparedThisFrame=preparedThisFrame;stats.preparationCursor=preparationQueue.cursor;
       stats.preparationVisited=(stats.preparationVisited||0)+preparedThisFrame;
@@ -342,14 +336,17 @@ export default function DepthVectorLayer(props) {
       }
       let drawn = 0;
       if (gpu) {
-        atlas.flush(); stats.texturePages = atlas.pages.length;
-        app.stage.position.set(camera.x,camera.y); app.stage.scale.set(camera.scale);
-        try { app.renderer.render(app.stage); } catch { fallBackToCanvas(); return; } drawn = preparation.count;
+        try {
+          atlas.flush(app); stats.texturePages = atlas.pages.length;
+          drawn = gpuBatcher.sync(app, ordered);
+          presentGpu();
+        } catch (error) { stats.gpuError = String(error); fallBackToCanvas(); return; }
         previousPaintKey = '';
       } else {
         const bufferWidth=Math.round((width+margin*2)*ratio),bufferHeight=Math.round((height+margin*2)*ratio);
         if(buffer.width!==bufferWidth || buffer.height!==bufferHeight){buffer.width=bufferWidth;buffer.height=bufferHeight;bufferCamera=null;}
-        if(!bufferFits || !bufferCamera || (!cameraZooming && (zoomRatio<0.98 || zoomRatio>1.02))){bufferCamera={...camera};previousPaintKey='';}
+        const activeBufferFits=Boolean(cachedCameraProjection(bufferCamera,camera,width,height,margin,worldPaintBounds));
+        if(!activeBufferFits || !bufferCamera || (!cameraZooming && (zoomRatio<0.98 || zoomRatio>1.02))){bufferCamera={...camera};previousPaintKey='';}
         const paintCamera={...bufferCamera,x:bufferCamera.x+margin,y:bufferCamera.y+margin};
         const bufferKey=`${width}:${height}:${ratio}:${bufferCamera.x}:${bufferCamera.y}:${bufferCamera.scale}`;
         const region = mergeDamage(damage,2/Math.max(.01,camera.scale));
@@ -376,8 +373,10 @@ export default function DepthVectorLayer(props) {
           const bufferWorldBounds={minX:-paintCamera.x/bufferCamera.scale,minY:-paintCamera.y/bufferCamera.scale,maxX:(width+margin*2-paintCamera.x)/bufferCamera.scale,maxY:(height+margin*2-paintCamera.y)/bufferCamera.scale};
           const clipRegion=fullPaint?bufferWorldBounds:region;
           let activeAlpha=1,activeFill;
-          for (const record of ordered) {
-            if (!record) continue;
+          const candidates=paintIndex.query(clipRegion,ordered);
+          stats.paintCandidates=candidates.length;
+          for (const record of candidates) {
+            if (!record || record.hidden) continue;
             if (!overlaps(record.paintedBounds,clipRegion)) continue;
             const descriptor=record.descriptor,raster=record.raster,handle=record.resource.textureHandle;
             const rotated=Boolean(descriptor.rotation);
@@ -417,7 +416,10 @@ export default function DepthVectorLayer(props) {
     const observer = new ResizeObserver(([entry])=>{viewportMetrics={width:entry.contentRect.width,height:entry.contentRect.height};schedule();}); observer.observe(element);
     const themeObserver=new MutationObserver(appearanceChanged);const themeRoot=element.closest('[data-theme]');if(themeRoot)themeObserver.observe(themeRoot,{attributes:true,attributeFilter:['data-theme']});
     const stage=element.closest('.canvas-stage');
-    const cameraChanged=()=>schedule();
+    // DOM world layers are transformed in this camera event's animation frame.
+    // Present cached pixels/GPU in the same frame, rather than scheduling a
+    // second rAF that leaves vector objects one frame behind DOM objects.
+    const cameraChanged=()=>{if(disposed)return;if(frame!==null){cancelAnimationFrame(frame);frame=null;}render();};
     stage?.addEventListener('agora-camera',cameraChanged);
     window.addEventListener(CONNECTOR_METRICS_EVENT,metricsChanged);
     document.fonts?.addEventListener('loadingdone',appearanceChanged);
@@ -430,7 +432,7 @@ export default function DepthVectorLayer(props) {
       stopGpuEvents();
       for (const record of records.values()) destroyRecord(record);
       imagePreviews.destroy();
-      records.clear(); resources.destroy(); atlas.destroy(); app?.destroy(true,{children:true});
+      records.clear(); resources.destroy(); atlas.destroy(); app?.destroy(); app?.free(); gpuCanvas?.remove();
       // A pending init releases its slot after completion.
       if (!pendingApp) releaseGpu?.();
       compositor?.destroy();buffer.width=buffer.height=1;buffer.remove();ink.destroy(); canvas.remove();

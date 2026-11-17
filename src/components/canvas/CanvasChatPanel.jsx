@@ -20,6 +20,7 @@ async function writeClipboardText(text) {
   } catch { /* Fall back to textarea selection copy when Async Clipboard API is unavailable. */ }
   try {
     const area = document.createElement('textarea');
+    area.name = 'chat-clipboard-copy';
     area.value = value;
     area.setAttribute('readonly', '');
     area.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';

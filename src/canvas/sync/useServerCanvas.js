@@ -21,7 +21,7 @@ export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsR
   useEffect(()=>()=>motion.current.stop(),[]);
   const [status, setStatus] = useState({ ready: false, editable: false, queued: 0, blocked: false, message: '서버에서 최신 캔버스를 불러오고 있습니다.' });
   const [lastReceipt, setLastReceipt] = useState(null);
-  const view = useRef(null); if (!view.current) view.current = new HostCanvasView();
+  const view = useRef(null); if (!view.current) view.current = new HostCanvasView({lazyPlainDocuments:true});
   const working = useRef(view.current.items), committedItemsRef = useRef({}), sessionRef = useRef(null);
   const callbacks = useRef({ setToast, setDirtyItems }); callbacks.current = { setToast, setDirtyItems, onItemsPublished, onCommittedItems };
   if (!sessionRef.current) sessionRef.current = new ServerCanvasSession({

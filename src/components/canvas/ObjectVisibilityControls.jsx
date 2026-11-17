@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import ItemSubset from '../../canvas/ItemSubset.js';
+import { useId, useMemo, useRef } from 'react';
 import Icon from '../Icon.jsx';
 import { ui } from '../../i18n/locale.js';
 import '../../canvas/runtimeEn.js';
@@ -46,6 +47,7 @@ export function ObjectVisibilityControls({
   onToggleRevealAfterAnimation,
   onRevealAfterAnimation,
 }) {
+  const fieldId = useId();
   const hideableIds = ids.filter((id) => isHideableObject(items[id]));
   if (!hideableIds.length) return null;
 
@@ -91,6 +93,8 @@ export function ObjectVisibilityControls({
       </div>
       <label className="object-reveal-toggle">
         <input
+          id={`${fieldId}-reveal-after-animation`}
+          name="object-reveal-after-animation"
           type="checkbox"
           disabled={disabled}
           checked={allReveal}
@@ -112,6 +116,8 @@ export function ObjectVisibilityControls({
       {hiddenCount > 0 && onTogglePreviewHidden && (
         <label className="object-reveal-toggle">
           <input
+            id={`${fieldId}-preview-hidden`}
+            name="object-preview-hidden"
             type="checkbox"
             checked={previewHidden}
             onChange={() => onTogglePreviewHidden()}
@@ -146,15 +152,10 @@ export function HiddenObjectsManager({
   onUnhideAll,
   onRevealAllAfterAnimation,
 }) {
-  const hiddenEntries = useMemo(() => {
-    const entries = [];
-    for (const id of Object.keys(items)) {
-      const item = items[id];
-      if (isHideableObject(item) && readObjectVisibility(item).hidden) entries.push([id, item]);
-    }
-    entries.sort(([a], [b]) => String(a).localeCompare(String(b)));
-    return entries;
-  }, [items]);
+  const subset = useRef(null);
+  if (!subset.current) subset.current = new ItemSubset(item => isHideableObject(item) && readObjectVisibility(item).hidden);
+  const candidates = subset.current.update(items);
+  const hiddenEntries = useMemo(() => candidates.slice().sort(([a], [b]) => String(a).localeCompare(String(b))), [candidates]);
 
   if (!hiddenEntries.length) return null;
 

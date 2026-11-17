@@ -37,7 +37,7 @@ import { useEditingBoundary } from './useEditingBoundary.js';
 import './image-object.css';
 import { scaleObjectElement } from './ScalableObjectContent.jsx';
 import { handleObjectDoubleClick } from './objectDoubleClick.js';
-import { cloneElement, memo, useContext, useEffect, useMemo, useLayoutEffect, useRef, useState } from 'react';
+import { cloneElement, memo, useContext, useEffect, useId, useMemo, useLayoutEffect, useRef, useState } from 'react';
 import {PresentationContext} from './portfolio/presentationContext.js';
 import { getObjectRevealPhase, useVisibilityPreview } from './portfolio/animationReveal.js';
 import Icon from '../components/Icon.jsx';
@@ -73,6 +73,7 @@ const ConnectorLabel=memo(RawConnectorLabel,objectContentPropsEqual);
 
 function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=false, canExecute=true, id, item, notebookCells=[],notebookSiblingCells=[],notebookParent=null,notebookOrder=0,notebookCellCount=0,bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, token, runtimeStore, onUndo, onStartEditing, onTextChange, onTextColorChange, onMetadataChange, onFormulaChange, onTableChange, onQuestionChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
   useUiLocale();
+  const fieldId = useId();
   const presentation=useContext(PresentationContext);
   const contentLatest=useRef(null);contentLatest.current={id,onTableChange,onQuestionChange,onStartEditing,onStopEditing};
   const contentActions=useMemo(()=>({
@@ -309,9 +310,9 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
     </div>);
   }
   if (item.kind === 'note') return withResizeHandles(<div key={id} className={`${classes} sticky-note-object`} style={{ ...style, '--sticky-note-color': item.color || stickyNoteColors[0], '--sticky-note-rotation': `${Number(item.rotation) || -1}deg` }} data-item-id={id} {...handlers} onBlur={editingBoundary.onBlur} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); onSave(id); } }}>
-    <div className="sticky-note-head"><span title={ui("끌어서 포스트잇 이동")}><Icon name="sticky" size={13} />{" " + ui("포스트잇") + ""}</span><input type="color" aria-label={ui("포스트잇 색상")} title={ui("포스트잇 색상 변경")} value={item.color || stickyNoteColors[0]} disabled={item.locked === true || readOnly} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'color', event.target.value)} /></div>
+    <div className="sticky-note-head"><span title={ui("끌어서 포스트잇 이동")}><Icon name="sticky" size={13} />{" " + ui("포스트잇") + ""}</span><input id={`${fieldId}-note-color`} name="sticky-note-color" type="color" aria-label={ui("포스트잇 색상")} title={ui("포스트잇 색상 변경")} value={item.color || stickyNoteColors[0]} disabled={item.locked === true || readOnly} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onMetadataChange(id, 'color', event.target.value)} /></div>
     <EditingSurface editing={editing} renderPreview={() => <div className="sticky-note-content" title={ui("두 번 클릭해 Markdown 편집")}>{item.text ? <MarkdownText source={item.text} /> : <p className="sticky-note-empty">{ui("두 번 클릭해 메모를 작성하세요.")}</p>}</div>}>
-      <textarea className="sticky-note-input" ref={collaborativeEditorRef} autoFocus aria-label={ui("포스트잇 Markdown 편집")} value={item.text || ''} placeholder={ui("# 메모 제목\n- 할 일\n**중요한 내용**")} onPointerDown={(event) => event.stopPropagation()} onSelect={rememberCollaborativeSelection} onKeyUp={rememberCollaborativeSelection} onClick={rememberCollaborativeSelection} onChange={handleCollaborativeInput} />
+      <textarea id={`${fieldId}-note-text`} name="sticky-note-text" className="sticky-note-input" ref={collaborativeEditorRef} autoFocus aria-label={ui("포스트잇 Markdown 편집")} value={item.text || ''} placeholder={ui("# 메모 제목\n- 할 일\n**중요한 내용**")} onPointerDown={(event) => event.stopPropagation()} onSelect={rememberCollaborativeSelection} onKeyUp={rememberCollaborativeSelection} onClick={rememberCollaborativeSelection} onChange={handleCollaborativeInput} />
     </EditingSurface>
   </div>);
   if (item.kind === 'table') return withResizeHandles(<div key={id} className={`${classes} canvas-table-object`} style={style} data-item-id={id} {...handlers}><EditableTable item={item} editingActive={editing} enabled={activeTool === 'select' && selected && !item.locked && !readOnly} onStartEditing={contentActions.start} onStopEditing={contentActions.stop} onChange={contentActions.table} /></div>);

@@ -4,10 +4,11 @@ import OAuthEnrollment from '../components/account/OAuthEnrollment.jsx';
 import {authenticatePasskey,passkeyError,passkeysSupported} from '../auth/passkeys.js';
 import '../components/account/passkeys.css';
 import EmailVerification from '../components/account/EmailVerification.jsx';
+import SignupConsent from '../components/account/SignupConsent.jsx';
 import LanguageSwitcher from '../i18n/LanguageSwitcher.jsx';
 import { ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from '../routing.jsx';
 import Icon from '../components/Icon.jsx';
 import FreLogBrand from '../components/frelog/FreLogBrand.jsx';
@@ -19,11 +20,13 @@ import { oauthReturnPath } from '../auth/oauthReturn.js';
 
 export default function LoginPage() {
   useUiLocale();
+  const fieldId = useId();
   const { isAuthenticated, authError, login, signup, completeOAuthLogin, completeOrcidLogin, pendingOAuthEnrollment, cancelOAuthEnrollment, pendingMfa, verifyMfa, cancelMfa, acceptLoginResponse } = useAuth();
   const [emailProof, setEmailProof] = useState(null);
   const [mode, setMode] = useState('login');
   const [showQr,setShowQr]=useState(false);
   const [form, setForm] = useState({ email: '', password: '', nickname: '' });
+  const [consent, setConsent] = useState({ terms: false, privacy: false });
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -88,6 +91,9 @@ export default function LoginPage() {
   const submit = async (event) => {
     event.preventDefault(); setBusy(true); setError('');
     try {
+      if (mode === 'signup' && (!consent.terms || !consent.privacy)) {
+        throw new Error('이용약관 및 개인정보 수집·저장에 동의해주세요.');
+      }
       if(mode==='signup'&&(!emailProof||emailProof.email!==form.email.trim().toLowerCase()))throw new Error('이메일 인증을 완료해주세요.');
       const result = mode === 'signup' ? await signup({...form,email:form.email.trim().toLowerCase(),emailVerificationToken:emailProof.token}) : await login(form.email, form.password);
       if (result.mfaRequired) return;
@@ -109,10 +115,11 @@ export default function LoginPage() {
         {pendingMfa ? <MfaLogin onVerify={async code=>{setBusy(true);try{await verifyMfa(code);const target=sessionStorage.getItem('frelog_oauth_return');sessionStorage.removeItem('frelog_oauth_return');navigate(oauthReturnPath(target||location.state?.from),{replace:true});}catch(error){setBusy(false);throw error;}}} onCancel={cancelMfa}/> : pendingOAuthEnrollment ? <OAuthEnrollment key={pendingOAuthEnrollment.enrollmentToken} enrollment={pendingOAuthEnrollment} onBusyChange={setBusy} onCancel={cancelOAuthEnrollment} onComplete={result=>{if(result.mfaRequired){setBusy(false);return;}setBusy(true);const target=sessionStorage.getItem('frelog_oauth_return');sessionStorage.removeItem('frelog_oauth_return');navigate(oauthReturnPath(target||location.state?.from),{replace:true});}}/> : showQr ? <QrLoginPanel onCancel={()=>setShowQr(false)} onComplete={result=>{setBusy(true);acceptLoginResponse(result);navigate(oauthReturnPath(location.state?.from),{replace:true});}}/> : <>
         <form className="auth-form" onSubmit={submit}>
           {(authError || location.state?.sessionExpired) && <div className="form-error" role="status">{ui(authError) || ui("로그인 세션이 만료되었거나 유효하지 않습니다. 다시 로그인해주세요.")}</div>}
-          {mode === 'signup' && <label className="form-field"><span>{ui("닉네임")}</span><div className="input-wrap"><Icon name="user" size={18} /><input name="nickname" value={form.nickname} onChange={change} placeholder={ui("어떻게 불러드릴까요?")} autoComplete="nickname" maxLength={100} required /></div></label>}
-          <label className="form-field"><span>{ui("이메일")}</span><div className="input-wrap"><Icon name="mail" size={18} /><input type="email" name="email" value={form.email} onChange={change} placeholder="you@example.com" autoComplete="email" required /></div></label>
+          {mode === 'signup' && <label className="form-field"><span>{ui("닉네임")}</span><div className="input-wrap"><Icon name="user" size={18} /><input id={`${fieldId}-nickname`} name="nickname" value={form.nickname} onChange={change} placeholder={ui("어떻게 불러드릴까요?")} autoComplete="off" maxLength={100} required /></div></label>}
+          <label className="form-field"><span>{ui("이메일")}</span><div className="input-wrap"><Icon name="mail" size={18} /><input id={`${fieldId}-email`} type="email" name="email" value={form.email} onChange={change} placeholder="you@example.com" autoComplete="email" required /></div></label>
           {mode==='signup'&&<EmailVerification email={form.email} verified={Boolean(emailProof&&emailProof.email===form.email.trim().toLowerCase())} onVerified={(email,token)=>{setEmailProof({email,token});setError('');}} disabled={busy}/>}
-          <label className="form-field"><span>{ui("비밀번호")}</span><div className="input-wrap"><Icon name="lock" size={18} /><input type={showPassword ? 'text' : 'password'} name="password" aria-label={ui("비밀번호")} aria-describedby={mode === 'signup' ? 'signup-password-hint' : undefined} value={form.password} onChange={change} placeholder={ui("비밀번호를 입력해주세요")} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={mode === 'signup' ? 12 : undefined} required /><button type="button" className="input-trailing" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? ui("비밀번호 숨기기") : ui("비밀번호 표시")}><Icon name={showPassword ? 'eyeOff' : 'eye'} size={18} /></button></div>{mode === 'signup' && <small id="signup-password-hint" className="field-hint">{ui("12자 이상 · 문자, 숫자, 특수문자 포함 · 공백 제외 · 최대 72바이트")}</small>}</label>
+          <label className="form-field"><span>{ui("비밀번호")}</span><div className="input-wrap"><Icon name="lock" size={18} /><input id={`${fieldId}-password`} type={showPassword ? 'text' : 'password'} name="password" aria-label={ui("비밀번호")} aria-describedby={mode === 'signup' ? 'signup-password-hint' : undefined} value={form.password} onChange={change} placeholder={ui("비밀번호를 입력해주세요")} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={mode === 'signup' ? 12 : undefined} required /><button type="button" className="input-trailing" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? ui("비밀번호 숨기기") : ui("비밀번호 표시")}><Icon name={showPassword ? 'eyeOff' : 'eye'} size={18} /></button></div>{mode === 'signup' && <small id="signup-password-hint" className="field-hint">{ui("12자 이상 · 문자, 숫자, 특수문자 포함 · 공백 제외 · 최대 72바이트")}</small>}</label>
+          {mode === 'signup' && <SignupConsent value={consent} onChange={(next) => { setConsent(next); setError(''); }} disabled={busy} />}
           {error && <div className="form-error" role="alert">{ui(error)}</div>}
           <button className="button button-dark button-submit" type="submit" disabled={busy||(mode==='signup'&&!emailProof)}>{busy ? ui("잠시만요…") : mode === 'login' ? ui("로그인") : ui("계정 만들기")} <Icon name="arrow" size={17} /></button>
         </form>
@@ -129,12 +136,18 @@ export default function LoginPage() {
         {mode==='login'&&<button className="auth-qr-button" type="button" disabled={busy} onClick={()=>setShowQr(true)}>{ui('QR 코드로 로그인')}</button>}
         </div>}
 
-        <div className="auth-switch">{mode === 'login' ? ui("아직 계정이 없으신가요?") : ui("이미 FreLog 계정이 있나요?")} <button type="button" onClick={() => { setError(''); setMode(mode === 'login' ? 'signup' : 'login'); }}>{mode === 'login' ? ui("회원가입") : ui("로그인")}</button></div>
+        <div className="auth-switch">{mode === 'login' ? ui("아직 계정이 없으신가요?") : ui("이미 FreLog 계정이 있나요?")} <button type="button" onClick={() => { setError(''); setConsent({ terms: false, privacy: false }); setMode(mode === 'login' ? 'signup' : 'login'); }}>{mode === 'login' ? ui("회원가입") : ui("로그인")}</button></div>
         </>}
-        <div className="auth-terms">{ui("계속 진행하면 FreLog의 이용약관과 개인정보 처리방침에 동의하게 됩니다.")}</div>
+        <div className="auth-terms">
+          {ui("계속 진행하면 FreLog의")}{' '}
+          <Link to="/terms">{ui("이용약관")}</Link>{' '}
+          {ui("및")}{' '}
+          <Link to="/privacy">{ui("개인정보 처리방침")}</Link>
+          {ui("에 동의하게 됩니다.")}
+        </div>
       </div>
       </section>
     </main>
-    <footer className="auth-page-footer"><span>© {new Date().getFullYear()} FreLog</span><Link to="/docs">{ui('문서')}</Link></footer>
+    <footer className="auth-page-footer"><span>© {new Date().getFullYear()} FreLog Studio (hyeon su Lee)</span><div><Link to="/terms">{ui('이용약관')}</Link><Link to="/privacy">{ui('개인정보 처리방침')}</Link><Link to="/docs">{ui('문서')}</Link></div></footer>
   </div>;
 }

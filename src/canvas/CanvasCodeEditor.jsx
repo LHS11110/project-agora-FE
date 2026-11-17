@@ -1,7 +1,7 @@
 import { ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
 import { useEditingBoundary } from './useEditingBoundary.js';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { moveTextPosition, textSpliceBetween } from './collaborativeText.js';
 import './canvas-code-editor.css';
 import './code-completions.css';
@@ -9,6 +9,7 @@ import './code-completions.css';
 /** One model per open block; remote updates preserve selections and view state. */
 export default function CanvasCodeEditor({ value = '', language = 'javascript', inline = false, onChange, onUndo, onSave, onStopEditing, onRun, notebook = false }) {
   useUiLocale();
+  const editorId = useId();
   const boundary = useEditingBoundary(true, onStopEditing, { pointerOnly: true });
   const hostRef = useRef(null);
   const editorRef = useRef(null);
@@ -64,6 +65,11 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
         ariaLabel: ui('공동 편집 코드 에디터'),
       });
       editorRef.current = editor;
+      const monacoTextarea = editor.getDomNode()?.querySelector('textarea.inputarea');
+      if (monacoTextarea) {
+        monacoTextarea.id = `${editorId}-monaco`;
+        monacoTextarea.name = 'code-editor';
+      }
       subscriptions.push(editor.onDidChangeModelContent(() => {
         if (!applyingRemoteRef.current) latest.current.onChange?.(model.getValue());
       }));
@@ -133,6 +139,6 @@ export default function CanvasCodeEditor({ value = '', language = 'javascript', 
   }}>
     <div ref={hostRef} className="canvas-code-editor-host" />
     {status === 'loading' && <div className="canvas-code-editor-loading" role="status">{ui("코드 에디터를 불러오는 중…")}</div>}
-    {status === 'failed' && <><p role="status">{ui("에디터를 불러오지 못했습니다. 기본 입력창에서 계속 편집할 수 있어요.")}</p><textarea className="canvas-code-editor-fallback" autoFocus aria-label={ui("코드 편집")} value={value} onChange={event => onChange?.(event.target.value)} /></>}
+    {status === 'failed' && <><p role="status">{ui("에디터를 불러오지 못했습니다. 기본 입력창에서 계속 편집할 수 있어요.")}</p><textarea id={`${editorId}-fallback`} name="code-editor-fallback" className="canvas-code-editor-fallback" autoFocus aria-label={ui("코드 편집")} value={value} onChange={event => onChange?.(event.target.value)} /></>}
   </div>;
 }

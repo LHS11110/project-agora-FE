@@ -1,3 +1,4 @@
+import {displayedValue,validValue} from '../values/valueData.js';
 import { resolveBlueprint, resolveCode } from './blueprintGraph.js';
 import { contentSource } from '../content/contentPresentation.js';
 import { runtimeLanguages } from './runtimeLanguages.js';
@@ -19,7 +20,7 @@ export async function runBlueprint(items, executorId, execute, publish, {codeOnl
     const emit = () => {
       timer = null; lastSent = Date.now();
       if (streamError) return;
-      try { for (const outputId of step.outputIds) publish(outputId, {codeId:step.codeId,result:{output:streamed},partial:true}); }
+      try { for (const outputId of step.outputIds) if(items[outputId]?.kind!=='value')publish(outputId, {codeId:step.codeId,result:{output:streamed},partial:true}); }
       catch (error) { streamError = error; }
     };
     const onOutput = chunk => {
@@ -30,8 +31,8 @@ export async function runBlueprint(items, executorId, execute, publish, {codeOnl
       else if (timer === null) timer = setTimeout(emit, 100 - (Date.now() - lastSent));
     };
     try {
-      const inputIds = [...new Set(Object.values(items).filter(edge => edge?.kind === 'connector' && String(edge.to) === step.codeId && items[String(edge.from)]?.runtimeRole === 'output').map(edge => String(edge.from)))].sort((a,b)=>(items[a].y||0)-(items[b].y||0)||(items[a].x||0)-(items[b].x||0)||a.localeCompare(b));
-      const chunks = inputIds.flatMap(id => (outputs.get(id) || items[id].runtimeResults || []).map(entry => typeof entry.output === 'string' ? entry.output : ''));
+      const inputIds = [...new Set(Object.values(items).filter(edge => edge?.kind === 'connector' && String(edge.to) === step.codeId && (items[String(edge.from)]?.runtimeRole === 'output'||items[String(edge.from)]?.kind==='value')).map(edge => String(edge.from)))].sort((a,b)=>(items[a].y||0)-(items[b].y||0)||(items[a].x||0)-(items[b].x||0)||a.localeCompare(b));
+      const chunks = inputIds.flatMap(id => (outputs.get(id) || (items[id].kind==='value'?[{output:String(displayedValue(items[id]))}]:items[id].runtimeResults) || []).map(entry => typeof entry.output === 'string' ? entry.output : ''));
       const stdin = chunks.filter(text=>text.length).map(text=>text.endsWith('\n')?text:text+'\n').join('');
       if (!buildOnly && new TextEncoder().encode(stdin).length > 65536) throw new Error('표준 입력은 64KB 이하여야 합니다.');
       const { environmentReset, ...response } = await execute({ objectId:step.codeId, language: step.language, code: step.code, ...(buildOnly?{action:'build'}:inputIds.length?{stdin}:{}) }, buildOnly?undefined:onOutput);
@@ -43,6 +44,17 @@ export async function runBlueprint(items, executorId, execute, publish, {codeOnl
     finally { if (timer !== null) clearTimeout(timer); }
     onStepResult({codeId:step.codeId, failed:Boolean(result.error || result.timedOut || result.exitCode !== 0), exitCode:result.exitCode, timedOut:Boolean(result.timedOut), detail:result.error || ((result.exitCode !== 0 || result.timedOut)?result.output:undefined)});
     for (const outputId of (buildOnly?[]:step.outputIds)) {
+      if(items[outputId]?.kind==='value'){
+        if(result.error||result.timedOut||result.exitCode!==0)continue;
+        const text=String(result.output||'').trim(),item=items[outputId];let patch;
+        if(item.valueType==='text')patch={valueText:String(result.output||'').replace(/\n$/,'')};
+        else if(item.valueType==='select'){
+          const found=item.valueOptions.indexOf(text);patch={valueNumber:found>=0?found:(text?Number(text):NaN)};
+        }else patch={valueNumber:text?Number(text):NaN};
+        if(!validValue({...item,...patch}))throw Error('코드 출력이 연결된 값 객체의 유형 또는 범위에 맞지 않습니다.');
+        publish(outputId,{codeId:step.codeId,valuePatch:patch,result});
+        outputs.set(outputId,[{output:String(displayedValue({...item,...patch}))}]);continue;
+      }
       outputs.set(outputId,[...(outputs.get(outputId)||[]),result]);
       publish(outputId, { codeId: step.codeId, result });
     }

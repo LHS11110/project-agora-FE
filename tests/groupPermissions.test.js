@@ -16,3 +16,9 @@ test('execution-only access can publish output without gaining object edit acces
  assert.throws(()=>assertAccessOperations({output},[{action:'patch',id:'output',patch:{runtimeResults:[],x:2}}],operator),/쓰기 권한/);
  assert.throws(()=>assertAccessOperations({output},[{action:'patch',id:'output',patch:{runtimeResults:[]}}],{...viewer,write_groups:['default']}),/실행 권한/);
 });
+test('object group editing allows valid group reassignment and blocks empty or foreign group escalation',()=>{
+ const writer={groups:['default','research'],member_groups:['default','research'],write_groups:['default'],execute_groups:[],is_admin:false};
+ assert.doesNotThrow(()=>assertAccessOperations({box},[{action:'patch',id:'box',patch:{permission:['default','research']}}],writer));
+ assert.throws(()=>assertAccessOperations({box},[{action:'patch',id:'box',patch:{permission:['default','admin-group']}}],writer),/쓰기 권한/);
+ assert.throws(()=>assertAccessOperations({box},[{action:'patch',id:'box',patch:{permission:[]}}],{...writer,is_admin:true}),/쓰기 권한/);
+});

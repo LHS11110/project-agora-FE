@@ -33,6 +33,7 @@ const initialItems = {
 
 const canvasPeers = new Set();
 const rtcSockets = new Set();
+const rtcPeers = new Map();
 const receipts = new Map();
 const errors = [];
 const packets = [];
@@ -133,7 +134,24 @@ async function installRoutes(context, { user, token, caps }) {
     const isRtc = ws.url().includes('/rtc/');
     const clientSet = isRtc ? rtcSockets : canvasPeers;
     clientSet.add(ws);
-    ws.onClose(() => clientSet.delete(ws));
+    const sendVoiceNotice = (senderWs, peerId, notice) => {
+      for (const [otherWs, other] of rtcPeers) {
+        if (otherWs !== senderWs && other.voice_active) {
+          otherWs.send(JSON.stringify({ type: 'voice_notice', event: notice, peer_id: peerId }));
+        }
+      }
+    };
+    ws.onClose(() => {
+      clientSet.delete(ws);
+      if (isRtc && rtcPeers.has(ws)) {
+        const closed = rtcPeers.get(ws);
+        rtcPeers.delete(ws);
+        for (const [otherWs] of rtcPeers) {
+          otherWs.send(JSON.stringify({ type: 'rtc_peer_left', peer_id: closed.peerId }));
+        }
+        if (closed.voice_active) sendVoiceNotice(ws, closed.peerId, 'voice_leave');
+      }
+    });
 
     setTimeout(() => {
       ws.send(
@@ -141,17 +159,17 @@ async function installRoutes(context, { user, token, caps }) {
           isRtc
             ? { type: 'rtc_ready' }
             : {
-                type: 'init_items',
-                items: latest,
-                ...caps,
-                groups: ['default'],
-                sync_protocol: 2,
-                sync_user_id: user.tag_number === 1 ? 7 : 8,
-                revision,
-                accepted_count: 0,
-                rtc_canvas_connection_id: 'fixture',
-                rtc_canvas_connection_hash: 'proof',
-              }
+              type: 'init_items',
+              items: latest,
+              ...caps,
+              groups: ['default'],
+              sync_protocol: 2,
+              sync_user_id: user.tag_number === 1 ? 7 : 8,
+              revision,
+              accepted_count: 0,
+              rtc_canvas_connection_id: 'fixture',
+              rtc_canvas_connection_hash: 'proof',
+            }
         )
       );
     }, 80);
@@ -174,24 +192,65 @@ async function installRoutes(context, { user, token, caps }) {
         );
       } else if (data.type === 'rtc_join') {
         const gen = ++rtcGeneration;
-        ws.send(
-          JSON.stringify({
-            type: 'rtc_peers',
-            self_peer_id: `peer-${gen}`,
-            peers: [
-              {
-                peer_id: `voice-other-${gen}`,
-                nickname: 'Other',
-                tag_number: 2,
-                groups: ['default'],
-                voice_active: true,
-                voice_muted: false,
-              },
-            ],
-          })
-        );
+        const peerId = `peer-${gen}`;
+        const existingPeers = [...rtcPeers.values()].map((peer) => ({
+          peer_id: peer.peerId,
+          nickname: peer.nickname,
+          tag_number: peer.tag_number,
+          groups: peer.groups,
+          voice_active: peer.voice_active,
+          voice_muted: peer.voice_muted,
+          screen_sharing: peer.screen_sharing,
+        }));
+        const publicPeer = {
+          peer_id: peerId,
+          nickname: user.nickname,
+          tag_number: user.tag_number,
+          groups: ['default'],
+          voice_active: false,
+          voice_muted: false,
+          screen_sharing: false,
+        };
+        rtcPeers.set(ws, { peerId, ...publicPeer });
+        ws.send(JSON.stringify({ type: 'rtc_peers', self_peer_id: peerId, peers: existingPeers }));
+        for (const [otherWs] of rtcPeers) {
+          if (otherWs !== ws) {
+            otherWs.send(JSON.stringify({ type: 'rtc_peer_joined', peer: publicPeer }));
+          }
+        }
       } else if (data.type === 'voice_state') {
-        ws.send(JSON.stringify({ ...data, peer_id: `peer-${rtcGeneration}` }));
+        const peer = rtcPeers.get(ws);
+        if (!peer) return;
+        const prevActive = peer.voice_active;
+        const prevSharing = peer.screen_sharing;
+        const nextActive = Boolean(data.active);
+        const nextMuted = nextActive && Boolean(data.muted);
+        const nextSharing = nextActive && data.screen_sharing === true;
+        peer.voice_active = nextActive;
+        peer.voice_muted = nextMuted;
+        peer.screen_sharing = nextSharing;
+        for (const [otherWs] of rtcPeers) {
+          otherWs.send(
+            JSON.stringify({
+              type: 'voice_state',
+              peer_id: peer.peerId,
+              active: nextActive,
+              muted: nextMuted,
+              screen_sharing: nextSharing,
+            })
+          );
+        }
+        const notices = [];
+        if (!prevActive && nextActive) {
+          notices.push('voice_join');
+          if (nextSharing) notices.push('screen_share_start');
+        } else if (prevActive && !nextActive) {
+          notices.push('voice_leave');
+        } else if (prevActive && nextActive) {
+          if (!prevSharing && nextSharing) notices.push('screen_share_start');
+          else if (prevSharing && !nextSharing) notices.push('screen_share_stop');
+        }
+        for (const cue of notices) sendVoiceNotice(ws, peer.peerId, cue);
       } else if (data.type === 'chat_history') {
         const isComment = Boolean(data.object_id);
         ws.send(
@@ -231,7 +290,7 @@ async function installRoutes(context, { user, token, caps }) {
           JSON.stringify({
             type: 'mentions_snapshot',
             request_id: data.request_id,
-            notifications: notes,
+            notifications: notes.filter((n) => !n.target || n.target === user.nickname),
           })
         );
       } else if (data.type === 'mention_read') {
@@ -373,12 +432,20 @@ try {
     p.on('pageerror', (e) => errors.push(`${label}: ${e.message}`));
   }
 
+  const waitForCanvasReady = (p) =>
+    p.waitForFunction(
+      () =>
+        Boolean(window.frelogCanvas?.read().items?.box) &&
+        Boolean(document.querySelector('.connection-pill.connected')) &&
+        !document.querySelector('.canvas-loading-status')
+    );
+
   await writer.goto(`${origin}/canvases/999004`);
-  await writer.locator('.canvas-loading-status.is-overlay').waitFor({ state: 'hidden' });
+  await waitForCanvasReady(writer);
   await observer.goto(`${origin}/canvases/999004`);
-  await observer.locator('.canvas-loading-status.is-overlay').waitFor({ state: 'hidden' });
+  await waitForCanvasReady(observer);
   await reader.goto(`${origin}/canvases/999004`);
-  await reader.locator('.canvas-loading-status.is-overlay').waitFor({ state: 'hidden' });
+  await waitForCanvasReady(reader);
 
   // Wait briefly so initial mentions_snapshot / backlog resolves, verifying zero false mention chimes on load.
   await writer.waitForTimeout(300);
@@ -466,7 +533,7 @@ try {
   assert.equal(readerWrites, 0, 'read-only viewer issued zero writes');
 
   await observer.reload();
-  await observer.locator('.canvas-loading-status.is-overlay').waitFor({ state: 'hidden' });
+  await waitForCanvasReady(observer);
   await observer.waitForFunction(
     (id) => window.frelogCanvas?.read().items[id]?.mediaType === 'youtube' && !window.frelogCanvas.read().items[id]?.mediaState,
     ytId
@@ -501,7 +568,16 @@ try {
     'temporary broker reconnect must not emit voice_leave or voice_join cues'
   );
 
-  // 3) Cancelled screen share prompt must NOT emit screen_share_start.
+  // 3) Observer joins voice -> both observer and already-connected writer hear voice_join; non-voice reader hears nothing.
+  await observer.getByRole('button', { name: '음성 통화', exact: true }).click();
+  await observer.locator('.canvas-chat-panel .canvas-voice').waitFor();
+  await observer.waitForFunction(() => document.querySelector('.voice-join')?.disabled === false);
+  await observer.getByRole('button', { name: '통화 참여', exact: true }).click();
+  await observer.waitForFunction(() => window.__soundCues.includes('voice_join'));
+  await writer.waitForFunction(() => window.__soundCues.filter((c) => c === 'voice_join').length === 2);
+  assert.deepEqual(await reader.evaluate(() => window.__soundCues), [], 'non-voice reader must not receive voice_join cue');
+
+  // 4) Cancelled screen share prompt must NOT emit screen_share_start to self or peers.
   await writer.evaluate(() => {
     window.__displayMediaMode = 'cancel';
   });
@@ -509,22 +585,42 @@ try {
   await writer.waitForTimeout(200);
   assert.equal(
     await writer.evaluate(() => window.__soundCues.length),
-    cuesAfterJoin,
+    cuesAfterJoin + 1,
     'cancelled screen share permission prompt must not emit cue'
   );
+  assert.deepEqual(await observer.evaluate(() => window.__soundCues), ['voice_join']);
 
-  // 4) Active screen share emits screen_share_start.
+  // 5) Active screen share emits screen_share_start to both sharer and connected peers (not non-voice reader).
   await writer.evaluate(() => {
     window.__displayMediaMode = 'stream';
   });
   await writer.getByRole('button', { name: '화면 공유', exact: true }).click();
   await writer.waitForFunction(() => window.__soundCues.includes('screen_share_start'));
+  await observer.waitForFunction(() => window.__soundCues.includes('screen_share_start'));
+  assert.deepEqual(await reader.evaluate(() => window.__soundCues), [], 'non-voice reader must not receive screen_share_start');
 
-  // 5) Leaving voice call emits voice_leave.
+  // 6) Stopping screen share emits screen_share_stop to both sharer and connected peers (not non-voice reader).
+  await writer.getByRole('button', { name: '화면 공유 중지', exact: true }).click();
+  await writer.waitForFunction(() => window.__soundCues.includes('screen_share_stop'));
+  await observer.waitForFunction(() => window.__soundCues.includes('screen_share_stop'));
+  assert.deepEqual(await reader.evaluate(() => window.__soundCues), [], 'non-voice reader must not receive screen_share_stop');
+
+  // 7) Leaving voice call emits voice_leave to self and remaining connected peers; then observer leaves alone.
   await writer.getByRole('button', { name: '통화 나가기', exact: true }).click();
   await writer.waitForFunction(() => window.__soundCues.includes('voice_leave'));
+  await observer.waitForFunction(() => window.__soundCues.includes('voice_leave'));
+  await observer.waitForTimeout(120);
+  await observer.getByRole('button', { name: '통화 나가기', exact: true }).click();
+  await observer.waitForFunction(() => window.__soundCues.filter((c) => c === 'voice_leave').length === 2);
+  await writer.waitForTimeout(150);
+  assert.equal(
+    await writer.evaluate(() => window.__soundCues.filter((c) => c === 'voice_leave').length),
+    1,
+    'disconnected user must not hear peer voice_leave cue'
+  );
+  assert.deepEqual(await reader.evaluate(() => window.__soundCues), [], 'non-voice reader must still have zero sound cues');
 
-  // 6) Self-mention in general chat must NOT emit mention cue (also ignore chat_history).
+  // 8) Self-mention in general chat must NOT emit mention cue (also ignore chat_history).
   await writer.getByRole('tab', { name: '채팅', exact: true }).click();
   await writer.waitForTimeout(150);
   const cuesBeforeSelfMention = await writer.evaluate(() => window.__soundCues.length);
@@ -540,6 +636,7 @@ try {
   // 7) Live general chat mention + trailing mentions_changed must chime only ONCE.
   notes.push({
     mention_id: 'live-chat-note-1',
+    target: 'Roles',
     unread: true,
     sequence: 205,
     text: '확인해주세요 @Roles#1',
@@ -592,13 +689,24 @@ try {
   const finalCues = await writer.evaluate(() => window.__soundCues);
   assert.deepEqual(finalCues, [
     'voice_join',
+    'voice_join',
     'screen_share_start',
+    'screen_share_stop',
     'voice_leave',
     'mention',
     'mention',
   ]);
+  const observerVoiceCues = await observer.evaluate(() => window.__soundCues.slice(0, 5));
+  assert.deepEqual(observerVoiceCues, [
+    'voice_join',
+    'screen_share_start',
+    'screen_share_stop',
+    'voice_leave',
+    'voice_leave',
+  ]);
+  assert.deepEqual(await reader.evaluate(() => window.__soundCues), []);
   assert.deepEqual(errors, []);
-  console.log('PASS Web Audio sound cues: voice_join, screen_share_start, voice_leave, chat & object-comment mention, dedup & negative guards');
+  console.log('PASS Web Audio sound cues: peer voice_join, screen_share_start/stop, voice_leave (voice-only), mentions, dedup & negative guards');
 
   await writerContext.close();
   await readerContext.close();

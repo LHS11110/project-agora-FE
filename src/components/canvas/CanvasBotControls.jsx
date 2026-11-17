@@ -1,9 +1,10 @@
 import {managementError} from '../../canvas/permissions/managementError.js';
-import {useEffect,useState} from 'react';
+import {useEffect,useId,useState} from 'react';
 import {api} from '../../api/client.js';
 import {ui} from '../../i18n/locale.js';
 import '../../canvas/permissions/canvas-access-management.css';
 export default function CanvasBotControls({canvasId,token,settings,pending,onRequest}){
+ const fieldId=useId();
  const [bots,setBots]=useState([]),[name,setName]=useState(''),[group,setGroup]=useState(settings?.initial_group||'default'),[busy,setBusy]=useState(false),[error,setError]=useState(''),[secret,setSecret]=useState(null),[visible,setVisible]=useState(false),[copied,setCopied]=useState(false),[confirm,setConfirm]=useState(null);
  const root='/api/canvases/'+canvasId+'/bots';
  const groups=Object.keys(settings?.group_permissions||{}).filter(key=>key!=='admin-group'&&settings.group_permissions[key].read===true);
@@ -38,11 +39,11 @@ export default function CanvasBotControls({canvasId,token,settings,pending,onReq
  };
  return <section className="canvas-access-management" aria-label={ui('봇 참여자 관리')}><h3>{ui('봇 참여자 관리')}</h3><p>{ui('봇을 생성하고 접속 그룹을 선택합니다. 봇은 이 캔버스에서 선택한 그룹의 권한으로만 작업합니다.')}</p>
   <form className="bot-management-create" onSubmit={create}>
-   <input className="plain-input" aria-label={ui('봇 이름')} placeholder={ui('봇 이름')} maxLength={80} value={name} disabled={busy||pending||Boolean(secret)} onChange={e=>setName(e.target.value)}/>
-   <select className="plain-input" aria-label={ui('봇 참여 그룹')} value={group} disabled={busy||pending||Boolean(secret)} onChange={e=>setGroup(e.target.value)}>{groups.map(key=><option key={key} value={key}>{key}</option>)}</select>
+   <input id={`${fieldId}-bot-name`} name="bot-name" className="plain-input" aria-label={ui('봇 이름')} placeholder={ui('봇 이름')} maxLength={80} value={name} disabled={busy||pending||Boolean(secret)} onChange={e=>setName(e.target.value)}/>
+   <select id={`${fieldId}-bot-group`} name="bot-group" className="plain-input" aria-label={ui('봇 참여 그룹')} value={group} disabled={busy||pending||Boolean(secret)} onChange={e=>setGroup(e.target.value)}>{groups.map(key=><option key={key} value={key}>{key}</option>)}</select>
    <button className="button button-outline" disabled={busy||pending||Boolean(secret)||!name.trim()||!group}>{ui('봇 생성')}</button>
   </form>
-  {secret&&<div className="bot-secret-card" role="region" aria-label={ui('새 봇 자격 증명')}><strong>{secret.bot.nickname}#{secret.bot.tag_number}</strong><p>{ui('토큰은 이번 응답에서만 확인할 수 있습니다. 복사하거나 파일로 저장한 뒤 확인 완료를 누르세요.')}</p><input className="plain-input" aria-label={ui('봇 접속 토큰')} type={visible?'text':'password'} readOnly value={secret.token}/>
+  {secret&&<div className="bot-secret-card" role="region" aria-label={ui('새 봇 자격 증명')}><strong>{secret.bot.nickname}#{secret.bot.tag_number}</strong><p>{ui('토큰은 이번 응답에서만 확인할 수 있습니다. 복사하거나 파일로 저장한 뒤 확인 완료를 누르세요.')}</p><input id={`${fieldId}-bot-secret`} name="bot-secret-token" className="plain-input" aria-label={ui('봇 접속 토큰')} type={visible?'text':'password'} readOnly value={secret.token}/>
    <div className="bot-secret-actions"><button className="button button-outline" onClick={()=>setVisible(v=>!v)}>{ui(visible?'토큰 숨기기':'토큰 보기')}</button><button className="button button-outline" onClick={async()=>{try{await navigator.clipboard.writeText(secret.token);setCopied(true);}catch{setError('복사하지 못했습니다. 토큰을 선택해 복사하거나 파일로 저장하세요.');}}}>{ui(copied?'복사됨':'토큰 복사')}</button><button className="button button-outline" onClick={download}>{ui('자격 증명 저장')}</button><button className="button button-outline" onClick={()=>setSecret(null)}>{ui('확인 완료')}</button></div>
   </div>}
   {error&&<p className="access-management-error" role="alert">{managementError(error)}</p>}

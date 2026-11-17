@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useId,useRef,useState} from 'react';
 import {api as request} from '../../api/client.js';
 import {useAuth} from '../../state/AuthContext.jsx';
 import {useNavigate} from '../../routing.jsx';
@@ -9,6 +9,7 @@ import {canvasPasswordGrantKey,readCanvasPasswordGrant,saveCanvasPasswordGrant} 
 import {canvasSnapshot} from './githubCanvas.js';
 
 export default function CanvasBranchPanel({canvasId,api,connection,work,onConnected,onContext,context:projectContext,authorize,caps={}}){
+ const fieldId=useId();
  const {token,user}=useAuth(),navigate=useNavigate();
  const [context,setContext]=useState(projectContext),[branches,setBranches]=useState([]),[selected,setSelected]=useState(''),[name,setName]=useState(''),[status,setStatus]=useState('');
  const alive=useRef(true);
@@ -54,10 +55,10 @@ export default function CanvasBranchPanel({canvasId,api,connection,work,onConnec
   <strong>{ui('브랜치별 캔버스')}</strong><p>{ui('브랜치마다 별도 캔버스와 실시간 편집 방을 사용합니다. 브랜치 전환은 다른 방의 내용을 바꾸지 않습니다.')}</p>
   {current&&<small>{ui('현재 브랜치')} · {current} · #{canvasId}</small>}
   <div className="canvas-github-actions"><button onClick={list}>{ui('브랜치 연결 · 목록 갱신')}</button><button disabled={!caps.restore} onClick={latest}>{ui('브랜치 최신 커밋 복구')}</button></div>
-  <label>{ui('대상 브랜치')}<select aria-label={ui('대상 브랜치')} value={selected} onChange={e=>setSelected(e.target.value)}><option value="">{ui('브랜치 선택')}</option>{branches.map(b=><option key={b}>{b}</option>)}</select></label>
+  <label>{ui('대상 브랜치')}<select id={`${fieldId}-target`} name="github-branch-target" aria-label={ui('대상 브랜치')} value={selected} onChange={e=>setSelected(e.target.value)}><option value="">{ui('브랜치 선택')}</option>{branches.map(b=><option key={b}>{b}</option>)}</select></label>
   <div className="canvas-github-actions"><button disabled={!caps.switch_branch||!selected||(!caps.create_branch&&!context?.project?.branches?.[selected])} onClick={()=>checkout(false)}>{ui('별도 브랜치 캔버스로 이동')}</button><button disabled={!caps.merge||!selected||selected===target.branch} onClick={merge}>{ui('선택 브랜치를 현재 브랜치에 병합')}</button></div>
-  <label>{ui('새 브랜치 이름')}<input value={name} onChange={e=>setName(e.target.value)} placeholder="feature/canvas"/></label><button disabled={!caps.create_branch||!name.trim()} onClick={()=>checkout(true)}>{ui('새 브랜치와 캔버스 만들기')}</button>
-  <section className="canvas-github-pr"><strong>{ui('Pull Request')}</strong><small>{ui('PR 생성에는 GitHub 토큰의 Pull requests 쓰기 권한도 필요합니다.')}</small><label>{ui('PR 제목')}<input value={prTitle} onChange={e=>setPrTitle(e.target.value)}/></label><label>{ui('PR 설명')}<textarea value={prBody} onChange={e=>setPrBody(e.target.value)}/></label><button disabled={!caps.pr||!selected||selected===target.branch||!prTitle.trim()} onClick={pr}>{ui('선택 브랜치로 PR 생성')}</button>{prUrl&&<a href={prUrl} target="_blank" rel="noreferrer">{ui('PR 보기')}</a>}</section>
+  <label>{ui('새 브랜치 이름')}<input id={`${fieldId}-new-branch`} name="github-new-branch" value={name} onChange={e=>setName(e.target.value)} placeholder="feature/canvas"/></label><button disabled={!caps.create_branch||!name.trim()} onClick={()=>checkout(true)}>{ui('새 브랜치와 캔버스 만들기')}</button>
+  <section className="canvas-github-pr"><strong>{ui('Pull Request')}</strong><small>{ui('PR 생성에는 GitHub 토큰의 Pull requests 쓰기 권한도 필요합니다.')}</small><label>{ui('PR 제목')}<input id={`${fieldId}-pr-title`} name="github-pr-title" value={prTitle} onChange={e=>setPrTitle(e.target.value)}/></label><label>{ui('PR 설명')}<textarea id={`${fieldId}-pr-body`} name="github-pr-body" value={prBody} onChange={e=>setPrBody(e.target.value)}/></label><button disabled={!caps.pr||!selected||selected===target.branch||!prTitle.trim()} onClick={pr}>{ui('선택 브랜치로 PR 생성')}</button>{prUrl&&<a href={prUrl} target="_blank" rel="noreferrer">{ui('PR 보기')}</a>}</section>
   {status&&<p role="status">{ui(status)}</p>}
  </div>;
 }

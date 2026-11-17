@@ -1,13 +1,14 @@
 import ParticipantRoleControls from '../../canvas/permissions/ParticipantRoleControls.jsx';
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import Icon from '../Icon.jsx';
 import UserAvatar from '../account/UserAvatar.jsx';
 import CanvasManagementDialog from './CanvasManagementDialog.jsx';
 
 export default function CanvasParticipantsDialog({ settings, participants = [], token, pending, onRequest, onClose, onAddParticipant, onRemoveParticipant }) {
   useUiLocale();
+  const fieldId = useId();
   const [nickname, setNickname] = useState('');
   const [tag, setTag] = useState('');
   const valid = nickname.trim() && /^\d+$/.test(tag) && Number.isSafeInteger(Number(tag));
@@ -26,8 +27,8 @@ export default function CanvasParticipantsDialog({ settings, participants = [], 
       </div>
       <ParticipantRoleControls settings={settings} pending={pending} onRequest={onRequest} onRemoveParticipant={onRemoveParticipant}/>
       <form className="setting-row participant-add-row" onSubmit={event => { event.preventDefault(); if (pending || !settings?.can_manage || !valid) return; onAddParticipant(nickname.trim(), Number(tag)); setNickname(''); setTag(''); }}>
-        <input className="plain-input" aria-label={ui("참여자 닉네임")} placeholder={ui("닉네임")} value={nickname} onChange={event => setNickname(event.target.value)} />
-        <input className="plain-input tag-input" aria-label={ui("참여자 태그")} inputMode="numeric" placeholder={ui("태그")} value={tag} onChange={event => setTag(event.target.value)} />
+        <input id={`${fieldId}-nickname`} name="participant-nickname" className="plain-input" aria-label={ui("참여자 닉네임")} placeholder={ui("닉네임")} value={nickname} onChange={event => setNickname(event.target.value)} />
+        <input id={`${fieldId}-tag`} name="participant-tag" className="plain-input tag-input" aria-label={ui("참여자 태그")} inputMode="numeric" placeholder={ui("태그")} value={tag} onChange={event => setTag(event.target.value)} />
         <button className="button button-outline" disabled={pending || !settings?.can_manage || !valid}>{ui("추가")}</button>
       </form>
     </div>

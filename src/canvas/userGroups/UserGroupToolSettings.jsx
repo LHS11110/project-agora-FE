@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useId, useMemo, useState, useEffect } from 'react';
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
 import UserAvatar from '../../components/account/UserAvatar.jsx';
@@ -7,6 +7,7 @@ import './user-group.css';
 
 export default function UserGroupToolSettings({ settings, canvasParticipants = [], user, token, onInsert, onTemplateChange }) {
   useUiLocale();
+  const fieldId = useId();
   const groups = settings?.groups || {};
   const groupNames = Object.keys(groups);
   const [selectedGroup, setSelectedGroup] = useState(() => groupNames[0] || '');
@@ -90,7 +91,7 @@ export default function UserGroupToolSettings({ settings, canvasParticipants = [
     {groupNames.length > 0 && <div className="user-group-picker-block">
       <label className="form-field">
         <span>{ui("캔버스 그룹 지정")}</span>
-        <select className="plain-input" value={selectedGroup} onChange={e => { setSelectedGroup(e.target.value); setSelectedUsers([]); }}>
+        <select id={`${fieldId}-group`} name="user-group-tool-preset" className="plain-input" value={selectedGroup} onChange={e => { setSelectedGroup(e.target.value); setSelectedUsers([]); }}>
           {groupNames.map(name => <option key={name} value={name}>{name} ({groups[name]?.length || 0}{ui("명")})</option>)}
         </select>
       </label>
@@ -112,7 +113,7 @@ export default function UserGroupToolSettings({ settings, canvasParticipants = [
           const key = `${person.nickname}#${person.tag_number}`;
           const isSelected = selectedUsers.includes(key);
           return <div className={`user-group-participant-row${isSelected ? ' is-selected' : ''}`} key={key}>
-            <input type="checkbox" checked={isSelected} onChange={() => toggleUserSelection(key)} aria-label={key} />
+            <input id={`${fieldId}-user-${key}`} name={`user-group-tool-user-${key}`} type="checkbox" checked={isSelected} onChange={() => toggleUserSelection(key)} aria-label={key} />
             <UserAvatar user={person} token={token} />
             <div className="user-group-participant-info">
               <strong>{person.nickname}</strong>

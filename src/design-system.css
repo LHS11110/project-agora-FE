@@ -54,7 +54,7 @@ body .empty-icon {background:var(--fl-accent-soft);color:var(--fl-accent);}
 /* Public product pages */
 body .home-scroll-page {--home-bg:#fff;--home-panel:#f7f7fa;--home-line:var(--fl-border);--home-muted:var(--fl-secondary);--home-lime:var(--fl-accent);background:#fff;color:var(--fl-ink);font-family:var(--fl-font);}
 body .home-container {width:min(1200px,calc(100% - 96px));}
-body .home-scroll-header {background:#fffffff5;border-color:var(--fl-border);backdrop-filter:none;}
+body .home-scroll-header {background:#fff;border-color:var(--fl-border);backdrop-filter:none;}
 body .home-scroll-header>.home-container {min-height:76px;}
 body .home-scroll-header nav {gap:30px;margin-left:0;}
 body .home-scroll-header nav a {font-size:13px;color:var(--fl-secondary);}
@@ -202,7 +202,7 @@ body .side-link.active {background:#eeebfa;color:var(--fl-accent);font-weight:60
 body .side-link.active>svg {color:var(--fl-accent);}
 body .side-link>svg {width:17px;height:17px;}
 body .sidebar-create-link {display:flex;align-items:center;gap:9px;margin:32px 6px 18px;padding:14px 10px;border-top:1px solid var(--fl-border);border-bottom:1px solid var(--fl-border);color:var(--fl-muted);font-size:10px;line-height:1.8;}
-body .sidebar-create-link>span {flex:1;}
+body .sidebar-create-link>span {flex:1;word-break:keep-all;}
 body .sidebar-create-link>svg {flex:none;}
 body .sidebar-account {border-color:var(--fl-border);padding-top:16px;}
 body .account-copy strong {font-size:12px;color:var(--fl-ink);}
@@ -479,7 +479,8 @@ body .tutorial-footnote {background:#faf9fc;border-color:var(--fl-border);color:
  body .home-start {flex-direction:column;align-items:flex-start;padding:29px 25px;gap:25px;margin-bottom:40px;}
  body .home-start h2 {font-size:26px;letter-spacing:-1px;}
  body .home-start p {font-size:12px;}
- body .home-scroll-footer {flex-wrap:wrap;gap:20px;}
+ body .home-scroll-footer{flex-wrap:wrap;gap:20px;}
+ body .home-scroll-footer.home-site-footer{padding-bottom:74px;}
  body .home-scroll-footer>span {font-size:10px;}
  body .home-scroll-footer>div {font-size:11px;}
  body .auth-page-header,body .auth-page-footer {width:calc(100% - 40px);}
@@ -521,16 +522,21 @@ body .tutorial-footnote {background:#faf9fc;border-color:var(--fl-border);color:
  body .docs-api-table td {font-size:11px;}
  body .docs-api-table code {font-size:10px;}
  body .docs-payload-card {grid-template-columns:1fr;}
- body .docs-footer {flex-wrap:wrap;gap:14px;line-height:1.8;}
+ body .docs-footer {flex-wrap:wrap;gap:14px;line-height:1.8;padding-bottom:68px;}
 }
-@media(max-width:470px) {
- body .canvas-grid {grid-template-columns:minmax(0,1fr);}
- body .home-hero-copy h1 {font-size:43px;}
- body .home-header-actions .language-switcher {font-size:10px;}
- body .home-header-actions .language-switcher>svg {display:none;}
- body .docs-workspace-link {font-size:0!important;padding:8px!important;}
- body .docs-workspace-link>svg {width:17px;height:17px;}
-}
+ @media(max-width:650px) {
+  body .docs-workspace-link {font-size:11px!important;min-height:34px;padding:6px 10px!important;gap:5px;white-space:nowrap;flex-shrink:0;}
+  body .docs-workspace-link>svg {width:14px;height:14px;flex:none;}
+ }
+ @media(max-width:470px) {
+  body .canvas-grid {grid-template-columns:minmax(0,1fr);}
+  body .home-hero-copy h1 {font-size:43px;}
+  body .home-header-actions .language-switcher {font-size:10px;}
+  body .home-header-actions .language-switcher>svg {display:none;}
+  body .docs-header {gap:8px;}
+  body .docs-header .language-switcher>svg {display:none;}
+  body .docs-workspace-link {font-size:10px!important;min-height:32px;padding:5px 9px!important;}
+ }
 
 /* Component-level colors stay in sync when their CSS loads lazily. */
 body :is(.home-scroll-page,.auth-page) .frelog-brand-lockup {color:var(--fl-ink)!important;}

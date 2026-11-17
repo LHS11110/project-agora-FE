@@ -1,4 +1,5 @@
 import {canvasFetch} from '../api/client.js';
+import {decodeDataUriBlob} from '../api/canvasTransport.js';
 import { objectCornerRadius } from './objectCorners.js';
 // Small decoded previews are bounded independently of GPU atlas resources.
 // Eviction never invalidates pixels already copied into a layer's raster atlas.
@@ -55,21 +56,35 @@ export default class ImagePreviewCache {
 }
 
 export async function loadImagePreview(source, token, apiUrl, signal, maxSide=96) {
-  const url = new URL(/^(data|blob):/i.test(source) ? source : apiUrl(source));
-  const apiOrigin = /^(data|blob):$/i.test(url.protocol) ? null : new URL(apiUrl('/')).origin;
-  const response = await canvasFetch(url.href, { signal, cache: 'no-store', headers: url.origin === apiOrigin && token ? { Authorization: `Bearer ${token}` } : {} });
-  if (!response.ok) throw Error('Image preview unavailable');
-  const blob = await response.blob();
+  if (signal?.aborted) throw new DOMException('The request was aborted', 'AbortError');
+  const isInline = /^(data|blob):/i.test(source);
+  const url = new URL(isInline ? source : apiUrl(source));
   let bitmap, objectUrl;
   try {
-    try { bitmap = await createImageBitmap(blob); }
-    catch {
-      // Some browsers decode SVG in <img> but reject SVG createImageBitmap.
-      objectUrl = URL.createObjectURL(blob);
-      const image = new Image(); image.src = objectUrl; await image.decode();
+    if (url.protocol === 'blob:') {
+      // Avoid fetch() on blob:/data: URLs so strict connect-src https: wss: CSP is never violated.
+      const image = new Image(); image.src = url.href; await image.decode();
       bitmap = image;
+    } else {
+      let blob;
+      if (url.protocol === 'data:') {
+        blob = decodeDataUriBlob(url.href);
+      } else {
+        const apiOrigin = new URL(apiUrl('/')).origin;
+        const response = await canvasFetch(url.href, { signal, cache: 'no-store', headers: url.origin === apiOrigin && token ? { Authorization: `Bearer ${token}` } : {} });
+        if (!response.ok) throw Error('Image preview unavailable');
+        blob = await response.blob();
+      }
+      try { bitmap = await createImageBitmap(blob); }
+      catch {
+        // Some browsers decode SVG in <img> but reject SVG createImageBitmap.
+        objectUrl = URL.createObjectURL(blob);
+        const image = new Image(); image.src = objectUrl; await image.decode();
+        bitmap = image;
+      }
     }
-    const ratio = Math.min(1, Math.max(16,Math.min(1024,Number(maxSide)||96)) / Math.max(bitmap.width, bitmap.height));
+    if (signal?.aborted) throw new DOMException('The request was aborted', 'AbortError');
+    const ratio = Math.min(1, Math.max(16,Math.min(1024,Number(maxSide)||96)) / Math.max(1, bitmap.width, bitmap.height));
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(bitmap.width * ratio)); canvas.height = Math.max(1, Math.round(bitmap.height * ratio));
     const context=canvas.getContext('2d');context.imageSmoothingQuality=maxSide>96?'high':'low';context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);

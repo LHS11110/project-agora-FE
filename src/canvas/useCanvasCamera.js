@@ -4,7 +4,7 @@ import { applyGridProjection, gridProjection } from './gridProjection.js';
 import { CANVAS_SPACE, formatCanvasZoom } from './canvasSpace.js';
 
 // Camera motion is a compositor update. React refreshes scene membership at
-// most every 100ms, sooner if the camera could leave the prepared overscan.
+// a bounded cadence, sooner if the camera could leave the prepared overscan.
 export function useCanvasCamera(boardRef, sceneRef) {
   const current = useRef({ x: 0, y: 0, scale: 1 }), committed = useRef(current.current);
   const [revision, setRevision] = useState(0);
@@ -68,16 +68,18 @@ export function useCanvasCamera(boardRef, sceneRef) {
       const coordOrigin = hadOrigin ? refs.coordOrigin : (refs.coordOrigin = axes.querySelector('.coordinate-origin'));
       if (viewChanged || (coordX && !hadX) || (coordY && !hadY) || (coordOrigin && !hadOrigin)) {
         const x = CANVAS_SPACE.width * camera.scale / 2 + camera.x, y = CANVAS_SPACE.height * camera.scale / 2 + camera.y;
+        const displayX=Math.max(8,Math.min(Math.max(8,width-8),x)),displayY=Math.max(8,Math.min(Math.max(8,height-8),y));
         const nextXArrow = x <= width ? '1' : '0', nextYArrow = y >= 0 ? '1' : '0';
         if (coordX) {
-          coordX.style.transform = `translate3d(0,${y}px,0)`;
+          coordX.style.transform = `translate3d(0,${displayY}px,0)`;
           if (coordX.style.getPropertyValue('--axis-x-arrow-opacity') !== nextXArrow) coordX.style.setProperty('--axis-x-arrow-opacity', nextXArrow);
         }
         if (coordY) {
-          coordY.style.transform = `translate3d(${x}px,0,0)`;
+          coordY.style.transform = `translate3d(${displayX}px,0,0)`;
           if (coordY.style.getPropertyValue('--axis-y-arrow-opacity') !== nextYArrow) coordY.style.setProperty('--axis-y-arrow-opacity', nextYArrow);
         }
         if (coordOrigin) {
+          coordOrigin.style.display=x>=0&&x<=width&&y>=0&&y<=height?'':'none';
           coordOrigin.style.transform = `translate3d(${x}px,${y}px,0)`;
         }
       }
@@ -119,6 +121,6 @@ export function useCanvasCamera(boardRef, sceneRef) {
   }, [apply, commit, boardRef]);
   const camera = useMemo(() => ({ get x() { return current.current.x }, get y() { return current.current.y }, get scale() { return current.current.scale }, get detailScale() { return work.current.detailScale } }), [revision]);
   useLayoutEffect(apply);
-  useLayoutEffect(() => () => { cancelAnimationFrame(work.current.frame); clearTimeout(work.current.idle); work.current.observer?.disconnect(); boardRef.current?.classList.remove('camera-moving', 'camera-zooming'); }, [boardRef]);
+  useLayoutEffect(() => () => { cancelAnimationFrame(work.current.frame); work.current.frame = 0; clearTimeout(work.current.idle); work.current.idle = 0; work.current.observer?.disconnect(); work.current.observer = null; work.current.size = null; boardRef.current?.classList.remove('camera-moving', 'camera-zooming'); }, [boardRef]);
   return [camera, setCamera];
 }

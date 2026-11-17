@@ -202,18 +202,82 @@ test('voice call emits join, screen share, and leave sound cues only for genuine
   await call.startScreen();
   assert.deepEqual(cues,['voice_join']);
 
-  // Active screen share fires cue.
+  // Active screen share and manual screen stop both fire cues.
   media.getDisplayMedia=async()=>fakeScreen;
   await call.startScreen();
   assert.deepEqual(cues,['voice_join','screen_share_start']);
+  call.stopScreen();
+  assert.deepEqual(cues,['voice_join','screen_share_start','screen_share_stop']);
 
+  // Leaving while screen sharing emits only voice_leave (not duplicate screen_share_stop).
+  await call.startScreen();
+  assert.deepEqual(cues,['voice_join','screen_share_start','screen_share_stop','screen_share_start']);
   call.leave();
-  assert.deepEqual(cues,['voice_join','screen_share_start','voice_leave']);
+  assert.deepEqual(cues,['voice_join','screen_share_start','screen_share_stop','screen_share_start','voice_leave']);
 
-  // Leaving when not active or unmount close() does not fire extra leave cues.
-  call.leave();
+  // Remote voice_notice cues only play while connected to voice, not while idle, reconnecting, or from self.
+  call.handle({type:'voice_notice',event:'voice_join',peer_id:'b'});
+  call.handle({type:'voice_notice',event:'screen_share_start',peer_id:'b'});
+  assert.deepEqual(cues,['voice_join','screen_share_start','screen_share_stop','screen_share_start','voice_leave']);
+
   await call.join();
+  call.handle({type:'voice_notice',event:'voice_join',peer_id:'a'}); // ignored: self
+  call.handle({type:'voice_notice',event:'voice_join',peer_id:'b'});
+  call.handle({type:'voice_notice',event:'screen_share_start',peer_id:'b'});
+  call.handle({type:'voice_notice',event:'screen_share_stop',peer_id:'b'});
+  call.handle({type:'voice_notice',event:'voice_leave',peer_id:'b'});
+  call.handle({type:'voice_notice',event:'unknown_event',peer_id:'b'});
+  call.reconnect();
+  call.handle({type:'voice_notice',event:'voice_join',peer_id:'b'}); // ignored while reconnecting
   call.close();
-  assert.deepEqual(cues,['voice_join','screen_share_start','voice_leave','voice_join']);
+  assert.deepEqual(cues,[
+   'voice_join','screen_share_start','screen_share_stop','screen_share_start','voice_leave',
+   'voice_join','voice_join','screen_share_start','screen_share_stop','voice_leave'
+  ]);
+ }finally{call.close();}
+});
+test('received system volume and voice volume are independent preferences',async()=>{
+ const {call}=fixture();try{await call.join();const link=call.links.get('b');let system;
+ link.systemAudio={};link.systemGain={gain:{setTargetAtTime:v=>system=v},disconnect(){}};call.audioContext={currentTime:0,close:async()=>{}};
+ call.setPeerSystemVolume('b',25);assert.equal(system,.25);call.setPeerVolume('b',60);assert.equal(system,.25);assert.equal(call.snapshot.participants[0].systemVolume,25);assert.equal(call.snapshot.participants[0].volume,60);
+ call.deafen();assert.equal(system,0);call.deafen();assert.equal(system,.25);
+ link.systemAudio={pause(){}};
+ }finally{call.close();}
+});
+
+test('server relay credentials force media through TURN and are renewed over authenticated signaling',()=>{
+ let config;
+ class RelayPeer extends FakePeer{constructor(value){super();config=value;}}
+ const {call}=fixture({Peer:RelayPeer});
+ const servers=[{urls:'turns:frelog.p-e.kr:443?transport=tcp',username:'expiry:nonce',credential:'test-credential'}];
+ call.handle({type:'rtc_peers',self_peer_id:'self',peers:[],media_relay:{ice_servers:servers,expires_at:Math.floor(Date.now()/1000)+86400}});
+ call.stream={getAudioTracks:()=>[],getTracks:()=>[]};
+ call.handle({type:'rtc_peer_joined',peer:{peer_id:'other',nickname:'other',tag_number:1,voice_active:true}});
+ assert.equal(config.iceTransportPolicy,'relay');assert.deepEqual(config.iceServers,servers);assert.ok(call.relayTimer);
+ call.close();assert.equal(call.relayTimer,null);
+});
+test('unavailable Wall relay disables joining rather than using STUN or direct connections',()=>{
+ const {call}=fixture();
+ call.handle({type:'rtc_peers',self_peer_id:'self',peers:[],media_relay:{ice_servers:[]}});
+ assert.equal(call.snapshot.ready,false);assert.equal(call.snapshot.error,'VOICE_RELAY_UNAVAILABLE');assert.equal(call.iceTransportPolicy,'relay');call.close();
+});
+
+test('relay renewal preserves max-bundle settings and restarts ICE on existing links',async()=>{
+ class ConfigPeer extends FakePeer{
+  constructor(config){super();this.config=config;}
+  getConfiguration(){return this.config;}
+  setConfiguration(config){this.config=config;}
+ }
+ const {call}=fixture({Peer:ConfigPeer});
+ try{await call.join();const pc=call.links.get('b').pc;
+  call.applyRelay({ice_servers:[{urls:'turns:frelog.p-e.kr:443?transport=tcp',username:'renewed',credential:'test'}],expires_at:Math.floor(Date.now()/1000)+86400});
+  assert.equal(pc.config.bundlePolicy,'max-bundle');assert.equal(pc.config.rtcpMuxPolicy,'require');assert.equal(pc.config.iceTransportPolicy,'relay');assert.equal(pc.restarts,1);
+ }finally{call.close();}
+});
+test('only the elected peer sends the initial offer, avoiding TURN gathering rollback',async()=>{
+ class OfferPeer extends FakePeer{async setLocalDescription(){this.offers=(this.offers||0)+1;this.localDescription={type:'offer',toJSON:()=>({type:'offer',sdp:'v=0'})};}}
+ const {call}=fixture({Peer:OfferPeer});
+ try{await call.join();const link=call.links.get('b');call.self='z';link.pc.onnegotiationneeded();await link.serial;assert.equal(link.pc.offers,undefined);
+  call.self='a';link.pc.onnegotiationneeded();await link.serial;assert.equal(link.pc.offers,1);
  }finally{call.close();}
 });

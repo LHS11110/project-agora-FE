@@ -72,7 +72,6 @@ function localMathJaxAssets() {
       cpSync(source, output, { recursive: true, filter: (file) => !file.endsWith('.map') });
       const licenses = resolve(outputRoot, 'licenses');
       mkdirSync(licenses, { recursive: true });
-      copyFileSync(resolve(process.cwd(), 'node_modules/pixi.js/LICENSE'), resolve(licenses, 'pixi.js.txt'));
       copyFileSync(resolve(process.cwd(), 'node_modules/@automerge/automerge/LICENSE'), resolve(licenses, 'automerge.txt'));
     },
   };

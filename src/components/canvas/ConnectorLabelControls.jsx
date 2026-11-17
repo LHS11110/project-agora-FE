@@ -1,7 +1,9 @@
+import { useId } from 'react';
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
 import '../../canvas/content/unified-content.css';
 export default function ConnectorLabelControls({ item, onChange }) {
   useUiLocale();
-  return <section className="inspector-section connector-label-controls"><strong className="inspector-label">{ui("연결 이름")}</strong><label>{ui("이름")}<textarea value={item.label || ''} maxLength={2000} aria-label={ui("연결 화살표 이름")} placeholder={ui("예: **데이터 전달** 또는 $x \\to y$")} onChange={event => onChange('label', event.target.value)} /></label><label>{ui("이름 표시 방식")}<select aria-label={ui("연결 이름 렌더링 방식")} value={item.labelMode || 'markdown'} onChange={event => onChange('labelMode', event.target.value)}><option value="plain">{ui("일반 텍스트")}</option><option value="markdown">Markdown + LaTeX</option><option value="latex">LaTeX</option></select></label><small className="inspector-hint">{ui("이름은 연결선 중앙에 표시됩니다. LaTeX 모드에서는 수식만 입력하세요.")}</small></section>;
+  const fieldId = useId();
+  return <section className="inspector-section connector-label-controls"><strong className="inspector-label">{ui("연결 이름")}</strong><label>{ui("이름")}<textarea id={`${fieldId}-label`} name="connector-label" value={item.label || ''} maxLength={2000} aria-label={ui("연결 화살표 이름")} placeholder={ui("예: **데이터 전달** 또는 $x \\to y$")} onChange={event => onChange('label', event.target.value)} /></label><label>{ui("이름 표시 방식")}<select id={`${fieldId}-label-mode`} name="connector-label-mode" aria-label={ui("연결 이름 렌더링 방식")} value={item.labelMode || 'markdown'} onChange={event => onChange('labelMode', event.target.value)}><option value="plain">{ui("일반 텍스트")}</option><option value="markdown">Markdown + LaTeX</option><option value="latex">LaTeX</option></select></label><small className="inspector-hint">{ui("이름은 연결선 중앙에 표시됩니다. LaTeX 모드에서는 수식만 입력하세요.")}</small></section>;
 }

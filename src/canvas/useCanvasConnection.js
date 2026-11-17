@@ -1,6 +1,7 @@
 import {installCanvasTransport} from '../api/canvasTransport.js';
 import {canvasCodecUrl,installSocketCodec} from './sync/socketCodec.js';
 import { registerGroupLayout } from './permissions/groupBits.js';
+import { deriveUserCapabilitiesFromSettings } from './permissions/creationGroups.js';
 import { RtcMembershipRecovery } from './RtcMembershipRecovery.js';
 import { useEffect, useRef } from 'react';
 import { retryableConnectionError } from './connectionRetry.js';
@@ -17,6 +18,7 @@ import { executeCanvasCode, rejectRuntimeSocketRequests, settleRuntimeSocketResp
 
 export function useCanvasConnection(options) {
   const rtcMembershipRetryRef = useRef(0);
+  const pageFrozenRef = useRef(false);
   const {
     identity: {
       canvasId,
@@ -112,6 +114,7 @@ export function useCanvasConnection(options) {
   useEffect(() => {
     let cancelled = false;
     let disposeCanvasTransport=null;
+    const connectAbort = new AbortController();
     const passwordAbort = new AbortController();
     const rtcMembershipRecovery = new RtcMembershipRecovery(sendRtcRaw);
     let socket;
@@ -126,6 +129,63 @@ export function useCanvasConnection(options) {
     let canvasConnectionId = '';
     let canvasConnectionHash = '';
     let joinedCanvasConnectionId = '';
+    const waitForActiveNetwork = () => {
+      if (!pageFrozenRef.current && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
+        return Promise.resolve();
+      }
+      return new Promise((resolve, reject) => {
+        if (cancelled || connectAbort.signal.aborted) {
+          reject(new DOMException('The request was aborted', 'AbortError'));
+          return;
+        }
+        const cleanup = () => {
+          connectAbort.signal.removeEventListener('abort', onAbort);
+          if (typeof window !== 'undefined') window.removeEventListener('online', onReady);
+          if (typeof document !== 'undefined') {
+            document.removeEventListener('resume', onReady);
+            document.removeEventListener('visibilitychange', onVisible);
+          }
+        };
+        const onReady = () => {
+          if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+          pageFrozenRef.current = false;
+          cleanup();
+          resolve();
+        };
+        const onVisible = () => {
+          if (document.visibilityState === 'visible') onReady();
+        };
+        const onAbort = () => {
+          cleanup();
+          reject(new DOMException('The request was aborted', 'AbortError'));
+        };
+        connectAbort.signal.addEventListener('abort', onAbort, { once: true });
+        if (typeof window !== 'undefined') window.addEventListener('online', onReady);
+        if (typeof document !== 'undefined') {
+          document.addEventListener('resume', onReady);
+          document.addEventListener('visibilitychange', onVisible);
+        }
+      });
+    };
+    const onFreeze = () => { pageFrozenRef.current = true; };
+    const onWakeReconnect = () => {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+      pageFrozenRef.current = false;
+      if (cancelled || reconnectTimer === null || !autoReconnectRef.current) return;
+      window.clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+      reconnectAttemptsRef.current = 0;
+      setReconnectEpoch((current) => current + 1);
+    };
+    const onWakeVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') onWakeReconnect();
+    };
+    if (typeof window !== 'undefined') window.addEventListener('online', onWakeReconnect);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('freeze', onFreeze);
+      document.addEventListener('resume', onWakeReconnect);
+      document.addEventListener('visibilitychange', onWakeVisible);
+    }
     const trackSocketWrites = (ws, onWrite) => {
       if (!ws?.send) return ws;
       const rawSend = ws.send.bind(ws);
@@ -205,10 +265,12 @@ export function useCanvasConnection(options) {
       }
       setError('');
       try {
-        const summary = await api(`/api/canvases/${canvasId}`, { token });
+        await waitForActiveNetwork();
+        if (cancelled) return;
+        const summary = await api(`/api/canvases/${canvasId}`, { token, signal: connectAbort.signal });
         if (cancelled) return;
         setCanvas(summary);
-        const canvasSettings = await api(`/api/canvases/${canvasId}/settings`, { token });
+        const canvasSettings = await api(`/api/canvases/${canvasId}/settings`, { token, signal: connectAbort.signal });
         if (cancelled) return;
         setSettings(canvasSettings);
 
@@ -237,8 +299,10 @@ export function useCanvasConnection(options) {
             ? { canvas_password_token: passwordGrant }
             : password === undefined ? undefined : { password };
           try {
+            await waitForActiveNetwork();
+            if (cancelled) return;
             access = await api(`/api/canvases/${canvasId}/access`, {
-              method: 'POST', token, ...(body ? { body } : {}),
+              method: 'POST', token, signal: connectAbort.signal, ...(body ? { body } : {}),
             });
             serverAccessRetry = 0;
             // Persist only a grant issued after direct password entry. Reusing
@@ -485,6 +549,15 @@ export function useCanvasConnection(options) {
           if (data.type === 'canvas_participants_changed') { sendRaw({ type: 'canvas_settings_get' }); return; }
           if (data.type === 'canvas_settings_snapshot' || data.type === 'canvas_settings_changed') {
             setSettings(data.settings);
+            setCapabilities?.(current => {
+              const next = deriveUserCapabilitiesFromSettings(data.settings, user, current);
+              if (next?.groups) {
+                registerGroupLayout(next.groups, next.group_bits);
+                groupsRef.current = next.groups;
+                setGroups(next.groups);
+              }
+              return next;
+            });
             setCanvas((current) => ({ ...current, canvas_name: data.settings?.canvas_name || current?.canvas_name, description: data.settings?.description ?? current?.description }));
             return;
           }
@@ -492,7 +565,18 @@ export function useCanvasConnection(options) {
             const request=settingsRequestsRef?.current.get(data.request_id);
             if(request){clearTimeout(request.timer);settingsRequestsRef.current.delete(data.request_id);if(data.ok)request.resolve(data.settings);else{const error=new Error(data.code||'SETTINGS_INVALID_INPUT');error.code=data.code;request.reject(error);}}
             setSettingsPending(false);
-            if (data.settings) setSettings(data.settings);
+            if (data.settings) {
+              setSettings(data.settings);
+              setCapabilities?.(current => {
+                const next = deriveUserCapabilitiesFromSettings(data.settings, user, current);
+                if (next?.groups) {
+                  registerGroupLayout(next.groups, next.group_bits);
+                  groupsRef.current = next.groups;
+                  setGroups(next.groups);
+                }
+                return next;
+              });
+            }
             setToast(data.ok ? '설정이 업데이트되었습니다.' : data.code === 'SETTINGS_CONFLICT' ? '다른 변경사항이 먼저 저장되어 최신 정보를 불러왔어요.' : `설정 변경 실패: ${data.code || '오류'}`);
             window.setTimeout(() => setToast(''), 3400);
             return;
@@ -663,6 +747,7 @@ export function useCanvasConnection(options) {
           }
         };
       } catch (err) {
+        if (cancelled || connectAbort.signal.aborted || err?.name === 'AbortError') return;
         if(!cancelled && [401,403,404].includes(err.status)){
           voiceCallRef?.current?.suspend();
           autoReconnectRef.current=false;serverReconnectRequestedRef.current=false;
@@ -684,7 +769,14 @@ export function useCanvasConnection(options) {
       disposeCanvasTransport?.();
       rejectRuntimeSocketRequests(runtimeSocketRequestsRef.current,'캔버스 연결이 변경되어 실행 요청을 중단했습니다.');
       cancelled = true;
+      connectAbort.abort();
       passwordAbort.abort();
+      if (typeof window !== 'undefined') window.removeEventListener('online', onWakeReconnect);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('freeze', onFreeze);
+        document.removeEventListener('resume', onWakeReconnect);
+        document.removeEventListener('visibilitychange', onWakeVisible);
+      }
       const preservePeerMesh = autoReconnectRef.current && canvasSnapshotLoadedRef.current && reconnectTimer === null;
       rtcMembershipRecovery.dispose();
       if (keepaliveTimer !== null) { window.clearInterval(keepaliveTimer); keepaliveTimer = null; }

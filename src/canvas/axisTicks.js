@@ -40,6 +40,8 @@ export function axisTickLayout(camera, viewport, space = CANVAS_SPACE) {
   step = niceAxisStep(Math.max(80,Math.min(220,longest*6+20)) / scale);
   if (!step || !Number.isFinite(step)) return {step:null,x:[],y:[],originX,originY};
   return {step,originX,originY,
-    x:originY>=0&&originY<=height?ticks(originX,width,scale,step,1):[],
-    y:originX>=0&&originX<=width?ticks(originY,height,scale,step,-1):[]};
+    displayX:Math.max(8,Math.min(Math.max(8,width-8),originX)),
+    displayY:Math.max(8,Math.min(Math.max(8,height-8),originY)),
+    x:ticks(originX,width,scale,step,1),
+    y:ticks(originY,height,scale,step,-1)};
 }

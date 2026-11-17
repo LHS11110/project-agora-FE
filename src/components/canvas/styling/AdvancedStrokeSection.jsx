@@ -1,9 +1,11 @@
+import { useId } from 'react';
 import { ui } from '../../../i18n/locale.js';
 import { useUiLocale } from '../../../i18n/useUiLocale.js';
 import { readObjectStyle, writeObjectStylePatch } from '../../../canvas/styling/objectStyleModel.js';
 
 export default function AdvancedStrokeSection({ items, targetIds, onPatchStyle }) {
   useUiLocale();
+  const fieldId = useId();
   if (!targetIds.length) return null;
   const primaryItem = items[targetIds[0]];
   const style = readObjectStyle(primaryItem);
@@ -44,6 +46,8 @@ export default function AdvancedStrokeSection({ items, targetIds, onPatchStyle }
             <label className="inspector-mini-field">
               <span>{ui('선 색상')}</span>
               <input
+                id={`${fieldId}-stroke-color`}
+                name="style-stroke-color"
                 type="color"
                 aria-label={ui('고급 테두리 색상')}
                 value={stroke.color}
@@ -53,6 +57,8 @@ export default function AdvancedStrokeSection({ items, targetIds, onPatchStyle }
             <label className="inspector-mini-field">
               <span>{ui('기준선 (Align)')}</span>
               <select
+                id={`${fieldId}-stroke-align`}
+                name="style-stroke-align"
                 aria-label={ui('테두리 기준선')}
                 value={stroke.align}
                 onChange={(e) => updateStroke({ align: e.target.value })}
@@ -82,6 +88,8 @@ export default function AdvancedStrokeSection({ items, targetIds, onPatchStyle }
           {stroke.sides.linked ? (
             <label className="inspector-mini-field">
               <input
+                id={`${fieldId}-stroke-width`}
+                name="style-stroke-width"
                 type="number"
                 min="0.5"
                 max="64"
@@ -103,6 +111,8 @@ export default function AdvancedStrokeSection({ items, targetIds, onPatchStyle }
                 <label key={side} className="inspector-mini-field">
                   <span>{label}</span>
                   <input
+                    id={`${fieldId}-stroke-side-${side}`}
+                    name={`style-stroke-side-${side}`}
                     type="number"
                     min="0"
                     max="32"
@@ -125,6 +135,8 @@ export default function AdvancedStrokeSection({ items, targetIds, onPatchStyle }
             <label className="inspector-mini-field">
               <span>{ui('선 패턴')}</span>
               <select
+                id={`${fieldId}-stroke-dash-pattern`}
+                name="style-stroke-dash-pattern"
                 aria-label={ui('점선 패턴')}
                 value={stroke.dashPattern}
                 onChange={(e) => updateStroke({ dashPattern: e.target.value })}
@@ -140,6 +152,8 @@ export default function AdvancedStrokeSection({ items, targetIds, onPatchStyle }
                 <label className="inspector-mini-field">
                   <span>{ui('길이 (Dash)')}</span>
                   <input
+                    id={`${fieldId}-stroke-dash`}
+                    name="style-stroke-dash"
                     type="number"
                     min="1"
                     max="64"
@@ -151,6 +165,8 @@ export default function AdvancedStrokeSection({ items, targetIds, onPatchStyle }
                 <label className="inspector-mini-field">
                   <span>{ui('간격 (Gap)')}</span>
                   <input
+                    id={`${fieldId}-stroke-gap`}
+                    name="style-stroke-gap"
                     type="number"
                     min="0"
                     max="64"
@@ -167,6 +183,8 @@ export default function AdvancedStrokeSection({ items, targetIds, onPatchStyle }
             <label className="inspector-mini-field">
               <span>{ui('선 끝 모양 (Cap)')}</span>
               <select
+                id={`${fieldId}-stroke-cap`}
+                name="style-stroke-cap"
                 aria-label={ui('선 끝 모양')}
                 value={stroke.cap}
                 onChange={(e) => updateStroke({ cap: e.target.value })}
@@ -179,6 +197,8 @@ export default function AdvancedStrokeSection({ items, targetIds, onPatchStyle }
             <label className="inspector-mini-field">
               <span>{ui('꺾임 (Join)')}</span>
               <select
+                id={`${fieldId}-stroke-join`}
+                name="style-stroke-join"
                 aria-label={ui('선 꺾임 처리')}
                 value={stroke.join}
                 onChange={(e) => updateStroke({ join: e.target.value })}

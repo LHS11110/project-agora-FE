@@ -19,7 +19,8 @@ export class ApiError extends Error {
   }
 }
 
-export async function api(path, { method = 'GET', body, token, headers = {} } = {}) {
+export async function api(path, { method = 'GET', body, token, headers = {}, signal } = {}) {
+  if (signal?.aborted) throw new DOMException('The request was aborted', 'AbortError');
   const routed=canvasApiRequest(apiUrl(path),{method,body,token,headers});
   if(routed){try{return await routed;}catch(error){
     if(error.status===401&&token)window.dispatchEvent(new CustomEvent('agora:unauthorized',{detail:{token,message:error.message}}));
@@ -27,6 +28,7 @@ export async function api(path, { method = 'GET', body, token, headers = {} } = 
   }}
   const response = await fetch(apiUrl(path), {
     method,
+    ...(signal ? { signal } : {}),
     headers: {
       ...(body instanceof FormData ? {} : body ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),

@@ -12,7 +12,7 @@ const SearchPage = lazy(() => import('./pages/SearchPage.jsx'));
 const QrApprovalPage = lazy(() => import('./pages/QrApprovalPage.jsx'));
 const CanvasPage = lazy(() => import('./pages/CanvasPage.jsx'));
 const DocsPage = lazy(() => import('./pages/DocsPage.jsx'));
-const TutorialPage = lazy(() => import('./pages/TutorialPage.jsx'));
+const LegalPage = lazy(() => import('./pages/LegalPage.jsx'));
 
 function PageLoading() {
   return <div className="route-loading">{ui('페이지를 불러오고 있어요.')}</div>;
@@ -36,7 +36,8 @@ export default function App() {
   return <><GlobalYoutubePlayer /><Suspense fallback={<PageLoading />}><Routes>
     <Route path="/" element={<HomePage />} />
     <Route path="/docs" element={<DocsPage />} />
-    <Route path="/tutorial" element={<TutorialPage />} />
+    <Route path="/terms" element={<LegalPage defaultTab="terms" />} />
+    <Route path="/privacy" element={<LegalPage defaultTab="privacy" />} />
     <Route path="/qr-login" element={<QrApprovalPage />} />
     <Route path="/login" element={<LoginPage />} />
     <Route path="/profile" element={<Protected><ProfilePage /></Protected>} />

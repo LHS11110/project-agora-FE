@@ -1,6 +1,7 @@
 /* Match the surrounding account typography; reserve monospace for secret/code data. */
 .mfa-settings,.mfa-login{--mfa-font:'DM Sans','Noto Sans KR','Apple SD Gothic Neo',sans-serif;--mfa-ink:#34483d;--mfa-muted:#7e8983;--mfa-line:#e5e9e3;--mfa-soft:#f6f8f4;font-family:var(--mfa-font);font-size:13px;line-height:1.65;letter-spacing:-.15px}
 .mfa-settings{padding:23px 25px;margin-top:24px;display:grid;gap:22px}
+.mfa-settings>.button{justify-self:start}
 .mfa-settings .mfa-heading{align-items:center;gap:12px;padding-bottom:19px}
 .mfa-heading-copy{flex:1;min-width:0}
 .mfa-settings .card-heading h2{font-family:var(--mfa-font);font-size:15px;font-weight:600;line-height:1.5;letter-spacing:-.35px;margin:0 0 4px;color:var(--mfa-ink)}

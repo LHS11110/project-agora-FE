@@ -1,0 +1,4 @@
+# Keep generated WASM and upstream notices byte-for-byte across checkouts.
+src/canvas/wgpu/pkg/*.wasm binary
+public/licenses/rust/** -text -whitespace
+licenses/upstream/rust/** -text -whitespace

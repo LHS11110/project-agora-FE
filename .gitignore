@@ -64,3 +64,6 @@ playwright-report/
 *.sql.gz
 *.rdb
 appendonlydir/
+
+# Rust renderer build cache
+rust/**/target/

@@ -52,3 +52,7 @@
 .notebook-cell-surface>.notebook-cell>.notebook-code-input{flex:1;min-height:76px;overflow:hidden}
 
 .notebook-code-input>.canvas-code-editor{font:inherit}
+
+.notebook-code-input>select{display:block;position:relative;z-index:1;margin:3px 8px;padding:2px 6px;border:1px solid var(--line,#ddd);border-radius:5px;background:var(--surface,#fff);color:var(--ink-muted,#777);font:10px system-ui;max-width:110px}
+
+.notebook-code-input{display:flex;flex-direction:column}.notebook-code-input>select{flex:none}.notebook-code-input>textarea,.notebook-code-input>.canvas-code-editor{flex:1;height:auto!important;min-height:0}

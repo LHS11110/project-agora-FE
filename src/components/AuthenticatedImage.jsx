@@ -1,24 +1,30 @@
-import {canvasFetch} from '../api/client.js';
 import { useEffect, useState } from 'react';
-import { apiUrl } from '../api/client.js';
+import {
+  acquireAuthenticatedImage,
+  peekAuthenticatedImage,
+  releaseAuthenticatedImage,
+} from './authenticatedImageCache.js';
 
 /**
  * Renders API images that require Bearer auth as object URLs. Plain <img src>
  * requests cannot attach the app's Authorization header.
  */
 export default function AuthenticatedImage({ src, token, alt = '', className, fallback = null, loadingFallback, ...imageProps }) {
-  const [resolved, setResolved] = useState({ key: '', src: '' });
-  const [failedKey, setFailedKey] = useState('');
   const source = typeof src === 'string' ? src.trim() : '';
   const key = `${source}\n${token || ''}`;
-  const loading = Boolean(source) && resolved.key !== key;
+  const initialHit = source ? peekAuthenticatedImage(source, token) : null;
+  const [resolved, setResolved] = useState(() => (initialHit ? { key, src: initialHit.src } : { key: '', src: '' }));
+  const [failedKey, setFailedKey] = useState('');
+  const liveHit = resolved.key === key ? resolved.src : (peekAuthenticatedImage(source, token)?.src || '');
+  const loading = Boolean(source) && !liveHit;
   const failed = !source || failedKey === key;
 
   useEffect(() => {
     let cancelled = false;
-    let objectUrl = '';
+    let acquired = null;
     setFailedKey('');
-    setResolved({ key: '', src: '' });
+    const cached = source ? peekAuthenticatedImage(source, token) : null;
+    setResolved(cached ? { key, src: cached.src } : { key: '', src: '' });
 
     if (!source) return undefined;
     if (/^(data|blob):/i.test(source)) {
@@ -26,41 +32,18 @@ export default function AuthenticatedImage({ src, token, alt = '', className, fa
       return undefined;
     }
 
-    let imageUrl;
-    try {
-      imageUrl = new URL(apiUrl(source), window.location.href);
-      const apiOrigin = new URL(apiUrl('/'), window.location.href).origin;
-      if (imageUrl.origin !== apiOrigin) {
-        setResolved({ key, src: imageUrl.href });
-        return undefined;
-      }
-    } catch {
-      setFailedKey(key);
-      return undefined;
-    }
-
-    canvasFetch(imageUrl.href, {
-      // Canvas representative-image URLs are stable by canvas ID, while the
-      // backing file can be replaced (for example after restoring/reusing IDs).
-      // Do not let the browser reuse a previous canvas's bytes for that URL.
-      cache: 'no-store',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then((response) => {
-        if (!response.ok) throw new Error(`Image request failed (${response.status})`);
-        // A valid account without an uploaded avatar returns no content.
-        if (response.status === 204) return null;
-        const contentType = response.headers.get('content-type') || '';
-        if (contentType && !contentType.startsWith('image/') && !contentType.includes('octet-stream')) {
-          throw new Error('Image endpoint returned a non-image response');
+    acquireAuthenticatedImage(source, token)
+      .then((entry) => {
+        if (cancelled) {
+          releaseAuthenticatedImage(entry);
+          return;
         }
-        return response.blob();
-      })
-      .then((blob) => {
-        if (cancelled) return;
-        if (!blob?.size) { setFailedKey(key); return; }
-        objectUrl = URL.createObjectURL(blob);
-        setResolved({ key, src: objectUrl });
+        if (!entry) {
+          setFailedKey(key);
+          return;
+        }
+        acquired = entry;
+        setResolved({ key, src: entry.src });
       })
       .catch(() => {
         if (!cancelled) setFailedKey(key);
@@ -68,11 +51,11 @@ export default function AuthenticatedImage({ src, token, alt = '', className, fa
 
     return () => {
       cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      releaseAuthenticatedImage(acquired);
     };
   }, [key, source, token]);
 
   if (failed) return fallback;
   if (loading) return loadingFallback ?? fallback;
-  return <img {...imageProps} className={className} src={resolved.src} alt={alt} onError={() => setFailedKey(key)} />;
+  return <img {...imageProps} className={className} src={liveHit} alt={alt} onError={() => setFailedKey(key)} />;
 }

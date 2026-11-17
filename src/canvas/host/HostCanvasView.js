@@ -9,7 +9,8 @@ import { collaborativeField, createActorId, decodeBase64, isCollaborativeItem } 
 // Rebase only changed/previously pending objects. Unrelated collaborative
 // documents retain their parsed state instead of being loaded on every input.
 export class HostCanvasView {
-  constructor() {
+  constructor({ lazyPlainDocuments = false } = {}) {
+    this.lazyPlainDocuments = lazyPlainDocuments;
     this.items=itemSnapshot({});this.approvedDocs=new Map();this.approvedBases=new Map();
     this.docs=new Map();this.bases=new Map();this.actors=new Map();this.pendingIds=new Set();
     this.stats={rebases:0,itemsVisited:0,documentsLoaded:0};
@@ -22,7 +23,7 @@ export class HostCanvasView {
       let item=committed[id],doc,base;
       if(approved.has(id)){
         this.approvedDocs.delete(id);this.approvedBases.delete(id);
-        if(isCollaborativeItem(item))try{
+        if(isCollaborativeItem(item) && (!this.lazyPlainDocuments || item.automerge_snapshot || this.docs.has(id) || grouped.get(id)?.some(op=>op.doc)))try{
           this.stats.documentsLoaded++;this.approvedDocs.set(id,loadItemDoc(item));
           if(item.automerge_snapshot)this.approvedBases.set(id,loadEncodedDocument(item.automerge_snapshot));
         }catch{ /* Retain the plain-text fallback for malformed server state. */ }

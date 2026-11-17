@@ -62,7 +62,7 @@ test('thumbnail loader authenticates API images without leaking credentials to e
     assert.equal(canvas.width, 96); assert.equal(canvas.height, 48);
     await loadImagePreview('https://external.example.test/image.png', 'private-account-token', resolve);
     await loadImagePreview('data:image/png;base64,AA==', 'private-account-token', () => { throw Error('Inline images must not resolve API URLs'); });
-    assert.deepEqual(requests.map(([, headers]) => headers), [{ Authorization: 'Bearer private-account-token' }, {}, {}]);
+    assert.deepEqual(requests.map(([, headers]) => headers), [{ Authorization: 'Bearer private-account-token' }, {}]);
     assert.equal(closed, 3);
   } finally {
     names.forEach((name, i) => originals[i] ? Object.defineProperty(globalThis, name, originals[i]) : delete globalThis[name]);
@@ -85,4 +85,48 @@ test('large inline image sources are not duplicated in raster resource keys', as
   const first = rasterDescriptor('a', item, world, {}, 'image:0:1');
   assert.ok(first.key.length < 1000);
   assert.notEqual(first.key, rasterDescriptor('a', item, world, {}, 'image:0:2').key);
+});
+
+test('shared authenticated image cache retains media across unmount/remount, prefetches once, and revokes mutable covers on release', async () => {
+  const names = ['fetch', 'URL', 'window'];
+  const originals = names.map((name) => Object.getOwnPropertyDescriptor(globalThis, name));
+  let calls = 0, nextId = 0;
+  const revoked = [];
+  Object.assign(globalThis, {
+    window: { location: { href: 'https://app.example.test/canvases/10' } },
+    URL: class MockUrl extends URL {
+      static createObjectURL(blob) { return `blob:mock-${++nextId}-${blob.size}`; }
+      static revokeObjectURL(url) { revoked.push(url); }
+    },
+    fetch: async (url) => {
+      calls += 1;
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'image/png' }),
+        blob: async () => new Blob([`img-${url}`], { type: 'image/png' }),
+      };
+    },
+  });
+  try {
+    const cacheMod = await import('../src/components/authenticatedImageCache.js');
+    assert.equal(cacheMod.prefetchAuthenticatedImage('/api/canvases/10/media/abc.png', 'tok-1'), true);
+    assert.equal(cacheMod.prefetchAuthenticatedImage('/api/canvases/10/media/abc.png', 'tok-1'), false);
+    await new Promise((r) => setTimeout(r, 20));
+    const entry = await cacheMod.acquireAuthenticatedImage('/api/canvases/10/media/abc.png', 'tok-1');
+    assert.ok(entry?.src.startsWith('blob:mock-'));
+    assert.equal(calls, 1, 'prefetched media is reused without a second fetch');
+    cacheMod.releaseAuthenticatedImage(entry);
+    assert.equal(revoked.includes(entry.src), false, 'retained media objectUrl survives unmount for instant pan-back');
+    assert.ok(cacheMod.peekAuthenticatedImage('/api/canvases/10/media/abc.png', 'tok-1'));
+
+    // Mutable cover image should NOT be prefetched or retained after release
+    assert.equal(cacheMod.prefetchAuthenticatedImage('/api/canvases/10/image', 'tok-1'), false);
+    const cover = await cacheMod.acquireAuthenticatedImage('/api/canvases/10/image', 'tok-1');
+    cacheMod.releaseAuthenticatedImage(cover);
+    assert.equal(revoked.includes(cover.src), true, 'mutable canvas cover is revoked on release');
+    cacheMod.invalidateAuthenticatedImage('/api/canvases/10/media/abc.png', 'tok-1');
+  } finally {
+    names.forEach((name, i) => (originals[i] ? Object.defineProperty(globalThis, name, originals[i]) : delete globalThis[name]));
+  }
 });

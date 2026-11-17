@@ -28,6 +28,8 @@ try{
   const submit=p.getByRole('button',{name:'인증하고 가입하기',exact:true});assert.ok(await submit.isDisabled());assert.equal(await p.evaluate(()=>localStorage.getItem('agora_token')),null);
   await p.getByRole('button',{name:'인증 메일 보내기',exact:true}).click();await p.getByRole('textbox',{name:'이메일 인증 코드',exact:true}).fill('123456');await p.getByRole('button',{name:'인증 코드 확인',exact:true}).click();await p.getByText('이메일 인증이 완료되었습니다.',{exact:false}).waitFor();assert.equal(enrollments,0);assert.equal(await p.evaluate(()=>localStorage.getItem('agora_token')),null);
   if(process.env.AGORA_E2E_SCREENSHOTS&&provider==='naver')await p.screenshot({path:'/tmp/agora-social-enrollment.png',fullPage:true});
+  await submit.click();await p.getByRole('alert').filter({hasText:'이용약관 및 개인정보 수집·저장에 동의해주세요.'}).waitFor();assert.equal(enrollments,0);
+  await p.getByLabel('이용약관 및 개인정보 수집·저장에 모두 동의합니다').check();
   await submit.click();await p.waitForURL('**/docs');assert.equal(enrollments,1);assert.equal(await p.evaluate(()=>localStorage.getItem('agora_token')),token);await c.close();
  }
  for(const provider of ['naver','kakao']){

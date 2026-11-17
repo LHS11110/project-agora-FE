@@ -1,10 +1,11 @@
 import {canvasFetch} from '../../api/client.js';
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useId,useRef,useState} from 'react';
 import {apiUrl} from '../../api/client.js';
 import {ui} from '../../i18n/locale.js';
 import {mediaPosition} from './mediaModel.js';
 import './media.css';
 export default function UploadedMedia({item,token,selected=false,interactive,writable,onChange}){
+ const fieldId=useId();
  const video=useRef(null),surface=useRef(null),worker=useRef(null),pending=useRef(false),requested=useRef(0),sent=useRef(0),generation=useRef(0),applying=useRef(false),latest=useRef(null),actor=useRef(crypto.randomUUID());
  const [source,setSource]=useState(''),[ready,setReady]=useState(false),[duration,setDuration]=useState(0),[position,setPosition]=useState(0),[error,setError]=useState(''),[blocked,setBlocked]=useState(false);
  latest.current={item,writable,onChange};const gif=item.mediaType==='gif';
@@ -38,9 +39,9 @@ export default function UploadedMedia({item,token,selected=false,interactive,wri
   <div className="uploaded-media-screen">{gif?<canvas ref={surface} aria-label={item.title||'GIF'}/>:source?<video ref={video} src={source} playsInline preload="metadata" loop={Boolean(item.mediaLoop)} onLoadedMetadata={e=>metadata(e.currentTarget)} onDurationChange={e=>metadata(e.currentTarget)} onProgress={e=>metadata(e.currentTarget)} onTimeUpdate={e=>setPosition(e.currentTarget.currentTime)} onEnded={()=>{if(writable&&!item.mediaLoop)publish(true,video.current.currentTime);}} onError={()=>setError('브라우저에서 이 동영상을 재생할 수 없습니다.')}/>:<span>{ui('미디어를 불러오는 중…')}</span>}{error&&<div role="alert">{ui(error)}</div>}</div>
   <div className="uploaded-media-center"><button className="uploaded-media-toggle" disabled={!controls||!ready||Boolean(error)} aria-label={ui(item.mediaState?.paused===false?'공유 일시정지':'공유 재생')} onClick={()=>{let time=video.current?.currentTime??mediaPosition(item.mediaState,duration,item.mediaLoop);if(item.mediaState?.paused!==false&&duration&&time>=duration-.05)time=0;const paused=item.mediaState?.paused===false;publish(paused,time);if(video.current&&!paused)video.current.play().catch(()=>setBlocked(true));}}><span aria-hidden="true">{item.mediaState?.paused===false?'Ⅱ':'▶'}</span></button></div>
   <div className="uploaded-media-controls">
-   <input type="range" aria-label={ui('공유 재생 위치')} disabled={!controls||!duration} min="0" max={duration||1} step="0.01" value={Math.min(position,duration||1)} onChange={e=>{const time=Number(e.target.value);if(video.current)video.current.currentTime=time;publish(item.mediaState?.paused!==false,time);}}/><span>{stamp(position)} / {duration?stamp(duration):'—'}s</span>
+   <input id={`${fieldId}-position`} name="media-position" type="range" aria-label={ui('공유 재생 위치')} disabled={!controls||!duration} min="0" max={duration||1} step="0.01" value={Math.min(position,duration||1)} onChange={e=>{const time=Number(e.target.value);if(video.current)video.current.currentTime=time;publish(item.mediaState?.paused!==false,time);}}/><span>{stamp(position)} / {duration?stamp(duration):'—'}s</span>
 
-   {!gif&&<input type="range" aria-label={ui('음량')} min="0" max="1" step=".05" defaultValue="1" onChange={e=>{if(video.current)video.current.volume=Number(e.target.value);}}/>}
+   {!gif&&<input id={`${fieldId}-volume`} name="media-volume" type="range" aria-label={ui('음량')} min="0" max="1" step=".05" defaultValue="1" onChange={e=>{if(video.current)video.current.volume=Number(e.target.value);}}/>}
   </div>   <button className="uploaded-media-loop" title={ui('반복 재생')} disabled={!controls} aria-label={ui('반복 재생')} aria-pressed={Boolean(item.mediaLoop)} onClick={()=>publish(item.mediaState?.paused!==false,video.current?.currentTime??mediaPosition(item.mediaState,duration,item.mediaLoop),{mediaLoop:!item.mediaLoop})}><span aria-hidden="true">↻</span></button>{blocked&&<button className="uploaded-media-unlock" onClick={()=>video.current?.play().then(()=>setBlocked(false)).catch(()=>{})}>{ui('브라우저에서 공유 재생 허용')}</button>}
  </div>;
 }

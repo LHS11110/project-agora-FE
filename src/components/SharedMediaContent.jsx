@@ -2,7 +2,7 @@ import { LinkSummary } from './LinkPreview.jsx';
 import { mediaPosition, youtubeEmbedSrc } from '../canvas/media/mediaModel.js';
 import { ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { inspectShareUrl } from './shareMedia.js';
 import './shared-playback.css';
 
@@ -11,6 +11,7 @@ export function playbackTime(state, now = Date.now()) {
 }
 
 function SharedVideoPlayer({ item, media, interactive, writable, onChange }) {
+  const fieldId = useId();
   const video = useRef(null);
   const actor = useRef(globalThis.crypto?.randomUUID?.() || String(Math.random()));
   const until = useRef(0);
@@ -124,6 +125,8 @@ function SharedVideoPlayer({ item, media, interactive, writable, onChange }) {
             {ui(!paused ? '일시정지' : '재생')}
           </button>
           <input
+            id={`${fieldId}-position`}
+            name="shared-media-position"
             aria-label={ui('공유 재생 위치')}
             type="range"
             min={0}
@@ -180,7 +183,7 @@ export default function SharedMediaContent({ item, token, interactive = true, wr
             src={youtubeEmbedSrc(media.embedUrl, media.url)}
             title={item.title || media.defaultTitle}
             loading="lazy"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; compute-pressure"
             referrerPolicy="strict-origin-when-cross-origin"
             allowFullScreen
             onPointerDown={e => e.stopPropagation()}

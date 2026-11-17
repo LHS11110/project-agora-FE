@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
 import { chartNumber, formatChartData, parseChartData } from './chartData.js';
@@ -8,6 +8,7 @@ const labels = [['bar', '막대 그래프'], ['line', '선 그래프'], ['area',
 
 export default function ChartControls({ item, onChange }) {
   useUiLocale();
+  const fieldId = useId();
   const source = formatChartData(item.columns, item.rows);
   const [baseline, setBaseline] = useState(source), [draft, setDraft] = useState(source), [error, setError] = useState('');
   const dirty = draft !== baseline;
@@ -26,9 +27,9 @@ export default function ChartControls({ item, onChange }) {
   };
   return <section className="inspector-section chart-editor">
     <strong className="inspector-label">{ui('그래프 설정')}</strong>
-    <label>{ui('그래프 종류')}<select aria-label={ui('그래프 종류')} value={item.chartType || 'bar'} onChange={event => onChange({ chartType: event.target.value })}>{labels.map(([value, label]) => <option key={value} value={value}>{ui(label)}</option>)}</select></label>
-    <label>{ui('제목')}<input aria-label={ui('그래프 제목')} maxLength={120} value={item.title || ''} onChange={event => onChange({ title: event.target.value })} /></label>
-    <label>{ui('데이터 (CSV 또는 탭으로 구분)')}<textarea aria-label={ui('그래프 데이터')} value={draft} maxLength={32768} onChange={event => { setDraft(event.target.value); setError(''); }} spellCheck="false" /></label>
+    <label>{ui('그래프 종류')}<select id={`${fieldId}-type`} name="chart-type" aria-label={ui('그래프 종류')} value={item.chartType || 'bar'} onChange={event => onChange({ chartType: event.target.value })}>{labels.map(([value, label]) => <option key={value} value={value}>{ui(label)}</option>)}</select></label>
+    <label>{ui('제목')}<input id={`${fieldId}-title`} name="chart-title" aria-label={ui('그래프 제목')} maxLength={120} value={item.title || ''} onChange={event => onChange({ title: event.target.value })} /></label>
+    <label>{ui('데이터 (CSV 또는 탭으로 구분)')}<textarea id={`${fieldId}-data`} name="chart-data" aria-label={ui('그래프 데이터')} value={draft} maxLength={32768} onChange={event => { setDraft(event.target.value); setError(''); }} spellCheck="false" /></label>
     <small>{ui('첫 행은 열 이름, 첫 열은 항목입니다. 나머지 열에 숫자를 입력하세요.')}</small>
     {(item.chartType === 'pie' || item.chartType === 'donut') && <small>{ui('원형 그래프는 첫 번째 숫자 열의 양수만 표시합니다.')}</small>}
     {item.chartType === 'scatter' && <small>{ui('산점도는 첫 열을 X 값으로 사용합니다.')}</small>}

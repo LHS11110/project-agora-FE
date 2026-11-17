@@ -194,7 +194,7 @@ export function LinkSummary({
             src={embedSrc}
             title={preview?.title || ui('유튜브 동영상 미리보기')}
             loading="lazy"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; compute-pressure"
             referrerPolicy="strict-origin-when-cross-origin"
             allowFullScreen
           />

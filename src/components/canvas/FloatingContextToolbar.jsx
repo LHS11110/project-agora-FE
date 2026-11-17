@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../Icon.jsx';
 import { ui } from '../../i18n/locale.js';
 import '../../canvas/runtimeEn.js';
@@ -98,6 +98,7 @@ export default function FloatingContextToolbar({
   onToggleHidden,
 }) {
   useUiLocale();
+  const fieldId = useId();
   const [showPresets, setShowPresets] = useState(false);
   const barRef = useRef(null);
   const [layoutMetrics, setLayoutMetrics] = useState({ barWidth: 560, tools: null, inspector: null });
@@ -200,6 +201,8 @@ export default function FloatingContextToolbar({
         <label className="floating-bar-color" title={ui('배경 색상')}>
           <span>{ui('채우기')}</span>
           <input
+            id={`${fieldId}-fill-color`}
+            name="floating-fill-color"
             type="color"
             aria-label={ui('빠른 채우기 색상')}
             value={fillHex}
@@ -226,6 +229,8 @@ export default function FloatingContextToolbar({
         <label className="floating-bar-color" title={ui('테두리 색상')}>
           <span>{ui('선')}</span>
           <input
+            id={`${fieldId}-stroke-color`}
+            name="floating-stroke-color"
             type="color"
             aria-label={ui('빠른 테두리 색상')}
             value={strokeHex}
@@ -243,6 +248,8 @@ export default function FloatingContextToolbar({
       {caps.stroke && (
         <label className="floating-bar-num" title={ui('테두리 두께')}>
           <input
+            id={`${fieldId}-stroke-width`}
+            name="floating-stroke-width"
             type="number"
             min="0.5"
             max="32"
@@ -269,6 +276,8 @@ export default function FloatingContextToolbar({
       <label className="floating-bar-num" title={ui('투명도')}>
         <span>%</span>
         <input
+          id={`${fieldId}-opacity`}
+          name="floating-opacity"
           type="number"
           min="0"
           max="100"

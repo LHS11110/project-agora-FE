@@ -10,7 +10,7 @@ import SharedRasterCache from '../src/canvas/SharedRasterCache.js';
 import CanvasSpatialBTree from '../src/components/CanvasSpatialBTree.js';
 import { hitTestVector, needsVectorDom } from '../src/canvas/vectorHitTest.js';
 import { rasterDescriptor } from '../src/canvas/rasterObjectCache.js';
-import { renderWindow } from '../src/canvas/renderWindow.js';
+import { renderWindow, containsViewport } from '../src/canvas/renderWindow.js';
 import { plainTextLayout, isRasterText } from '../src/canvas/plainTextRaster.js';
 import { buildDepthLayers } from '../src/canvas/itemDepth.js';
 import { isOverviewProxy } from '../src/canvas/sceneRepresentation.js';
@@ -154,6 +154,7 @@ test('raster output retains painted bounds while cropping transparent and offscr
   assert.deepEqual(rasterViewportRegion(b,camera,1600,1000),rasterViewportRegion(b,{...camera,x:-101},1600,1000));
   assert.equal(rasterViewportRegion(b,{...camera,x:3000},1600,1000),null);
   assert.equal(rasterViewportRegion(null,camera,1600,1000),null);
+  assert.equal(rasterViewportRegion(b,null,1600,1000),null);
 });
 
 test('opaque rectangle fills share geometry without recoloring outlines or shadows',()=>{
@@ -194,4 +195,21 @@ test('zooming out reuses a bitmap containing every painted object, but rejects c
  const cached={x:0,y:0,scale:1},camera={x:200,y:120,scale:.1};
  assert.ok(cachedCameraProjection(cached,camera,1000,600,256,{minX:0,minY:0,maxX:900,maxY:500}));
  assert.equal(cachedCameraProjection(cached,camera,1000,600,256,{minX:0,minY:0,maxX:2000,maxY:500}),null);
+});
+
+test('retained pan window covers new viewport and refreshes before entering unseen space',()=>{
+ const visible={minX:0,minY:0,maxX:1,maxY:1};
+ const retained=renderWindow(visible,world,1).bounds;
+ assert.equal(containsViewport(retained,visible,world,1),true);
+ assert.equal(containsViewport(retained,{...visible,minX:.1,maxX:1.1},world,1),true);
+ assert.equal(containsViewport(retained,{...visible,minX:1,maxX:2},world,1),false);
+ assert.equal(containsViewport(retained,{...visible,minY:-1,maxY:0},world,1),false);
+ assert.equal(containsViewport(retained,{minX:-2,minY:-2,maxX:2,maxY:2},world,.25),false);
+});
+test('connect tool can target a frame border covered by another object',async()=>{
+ const {hitTestFrameBorder}=await import('../src/canvas/vectorHitTest.js');
+ const items={frame:{kind:'frame',x:.1,y:.1,width:.4,height:.4},cover:{kind:'shape',x:.45,y:.2,width:.1,height:.2}};
+ const index=new CanvasSpatialBTree(items,world);
+ assert.equal(hitTestFrameBorder(index,{x:.5,y:.3},world,1)?.id,'frame');
+ assert.equal(hitTestFrameBorder(index,{x:.3,y:.3},world,1),null);
 });

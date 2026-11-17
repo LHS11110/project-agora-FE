@@ -1,8 +1,8 @@
 // Structurally shared, read-only item dictionaries. Updating one item copies one
 // small hash bucket; Object.keys/entries and JSON export retain dictionary APIs.
-const states = new WeakMap(), BUCKETS = 256, CHUNK = 1024;
+const states = new WeakMap(), BUCKETS = 1024, CHUNK = 1024;
 const depth = item => Number.isSafeInteger(Number(item?.depth))?Number(item.depth):0;
-const hash = id => { let h=2166136261;for(let i=0;i<id.length;i++)h=Math.imul(h^id.charCodeAt(i),16777619);return h>>>24; };
+const hash = id => { let h=2166136261;for(let i=0;i<id.length;i++)h=Math.imul(h^id.charCodeAt(i),16777619);return h>>>22; };
 function record(state,id){return typeof id==='string'?state.buckets[hash(id)]?.[id]:undefined;}
 function wrap(state){
   const value=new Proxy({}, {

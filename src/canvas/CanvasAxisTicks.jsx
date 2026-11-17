@@ -16,7 +16,7 @@ function paint(group, rows, origin, size, horizontal, zooming) {
     node.append(line,text);group.append(node);
   }
   const left = horizontal ? false : origin > size - 100;
-  const textX = left ? '-8' : '8', textAnchor = left ? 'end' : 'start', textY = horizontal ? String(Math.min(origin + 15, size - 5) - origin) : null;
+  const textX = left ? '-8' : '8', textAnchor = left ? 'end' : 'start', textY = horizontal ? String(origin > size - 30 ? -8 : 15) : null;
   for(let index=0;index<group.children.length;index++){
     const node=group.children[index],row=rows[index];
     if(!row){if(node.style.display!=='none')node.style.display='none';continue;}
@@ -24,7 +24,7 @@ function paint(group, rows, origin, size, horizontal, zooming) {
     const [,text]=node.children;
     setAttr(node,'data-value',String(row.value));
     setAttr(node,'transform',horizontal?`translate(${row.position} ${origin})`:`translate(${origin} ${row.position})`);
-    if(!zooming){
+    {
       if(horizontal)setAttr(text,'y',textY);
       else{setAttr(text,'x',textX);setAttr(text,'text-anchor',textAnchor);}
       if(text.textContent!==row.label)text.textContent=row.label;
@@ -44,8 +44,8 @@ export default function CanvasAxisTicks({boardRef,camera,showXAxis,showYAxis}){
       const layout=axisTickLayout(c.camera,{width,height});
       setAttr(svg.current,'viewBox',`0 0 ${Math.max(1,width)} ${Math.max(1,height)}`);
       setAttr(svg.current,'data-step',String(layout.step??''));
-      paint(xGroup.current,c.showXAxis?layout.x:[],layout.originY,height,true,zooming);
-      paint(yGroup.current,c.showYAxis?layout.y:[],layout.originX,width,false,zooming);
+      paint(xGroup.current,c.showXAxis?layout.x:[],layout.displayY??layout.originY,height,true,zooming);
+      paint(yGroup.current,c.showYAxis?layout.y:[],layout.displayX??layout.originX,width,false,zooming);
     };
     draw.current=update;stage.addEventListener('agora-camera',update);
     const observer=new ResizeObserver(([entry])=>{width=entry.contentRect.width;height=entry.contentRect.height;update();});observer.observe(stage);update();

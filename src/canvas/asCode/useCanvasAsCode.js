@@ -59,10 +59,18 @@ export function useCanvasAsCode(options) {
       }
       changed.push(id);
     }
-    // Remove connectors first, then their objects.
-    const deletions = [...preview.deletes].sort((a, b) => Number(c.itemsRef.current[b]?.kind === 'connector') - Number(c.itemsRef.current[a]?.kind === 'connector'));
-    for (const id of deletions) if (!c.deleteItem(id)) throw new Error(`${id}: 삭제를 처리하지 못했습니다.`);
-    c.refreshSpatialIndex();
+    // Remove all deleted items and connectors in one atomic batch.
+    const deletions = [...preview.deletes];
+    if (deletions.length) {
+      if (c.deleteItems) {
+        const result = c.deleteItems(deletions, { silent: true });
+        if (!result.ok || result.remaining.length) throw new Error(`${result.remaining[0] || deletions[0]}: 삭제를 처리하지 못했습니다.`);
+      } else {
+        deletions.sort((a, b) => Number(c.itemsRef.current[b]?.kind === 'connector') - Number(c.itemsRef.current[a]?.kind === 'connector'));
+        for (const id of deletions) if (!c.deleteItem(id)) throw new Error(`${id}: 삭제를 처리하지 못했습니다.`);
+        c.refreshSpatialIndex();
+      }
+    }
     c.selectItems(changed.filter(id => c.itemsRef.current[id]));
     return { created: preview.creates.length, updated: preview.updates.length, deleted: preview.deletes.length, status: 'queued' };
   }, []);

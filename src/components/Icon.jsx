@@ -55,6 +55,8 @@ const paths = {
   moon: <path d="M20.9 13A8.5 8.5 0 0 1 11 3.1 8.5 8.5 0 1 0 20.9 13Z"/>,
   rectangle: <rect x="4" y="5" width="16" height="14" rx="2"/>,
   ellipse: <ellipse cx="12" cy="12" rx="9" ry="6"/>,
+  play: <polygon points="6 4 20 12 6 20 6 4"/>,
+  pause: <><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></>,
 };
 
 export default function Icon({ name, size = 20, strokeWidth = 1.8, className = '' }) {

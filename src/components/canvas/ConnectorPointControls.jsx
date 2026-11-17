@@ -1,10 +1,12 @@
+import { useId } from 'react';
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
 import { connectorPointCount, MAX_BEND_POINTS } from '../../canvas/connectors/controlPoints.js';
 import '../../canvas/content/unified-content.css';
 export default function ConnectorPointControls({ item, onChange }) {
   useUiLocale();
-  return <div className="content-render-controls"><label>{ui("곡률 조절점 개수")}<input type="number" min="1" max={MAX_BEND_POINTS} step="1" value={connectorPointCount(item)} aria-label={item?.kind === 'shape' ? ui("일반 화살표 곡률 조절점 개수") : ui("연결 화살표 곡률 조절점 개수")} onChange={event => {
+  const fieldId = useId();
+  return <div className="content-render-controls"><label>{ui("곡률 조절점 개수")}<input id={`${fieldId}-point-count`} name="connector-bend-point-count" type="number" min="1" max={MAX_BEND_POINTS} step="1" value={connectorPointCount(item)} aria-label={item?.kind === 'shape' ? ui("일반 화살표 곡률 조절점 개수") : ui("연결 화살표 곡률 조절점 개수")} onChange={event => {
     const count = Number(event.target.value);
     if (Number.isInteger(count) && count >= 1 && count <= MAX_BEND_POINTS) onChange(count);
   }} /></label><small className="inspector-hint">{"" + ui("기본 1개 · 최대") + " "}{MAX_BEND_POINTS}{ui("개. 각 점을 드래그해 원하는 부분을 휘어보세요.")}</small></div>;

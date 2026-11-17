@@ -24,6 +24,7 @@ function Fixture() {
   window.depthFixture = {
     patch: changes => setItems(current => changeItems(current, Object.fromEntries(Object.entries(changes).map(([id, patch]) => [id, { ...current[id], ...patch }])))),
     items,
+    move:next=>{Object.assign(camera,next);document.querySelector('.canvas-stage').dispatchEvent(new CustomEvent('agora-camera',{detail:{camera:next}}));},
     regions: Object.entries(initial).map(([id, item], i) => ({ id, x: 40 + i % 9 * 120, y: 40 + Math.floor(i / 9) * 100, red: item.kind !== 'text' })),
   };
   return <div className="canvas-stage" style={{ position: 'relative', width: 1200, height: 500 }}>

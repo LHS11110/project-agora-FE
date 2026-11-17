@@ -41,9 +41,9 @@ export default function CanvasColorPicker({ color, onChange, favoriteColors, onS
       if (event.target === event.currentTarget && (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom)) close();
     }}>
       <div className="canvas-color-dialog-heading"><h2 id={headingId}>{ui(label)}{" " + ui("선택") + ""}</h2><button type="button" onClick={close} aria-label={ui("색상 선택 닫기")}>×</button></div>
-      <div className="canvas-color-inputs"><label>{ui("자유 선택")}<input type="color" value={draft} onChange={event => choose(event.target.value)} aria-label={ui("{v0} 색상 선택기", {
+      <div className="canvas-color-inputs"><label>{ui("자유 선택")}<input id={`${headingId}-picker`} name="color-picker" type="color" value={draft} onChange={event => choose(event.target.value)} aria-label={ui("{v0} 색상 선택기", {
   v0: ui(label)
-})} /></label><label>{ui("HEX 색상 코드")}<input type="text" value={hex} maxLength={7} spellCheck={false} aria-label={ui("HEX 색상 코드")} aria-invalid={!validColor} onChange={event => {
+})} /></label><label>{ui("HEX 색상 코드")}<input id={`${headingId}-hex`} name="color-hex" type="text" value={hex} maxLength={7} spellCheck={false} aria-label={ui("HEX 색상 코드")} aria-invalid={!validColor} onChange={event => {
         setHex(event.target.value); setMessage('');
         const next = normalizeCanvasColor(event.target.value);
         if (next) setDraft(next);

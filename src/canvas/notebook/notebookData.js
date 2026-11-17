@@ -1,3 +1,4 @@
+import { stripSandboxedExternalTags } from '../content/htmlPreviewDocument.js';
 export const NOTEBOOK_LIMIT=32;
 export const NOTEBOOK_FILE_LIMIT_BYTES=1024*1024;
 const text=value=>Array.isArray(value)?value.join(''):String(value??'');
@@ -36,4 +37,4 @@ export function exportNotebook(item,cellItems=[]){
  const results=Array.isArray(item.notebookCellIds)?Object.fromEntries(cellItems.filter(entry=>entry?.item?.notebookCell&&entry.item.notebookResult).map(entry=>[entry.item.notebookCell.id,entry.item.notebookResult])):item.notebookResults||{};
  return {nbformat:4,nbformat_minor:5,metadata:{kernelspec:{display_name:'Python 3',language:'python',name:'python3'},language_info:{name:'python'}},cells:cells.map(c=>({id:c.id,cell_type:c.cellType,metadata:{},source:c.source.split(/(?<=\n)/),...(c.cellType==='code'?{execution_count:results[c.id]?.executionCount??null,outputs:(results[c.id]?.outputs||[]).map(output=>{const clean={...output};if(clean.output_type!=='execute_result')delete clean.execution_count;return clean;})}:{} )}))};
 }
-export const notebookHtml=(html,fontSize=13)=>`<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><style>body{font:${Number.isFinite(fontSize)?Math.max(2,Math.min(512,fontSize)):13}px system-ui;color:#283044;margin:8px;overflow:auto}table{border-collapse:collapse;max-width:100%}th,td{padding:6px 9px;border:1px solid #dce1e9}img{max-width:100%}a{color:inherit}</style>${html}`;
+export const notebookHtml=(html,fontSize=13)=>`<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><style>body{font:${Number.isFinite(fontSize)?Math.max(2,Math.min(512,fontSize)):13}px system-ui;color:#283044;margin:8px;overflow:auto}table{border-collapse:collapse;max-width:100%}th,td{padding:6px 9px;border:1px solid #dce1e9}img{max-width:100%}a{color:inherit}</style>${stripSandboxedExternalTags(html)}`;

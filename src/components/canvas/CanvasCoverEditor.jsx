@@ -1,12 +1,13 @@
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { api } from '../../api/client.js';
 import AuthenticatedImage from '../AuthenticatedImage.jsx';
 import './canvas-cover-editor.css';
 
 export default function CanvasCoverEditor({ canvasId, image, token, onSaved }) {
   useUiLocale();
+  const fieldId = useId();
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState('');
   const [pending, setPending] = useState(false);
@@ -40,7 +41,7 @@ export default function CanvasCoverEditor({ canvasId, image, token, onSaved }) {
     <span>{ui("대표 이미지")}</span>
     <div className="canvas-cover-editor-row">
       <AuthenticatedImage className="canvas-cover-editor-preview" src={preview || image} token={token} alt={ui("대표 이미지 미리보기")} fallback={<div className="canvas-cover-editor-placeholder">{ui("이미지 없음")}</div>} />
-      <div><label className="button button-outline canvas-cover-file">{ui("이미지 선택")}<input type="file" accept="image/png,image/jpeg" aria-label={ui("대표 이미지 선택")} disabled={pending} onChange={choose} /></label>
+      <div><label className="button button-outline canvas-cover-file">{ui("이미지 선택")}<input id={`${fieldId}-cover-file`} name="canvas-cover-file" type="file" accept="image/png,image/jpeg" aria-label={ui("대표 이미지 선택")} disabled={pending} onChange={choose} /></label>
         <p>{ui("PNG·JPEG · 최대 5MB · 최대 2048×2048")}<br />{ui("캔버스 관리자만 변경할 수 있어요.")}</p>
         {file && <small className="canvas-cover-filename">{file.name}</small>}
       </div>

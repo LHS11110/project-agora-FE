@@ -40,9 +40,12 @@ export function useObjectClipboard(options) {
     const c = latest.current;
     if (c.blocked || c.isInteracting?.()) { c.setToast('편집 상태가 변경되어 잘라내기를 취소했습니다. 복사본은 유지됩니다.'); return; }
     if (Object.entries(snapshot.originals).some(([id, item]) => c.itemsRef.current[id] !== item)) { c.setToast('복사 중 객체가 변경되어 잘라내기를 취소했습니다. 복사본은 유지됩니다.'); return; }
-    const ids = Object.keys(snapshot.originals).sort((a, b) => Number(snapshot.originals[b].kind === 'connector') - Number(snapshot.originals[a].kind === 'connector'));
-    const remaining = [];
-    for (const id of ids) if (!c.deleteItem(id)) remaining.push(id);
+    const ids = Object.keys(snapshot.originals);
+    const remaining = c.deleteItems
+      ? c.deleteItems(ids, { silent: true }).remaining
+      : ids
+        .sort((a, b) => Number(snapshot.originals[b].kind === 'connector') - Number(snapshot.originals[a].kind === 'connector'))
+        .filter((id) => !c.deleteItem(id));
     c.selectItems(remaining);
     c.setConnectionStartId(null);
     c.setToast(remaining.length ? '일부 객체를 잘라내지 못했습니다. 연결 상태와 권한을 확인해주세요.' : `${ids.length}개 객체를 잘라냈습니다.${localOnly ? ' 브라우저 내부 클립보드를 사용합니다. 붙여넣기 버튼을 눌러주세요.' : ''}`);

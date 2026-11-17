@@ -55,8 +55,8 @@ export default function TextSelectionColorPopover({ owner, inputRef, anchor, sel
       </button>)}
     </div>
     <form className="selection-color-custom" onSubmit={event => { event.preventDefault(); if (valid) onChoose(valid); }}>
-      <label className="selection-custom-picker" title={ui('직접 색상 고르기')}><span style={{ background: valid || activeColor || '#7558d9' }} /><input type="color" aria-label={ui('선택한 글자 색상')} value={valid || activeColor || '#7558d9'} onChange={event => { setHex(event.target.value); onChoose(event.target.value, false); }} /></label>
-      <label className="selection-hex-label"><span>HEX</span><input type="text" aria-label={ui('글자 색상 HEX 코드')} value={hex} maxLength={7} spellCheck={false} autoComplete="off" aria-invalid={!valid} aria-describedby={hintId} onChange={event => setHex(event.target.value)} /></label>
+      <label className="selection-custom-picker" title={ui('직접 색상 고르기')}><span style={{ background: valid || activeColor || '#7558d9' }} /><input id={`${headingId}-color`} name="selection-text-color" type="color" aria-label={ui('선택한 글자 색상')} value={valid || activeColor || '#7558d9'} onChange={event => { setHex(event.target.value); onChoose(event.target.value, false); }} /></label>
+      <label className="selection-hex-label"><span>HEX</span><input id={`${headingId}-hex`} name="selection-text-hex" type="text" aria-label={ui('글자 색상 HEX 코드')} value={hex} maxLength={7} spellCheck={false} autoComplete="off" aria-invalid={!valid} aria-describedby={hintId} onChange={event => setHex(event.target.value)} /></label>
       <button className="selection-color-apply" type="submit" disabled={!valid}>{ui('적용')}</button>
     </form>
     <p id={hintId} className={`selection-color-hint${!valid ? ' is-invalid' : ''}`}>{ui(valid ? '색상을 누르면 선택한 글자에 바로 적용돼요.' : '#336699 또는 #369 형식으로 입력하세요.')}</p>

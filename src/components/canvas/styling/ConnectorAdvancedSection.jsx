@@ -1,9 +1,11 @@
+import { useId } from 'react';
 import { ui } from '../../../i18n/locale.js';
 import { useUiLocale } from '../../../i18n/useUiLocale.js';
 import { readObjectStyle, writeObjectStylePatch } from '../../../canvas/styling/objectStyleModel.js';
 
 export default function ConnectorAdvancedSection({ items, targetIds, onPatchStyle }) {
   useUiLocale();
+  const fieldId = useId();
   if (!targetIds.length) return null;
   const primaryItem = items[targetIds[0]];
   if (primaryItem?.kind !== 'connector') return null;
@@ -30,6 +32,8 @@ export default function ConnectorAdvancedSection({ items, targetIds, onPatchStyl
         <label className="inspector-mini-field">
           <span>{ui('선 경로 방식')}</span>
           <select
+            id={`${fieldId}-routing`}
+            name="connector-routing"
             aria-label={ui('연결선 경로 방식')}
             value={c.routing}
             onChange={(e) => updateConnectorStyle({ routing: e.target.value })}
@@ -42,6 +46,8 @@ export default function ConnectorAdvancedSection({ items, targetIds, onPatchStyl
         <label className="inspector-mini-field">
           <span>{ui('점선 흐름 애니메이션')}</span>
           <select
+            id={`${fieldId}-dash-animation`}
+            name="connector-dash-animation"
             aria-label={ui('연결선 흐름 애니메이션')}
             value={c.dashAnimation}
             onChange={(e) => {
@@ -69,6 +75,8 @@ export default function ConnectorAdvancedSection({ items, targetIds, onPatchStyl
             <span>{c.animationSpeed}x</span>
           </div>
           <input
+            id={`${fieldId}-animation-speed`}
+            name="connector-animation-speed"
             type="range"
             min="0.25"
             max="3"
@@ -84,6 +92,8 @@ export default function ConnectorAdvancedSection({ items, targetIds, onPatchStyl
         <label className="inspector-mini-field">
           <span>{ui('라벨 배경')}</span>
           <input
+            id={`${fieldId}-label-bg`}
+            name="connector-label-background"
             type="color"
             aria-label={ui('라벨 배경 색상')}
             value={ls.background || '#ffffff'}
@@ -93,6 +103,8 @@ export default function ConnectorAdvancedSection({ items, targetIds, onPatchStyl
         <label className="inspector-mini-field">
           <span>{ui('라벨 글자')}</span>
           <input
+            id={`${fieldId}-label-color`}
+            name="connector-label-color"
             type="color"
             aria-label={ui('라벨 글자 색상')}
             value={ls.color || '#1f2937'}
@@ -102,6 +114,8 @@ export default function ConnectorAdvancedSection({ items, targetIds, onPatchStyl
         <label className="inspector-mini-field">
           <span>{ui('라벨 테두리')}</span>
           <input
+            id={`${fieldId}-label-border`}
+            name="connector-label-border"
             type="color"
             aria-label={ui('라벨 테두리 색상')}
             value={ls.borderColor || '#cbd5e1'}

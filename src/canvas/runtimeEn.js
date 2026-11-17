@@ -46,4 +46,11 @@ Object.assign(en, {
   '프로젝트': 'Project',
   '그룹': 'Group',
   '객체': 'Object',
+  '객체 그룹': 'Object Groups',
+  '객체 그룹 검색': 'Search object groups',
+  '객체에 할당된 그룹을 관리합니다. 최소 하나 이상의 그룹이 유지되어야 합니다.': 'Manage groups assigned to this object. At least one group must remain assigned.',
+  '객체에서 {group} 그룹 제거': 'Remove {group} group from object',
+  '객체 {group} 그룹 할당': 'Assign {group} group to object',
+  '미등록 그룹': 'Unregistered group',
+  '관리자': 'Admin',
 });

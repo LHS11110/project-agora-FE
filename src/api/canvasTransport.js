@@ -36,6 +36,18 @@ const resourcePath=path=>/^\/(media|pdfs|profile-images|linked-resource)\//.test
 const encode=bytes=>{let text='';for(let at=0;at<bytes.length;at+=8192)text+=String.fromCharCode(...bytes.subarray(at,at+8192));return btoa(text);};
 const decode=text=>Uint8Array.from(atob(text),c=>c.charCodeAt(0));
 const abort=signal=>{if(signal?.aborted)throw new DOMException('The request was aborted','AbortError');};
+export function decodeDataUriBlob(uri){
+ const text=String(uri||''),comma=text.indexOf(',');
+ if(!/^data:/i.test(text)||comma<0)throw new Error('Invalid data URI');
+ const header=text.slice(5,comma),body=text.slice(comma+1),isBase64=/;base64$/i.test(header);
+ const type=(isBase64?header.slice(0,-7):header)||'application/octet-stream';
+ if(isBase64){
+  const binary=atob(body.replace(/\s+/g,'')),bytes=new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+  return new Blob([bytes],{type});
+ }
+ return new Blob([decodeURIComponent(body)],{type});
+}
 export function canvasApiRequest(path,options){
  const destination=target(path);if(!destination)return null;
  const {entry,path:relative}=destination;
@@ -60,7 +72,13 @@ export function canvasApiRequest(path,options){
  })();
 }
 export async function canvasFetch(input,options={}){
- const destination=target(typeof input==='string'?input:input.href||input.url);
+ const raw=typeof input==='string'?input:input?.href||input?.url||'';
+ if(/^data:/i.test(raw)){
+  abort(options.signal);
+  const blob=decodeDataUriBlob(raw);
+  return new Response(blob,{status:200,headers:{'Content-Type':blob.type,'Cache-Control':'no-store'}});
+ }
+ const destination=target(raw);
  if(!destination||!resourcePath(destination.path)||options.method&&options.method!=='GET')return fetch(input,options);
  const {entry,path}=destination;const authorization=new Headers(options.headers||{}).get('Authorization');if(authorization&&authorization!==`Bearer ${entry.token}`)throw Error('캔버스 인증 정보가 변경되었습니다.');let offset=0,size=null,type,version;const chunks=[];
  do{

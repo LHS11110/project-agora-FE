@@ -1,11 +1,12 @@
 import { ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import MarkdownText from './MarkdownText.jsx';
 import './editable-table.css';
 
 export default function EditableTable({ item, onChange, enabled = true, editingActive = true, onStartEditing, onStopEditing }) {
   useUiLocale();
+  const tableId = useId();
   const [editingCell, setEditingCell] = useState(null);
   const columns = Array.isArray(item.columns) ? item.columns : [];
   const rows = Array.isArray(item.rows) ? item.rows : [];
@@ -33,7 +34,7 @@ export default function EditableTable({ item, onChange, enabled = true, editingA
           const isEditing = enabled && editingActive && editingCell?.kind === 'column' && editingCell.columnIndex === columnIndex;
           return <th key={`column-${columnIndex}`} scope="col" onDoubleClick={() => beginEditing({ kind: 'column', columnIndex })} title={ui("두 번 클릭해 컬럼 이름 편집")}>
             {isEditing
-              ? <input autoFocus aria-label={ui("컬럼 {v0} 이름", {
+              ? <input id={`${tableId}-col-${columnIndex}`} name={`table-column-${columnIndex}`} autoFocus aria-label={ui("컬럼 {v0} 이름", {
   v0: columnIndex + 1
 })} value={column} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeColumn(columnIndex, event.target.value)} onBlur={finishEditing} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === 'Escape') { event.preventDefault(); finishEditing(); } }} />
               : <div className="table-markdown-content">{column ? <MarkdownText source={column} /> : <span className="table-cell-placeholder">{ui("컬럼 이름")}</span>}</div>}
@@ -48,7 +49,7 @@ export default function EditableTable({ item, onChange, enabled = true, editingA
             const isEditing = enabled && editingActive && editingCell?.kind === 'cell' && editingCell.rowIndex === rowIndex && editingCell.columnIndex === columnIndex;
             return <td key={`cell-${rowIndex}-${columnIndex}`} onDoubleClick={() => beginEditing({ kind: 'cell', rowIndex, columnIndex })} title={ui("두 번 클릭해 Markdown 셀 편집")}>
               {isEditing
-                ? <textarea autoFocus aria-label={ui("{v0}행 {v1}열", {
+                ? <textarea id={`${tableId}-cell-${rowIndex}-${columnIndex}`} name={`table-cell-${rowIndex}-${columnIndex}`} autoFocus aria-label={ui("{v0}행 {v1}열", {
   v0: rowIndex + 1,
   v1: columnIndex + 1
 })} value={value} placeholder={ui("Markdown 텍스트")} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeCell(rowIndex, columnIndex, event.target.value)} onBlur={finishEditing} onKeyDown={(event) => { if (event.key === 'Escape' || (event.key === 'Enter' && (event.ctrlKey || event.metaKey))) { event.preventDefault(); finishEditing(); } }} />

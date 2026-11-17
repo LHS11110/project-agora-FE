@@ -22,7 +22,7 @@ export default class ScenePreparationQueue {
     this.enumerations++; this.restart(); return true;
   }
   restart() { this.cursor = 0;this.urgent.clear(); }
-  invalidate(ids){for(const id of ids)this.urgent.add(this.positions.get(id));}
+  invalidate(ids){for(const id of ids){const index=this.positions.get(id);if(index!==undefined)this.urgent.add(index);}}
   get pending() { return this.urgent.size>0 || this.cursor < this.entries.length; }
   run(visit, budgetMs = 8, now = () => performance.now()) {
     const start = now(); let visited = 0;

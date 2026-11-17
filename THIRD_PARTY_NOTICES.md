@@ -7,11 +7,11 @@ The frontend uses the following third-party rendering and collaboration librarie
 | `gifuct-js` | `2.1.2` | MIT | [matt-way/gifuct-js](https://github.com/matt-way/gifuct-js) |
 | `papaparse` | `5.7.0` | MIT | [mholt/PapaParse](https://github.com/mholt/PapaParse) |
 | `read-excel-file` | `8.0.0` | MIT | [catamphetamine/read-excel-file](https://gitlab.com/catamphetamine/read-excel-file) |
-| `pixi.js` | `^8.21.0` | MIT | [pixijs/pixijs](https://github.com/pixijs/pixijs) |
+| Rust `wgpu` | `24.0` (Cargo.lock) | MIT OR Apache-2.0 | [gfx-rs/wgpu](https://github.com/gfx-rs/wgpu) |
 | `@automerge/automerge` | `^3.5.0` | MIT | [automerge/automerge](https://github.com/automerge/automerge) |
 | `mathjax` | `^4.1.3` | Apache-2.0 | [mathjax/MathJax](https://github.com/mathjax/MathJax) |
 
-The corresponding license texts are included in the npm packages. The production build copies the PixiJS and Automerge license texts to `dist/licenses/` and the MathJax package (including its `LICENSE`) to `dist/mathjax/`.
+The corresponding license texts are included in the npm packages. The production build copies the Automerge license texts to `dist/licenses/` and the MathJax package (including its `LICENSE`) to `dist/mathjax/`.
 
 ## Complete production npm inventory
 
@@ -24,3 +24,7 @@ Additional direct packages include React/React DOM, Monaco Editor, perfect-freeh
 Third-party components retain their own licenses; this repository's MIT license does not relicense them. External Google Fonts requests and user-uploaded images/content are outside the npm inventory.
 
 Authenticator enrollment uses `qrcode` (MIT) to create QR images locally. Its exact version, transitive dependencies and license files are included in the generated npm inventory. Enrollment secrets are not sent to a third-party QR service.
+
+## Rust WASM renderer
+
+`public/licenses/rust/inventory.json` records the resolved wasm32 Cargo dependency superset and upstream license declarations. License texts are retained alongside it and published under `/licenses/rust/`. Regenerate these files with `python3 scripts/wgpu-notices.py` after changing Cargo.lock. The application renderer itself uses this repository’s MIT license.

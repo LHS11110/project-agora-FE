@@ -1,6 +1,6 @@
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
-import { useRef, useState, useMemo } from 'react';
+import { useId, useRef, useState, useMemo } from 'react';
 import { api } from '../../api/client.js';
 import UserAvatar from '../../components/account/UserAvatar.jsx';
 import { groupMember, membersFromGroup, MAX_GROUP_MEMBERS } from './userGroupModel.js';
@@ -8,6 +8,7 @@ import './user-group.css';
 
 export default function UserGroupControls({ item, token, user, onChange, canvasParticipants = [], settings }) {
   useUiLocale();
+  const fieldId = useId();
   const [query, setQuery] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const pending = useRef(false), latest = useRef(item); latest.current = item;
   const members = item.members || [];
@@ -68,14 +69,14 @@ export default function UserGroupControls({ item, token, user, onChange, canvasP
     <strong className="inspector-label">{ui("사용자 그룹")}</strong>
     <label className="form-field">
       <span>{ui("그룹 이름")}</span>
-      <input className="plain-input" maxLength={80} value={item.groupTitle || ''} onChange={event => onChange({ groupTitle: event.target.value })} />
+      <input id={`${fieldId}-title`} name="user-group-title" className="plain-input" maxLength={80} value={item.groupTitle || ''} onChange={event => onChange({ groupTitle: event.target.value })} />
     </label>
 
     {groupNames.length > 0 && <div className="user-group-preset-section">
       <label className="form-field">
         <span>{ui("캔버스 그룹으로 설정")}</span>
         <div className="user-group-preset-row">
-          <select className="plain-input" value={selectedGroupPreset} onChange={e => setSelectedGroupPreset(e.target.value)}>
+          <select id={`${fieldId}-preset`} name="user-group-preset" className="plain-input" value={selectedGroupPreset} onChange={e => setSelectedGroupPreset(e.target.value)}>
             {groupNames.map(name => <option key={name} value={name}>{name} ({groups[name]?.length || 0}{ui("명")})</option>)}
           </select>
           <button type="button" className="button button-outline" onClick={applyCanvasGroup}>
@@ -101,7 +102,7 @@ export default function UserGroupControls({ item, token, user, onChange, canvasP
       </div>
     </div>}
 
-    <form onSubmit={find}><input className="plain-input" aria-label={ui("추가할 사용자 닉네임과 태그")} placeholder={ui("닉네임#태그")} value={query} disabled={busy} onChange={event => setQuery(event.target.value)} /><button className="button button-outline" disabled={busy || members.length >= MAX_GROUP_MEMBERS}>{busy ? ui("찾는 중…") : ui("추가")}</button></form>
+    <form onSubmit={find}><input id={`${fieldId}-add-query`} name="user-group-add-query" className="plain-input" aria-label={ui("추가할 사용자 닉네임과 태그")} placeholder={ui("닉네임#태그")} value={query} disabled={busy} onChange={event => setQuery(event.target.value)} /><button className="button button-outline" disabled={busy || members.length >= MAX_GROUP_MEMBERS}>{busy ? ui("찾는 중…") : ui("추가")}</button></form>
     <button type="button" className="button button-outline" disabled={busy || user?.user_id == null || members.some(member => member.nickname === user.nickname && Number(member.tag_number) === Number(user.tag_number)) || members.length >= MAX_GROUP_MEMBERS} onClick={() => add(user)}>{ui("내 프로필 추가")}</button>
     {error && <p className="inline-notice error" role="alert">{error}</p>}
     <div className="user-group-members-setting-list">
@@ -121,11 +122,11 @@ export default function UserGroupControls({ item, token, user, onChange, canvasP
           <div className="user-group-member-custom">
             <label className="user-group-color-label">
               <span>{ui("테두리")}</span>
-              <input type="color" aria-label={ui("{v0} 테두리 색상", { v0: member.nickname })} value={member.borderColor || '#5d8bba'} onChange={event => modify(index, 'borderColor', event.target.value)} />
+              <input id={`${fieldId}-border-${index}`} name={`user-group-border-${index}`} type="color" aria-label={ui("{v0} 테두리 색상", { v0: member.nickname })} value={member.borderColor || '#5d8bba'} onChange={event => modify(index, 'borderColor', event.target.value)} />
             </label>
             <label className="user-group-color-label">
               <span>{ui("이름")}</span>
-              <input type="color" aria-label={ui("{v0} 닉네임 색상", { v0: member.nickname })} value={member.nameColor || '#5d8bba'} onChange={event => modify(index, 'nameColor', event.target.value)} />
+              <input id={`${fieldId}-name-${index}`} name={`user-group-name-${index}`} type="color" aria-label={ui("{v0} 닉네임 색상", { v0: member.nickname })} value={member.nameColor || '#5d8bba'} onChange={event => modify(index, 'nameColor', event.target.value)} />
             </label>
           </div>
         </div>;

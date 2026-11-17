@@ -4,7 +4,6 @@ import { isLogicGate } from '../canvas/logicGates.js';
 import { logicConnectorGeometry } from '../canvas/connectors/logicConnectorGeometry.js';
 import { connectorControlHandles, connectorPointCount, sampleControlCurve } from '../canvas/connectors/controlPoints.js';
 import { strokePaintSize } from '../canvas/inkStroke.js';
-import { obstacleRoute } from '../canvas/connectors/obstacleRoute.js';
 import { connectorObjectSize, connectorMetricsRevision } from '../canvas/connectors/objectMetrics.js';
 import { isRasterCode, codePreviewHeight } from '../canvas/codePreviewMetrics.js';
 import { CANVAS_SPACE } from '../canvas/canvasSpace.js';
@@ -125,10 +124,8 @@ function calculateConnectorGeometry(item, items, width, height) {
   if (isLogicGate(fromItem.shapeType) || isLogicGate(toItem.shapeType)) {
     return logicConnectorGeometry(item, fromItem, toItem, objectRect(fromItem, width, height), objectRect(toItem, width, height), { width, height }, distanceToEdge);
   }
-  const rectangles = Object.entries(items).filter(([id, candidate]) => isDrawableCanvasItem(candidate) && candidate.kind !== 'connector' && (candidate.kind!=='frame'||id===String(item.from)||id===String(item.to))).map(([id, candidate]) => ({ id, ...objectRect(candidate, width, height) }));
-  const from = rectangles.find(rect => rect.id === String(item.from));
-  const to = rectangles.find(rect => rect.id === String(item.to));
-  if (!from || !to) return null;
+  const from = {id:String(item.from),...objectRect(fromItem,width,height)};
+  const to = {id:String(item.to),...objectRect(toItem,width,height)};
   const dx = to.centerX - from.centerX;
   const dy = to.centerY - from.centerY;
   const length = Math.hypot(dx, dy);
@@ -259,21 +256,13 @@ function calculateConnectorGeometry(item, items, width, height) {
     };
     curvePoints = sampleControlCurve([attached(from, controls[0], start), ...controls, attached(to, controls.at(-1), end)]);
   }
-  const routed = obstacleRoute({ preferred: curvePoints, rectangles, from, to,
-    padding: headSize + strokeWidth / 2 + 4, preserveBend: bend > 0, guides: hasControls ? controls : null,
-    anchor: (rect, direction) => {
-      const reach = distanceToEdge(rect, direction.x, direction.y) + attachmentPadding(rect);
-      return { x: rect.centerX + direction.x * reach, y: rect.centerY + direction.y * reach };
-    },
-  });
-  if (!routed) return null;
-  const arrowPath = arrowPathGeometry(routed.points, {
+  const arrowPath = arrowPathGeometry(curvePoints, {
     startHead: item.startHead,
     endHead: item.endHead,
     headSize,
     strokeWidth: Number(item.strokeWidth) || 1.5,
   });
-  return { ...arrowPath, directionX, directionY, normalX, normalY, gap, bend, bendStart: start, bendEnd: end, controlSourcePoints: curvePoints, controlHandles: hasControls ? (routed.handles || controls) : [routed.points[Math.floor((routed.points.length - 1) / 2)]], routed: routed.routed };
+  return { ...arrowPath, directionX, directionY, normalX, normalY, gap, bend, bendStart: start, bendEnd: end, controlSourcePoints: curvePoints, controlHandles: hasControls ? controls : [curvePoints[Math.floor((curvePoints.length - 1) / 2)]], routed: false };
 }
 
 const geometryCache = new WeakMap();

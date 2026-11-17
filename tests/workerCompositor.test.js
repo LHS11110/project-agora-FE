@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import WorkerFrameCompositor from '../src/canvas/WorkerFrameCompositor.js';
 
 test('worker compositor closes stale snapshots, switches only to current content and restores fallback on failure',async()=>{
-  const names=['Worker','document','HTMLCanvasElement','createImageBitmap'];
+  const names=['Worker','document','HTMLCanvasElement','createImageBitmap','OffscreenCanvas'];
   const previous=names.map(name=>Object.getOwnPropertyDescriptor(globalThis,name));
   const bitmaps=[],instances=[];
-  class Canvas {style={};transferControlToOffscreen(){return {}}remove(){this.removed=true}}
+  class Canvas {style={};getContext(){return {transferFromImageBitmap(){}}}transferControlToOffscreen(){return {}}remove(){this.removed=true}}
   class MockWorker {messages=[];constructor(){instances.push(this)}postMessage(data){this.messages.push(data)}terminate(){this.terminated=true}}
-  Object.assign(globalThis,{Worker:MockWorker,HTMLCanvasElement:Canvas,document:{createElement:()=>new Canvas()},createImageBitmap:async()=>{const bitmap={close(){this.closed=true}};bitmaps.push(bitmap);return bitmap;}});
+  Object.assign(globalThis,{OffscreenCanvas:class {},Worker:MockWorker,HTMLCanvasElement:Canvas,document:{createElement:()=>new Canvas()},createImageBitmap:async()=>{const bitmap={close(){this.closed=true}};bitmaps.push(bitmap);return bitmap;}});
   const host={dataset:{},insertBefore(){}},fallback=new Canvas(),stats={};let changes=0,compositor;
   try{
     compositor=new WorkerFrameCompositor(host,fallback,()=>changes++,stats);
@@ -30,6 +30,12 @@ test('worker compositor closes stale snapshots, switches only to current content
     compositor.send({...frame,version:2,projection:{x:20,y:30,scale:2}},{});
     assert.equal(worker.messages.length,count);
     assert.equal(compositor.canvas.style.transform,'translate3d(30px,50px,0) scale(2)');
+    assert.equal(compositor.send({...frame,projection:null},{}),false);
+    assert.equal(compositor.canvas.style.display,'none');
+    worker.onmessage({data:{type:'painted',version:2,crop:frame.sourceCrop}});
+    assert.equal(compositor.canvas.style.display,'none');
+    assert.equal(compositor.canvas.style.transform,'translate3d(30px,50px,0) scale(2)');
+    assert.equal(compositor.version,-1,'discarded presentation must allow retry of the same revision');
     worker.onerror();
     assert.equal(host.dataset.compositor,'main');
     assert.equal(fallback.style.display,'');

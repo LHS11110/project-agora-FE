@@ -452,34 +452,7 @@ try {
       await page.screenshot({ path: path.join(screenshotDir, `search-${vp.name}.png`) });
     }
 
-    // 3) /tutorial header one-row alignment & no horizontal overflow
-    await page.goto(`${origin}/tutorial`);
-    await page.locator('.tutorial-header').waitFor({ state: 'visible' });
-    await page.waitForTimeout(150);
-    const tutorialReport = await page.evaluate(() => {
-      const header = document.querySelector('.tutorial-header');
-      const hr = header.getBoundingClientRect();
-      const brand = header.querySelector('.frelog-brand-lockup, .brand-lockup')?.getBoundingClientRect();
-      const lang = header.querySelector('.language-switcher')?.getBoundingClientRect();
-      const cta = header.querySelector('.button')?.getBoundingClientRect();
-      const items = [brand, lang, cta].filter(Boolean);
-      const midY = items.map((r) => (r.top + r.bottom) / 2);
-      const maxDeltaY = items.length ? Math.max(...midY) - Math.min(...midY) : 0;
-      const clipped = items.some((r) => r.bottom > hr.bottom + 1 || r.right > hr.right + 1 || r.left < hr.left - 1);
-      return {
-        docOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
-        maxDeltaY: Math.round(maxDeltaY),
-        clipped,
-      };
-    });
-    assert.equal(tutorialReport.docOverflow, false, `${vp.name}-tutorial docOverflow`);
-    assert.equal(tutorialReport.clipped, false, `${vp.name}-tutorial header clipped`);
-    assert.ok(tutorialReport.maxDeltaY <= 12, `${vp.name}-tutorial header items wrapped (deltaY=${tutorialReport.maxDeltaY})`);
-    if (screenshotDir && (vp.width === 768 || vp.height === 768)) {
-      await page.screenshot({ path: path.join(screenshotDir, `tutorial-${vp.name}.png`) });
-    }
-
-    // 4) /docs TOC viewport containment & no horizontal overflow
+    // 3) /docs TOC viewport containment & no horizontal overflow
     await page.goto(`${origin}/docs`);
     await page.locator('.docs-toc').waitFor({ state: 'visible' });
     await page.waitForTimeout(150);
@@ -498,7 +471,7 @@ try {
     }
 
     await context.close();
-    console.log(`PASS tablet layout (${vp.width}x${vp.height}): canvas, /search, /tutorial, /docs`);
+    console.log(`PASS tablet layout (${vp.width}x${vp.height}): canvas, /search, /docs`);
   }
 
   assert.deepEqual(pageErrors, [], `Unexpected page errors: ${pageErrors.join(' | ')}`);

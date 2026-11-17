@@ -15,6 +15,11 @@ export const SOUND_CUE_PATTERNS = {
     { freq: 987.77, delay: 0.12, duration: 0.16, gain: 0.11, type: 'triangle' },
     { freq: 1318.51, delay: 0.18, duration: 0.22, gain: 0.07, type: 'sine' },
   ],
+  screen_share_stop: [
+    { freq: 987.77, delay: 0, duration: 0.11, gain: 0.1, type: 'sine' },
+    { freq: 830.61, delay: 0.06, duration: 0.13, gain: 0.1, type: 'sine' },
+    { freq: 659.25, delay: 0.12, duration: 0.2, gain: 0.09, type: 'triangle' },
+  ],
   mention: [
     { freq: 698.46, delay: 0, duration: 0.13, gain: 0.12, type: 'sine' },
     { freq: 1046.5, delay: 0.085, duration: 0.26, gain: 0.13, type: 'triangle' },

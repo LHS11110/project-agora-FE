@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { ui } from '../../../i18n/locale.js';
 import { useUiLocale } from '../../../i18n/useUiLocale.js';
 import { STYLE_PRESETS, THEME_PALETTES, applyPresetToItem, applyThemePaletteToItem } from '../../../canvas/styling/stylePresets.js';
@@ -25,6 +25,7 @@ export default function StylePresetsAndTokensSection({
   onPatchAllItems,
 }) {
   useUiLocale();
+  const fieldId = useId();
   const [tokens, setTokens] = useState(() => loadStyleTokens(canvasId));
   const [tokenName, setTokenName] = useState('');
   const [tokenCategory, setTokenCategory] = useState('complete');
@@ -113,6 +114,8 @@ export default function StylePresetsAndTokensSection({
         <strong className="inspector-label">{ui('스타일 토큰 · 변수')}</strong>
         <div className="inspector-grid-2">
           <input
+            id={`${fieldId}-token-name`}
+            name="style-token-name"
             type="text"
             aria-label={ui('새 토큰 이름')}
             placeholder={ui('토큰 이름 (예: 강조 카드)')}
@@ -120,6 +123,8 @@ export default function StylePresetsAndTokensSection({
             onChange={(e) => setTokenName(e.target.value)}
           />
           <select
+            id={`${fieldId}-token-category`}
+            name="style-token-category"
             aria-label={ui('토큰 유형')}
             value={tokenCategory}
             onChange={(e) => setTokenCategory(e.target.value)}
@@ -187,6 +192,8 @@ export default function StylePresetsAndTokensSection({
           {selectionColors.map((entry) => (
             <div key={entry.color} className="inspector-selection-color-row">
               <input
+                id={`${fieldId}-batch-color-${entry.color}`}
+                name={`style-batch-color-${entry.color}`}
                 type="color"
                 aria-label={ui('선택 색상 일괄 교체')}
                 value={entry.color}

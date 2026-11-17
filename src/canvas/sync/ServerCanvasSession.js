@@ -1,8 +1,11 @@
-import {applyItemDelta,operationForWire} from './itemDelta.js';
+import { applyItemDelta, operationForWire } from './itemDelta.js';
 import { OBJECT_LOCK_MESSAGE } from '../locks/objectLock.js';
 import { itemSnapshot, changeItems } from '../itemSnapshots.js';
 import { operationIds, translateItem } from '../host/hostOperations.js';
 import { createId } from '../canvasIds.js';
+
+const textEncoder = new TextEncoder();
+const opWireBytes = (operation, deltaEdits) => textEncoder.encode(JSON.stringify(operationForWire(operation, deltaEdits))).length;
 
 // One ordered, retryable mutation in flight. The durable server receipt and
 // snapshot counter distinguish a lost acknowledgement from an unsaved edit.
@@ -21,7 +24,7 @@ export class ServerCanvasSession {
   get editable() { return this.seeded && !this.blocked; }
   get pendingOperations() { return [...(this.flight?.operations || []), ...this.queue]; }
   notify() {
-    this.status({ ready: this.ready, editable: this.editable, queued: this.pendingOperations.length,
+    this.status({ ready: this.ready, editable: this.editable, queued: (this.flight?.operations.length || 0) + this.queue.length,
       blocked: Boolean(this.blocked), message: this.blocked || '서버에서 최신 캔버스를 불러오고 있습니다.' });
   }
   redraw(touched = [], motion = null) { this.publish(this.items, touched, motion); this.notify(); }
@@ -52,11 +55,10 @@ export class ServerCanvasSession {
   }
   submit(operations) {
     if (!this.editable) return false;
-    if (this.pendingOperations.length + operations.length > 20000) { this.reject('저장 대기 중인 변경이 많습니다. 서버 연결을 확인해주세요.'); return false; }
-    const bytes = operation => {
-      const wire=operationForWire(operation,this.deltaEdits);
-      return new TextEncoder().encode(JSON.stringify(wire)).length;
-    };
+    if ((this.flight?.operations.length || 0) + this.queue.length + operations.length > 200000) {
+      this.reject('저장 대기 중인 변경이 많습니다. 서버 연결을 확인해주세요.'); return false;
+    }
+    const bytes = operation => opWireBytes(operation, this.deltaEdits);
     const sizes = operations.map(bytes);
     if (sizes.some(size => size > 8 * 1024 * 1024)) {
       this.reject('객체 데이터가 서버 전송 한도(8MiB)를 초과했습니다.'); return false;
@@ -149,12 +151,16 @@ export class ServerCanvasSession {
     const now = Date.now();
     if (!this.ready) { if (this.seeded || this.needsSync) this.requestSync(now); return; }
     if (!this.flight && this.queue.length && now >= this.nextAt) {
-      const operations = []; let bytes = 0;
-      while (this.queue.length && operations.length < 512) {
-        const { doc, base, ...wire } = this.queue[0];
-        const size = new TextEncoder().encode(JSON.stringify(wire)).length;
+      const operations = []; let bytes = 0; let take = 0;
+      while (take < this.queue.length && operations.length < 512) {
+        const operation = this.queue[take];
+        const size = opWireBytes(operation, this.deltaEdits);
         if (bytes && bytes + size > 1024 * 1024) break;
-        operations.push(this.queue.shift()); bytes += size; this.queuedBytes -= size;
+        operations.push(operation); bytes += size; take++;
+      }
+      if (take) {
+        this.queue = this.queue.slice(take);
+        this.queuedBytes = this.queue.length ? Math.max(0, this.queuedBytes - bytes) : 0;
       }
       this.flight = { wireBytes: bytes, type: 'canvas_ops', client_id: this.clientId, request_count: this.count + 1, request_id: createId(), operations: structuredClone(operations) };
       this.sentAt = 0; this.nextAt = now + (operations.every(o => o.action === 'translate') ? 100 : 33);

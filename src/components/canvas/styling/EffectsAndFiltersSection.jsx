@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { ui } from '../../../i18n/locale.js';
 import { useUiLocale } from '../../../i18n/useUiLocale.js';
 import {
@@ -10,6 +10,7 @@ import {
 
 export default function EffectsAndFiltersSection({ items, targetIds, onPatchStyle }) {
   useUiLocale();
+  const fieldId = useId();
   const primaryItem = targetIds.length ? items[targetIds[0]] : null;
   const style = readObjectStyle(primaryItem || {});
   const [cssDraft, setCssDraft] = useState(style.customCss || '');
@@ -85,6 +86,8 @@ export default function EffectsAndFiltersSection({ items, targetIds, onPatchStyl
                 {fx.enabled === false ? '○' : '●'}
               </button>
               <select
+                id={`${fieldId}-fx-${idx}-type`}
+                name={`style-effect-${idx}-type`}
                 aria-label={ui('효과 유형')}
                 value={fx.type}
                 onChange={(e) => updateEffect(idx, { type: e.target.value })}
@@ -108,27 +111,27 @@ export default function EffectsAndFiltersSection({ items, targetIds, onPatchStyl
               <div className="inspector-grid-4">
                 <label className="inspector-mini-field">
                   <span>{ui('색상')}</span>
-                  <input type="color" aria-label={ui('그림자 색상')} value={fx.color} onChange={(e) => updateEffect(idx, { color: e.target.value })} />
+                  <input id={`${fieldId}-fx-${idx}-color`} name={`style-effect-${idx}-color`} type="color" aria-label={ui('그림자 색상')} value={fx.color} onChange={(e) => updateEffect(idx, { color: e.target.value })} />
                 </label>
                 <label className="inspector-mini-field">
                   <span>X</span>
-                  <input type="number" min="-48" max="48" aria-label={ui('그림자 X')} value={fx.x} onChange={(e) => updateEffect(idx, { x: Number(e.target.value) || 0 })} />
+                  <input id={`${fieldId}-fx-${idx}-x`} name={`style-effect-${idx}-x`} type="number" min="-48" max="48" aria-label={ui('그림자 X')} value={fx.x} onChange={(e) => updateEffect(idx, { x: Number(e.target.value) || 0 })} />
                 </label>
                 <label className="inspector-mini-field">
                   <span>Y</span>
-                  <input type="number" min="-48" max="48" aria-label={ui('그림자 Y')} value={fx.y} onChange={(e) => updateEffect(idx, { y: Number(e.target.value) || 0 })} />
+                  <input id={`${fieldId}-fx-${idx}-y`} name={`style-effect-${idx}-y`} type="number" min="-48" max="48" aria-label={ui('그림자 Y')} value={fx.y} onChange={(e) => updateEffect(idx, { y: Number(e.target.value) || 0 })} />
                 </label>
                 <label className="inspector-mini-field">
                   <span>Blur</span>
-                  <input type="number" min="0" max="64" aria-label={ui('그림자 흐림')} value={fx.blur} onChange={(e) => updateEffect(idx, { blur: Math.max(0, Number(e.target.value) || 0) })} />
+                  <input id={`${fieldId}-fx-${idx}-blur`} name={`style-effect-${idx}-blur`} type="number" min="0" max="64" aria-label={ui('그림자 흐림')} value={fx.blur} onChange={(e) => updateEffect(idx, { blur: Math.max(0, Number(e.target.value) || 0) })} />
                 </label>
                 <label className="inspector-mini-field" style={{ gridColumn: '1 / 3' }}>
                   <span>{ui('투명도')} ({Math.round(fx.opacity * 100)}%)</span>
-                  <input type="range" min="0" max="100" aria-label={ui('그림자 투명도')} value={Math.round(fx.opacity * 100)} onChange={(e) => updateEffect(idx, { opacity: Number(e.target.value) / 100 })} />
+                  <input id={`${fieldId}-fx-${idx}-opacity`} name={`style-effect-${idx}-opacity`} type="range" min="0" max="100" aria-label={ui('그림자 투명도')} value={Math.round(fx.opacity * 100)} onChange={(e) => updateEffect(idx, { opacity: Number(e.target.value) / 100 })} />
                 </label>
                 <label className="inspector-mini-field" style={{ gridColumn: '3 / 5' }}>
                   <span>{ui('퍼짐 (Spread)')}</span>
-                  <input type="number" min="-24" max="32" aria-label={ui('그림자 퍼짐')} value={fx.spread} onChange={(e) => updateEffect(idx, { spread: Number(e.target.value) || 0 })} />
+                  <input id={`${fieldId}-fx-${idx}-spread`} name={`style-effect-${idx}-spread`} type="number" min="-24" max="32" aria-label={ui('그림자 퍼짐')} value={fx.spread} onChange={(e) => updateEffect(idx, { spread: Number(e.target.value) || 0 })} />
                 </label>
               </div>
             )}
@@ -137,6 +140,8 @@ export default function EffectsAndFiltersSection({ items, targetIds, onPatchStyl
               <label className="inspector-mini-field">
                 <span>{ui('블러 강도')} ({fx.blur}px)</span>
                 <input
+                  id={`${fieldId}-fx-${idx}-blur-amount`}
+                  name={`style-effect-${idx}-blur-amount`}
                   type="range"
                   min="0"
                   max="48"
@@ -177,6 +182,8 @@ export default function EffectsAndFiltersSection({ items, targetIds, onPatchStyl
               <span>{style.filters[field]}{unit}</span>
             </div>
             <input
+              id={`${fieldId}-filter-${field}`}
+              name={`style-filter-${field}`}
               type="range"
               min={min}
               max={max}
@@ -191,6 +198,8 @@ export default function EffectsAndFiltersSection({ items, targetIds, onPatchStyl
       <div style={{ marginTop: 12 }}>
         <strong className="inspector-label">{ui('커스텀 인라인 CSS')}</strong>
         <textarea
+          id={`${fieldId}-custom-css`}
+          name="style-custom-css"
           className="inspector-css-textarea"
           aria-label={ui('커스텀 인라인 CSS 입력')}
           placeholder="border-style: double; letter-spacing: 1px;"

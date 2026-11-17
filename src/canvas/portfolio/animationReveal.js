@@ -1,3 +1,4 @@
+import ItemSubset from '../ItemSubset.js';
 import { createContext, useContext } from 'react';
 import { animationFrames, defaultAnimation, hasAnimation } from './portfolioModel.js';
 import { readObjectVisibility } from '../styling/objectStyleModel.js';
@@ -109,10 +110,14 @@ export function shouldUseVisibilityDom(item, { previewHidden = false, now = Date
  * Find milliseconds until the next reveal transition (`startedAt + delay` or `startedAt + delay + duration`),
  * or `null` if no active reveal animation is running or queued.
  */
+const revealCandidates = new ItemSubset(item => {
+  const state = readObjectVisibility(item);
+  return state.hidden && state.revealAfterAnimation && item.animationPlayback?.action === 'play';
+});
 export function nextRevealBoundaryDelay(items, now = Date.now()) {
   if (!items || typeof items !== 'object') return null;
   let earliest = Infinity;
-  for (const item of Object.values(items)) {
+  for (const [, item] of revealCandidates.update(items)) {
     const state = getObjectRevealPhase(item, now);
     if (!state.hiddenFlag || !state.revealAfterAnimation) continue;
     if (state.phase === 'delayed' && state.revealAt > now) {

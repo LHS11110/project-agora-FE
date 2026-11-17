@@ -68,7 +68,7 @@ export default function InlineContentInput({ value, mode, fitContainer = false, 
       onChoose={setSelectionColor} onClose={() => { setDismissed(true); restoreSelection(); }} />}
     <div className="inline-content-input-frame">
     {colorRanges.length > 0 && !isComposing && <div className="inline-content-color-overlay" aria-hidden="true"><div ref={overlay}><ColorText value={value} ranges={colorRanges} />{'\n'}</div></div>}
-    <textarea ref={boundary.ref} className={`inline-content-input${colorRanges.length && !isComposing ? ' has-text-colors' : ''}`} data-mode={mode} autoFocus rows={1}
+    <textarea ref={boundary.ref} id={`${owner}-input`} name={`inline-content-${mode}`} className={`inline-content-input${colorRanges.length && !isComposing ? ' has-text-colors' : ''}`} data-mode={mode} autoFocus rows={1}
     aria-label={ui("{v0} 직접 수정", {
   v0: ui(labels[mode]) || ui("내용")
 })} value={value} spellCheck={mode === 'plain'}

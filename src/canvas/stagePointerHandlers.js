@@ -12,7 +12,7 @@ export function stagePointerHandlers({ disabled=false, activeTool, dragRef, panR
       if (touchNavigation?.down(event)) return;
       if (event.target.closest?.('.canvas-minimap')) return;
       cancelCameraMotion?.();
-      if (activeTool !== 'hand' && event.target.closest?.('.canvas-code-editor')) return;
+      if (!['hand','connect'].includes(activeTool) && event.target.closest?.('.canvas-code-editor')) return;
       if (panRef.current) { event.preventDefault(); event.stopPropagation(); return; }
       if (event.button === 1 || (event.button === 0 && (activeTool === 'hand' || spacePressedRef.current))) startPan(event);
       else pickVector?.(event, false, true);

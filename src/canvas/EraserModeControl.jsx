@@ -1,12 +1,14 @@
+import { useId } from 'react';
 import { ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
 import './eraser-mode-control.css';
 
 export default function EraserModeControl({ value, onChange, compact = false }) {
   useUiLocale();
+  const fieldId = useId();
   if (compact) return <label className="eraser-mode-control compact">
     {ui('지우기 방식')}
-    <select aria-label={ui('지우기 방식')} value={value} onChange={event => onChange(event.target.value)}>
+    <select id={`${fieldId}-mode`} name="eraser-mode" aria-label={ui('지우기 방식')} value={value} onChange={event => onChange(event.target.value)}>
       <option value="partial">{ui('부분 지우기')}</option>
       <option value="stroke">{ui('선 전체 지우기')}</option>
     </select>

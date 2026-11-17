@@ -49,3 +49,13 @@ test('result feedback cycles are rejected before execution',async()=>{
  const items={code:{kind:'code',code:'x',language:'python'},out:{runtimeRole:'output'},a:{kind:'connector',from:'code',to:'out'},b:{kind:'connector',from:'out',to:'code'}};
  let called=false;await assert.rejects(runBlueprint(items,'code',async()=>{called=true;},()=>{},{codeOnly:true}),/순환/);assert.equal(called,false);
 });
+test('value inputs and numeric outputs flow through a code-value-code chain',async()=>{
+ const value={kind:'value',title:'',valueType:'real',valueMin:0,valueMax:100,valueStep:.1,valueNumber:3.5,valueText:'',valueOptions:['A']};
+ const items={a:{kind:'code',code:'double',language:'python'},b:{kind:'code',code:'consume',language:'python'},input:value,middle:{...value,valueNumber:0},e1:{kind:'connector',from:'input',to:'a'},e2:{kind:'connector',from:'a',to:'middle'},e3:{kind:'connector',from:'middle',to:'b'}};
+ const requests=[],writes=[];const outcome=await runBlueprint(items,'a',async request=>{requests.push(request);return {exitCode:0,output:'7\n'};},(id,entry)=>writes.push([id,entry.valuePatch]),{codeOnly:true});
+ assert.equal(outcome.failed,false);assert.equal(requests[0].stdin,'3.5\n');assert.equal(requests[1].stdin,'7\n');assert.deepEqual(writes,[['middle',{valueNumber:7}]]);
+});
+test('out of range output cannot silently overwrite a value object',async()=>{
+ const items={a:{kind:'code',code:'print',language:'python'},v:{kind:'value',title:'',valueType:'integer',valueMin:0,valueMax:10,valueStep:1,valueNumber:0,valueText:'',valueOptions:['A']},e:{kind:'connector',from:'a',to:'v'}};let writes=0;
+ await assert.rejects(runBlueprint(items,'a',async()=>({exitCode:0,output:'99'}),()=>writes++,{codeOnly:true}),/유형 또는 범위/);assert.equal(writes,0);
+});

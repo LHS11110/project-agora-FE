@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { ui } from '../../../i18n/locale.js';
 import { useUiLocale } from '../../../i18n/useUiLocale.js';
 import { FONT_FAMILIES, FONT_WEIGHTS, readObjectStyle, writeObjectStylePatch } from '../../../canvas/styling/objectStyleModel.js';
@@ -5,6 +6,7 @@ import { objectFontSize, MIN_OBJECT_FONT_SIZE, MAX_OBJECT_FONT_SIZE } from '../.
 
 export default function TypographyAdvancedSection({ items, targetIds, onPatchStyle, onFontSizeChange }) {
   useUiLocale();
+  const fieldId = useId();
   if (!targetIds.length) return null;
   const primaryItem = items[targetIds[0]];
   const style = readObjectStyle(primaryItem);
@@ -25,6 +27,8 @@ export default function TypographyAdvancedSection({ items, targetIds, onPatchSty
         <label className="inspector-mini-field" style={{ gridColumn: '1 / -1' }}>
           <span>{ui('폰트 패밀리')}</span>
           <select
+            id={`${fieldId}-font-family`}
+            name="style-font-family"
             aria-label={ui('폰트 패밀리')}
             value={t.fontFamily}
             onChange={(e) => updateTypo({ fontFamily: e.target.value })}
@@ -37,6 +41,8 @@ export default function TypographyAdvancedSection({ items, targetIds, onPatchSty
         <label className="inspector-mini-field">
           <span>{ui('굵기')}</span>
           <select
+            id={`${fieldId}-font-weight`}
+            name="style-font-weight"
             aria-label={ui('폰트 굵기')}
             value={t.fontWeight}
             onChange={(e) => updateTypo({ fontWeight: Number(e.target.value) })}
@@ -47,6 +53,8 @@ export default function TypographyAdvancedSection({ items, targetIds, onPatchSty
         <label className="inspector-mini-field">
           <span>{ui('크기 (px)')}</span>
           <input
+            id={`${fieldId}-font-size`}
+            name="style-font-size"
             type="number"
             min={MIN_OBJECT_FONT_SIZE}
             max={MAX_OBJECT_FONT_SIZE}
@@ -64,6 +72,8 @@ export default function TypographyAdvancedSection({ items, targetIds, onPatchSty
         <label className="inspector-mini-field">
           <span>{ui('행간 (Line Height)')}</span>
           <input
+            id={`${fieldId}-line-height`}
+            name="style-line-height"
             type="number"
             min="0.8"
             max="3"
@@ -76,6 +86,8 @@ export default function TypographyAdvancedSection({ items, targetIds, onPatchSty
         <label className="inspector-mini-field">
           <span>{ui('자간 (px)')}</span>
           <input
+            id={`${fieldId}-letter-spacing`}
+            name="style-letter-spacing"
             type="number"
             min="-4"
             max="24"
@@ -88,6 +100,8 @@ export default function TypographyAdvancedSection({ items, targetIds, onPatchSty
         <label className="inspector-mini-field">
           <span>{ui('단락 간격 (px)')}</span>
           <input
+            id={`${fieldId}-paragraph-spacing`}
+            name="style-paragraph-spacing"
             type="number"
             min="0"
             max="64"
@@ -100,6 +114,8 @@ export default function TypographyAdvancedSection({ items, targetIds, onPatchSty
         <label className="inspector-mini-field">
           <span>{ui('텍스트 정렬')}</span>
           <select
+            id={`${fieldId}-text-align`}
+            name="style-text-align"
             aria-label={ui('텍스트 정렬')}
             value={t.textAlign}
             onChange={(e) => updateTypo({ textAlign: e.target.value })}
@@ -113,6 +129,8 @@ export default function TypographyAdvancedSection({ items, targetIds, onPatchSty
         <label className="inspector-mini-field">
           <span>{ui('영역 초과 처리')}</span>
           <select
+            id={`${fieldId}-overflow-mode`}
+            name="style-overflow-mode"
             aria-label={ui('텍스트 초과 처리')}
             value={t.overflowMode}
             onChange={(e) => updateTypo({ overflowMode: e.target.value })}
@@ -125,6 +143,8 @@ export default function TypographyAdvancedSection({ items, targetIds, onPatchSty
         <label className="inspector-mini-field">
           <span>{ui('글자 색상')}</span>
           <input
+            id={`${fieldId}-text-color`}
+            name="style-text-color"
             type="color"
             aria-label={ui('타이포 글자 색상')}
             value={t.textColor || '#22242a'}
