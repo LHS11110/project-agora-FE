@@ -1,3 +1,4 @@
+import {mergeLocalCommit,sameRepository,localCommitBase} from './localCommitMerge.js';
 import {splitCanvas} from './canvasRepository.js';
 import {stable} from '../asCode/manifest.js';
 import CanvasRepositoryPreview from './CanvasRepositoryPreview.jsx';
@@ -31,7 +32,7 @@ export default function CanvasGithubPanel({api,canvasId,onLoad,active=true}){
  useEffect(()=>{if(error||status)feedback.current?.scrollIntoView({block:'nearest'});},[error,status]);
  const configEdits=useRef(0);
  const adopt=data=>{setContext(data);if(data.project?.target&&data.currentBranch)setConfig({...data.project.target,branch:data.currentBranch});};
- useEffect(()=>{if(!active)return;let mounted=true;const revision=configEdits.current;request(`/api/canvases/${canvasId}/github`,{token:agoraToken}).then(data=>{if(mounted){setContext(data);if(revision===configEdits.current&&data.project?.target&&data.currentBranch)setConfig({...data.project.target,branch:data.currentBranch});}}).catch(()=>{});return()=>{mounted=false;};},[canvasId,agoraToken,active]);
+ useEffect(()=>{if(!active)return;let mounted=true;const revision=configEdits.current;request(`/api/canvases/${canvasId}/github`,{token:agoraToken}).then(data=>{if(mounted){setContext(data);if(revision===configEdits.current&&data.project?.target&&data.currentBranch)setConfig({...data.project.target,branch:data.currentBranch});}}).catch(e=>{if(mounted)setError(e.message||'GitHub 작업 권한을 불러오지 못했습니다.');});return()=>{mounted=false;};},[canvasId,agoraToken,active]);
  const scope=tokenScope(user,{owner:typeof config.owner==='string'?config.owner:'',repo:typeof config.repo==='string'?config.repo:''});
  useEffect(()=>{let active=true;tokenEdited.current=false;cachedToken.current=null;setToken('');setTokenExpiry(null);storedRepositoryToken(scope).then(saved=>{if(active&&!tokenEdited.current&&saved){cachedToken.current={...saved,scope};setToken(saved.token);setTokenExpiry(saved.expiresAt);setTokenNotice('저장된 GitHub 토큰을 불러왔습니다.');}}).catch(()=>{});return()=>{active=false;};},[scope]);
  useEffect(()=>{if(!tokenExpiry)return;const timer=setTimeout(()=>{forgetRepositoryToken(scope).catch(()=>{});setToken('');setTokenExpiry(null);setConnection(null);cachedToken.current=null;setTokenNotice('GitHub 토큰의 24시간 보관 기간이 만료되었습니다. 다시 입력해주세요.');},Math.max(0,tokenExpiry-Date.now()));return()=>clearTimeout(timer);},[tokenExpiry,scope]);
@@ -69,20 +70,30 @@ export default function CanvasGithubPanel({api,canvasId,onLoad,active=true}){
   await authorize('commit');await authorize('push');
   if(!prepared||!connection)return;
   const snapshot=prepared;
-  if(snapshotForSave()!==snapshot)throw new Error(ui('검토 후 캔버스가 변경되었습니다. 현재 캔버스를 다시 검토해주세요.'));
+  if(stable(JSON.parse(snapshotForSave()))!==stable(JSON.parse(snapshot)))throw new Error(ui('검토 후 캔버스가 변경되었습니다. 현재 캔버스를 다시 검토해주세요.'));
   if(connection.file?.split&&stable(JSON.parse(connection.file.source))===stable(JSON.parse(snapshot))){setStatus(ui('저장소와 같은 내용입니다. 새 커밋을 만들지 않았습니다.'));return;}
-  let result;
-  try{
-   result=await client.commitSplit(connection.target,snapshot,message,connection.file?.sha,{empty:connection.empty,baseSource:connection.file?.source});if(!alive.current)return;
-  }catch(e){if(alive.current){setPrepared(null);setConnection(null);}throw e;}
+  const result=await client.commitSplit(connection.target,snapshot,message,connection.file?.sha,{empty:connection.empty,baseSource:connection.file?.source});if(!alive.current)return;
   setConnection({...connection,empty:false,file:result.file||{sha:result.content.sha,source:snapshot}});setPrepared(null);setCommitSha(result.commit.sha);setStatus(ui('캔버스를 GitHub에 커밋했습니다.'));
   try{const graph=await client.graphHistory(connection.target,1,{path:historyPath});if(alive.current)adoptHistory(graph);}
   catch{if(alive.current)setError(ui('커밋은 완료됐지만 이력을 불러오지 못했습니다. 저장소를 다시 연결해주세요.'));}
  });
  const load=entry=>work(async client=>{const source=await client.read(connection.target,entry.sha);const parsed=JSON.parse(source);canvasSnapshot(parsed);if(!alive.current)return;onLoad(JSON.stringify({...parsed,mode:'replace',remove:[]},null,2));setPrepared(null);setStatus(ui('선택한 버전을 편집기로 불러왔습니다. 변경 검토 후 적용하세요.'));});
  const restore=entry=>work(async(client,signal)=>{await authorize('restore');const source=await client.read(connection.target,entry.sha);canvasSnapshot(JSON.parse(source));await syncBranchCanvas({canvasId,token:agoraToken,user,source,signal});if(alive.current){setPrepared(null);setStatus(ui('커밋 내용으로 캔버스를 복구하고 서버 저장을 확인했습니다.'));}});
- const saveLocal=async()=>{try{await authorize('commit');if(!prepared||snapshot()!==prepared)throw new Error('현재 캔버스를 다시 검토해주세요.');await createLocalCommit(draftScope(user,canvasId),{source:prepared,message,target:connection.target,sha:connection.file?.sha,empty:connection.empty,baseSource:connection.file?.source});setPrepared(null);await refreshDrafts();setStatus('로컬 커밋을 저장했습니다. 푸시 권한이 있으면 GitHub에 전송할 수 있습니다.');}catch(e){setError(e.message);}};
- const pushDraft=draft=>work(async client=>{await authorize('push');if(JSON.stringify(draft.target)!==JSON.stringify(connection.target))throw new Error('이 커밋은 다른 저장소나 브랜치에 속합니다.');const result=await client.commitSplit(draft.target,draft.source,draft.message,draft.sha,{empty:draft.empty,baseSource:draft.baseSource});await removeLocalCommit(draft.id);await refreshDrafts();setConnection({...connection,empty:false,file:result.file||{sha:result.content.sha,source:draft.source}});setCommitSha(result.commit.sha);setStatus('로컬 커밋을 GitHub에 푸시했습니다.');adoptHistory(await client.graphHistory(connection.target,1,{path:historyPath}));});
+ const saveLocal=async()=>{if(running.current)return;running.current=true;setBusy(true);setError('');try{await authorize('commit');if(!prepared||stable(JSON.parse(snapshot()))!==stable(JSON.parse(prepared)))throw new Error('현재 캔버스를 다시 검토해주세요.');const pending=await localCommits(draftScope(user,canvasId));await createLocalCommit(draftScope(user,canvasId),{source:prepared,message,target:connection.target,sha:connection.file?.sha,empty:connection.empty,baseSource:localCommitBase(pending,connection.target,connection.file?.source)});setPrepared(null);await refreshDrafts();setStatus('로컬 커밋을 저장했습니다. 푸시 권한이 있으면 GitHub에 전송할 수 있습니다.');}catch(e){setError(e.message);}finally{running.current=false;if(alive.current)setBusy(false);}};
+ const pushDraft=draft=>work(async client=>{
+  await authorize('push');
+  if(!sameRepository(draft.target,connection.target))throw new Error('이 커밋은 다른 저장소나 브랜치에 속합니다.');
+  const pending=drafts.filter(other=>sameRepository(other.target,draft.target)).sort((a,b)=>a.createdAt-b.createdAt||a.id.localeCompare(b.id));
+  if(pending[0]?.id!==draft.id)throw new Error('먼저 생성한 로컬 커밋부터 푸시해주세요.');
+  const latest=await client.connect(draft.target);
+  const empty=canvasSnapshot({version:1,items:{}});
+  const source=mergeLocalCommit(draft.baseSource??(draft.empty?empty:undefined),draft.source,latest.file?.source??(latest.empty?empty:undefined));
+  const result=await client.commitSplit(latest.target,source,draft.message,latest.file?.sha,{empty:latest.empty,baseSource:latest.file?.source});
+  await removeLocalCommit(draft.id);await refreshDrafts();
+  setConnection({...connection,empty:false,file:result.file});setCommitSha(result.commit.sha);setStatus('로컬 커밋을 GitHub에 푸시했습니다.');
+  try{adoptHistory(await client.graphHistory(connection.target,1,{path:historyPath}));}
+  catch{setError('푸시는 완료됐지만 이력을 불러오지 못했습니다. 이력을 새로고침해주세요.');}
+ });
  const savePolicy=async groups=>{try{setError('');const data=await request(`/api/canvases/${canvasId}/github/permissions`,{method:'POST',body:{groups},token:agoraToken});adopt(data);setStatus('GitHub 그룹 권한을 저장했습니다.');}catch(e){setError(e.message);}};
  const discardDraft=async id=>{try{await removeLocalCommit(id);await refreshDrafts();}catch(e){setError(e.message);}};
  const forgetToken=async()=>{try{await forgetRepositoryToken(scope);cachedToken.current=null;setToken('');setTokenExpiry(null);setConnection(null);setTokenNotice('저장된 GitHub 토큰을 삭제했습니다.');}catch(e){setError(e.message);}};
@@ -127,9 +138,9 @@ export default function CanvasGithubPanel({api,canvasId,onLoad,active=true}){
       <button onClick={saveLocal} disabled={!allowed('commit')||!prepared||!message.trim()}>{ui('로컬 커밋 저장')}</button>
       <button className="canvas-github-save" onClick={save} disabled={!allowed('commit')||!allowed('push')||!prepared||!message.trim()}>{ui('검토한 캔버스를 GitHub에 커밋')}</button>
      </fieldset>
-     {drafts.length>0&&<div className="canvas-github-drafts"><strong>{ui('푸시 대기 중인 로컬 커밋')}</strong>{drafts.map(draft=><div key={draft.id}><span>{draft.message}</span><button disabled={busy||!allowed('push')} onClick={()=>pushDraft(draft)}>{ui('푸시')}</button><button onClick={()=>discardDraft(draft.id)}>{ui('로컬 커밋 삭제')}</button></div>)}</div>}
+     {drafts.length>0&&<div className="canvas-github-drafts"><strong>{ui('푸시 대기 중인 로컬 커밋')}</strong>{[...drafts].sort((a,b)=>a.createdAt-b.createdAt||a.id.localeCompare(b.id)).map(draft=><div key={draft.id}><span>{draft.message}</span><button disabled={busy||!allowed('push')} onClick={()=>pushDraft(draft)}>{ui('푸시')}</button><button onClick={()=>discardDraft(draft.id)}>{ui('로컬 커밋 삭제')}</button></div>)}</div>}
     </section>
-    <section className="canvas-github-history"><div className="canvas-commit-graph-heading"><strong>{ui('저장 이력')}</strong><button disabled={busy||connection.empty} onClick={refresh}>{ui('새로고침')}</button></div><small>{ui('공통 조상부터 커밋 수에 따라 아래에서 위로 배치합니다. 브랜치마다 필요한 행만 사용합니다.')}</small><small>{ui(historyPath?'선택한 파일의 변경 이력입니다. 복구 시에는 해당 커밋의 전체 캔버스를 적용합니다.':'현재 브랜치의 이력만 표시합니다. 이미 병합된 커밋은 포함됩니다.')}</small>
+    <section className="canvas-github-history"><div className="canvas-commit-graph-heading"><strong>{ui('저장 이력')}</strong><button disabled={busy||connection.empty} onClick={refresh}>{ui('새로고침')}</button></div><small>{ui('최신 커밋부터 표시합니다. 색상 경로로 분기와 병합을 확인할 수 있습니다.')}</small><small>{ui(historyPath?'선택한 파일의 변경 이력입니다. 복구 시에는 해당 커밋의 전체 캔버스를 적용합니다.':'현재 브랜치의 이력만 표시합니다. 이미 병합된 커밋은 포함됩니다.')}</small>
      <label>{ui('변경 이력 범위')}<select id={`${fieldId}-history-path`} name="github-history-path" aria-label={ui('변경 이력 범위')} value={historyPath} disabled={busy} onChange={e=>filterHistory(e.target.value)}><option value="">{ui('전체 파일')}</option>{historyFiles.map(path=><option key={path} value={path}>{path.endsWith('/permissions.json')?ui('객체 그룹 권한'):path.includes('/objects/')?path.split('/').at(-1):ui('캔버스 구성')}</option>)}</select></label>
      {!history.length&&<p className="canvas-version-history-empty">{ui(historyPath?'이 파일의 변경 이력이 없습니다.':'저장된 버전이 없습니다. 첫 캔버스 버전을 커밋해보세요.')}</p>}
      <CanvasCommitGraph entries={history} refs={graphRefs} branch={connection.target.branch} busy={busy} canRestore={allowed('restore')} onRestore={restore} onInspect={load}/>

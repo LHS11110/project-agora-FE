@@ -54,3 +54,24 @@
 .canvas-commit-entry .canvas-github-actions{margin-top:2px}
 
 .canvas-version-history-layout>section{min-width:0}
+
+.canvas-github-history>.canvas-git-history{display:block;overflow-x:auto;padding:0;border:0;margin-top:12px;border-radius:8px;background:#f8fafb}
+.canvas-git-graph{min-width:320px}
+.canvas-git-graph>.canvas-git-row{display:grid;grid-template-columns:var(--graph-width) minmax(100px,1fr) auto;min-height:64px;padding:0;align-items:stretch;border:0}
+.canvas-git-row:nth-child(even){background:#71809608}
+.canvas-git-row:hover{background:#71809612}
+.canvas-git-lanes{position:relative;min-width:0}
+.canvas-git-lanes svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.canvas-git-lanes>.canvas-commit-node{top:50%;z-index:1;border:2px solid var(--commit-color);background:var(--commit-color);width:10px;height:10px;box-shadow:0 0 0 1px #f8fafb}
+.canvas-git-lanes>.canvas-commit-node.is-merge{width:12px;height:12px}
+.canvas-git-lanes>.canvas-commit-node.is-head{background:#f8fafb;border-width:3px;width:13px;height:13px}
+.canvas-git-content{min-width:0;display:flex;flex-direction:column;justify-content:center;gap:5px;padding:10px 8px}
+.canvas-git-message{display:flex;align-items:center;gap:7px;min-width:0}
+.canvas-git-message>strong{font-size:12px;line-height:1.4;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.canvas-git-message .canvas-commit-refs{flex:0 0 auto}
+.canvas-git-message .canvas-commit-refs>span{display:inline-flex;gap:4px;align-items:center;border:1px solid color-mix(in srgb,var(--commit-color),transparent 55%);border-radius:5px;padding:2px 6px;background:color-mix(in srgb,var(--commit-color),transparent 92%);color:var(--commit-color);font-size:10px;white-space:nowrap}
+.canvas-git-content .canvas-commit-meta{display:flex;gap:8px;align-items:center;margin:0;font-size:10px;color:#65738b}
+.canvas-git-content code{font-size:10px;color:#65738b}
+.canvas-git-actions{display:flex;align-items:center;gap:4px;padding:0 7px}
+.canvas-git-actions button{padding:4px 7px;font-size:10px;min-height:25px;background:transparent}
+@media(max-width:700px){.canvas-git-content .canvas-commit-meta time{display:none}.canvas-git-actions{flex-direction:column;justify-content:center;padding:5px 4px;gap:3px}.canvas-git-graph{min-width:290px}}

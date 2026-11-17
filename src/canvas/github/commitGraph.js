@@ -1,6 +1,6 @@
 // Keep branch columns stable even when a branch has no visible commits yet or
 // its loaded history ends before another tip. Only real parent SHAs join lines.
-export function commitGraph(entries,{refs=[],branch=''}={}){
+export function commitGraph(entries,{refs=[],branch='',includeBands=true}={}){
  const nodes=new Map(entries.map(e=>[e.sha,{...e,parents:e.parents||[]}]));
  const children=new Map([...nodes.keys()].map(sha=>[sha,0]));
  for(const e of nodes.values())for(const p of e.parents)if(nodes.has(p))children.set(p,children.get(p)+1);
@@ -20,9 +20,10 @@ export function commitGraph(entries,{refs=[],branch=''}={}){
  }
  // File-filtered histories may omit the ref's tip. API provenance keeps their
  // visible commits in the right column without inventing parent connections.
+ const omittedHeads=new Set(sortedRefs.filter(ref=>!nodes.has(ref.sha)).map(ref=>ref.name));
  for(const entry of nodes.values())if(!owners.has(entry.sha)){
   const names=[...(entry.branches||[])].sort((a,b)=>Number(b===branch)-Number(a===branch)||a.localeCompare(b));
-  const lane=names.map(name=>branchLanes.get(name)).find(value=>value!==undefined);
+  const lane=names.filter(name=>omittedHeads.has(name)).map(name=>branchLanes.get(name)).find(value=>value!==undefined);
   if(lane!==undefined)owners.set(entry.sha,lane);
  }
  let lanes=[],width=Math.max(1,columns.length),nextLane=columns.length;
@@ -52,6 +53,7 @@ export function commitGraph(entries,{refs=[],branch=''}={}){
   width=Math.max(width,lanes.length,lane+1,before.length);
   return {entry,lane,segments};
  });
+ if(!includeBands)return {rows,width,columns,bands:[]};
  // Count upwards from loaded ancestors, then invert for newest-at-top
  // display. Short branches keep empty space above, rather than stretching
  // their first commit away from the actual branch point.

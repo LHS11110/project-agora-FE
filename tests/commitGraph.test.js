@@ -21,3 +21,12 @@ test('sparse history with one column never places two commits in the same cell',
 
 test('unequal merge parents retain ancestry ranks rather than aligning their tips',()=>{const g=commitGraph([e('merge',['m2','f']),e('m2',['m1']),e('m1',['root']),e('f',['root']),e('root')],{branch:'main',refs:[{name:'main',sha:'merge'},{name:'feature',sha:'f'}]});assert.deepEqual(g.bands.map(b=>b.commits.map(r=>r.entry.sha)),[['merge'],['m2'],['m1','f'],['root']]);assert.ok(g.bands[1].segments.some(s=>s.from===1&&s.to===1&&s.start===0&&s.end===100));});
 test('three branches use one, two and three rows above their common branch point',()=>{const entries=[e('m3',['m2']),e('m2',['m1']),e('m1',['root']),e('f2',['f1']),e('f1',['root']),e('g1',['root']),e('root')];const g=commitGraph(entries,{branch:'main',refs:[{name:'main',sha:'m3'},{name:'feature/test',sha:'f2'},{name:'feature/test2',sha:'g1'}]});assert.deepEqual(g.bands.map(b=>b.commits.map(r=>r.entry.sha)),[['m3'],['m2','f2'],['m1','f1','g1'],['root']]);});
+
+test('current-branch provenance does not collapse a merged side path into the trunk',()=>{
+ const entries=[e('merge',['main','feature']),e('main',['root'],'2026-11-02'),e('feature',['root'],'2026-11-01'),e('root')].map(entry=>({...entry,branches:['main']}));
+ const graph=commitGraph(entries,{branch:'main',refs:[{name:'main',sha:'merge'}]});
+ const bySha=new Map(graph.rows.map(row=>[row.entry.sha,row]));
+ assert.notEqual(bySha.get('main').lane,bySha.get('feature').lane);
+ assert.equal(bySha.get('root').lane,bySha.get('main').lane);
+ assert.ok(bySha.get('root').segments.some(segment=>segment.from===bySha.get('feature').lane&&segment.to===bySha.get('root').lane));
+});

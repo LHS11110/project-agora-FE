@@ -40,6 +40,11 @@ export function canvasSnapshot(manifest){
  const source=JSON.stringify({...manifest,mode:'replace',remove:[]},null,2)+'\n';
  if(new TextEncoder().encode(source).length>MAX_CANVAS_BYTES)throw new Error('캔버스 코드는 8MiB 이하로 저장해주세요.');return source;
 }
+export async function gitBlobSha(text){
+ const bytes=new TextEncoder().encode(text),header=new TextEncoder().encode(`blob ${bytes.length}\0`),data=new Uint8Array(header.length+bytes.length);
+ data.set(header);data.set(bytes,header.length);
+ return [...new Uint8Array(await crypto.subtle.digest('SHA-1',data))].map(value=>value.toString(16).padStart(2,'0')).join('');
+}
 export function githubCanvasClient(token,{signal,fetcher=fetch}={}){
  token=token.trim();if(!token)throw new Error('GitHub 토큰을 입력해주세요.');
  async function request(route,{method='GET',body,raw=false,missing=false}={}){
@@ -47,6 +52,8 @@ export function githubCanvasClient(token,{signal,fetcher=fetch}={}){
   if(missing&&response.status===404)return null;
   if(!response.ok){
    const messages={401:'GitHub 토큰이 만료되었거나 올바르지 않습니다.',403:'저장소 권한·브랜치 보호 규칙 또는 GitHub 요청 제한을 확인해주세요.',404:'저장소·브랜치 또는 파일에 접근할 수 없습니다.',409:'GitHub 파일이 변경되었습니다. 다시 연결해 최신 버전을 확인해주세요.',422:'파일 충돌·브랜치 또는 저장소 쓰기 규칙을 확인하고 다시 연결해주세요.'};
+   if(response.status===403&&response.headers.get('x-ratelimit-remaining')==='0')messages[403]='GitHub 요청 한도에 도달했습니다. 잠시 후 다시 시도해주세요.';
+   else if(response.status===403)messages[403]='GitHub 토큰의 저장소 Contents 읽기·쓰기 권한과 브랜치 보호 규칙을 확인해주세요.';
    const error=new Error(messages[response.status]||`GitHub 요청에 실패했습니다. (${response.status})`);error.status=response.status;error.service='github';throw error;
   }
   if(raw){const text=await response.text();if(new TextEncoder().encode(text).length>MAX_CANVAS_BYTES)throw new Error('8MiB 이하의 캔버스 파일만 불러올 수 있습니다.');return text;}
@@ -111,9 +118,11 @@ export function githubCanvasClient(token,{signal,fetcher=fetch}={}){
    if(!tree.length)return {content:{sha:current.sha},commit:{sha:head},file:current};
    const createdTree=await request(base(t)+'/git/trees',{method:'POST',body:{base_tree:parent.tree.sha,tree}});
    const commit=await request(base(t)+'/git/commits',{method:'POST',body:{message:message.trim(),tree:createdTree.sha,parents:[head]}});
-   // Never force a ref: a concurrent update rejects this commit instead of losing it.
+   const saved={sha:createdTree.tree?.find(entry=>entry.path===t.path)?.sha||await gitBlobSha(files[t.path]),source:canvasSnapshot(JSON.parse(source)),files,split:true};
+   // Never force a ref. Prepare local state before publication: a subsequent
+   // download failure must not turn an already successful push into an error.
    await request(refRoute,{method:'PATCH',body:{sha:commit.sha,force:false}});
-   const saved=await readFile(t,commit.sha);return {content:{sha:saved.sha},commit,file:saved};
+   return {content:{sha:saved.sha},commit,file:saved};
   }
  };
 }

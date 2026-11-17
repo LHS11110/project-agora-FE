@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {githubCanvasClient} from '../src/canvas/github/githubCanvas.js';
+import {githubCanvasClient,gitBlobSha} from '../src/canvas/github/githubCanvas.js';
 import {splitCanvas} from '../src/canvas/github/canvasRepository.js';
 const target={owner:'team',repo:'test',branch:'main',path:'canvas.json'},head='a'.repeat(40),commit='b'.repeat(40),blob='c'.repeat(40);
 const source=JSON.stringify({version:1,mode:'replace',remove:[],items:{a:{kind:'shape',x:1,permission:['g']}}});
@@ -20,3 +20,15 @@ test('concurrent branch update never forces ref; missing parts fail closed',asyn
 
 test('empty repository bootstraps a valid snapshot before publishing split commit',async()=>{const m=mock({empty:true});const result=await m.client.commitSplit(target,source,'first',undefined,{empty:true});assert.equal(m.calls[0].method,'PUT');assert.equal(m.calls[0].body.branch,undefined);assert.deepEqual(JSON.parse(Buffer.from(m.calls[0].body.content,'base64').toString()).items,JSON.parse(source).items);assert.equal(result.file.split,true);assert.equal(m.patches,1);});
 test('last kind deletion removes obsolete shard in same commit; old drafts without a base cannot overwrite split data',async()=>{const m=mock({split:true});await m.client.commitSplit(target,JSON.stringify({version:1,items:{}}),'delete',blob,{baseSource:source});assert.ok(m.tree.some(e=>e.path==='canvas.parts/objects/shape.json'&&e.sha===null));const old=mock({split:true});await assert.rejects(()=>old.client.commitSplit(target,source,'old draft',blob),/다시 검토/);assert.equal(old.patches,0);});
+
+test('push success does not depend on a second contents download',async()=>{
+ const m=mock();const result=await m.client.commitSplit(target,source,'publish',blob,{baseSource:source});
+ const publication=m.calls.findIndex(call=>call.method==='PATCH');
+ assert.equal(m.calls.slice(publication+1).length,0);
+ assert.equal(result.file.sha,await gitBlobSha(result.file.files[target.path]));
+ assert.equal(JSON.parse(result.file.source).items.a.x,1);
+});
+test('Git blob hashes include UTF-8 byte length and blob header',async()=>{
+ const {createHash}=await import('node:crypto');const text='한글 🌏';
+ assert.equal(await gitBlobSha(text),createHash('sha1').update(`blob ${Buffer.byteLength(text)}\0`).update(text).digest('hex'));
+});

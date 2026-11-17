@@ -1,26 +1,31 @@
 import {useMemo} from 'react';
 import {ui} from '../../i18n/locale.js';
 import {commitGraph} from './commitGraph.js';
-const COLUMN_WIDTH=240;
-const colors=['#7c83f5','#38bdb0','#e6a154','#d680bd','#69a8e4','#91b85c'];
-export default function CanvasCommitGraph({entries,refs,branch,busy,canRestore,onRestore,onInspect}){
- const graph=useMemo(()=>commitGraph(entries,{refs,branch}),[entries,refs,branch]);
- const width=graph.width*COLUMN_WIDTH;
- return <div className="canvas-parallel-history" style={{'--branch-columns':graph.width,'--branch-column-width':`${COLUMN_WIDTH}px`,'--branch-width':`${width}px`}}>
-  <div className="canvas-parallel-headings" aria-label={ui('브랜치별 경로')}>{Array.from({length:graph.width},(_,lane)=><div key={lane} style={{color:colors[lane%colors.length]}}>{graph.columns[lane]?.names.join(' · ')||ui('병합 경로')}</div>)}</div>
-  <ol className="canvas-commit-graph canvas-parallel-graph" aria-label={ui('Git 커밋 그래프')}>
-   {graph.bands.map((band,index)=><li key={index} className="canvas-commit-band" data-history-row={index}>
-    <svg className="canvas-band-lines" viewBox={`0 0 ${width} 100`} preserveAspectRatio="none" aria-hidden="true">{band.segments.map((s,i)=>{const a=14+s.from*COLUMN_WIDTH,b=14+s.to*COLUMN_WIDTH;return <path key={i} d={s.start===8&&s.from!==s.to?`M ${a} 8 C ${b} 8, ${b} 8, ${b} 18 L ${b} 100`:`M ${a} ${s.start} C ${a} ${(s.start+s.end)/2}, ${b} ${(s.start+s.end)/2}, ${b} ${s.end}`} fill="none" stroke={colors[(s.end===8?s.from:s.to)%colors.length]} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeDasharray={s.dashed?'4 4':undefined}/>;})}</svg>
-    {band.commits.map(({entry,lane})=><div className="canvas-commit-entry" key={entry.sha} data-commit={entry.sha} data-lane={lane} style={{gridColumn:lane+1}}>
-     <span aria-hidden="true" className={`canvas-commit-node${entry.parents.length>1?' is-merge':''}`} style={{borderColor:colors[lane%colors.length]}}/>
-     <div className="canvas-commit-content">
-      <div className="canvas-commit-refs">{refs.filter(r=>r.sha===entry.sha).map(r=><span key={r.name} className={r.name===branch?'is-current':''}>{r.name===branch?'HEAD · ':''}{r.name}</span>)}{entry.parents.length>1&&<span className="canvas-commit-merge" title={`${ui('병합 커밋')} · ${entry.parents.length}`}>{ui('병합 커밋')}</span>}</div>
-      <strong title={entry.message}>{entry.message.split('\n')[0]}</strong>
-      <small className="canvas-commit-meta"><code>{entry.sha.slice(0,7)}</code><span title={entry.author}>{entry.author}</span>{entry.date&&<time dateTime={entry.date} title={new Date(entry.date).toLocaleString()}>{new Date(entry.date).toLocaleString(undefined,{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}</time>}</small>
-      <div className="canvas-github-actions"><button aria-label={ui('이 커밋으로 캔버스 복구')} title={ui('이 커밋으로 캔버스 복구')} disabled={busy||!canRestore} onClick={()=>onRestore(entry)}>{ui('복구')}</button><button aria-label={ui('코드로 검토')} title={ui('코드로 검토')} disabled={busy} onClick={()=>onInspect(entry)}>{ui('코드')}</button></div>
+const GAP=22,PADDING=14;
+const colors=['#168dcc','#be35ba','#25a559','#d89a25','#8957da','#e46864'];
+export default function CanvasCommitGraph({entries,refs=[],branch,busy,canRestore,onRestore,onInspect}){
+ const graph=useMemo(()=>commitGraph(entries,{refs,branch,includeBands:false}),[entries,refs,branch]);
+ const labels=useMemo(()=>{const map=new Map();for(const ref of refs){if(!map.has(ref.sha))map.set(ref.sha,[]);map.get(ref.sha).push(ref);}return map;},[refs]);
+ const width=PADDING*2+Math.max(0,graph.width-1)*GAP;
+ return <div className="canvas-git-history">
+  <ol className="canvas-commit-graph canvas-git-graph" aria-label={ui('Git 커밋 그래프')} style={{'--graph-width':`${width}px`}}>
+   {graph.rows.map(({entry,lane,segments},index)=>{
+    const color=colors[lane%colors.length],head=labels.get(entry.sha)||[];
+    return <li key={entry.sha} className="canvas-git-row canvas-commit-entry" data-history-row={index} data-commit={entry.sha} data-lane={lane}>
+     <div className="canvas-git-lanes" aria-hidden="true">
+      <svg viewBox={`0 0 ${width} 100`} preserveAspectRatio="none">{segments.map((s,i)=>{
+       const a=PADDING+s.from*GAP,b=PADDING+s.to*GAP,middle=(s.start+s.end)/2;
+       return <path key={i} d={s.from===s.to?`M ${a} ${s.start} L ${b} ${s.end}`:`M ${a} ${s.start} C ${a} ${middle}, ${b} ${middle}, ${b} ${s.end}`} fill="none" stroke={colors[(s.start===50?s.to:s.from)%colors.length]} strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeDasharray={s.dashed?'3 4':undefined}/>;
+      })}</svg>
+      <span className={`canvas-commit-node${entry.parents.length>1?' is-merge':''}${head.some(r=>r.name===branch)?' is-head':''}`} style={{left:PADDING+lane*GAP,'--commit-color':color}}/>
      </div>
-    </div>)}
-   </li>)}
+     <div className="canvas-git-content">
+      <div className="canvas-git-message"><div className="canvas-commit-refs">{head.map(r=><span key={r.name} className={r.name===branch?'is-current':''} style={{'--commit-color':color}}><svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 4v8M4 9c6 0 8-1 8-5"/><circle cx="4" cy="3" r="2"/><circle cx="4" cy="13" r="2"/><circle cx="12" cy="3" r="2"/></svg>{r.name===branch?'HEAD · ':''}{r.name}</span>)}</div><strong title={entry.message}>{entry.message.split('\n')[0]}</strong></div>
+      <small className="canvas-commit-meta"><code>{entry.sha.slice(0,7)}</code><span title={entry.author}>{entry.author}</span>{entry.date&&<time dateTime={entry.date} title={new Date(entry.date).toLocaleString()}>{new Date(entry.date).toLocaleString(undefined,{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}</time>}{entry.parents.length>1&&<span title={ui('병합 커밋')}>{ui('병합 커밋')}</span>}</small>
+     </div>
+     <div className="canvas-git-actions"><button aria-label={ui('이 커밋으로 캔버스 복구')} title={ui('이 커밋으로 캔버스 복구')} disabled={busy||!canRestore} onClick={()=>onRestore(entry)}>{ui('복구')}</button><button aria-label={ui('코드로 검토')} title={ui('코드로 검토')} disabled={busy} onClick={()=>onInspect(entry)}>{ui('코드')}</button></div>
+    </li>;
+   })}
   </ol>
  </div>;
 }
