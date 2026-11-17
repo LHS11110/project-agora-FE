@@ -100,6 +100,9 @@ export function createInkStrokeRenderer(host, vectorCanvas) {
   const saved = document.createElement('canvas');
   const live = document.createElement('canvas');
   saved.className = 'ink-saved-surface'; live.className = 'ink-live-surface';
+  // Empty transparent canvases still become compositor layers. Show each
+  // surface only while it actually contributes saved or in-progress ink.
+  saved.style.display=live.style.display='none';
   host.insertBefore(saved, vectorCanvas);
   host.appendChild(live);
   const savedContext = saved.getContext('2d');
@@ -127,9 +130,9 @@ export function createInkStrokeRenderer(host, vectorCanvas) {
         liveContext.setTransform(1,0,0,1,0,0);
         liveContext.clearRect(0,0,live.width,live.height);
       }
-      livePainted=false;return;
+      live.style.display='none';livePainted=false;return;
     }
-    livePainted=true;prepare(live, liveContext);
+    live.style.display='';livePainted=true;prepare(live, liveContext);
     for (const preview of state.previews) drawStroke(liveContext, { ...preview, complete: false }, state.width, state.height);
     if (draft) drawStroke(liveContext, { ...draft, complete: false }, state.width, state.height);
   }
@@ -143,6 +146,7 @@ export function createInkStrokeRenderer(host, vectorCanvas) {
         : strokeEntries;
       if(entries.length || savedPainted)prepare(saved,savedContext);
       savedPainted=entries.length>0;
+      saved.style.display=savedPainted?'':'none';
       for(const [,stroke] of entries)drawStroke(savedContext,stroke,state.width,state.height);
       renderDraft(state.draft);
     },

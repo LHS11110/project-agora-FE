@@ -1,8 +1,10 @@
+import {useLiveContent} from '../canvas/content/LiveContentContext.js';
+import '../canvas/content/static-preview.css';
 import { LinkSummary } from './LinkPreview.jsx';
 import { mediaPosition, youtubeEmbedSrc } from '../canvas/media/mediaModel.js';
 import { ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, useMemo } from 'react';
 import { inspectShareUrl } from './shareMedia.js';
 import './shared-playback.css';
 
@@ -165,34 +167,23 @@ function SharedVideoPlayer({ item, media, interactive, writable, onChange }) {
   );
 }
 
-export default function SharedMediaContent({ item, token, interactive = true, writable = true, onChange }) {
-  useUiLocale();
-  const media = inspectShareUrl(item?.url);
-  if (!media) return <div className="shared-media-invalid">{ui('올바른 주소가 아닙니다.')}</div>;
-
-  if (media.mediaType === 'youtube') {
-    return (
-      <div
-        className="shared-playback shared-youtube-independent"
-        data-object-action={interactive ? 'playback' : undefined}
-        onPointerDown={interactive ? e => e.stopPropagation() : undefined}
-      >
-        <div className="shared-media-preview">
-          <iframe
-            className="shared-video-player"
-            src={youtubeEmbedSrc(media.embedUrl, media.url)}
-            title={item.title || media.defaultTitle}
-            loading="lazy"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; compute-pressure"
-            referrerPolicy="strict-origin-when-cross-origin"
-            allowFullScreen
-            onPointerDown={e => e.stopPropagation()}
-          />
-          {!interactive && <div className="shared-media-activate" aria-hidden="true" />}
-        </div>
-      </div>
-    );
-  }
+function YoutubeObject({item,media,interactive,playbackKey}){
+ const live=useLiveContent(playbackKey||item.id,`youtube:${media.url}`);
+ const src=useMemo(()=>youtubeEmbedSrc(media.embedUrl,media.url),[media.embedUrl,media.url]);
+ return <div className="shared-playback shared-youtube-independent" data-object-action={interactive?'playback':undefined}>
+  <div className="shared-media-preview">{live.active?<>
+   <iframe className="shared-video-player" src={`${src}&autoplay=1`} title={item.title||media.defaultTitle} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; compute-pressure" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen onPointerDown={event=>event.stopPropagation()}/>
+   <button className="youtube-live-close" data-object-action onPointerDown={event=>event.stopPropagation()} onClick={live.deactivate}>{ui('플레이어 닫기')}</button>
+  </>:<div className="youtube-static-preview">
+   <img src={`https://i.ytimg.com/vi/${media.videoId||new URL(media.embedUrl).pathname.split('/').pop()}/hqdefault.jpg`} alt="" loading="lazy" decoding="async"/>
+   <strong>{item.title||media.defaultTitle}</strong><button type="button" data-object-action aria-label={ui('YouTube 재생')} onPointerDown={event=>event.stopPropagation()} onClick={event=>{event.stopPropagation();live.activate();}}>▶</button><small>YouTube</small>
+  </div>}</div>
+ </div>;
+}
+export default function SharedMediaContent({item,token,interactive=true,writable=true,onChange,playbackKey}){
+ useUiLocale();const media=inspectShareUrl(item?.url);
+ if(!media)return <div className="shared-media-invalid">{ui('올바른 주소가 아닙니다.')}</div>;
+ if(media.mediaType==='youtube')return <YoutubeObject key={media.url} {...{item,media,interactive,playbackKey}}/>;
 
   if (media.mediaType === 'video') {
     return <SharedVideoPlayer {...{ item, media, interactive, writable, onChange }} />;

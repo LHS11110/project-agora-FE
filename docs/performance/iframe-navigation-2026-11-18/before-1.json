@@ -1,0 +1,138 @@
+{
+  "browser": "157.0.8103.78",
+  "recordedAt": "2026-11-17T19:13:13.926Z",
+  "results": [
+    {
+      "kind": "html",
+      "fixture": "72 objects; 1280x900; Chromium hardware GPU; 4.8s pan and zoom; deterministic player and thumbnail responses",
+      "fps": 41.93303048361735,
+      "frameP95Ms": 66.69999999999982,
+      "frameMaxMs": 66.70000000000073,
+      "over25": 44,
+      "over33": 35,
+      "iframeCreated": 166,
+      "motionIframeCreated": 130,
+      "maxIframes": 48,
+      "activeIframes": 42,
+      "domObjects": 42,
+      "renderP95Ms": 11.099999979138374,
+      "commitToProfilerP95Ms": 27.5,
+      "compositorLayers": 46,
+      "maxCompositorLayers": 60,
+      "phases": {
+        "Layout": {
+          "count": 170,
+          "totalMs": 22.093000000000025,
+          "p95Ms": 0.814,
+          "maxMs": 2.342
+        },
+        "UpdateLayoutTree": {
+          "count": 334,
+          "totalMs": 32.98999999999998,
+          "p95Ms": 0.226,
+          "maxMs": 1.218
+        },
+        "Paint": {
+          "count": 374,
+          "totalMs": 1179.24,
+          "p95Ms": 5.955,
+          "maxMs": 7.919
+        },
+        "Layerize": {
+          "count": 203,
+          "totalMs": 168.525,
+          "p95Ms": 1.447,
+          "maxMs": 2.017
+        }
+      }
+    },
+    {
+      "kind": "youtube",
+      "fixture": "72 objects; 1280x900; Chromium hardware GPU; 4.8s pan and zoom; deterministic player and thumbnail responses",
+      "fps": 52.105859334775,
+      "frameP95Ms": 33.399999999999636,
+      "frameMaxMs": 66.70000000000027,
+      "over25": 25,
+      "over33": 23,
+      "iframeCreated": 171,
+      "motionIframeCreated": 135,
+      "maxIframes": 48,
+      "activeIframes": 35,
+      "domObjects": 35,
+      "renderP95Ms": 16.899999991059303,
+      "commitToProfilerP95Ms": 27.5,
+      "compositorLayers": 41,
+      "maxCompositorLayers": 54,
+      "phases": {
+        "Layout": {
+          "count": 179,
+          "totalMs": 12.463000000000001,
+          "p95Ms": 0.267,
+          "maxMs": 0.617
+        },
+        "UpdateLayoutTree": {
+          "count": 381,
+          "totalMs": 38.40600000000003,
+          "p95Ms": 0.195,
+          "maxMs": 0.73
+        },
+        "Paint": {
+          "count": 470,
+          "totalMs": 814.5619999999997,
+          "p95Ms": 3.279,
+          "maxMs": 4.155
+        },
+        "Layerize": {
+          "count": 252,
+          "totalMs": 220.591,
+          "p95Ms": 1.55,
+          "maxMs": 2.403
+        }
+      }
+    },
+    {
+      "kind": "notebook",
+      "fixture": "72 objects; 1280x900; Chromium hardware GPU; 4.8s pan and zoom; deterministic player and thumbnail responses",
+      "fps": 43.82247762363714,
+      "frameP95Ms": 66.60000000000036,
+      "frameMaxMs": 66.70000000000073,
+      "over25": 34,
+      "over33": 34,
+      "iframeCreated": 166,
+      "motionIframeCreated": 130,
+      "maxIframes": 48,
+      "activeIframes": 42,
+      "domObjects": 42,
+      "renderP95Ms": 7,
+      "commitToProfilerP95Ms": 20.900000005960464,
+      "compositorLayers": 41,
+      "maxCompositorLayers": 54,
+      "phases": {
+        "Layout": {
+          "count": 162,
+          "totalMs": 12.008999999999988,
+          "p95Ms": 0.224,
+          "maxMs": 0.605
+        },
+        "UpdateLayoutTree": {
+          "count": 328,
+          "totalMs": 28.499000000000027,
+          "p95Ms": 0.182,
+          "maxMs": 0.544
+        },
+        "Paint": {
+          "count": 388,
+          "totalMs": 517.0830000000003,
+          "p95Ms": 3.001,
+          "maxMs": 3.871
+        },
+        "Layerize": {
+          "count": 211,
+          "totalMs": 163.56799999999993,
+          "p95Ms": 1.856,
+          "maxMs": 2.216
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+import React,{useState,useMemo,useSyncExternalStore} from 'react';import {createRoot} from 'react-dom/client';
+import HtmlObject from '../../src/canvas/content/HtmlObject.jsx';import SharedMediaContent from '../../src/components/SharedMediaContent.jsx';import NotebookOutput from '../../src/canvas/notebook/NotebookOutput.jsx';import {LiveContentContext,createLiveContentRegistry} from '../../src/canvas/content/LiveContentContext.js';import {WebAssetsContext} from '../../src/canvas/content/WebAssetsContext.js';
+const initial='<h1>Safe preview</h1><p id="value"></p><script>window.runs=(window.runs||0)+1;document.querySelector("#value").textContent=canvasValues.speed;addEventListener("canvasvalueschange",()=>document.querySelector("#value").textContent=canvasValues.speed)</script>';
+function App(){const registry=useMemo(()=>createLiveContentRegistry(),[]),active=useSyncExternalStore(registry.subscribe,registry.getSnapshot),[source,setSource]=useState(initial),[editing,setEditing]=useState(false),[selected,select]=useState(true),[inView,show]=useState(true),[assets,setAssets]=useState({css:['h1{color:rgb(1,2,3)}'],js:[],values:{speed:7}});
+ const store=useMemo(()=>({get:()=>assets,subscribe:()=>()=>{}}),[assets]);
+ window.lifecycleFixture={select,show,setSource,setAssets,registry,source,assets};
+ return <LiveContentContext.Provider value={registry}><WebAssetsContext.Provider value={store}>
+ <div data-item-id="html" style={{width:600,height:400}}><HtmlObject id="html" value={source} editing={editing} onStartEditing={()=>setEditing(true)} onStopEditing={()=>setEditing(false)} onChange={setSource}/></div>
+ {(inView||active.includes('youtube'))&&<div data-item-id="youtube" style={{width:500,height:300,position:'relative'}}><SharedMediaContent playbackKey="youtube" item={{url:'https://youtu.be/dQw4w9WgXcQ',title:'Tutorial'}} interactive={selected}/></div>}
+ <div data-item-id="notebook"><NotebookOutput ownerId="notebook" fontSize={13} output={{data:{'text/html':'<h2>Notebook output</h2><script>parent.notebookEscaped=true</script>'}}}/><NotebookOutput ownerId="svg" fontSize={13} output={{data:{'image/svg+xml':'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="40"><rect width="100" height="40" fill="blue"/><script>parent.svgEscaped=true</script></svg>'}}}/></div>
+ </WebAssetsContext.Provider></LiveContentContext.Provider>;
+}createRoot(document.getElementById('root')).render(<App/>);

@@ -1,3 +1,4 @@
+import {LiveContentContext,createLiveContentRegistry} from '../canvas/content/LiveContentContext.js';
 import ItemSubset from '../canvas/ItemSubset.js';
 import useCanvasWatch from '../canvas/useCanvasWatch.js';
 import CanvasWatchOverlay from '../components/canvas/CanvasWatchOverlay.jsx';
@@ -182,6 +183,8 @@ function CanvasWorkspace() {
   const [showAgent, setShowAgent] = useState(false);
   const [agentBusy, setAgentBusy] = useState(false);
   const { canvasId } = useParams();
+  const liveContent=useMemo(()=>createLiveContentRegistry(),[canvasId]);
+  const liveContentIds=useSyncExternalStore(liveContent.subscribe,liveContent.getSnapshot,liveContent.getSnapshot);
   const { token, user } = useAuth();
   const [portfolioViewing, setPortfolioViewing] = useState(false), [portfolioIndex, setPortfolioIndex] = useState(0), [portfolioSettings, setPortfolioSettings] = useState(false), [portfolioLocked, setPortfolioLocked] = useState(false);
   const frameStore = useMemo(() => createFrameStore(), []), framePages = useSyncExternalStore(frameStore.subscribe, frameStore.getSnapshot, frameStore.getSnapshot);
@@ -1332,6 +1335,7 @@ function CanvasWorkspace() {
   }, [remoteEditors]);
   const drawableItemCount = itemCount(items);
 
+  useEffect(()=>{liveContent.prune(new Set(liveContentIds.filter(id=>Boolean(items[id]))));},[items,liveContent,liveContentIds]);
   const viewportSize = useCanvasViewport({ boardRef, setCamera, refreshKey: error });
   useEffect(() => { if (portfolioViewing && presentationPage?.frameId) showPortfolioPage(portfolioIndex, false); }, [viewportSize.width, viewportSize.height, presentationPage?.frame]);
   const spatialIndexRef = useRef(null);
@@ -1363,12 +1367,12 @@ function CanvasWorkspace() {
     const cached = zoomEntriesCacheRef.current;
     const b = sceneWindow.bounds;
     const covered = containsViewport(cached?.bounds, visibleBounds, boardSize, camera.scale,viewportSize);
-    if (cameraMoving && covered && cached && cached.items === items && cached.spatialIndex === spatialIndex && cached.spatialRevision === spatialRevision && cached.editingId === editingId && cached.width === boardSize.width && cached.height === boardSize.height && !dragRef.current?.id) {
+    if (cameraMoving && covered && cached && cached.items === items && cached.spatialIndex === spatialIndex && cached.spatialRevision === spatialRevision && cached.editingId === editingId && cached.liveContentIds === liveContentIds && cached.width === boardSize.width && cached.height === boardSize.height && !dragRef.current?.id) {
       return cached.entries;
     }
     let entries = sceneQueryRef.current.query(spatialIndex, b);
     // Keep an open editor mounted even when its measured bounds leave the viewport.
-    for (const retainedId of [dragRef.current?.id, editingId].filter(Boolean)) {
+    for (const retainedId of [dragRef.current?.id, editingId, ...liveContentIds].filter(Boolean)) {
       if (!items[retainedId]) continue;
       const item = items[retainedId];
       if (entries.some(entry => entry.id === retainedId)) continue;
@@ -1378,9 +1382,9 @@ function CanvasWorkspace() {
         bounds: objectBounds(item, items, boardSize.width, boardSize.height),
       }];
     }
-    zoomEntriesCacheRef.current = { items, spatialIndex, spatialRevision, editingId, width: boardSize.width, height: boardSize.height, bounds: b, entries };
+    zoomEntriesCacheRef.current = { liveContentIds, items, spatialIndex, spatialRevision, editingId, width: boardSize.width, height: boardSize.height, bounds: b, entries };
     return entries;
-  }, [boardSize.height, boardSize.width, editingId, items, spatialIndex, spatialRevision, sceneWindow.key, zoomingActive, cameraMoving, camera]);
+  }, [boardSize.height, boardSize.width, editingId, items, spatialIndex, spatialRevision, sceneWindow.key, zoomingActive, cameraMoving, camera, liveContentIds]);
   useLayoutEffect(()=>{
     const stage=boardRef.current,cached=zoomEntriesCacheRef.current;
     if(stage&&cached)stage.__agoraPreparedScene={bounds:cached.bounds,world:boardSize};
@@ -1456,11 +1460,11 @@ function CanvasWorkspace() {
     return ids || EMPTY_ID_SET;
   }, [hiddenCandidates, previewHiddenEffective, revealNow]);
   const sceneDomIds = useMemo(() => {
-    if (!domSelection.size && !styledDomIds.size && !visibilityDomIds.size && editingId == null && connectionStartId == null) {
+    if (!liveContentIds.length && !domSelection.size && !styledDomIds.size && !visibilityDomIds.size && editingId == null && connectionStartId == null) {
       return EMPTY_ID_SET;
     }
-    return new Set([...domSelection, ...styledDomIds, ...visibilityDomIds, editingId, connectionStartId].filter(Boolean));
-  }, [domSelection, styledDomIds, visibilityDomIds, editingId, connectionStartId]);
+    return new Set([...liveContentIds, ...domSelection, ...styledDomIds, ...visibilityDomIds, editingId, connectionStartId].filter(Boolean));
+  }, [domSelection, styledDomIds, visibilityDomIds, editingId, connectionStartId, liveContentIds]);
   const sceneModelRef = useRef(null); if (!sceneModelRef.current) sceneModelRef.current = new SceneViewModel();
   const sceneModel = sceneModelRef.current.update(portfolioEntries, items, boardSize, representationScale, sceneDomIds, selectedObjectIdSet, spatialIndex.stats.boundsCalculated, spatialIndex, graphicsQuality);
   if (sceneRef.current) { sceneRef.current.__agoraSceneStats = sceneModel.stats; sceneRef.current.__agoraContentCacheStats = objectContentCacheStats; sceneRef.current.__agoraSpatialStats = spatialIndex.stats; }
@@ -2126,7 +2130,7 @@ function CanvasWorkspace() {
       .map(key => [key, (...args) => objectActionsRef.current[key](...args)])), []);
 
 
-    return <WebAssetsContext.Provider value={webAssetStore}><AnimationContext.Provider value={animationStore}><ProjectContext.Provider value={projectStore}><CanvasGraphicsContext.Provider value={graphicsQuality}><div className={`canvas-app-page${portfolioViewing ? ' portfolio-view' : ''}`} data-presentation-settings={portfolioSettings} style={portfolioViewing && presentationPage?.frame ? { '--frame-screen-left': `${presentationPage.frame.x * boardSize.width * camera.scale + camera.x}px`, '--frame-screen-top': `${presentationPage.frame.y * boardSize.height * camera.scale + camera.y}px`, '--frame-screen-width': `${presentationPage.frame.width * boardSize.width * camera.scale}px`, '--frame-screen-height': `${presentationPage.frame.height * boardSize.height * camera.scale}px`, '--frame-view-fill': presentationPage.frame.fill || '#fff', '--frame-content-color': isColorDark(presentationPage.frame.fill || '#fff') ? '#f0f1f5' : '#1e2029', '--frame-content-muted': isColorDark(presentationPage.frame.fill || '#fff') ? '#a3a4bb' : '#5f6377' } : undefined} data-frame-view={Boolean(portfolioViewing && presentationPage?.frameId)} data-graphics-quality={graphicsQuality} data-theme={theme} data-info-collapsed={chrome.collapsed.info}>
+    return <LiveContentContext.Provider value={liveContent}><WebAssetsContext.Provider value={webAssetStore}><AnimationContext.Provider value={animationStore}><ProjectContext.Provider value={projectStore}><CanvasGraphicsContext.Provider value={graphicsQuality}><div className={`canvas-app-page${portfolioViewing ? ' portfolio-view' : ''}`} data-presentation-settings={portfolioSettings} style={portfolioViewing && presentationPage?.frame ? { '--frame-screen-left': `${presentationPage.frame.x * boardSize.width * camera.scale + camera.x}px`, '--frame-screen-top': `${presentationPage.frame.y * boardSize.height * camera.scale + camera.y}px`, '--frame-screen-width': `${presentationPage.frame.width * boardSize.width * camera.scale}px`, '--frame-screen-height': `${presentationPage.frame.height * boardSize.height * camera.scale}px`, '--frame-view-fill': presentationPage.frame.fill || '#fff', '--frame-content-color': isColorDark(presentationPage.frame.fill || '#fff') ? '#f0f1f5' : '#1e2029', '--frame-content-muted': isColorDark(presentationPage.frame.fill || '#fff') ? '#a3a4bb' : '#5f6377' } : undefined} data-frame-view={Boolean(portfolioViewing && presentationPage?.frameId)} data-graphics-quality={graphicsQuality} data-theme={theme} data-info-collapsed={chrome.collapsed.info}>
       <div style={{ display: 'contents' }} inert={!hostStatus.editable && !error ? '' : undefined}>
         <header className={`canvas-topbar${chrome.collapsed.info ? ' is-collapsed' : ''}`}>
           <ChromeToggle label={ui("캔버스 정보")} collapsed={chrome.collapsed.info} onToggle={() => chrome.toggle('info')} controls="canvas-info-content" />
@@ -2314,7 +2318,7 @@ function CanvasWorkspace() {
       </div>
       {!error && !hostStatus.editable && <CanvasLoadingStatus overlay message={hostStatus.message} />}
       {portfolioViewing && presentationPage && <PortfolioViewer portfolio={{ ...items[PORTFOLIO_ID], title: items[PORTFOLIO_ID]?.title || ui('포트폴리오'), portfolioPages: presentationPages }} index={portfolioIndex} onAdvance={advancePresentation} sending={presentationSending} busyUntil={presentationBusy.current} step={cursor?.frameId === presentationPage.frameId ? cursor?.step || 0 : 0} totalSteps={animationGroups(presentationPage, itemsRef.current).length} canAdvance={portfolioWritable(presentationPage.frame || itemsRef.current[PORTFOLIO_ID]) && portfolioWritable(itemsRef.current[PORTFOLIO_ID] || frameMeta())} remainingFrames={(() => { let n = 0, id = presentationPage.nextFrameId; const seen = new Set([presentationPage.frameId]); while (id && !seen.has(id)) { seen.add(id); n++; id = presentationPageById.get(id)?.nextFrameId; } return n; })()} locked={portfolioLocked} onExit={exitPortfolio} />}
-    </div></CanvasGraphicsContext.Provider></ProjectContext.Provider></AnimationContext.Provider></WebAssetsContext.Provider>;
+    </div></CanvasGraphicsContext.Provider></ProjectContext.Provider></AnimationContext.Provider></WebAssetsContext.Provider></LiveContentContext.Provider>;
   }
 
 export default function CanvasPage() {

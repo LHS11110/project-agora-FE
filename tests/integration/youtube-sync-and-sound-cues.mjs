@@ -478,10 +478,10 @@ try {
   const readerYt = reader.locator(`[data-item-id="${ytId}"]`);
 
   // Pasted object is auto-selected on writer; deselecting restores pan guard, selecting removes it.
-  assert.equal(await readerYt.locator('.shared-media-activate').count(), 1);
+  assert.equal(await readerYt.locator('.shared-media-activate').count(), 0);
   assert.equal(await writerYt.locator('.shared-media-activate').count(), 0);
   await writer.locator('.canvas-stage').click({ position: { x: 180, y: 180 } });
-  assert.equal(await writerYt.locator('.shared-media-activate').count(), 1);
+  assert.equal(await writerYt.locator('.shared-media-activate').count(), 0);
   await writerYt.click({ position: { x: 10, y: 10 } });
   await writerYt.hover();
   assert.equal(await writerYt.locator('.shared-media-activate').count(), 0);
@@ -498,6 +498,7 @@ try {
     assert.equal(await card.getByLabel('공유 재생 위치').count(), 0);
   }
 
+  for(const [page,card]of [[writer,writerYt],[observer,observer.locator(`[data-item-id="${ytId}"]`)],[reader,readerYt]]){const loaded=page.waitForEvent('framenavigated',{predicate:frame=>frame.url().includes('youtube-nocookie.com/embed/')});await card.getByRole('button',{name:'YouTube 재생',exact:true}).click();await loaded;}
   const writerSrc = await writerYt.locator('iframe').getAttribute('src');
   const readerSrc = await readerYt.locator('iframe').getAttribute('src');
   assert.ok(writerSrc?.includes('youtube-nocookie.com/embed/dQw4w9WgXcQ'), 'writer renders embed URL');
@@ -538,6 +539,8 @@ try {
     (id) => window.frelogCanvas?.read().items[id]?.mediaType === 'youtube' && !window.frelogCanvas.read().items[id]?.mediaState,
     ytId
   );
+  assert.equal(await observer.locator(`[data-item-id="${ytId}"] iframe`).count(),0,'reload returns to an inert preview');
+  await observer.locator(`[data-item-id="${ytId}"]`).getByRole('button',{name:'YouTube 재생',exact:true}).click();
   assert.ok(
     (await observer.locator(`[data-item-id="${ytId}"] iframe`).getAttribute('src'))?.includes('start=25'),
     'reloaded observer still embeds independent YouTube with start=25'

@@ -1,0 +1,296 @@
+{
+  "html": {
+    "before": {
+      "fps": 41.93303048361735,
+      "frameP95Ms": 66.69999999999982,
+      "frameMaxMs": 66.79999999999973,
+      "over25": 38,
+      "over33": 35,
+      "iframeCreated": 166,
+      "motionIframeCreated": 130,
+      "maxIframes": 48,
+      "activeIframes": 42,
+      "renderP95Ms": 18.600000008940697,
+      "commitToProfilerP95Ms": 27.5,
+      "maxCompositorLayers": 60,
+      "fpsMean": 42.19710829298283,
+      "frameWorstMs": 66.80000000000018,
+      "over25Total": 116,
+      "over33Total": 105,
+      "phases": {
+        "Layout": {
+          "count": 157,
+          "totalMs": 19.058,
+          "p95Ms": 0.814,
+          "maxMs": 2.342,
+          "worstMs": 3.274
+        },
+        "UpdateLayoutTree": {
+          "count": 329,
+          "totalMs": 30.748999999999995,
+          "p95Ms": 0.214,
+          "maxMs": 1.218,
+          "worstMs": 1.336
+        },
+        "Paint": {
+          "count": 374,
+          "totalMs": 1179.24,
+          "p95Ms": 5.955,
+          "maxMs": 7.996,
+          "worstMs": 8.014
+        },
+        "Layerize": {
+          "count": 203,
+          "totalMs": 166.53500000000014,
+          "p95Ms": 1.595,
+          "maxMs": 2.236,
+          "worstMs": 2.298
+        }
+      }
+    },
+    "after": {
+      "fps": 59.271275268207035,
+      "frameP95Ms": 16.800000000000182,
+      "frameMaxMs": 33.400000000000546,
+      "over25": 5,
+      "over33": 5,
+      "iframeCreated": 0,
+      "motionIframeCreated": 0,
+      "maxIframes": 0,
+      "activeIframes": 0,
+      "renderP95Ms": 30.499999940395355,
+      "commitToProfilerP95Ms": 1.4000000059604645,
+      "maxCompositorLayers": 12,
+      "fpsMean": 59.15934202421624,
+      "frameWorstMs": 33.400000000000546,
+      "over25Total": 17,
+      "over33Total": 16,
+      "phases": {
+        "Layout": {
+          "count": 75,
+          "totalMs": 81.779,
+          "p95Ms": 2.912,
+          "maxMs": 4.185,
+          "worstMs": 6.267
+        },
+        "UpdateLayoutTree": {
+          "count": 285,
+          "totalMs": 56.755,
+          "p95Ms": 0.851,
+          "maxMs": 1.331,
+          "worstMs": 2.009
+        },
+        "Paint": {
+          "count": 158,
+          "totalMs": 846.5050000000002,
+          "p95Ms": 8.493,
+          "maxMs": 13.556,
+          "worstMs": 13.84
+        },
+        "Layerize": {
+          "count": 284,
+          "totalMs": 555.8970000000002,
+          "p95Ms": 2.824,
+          "maxMs": 4.664,
+          "worstMs": 5.238
+        }
+      }
+    }
+  },
+  "youtube": {
+    "before": {
+      "fps": 52.57907643712471,
+      "frameP95Ms": 33.399999999999636,
+      "frameMaxMs": 66.70000000000027,
+      "over25": 25,
+      "over33": 22,
+      "iframeCreated": 171,
+      "motionIframeCreated": 135,
+      "maxIframes": 48,
+      "activeIframes": 42,
+      "renderP95Ms": 16.49999998509884,
+      "commitToProfilerP95Ms": 29,
+      "maxCompositorLayers": 54,
+      "fpsMean": 52.695474511086374,
+      "frameWorstMs": 66.70000000000073,
+      "over25Total": 72,
+      "over33Total": 65,
+      "phases": {
+        "Layout": {
+          "count": 181,
+          "totalMs": 12.886000000000005,
+          "p95Ms": 0.261,
+          "maxMs": 0.719,
+          "worstMs": 0.818
+        },
+        "UpdateLayoutTree": {
+          "count": 387,
+          "totalMs": 39.29399999999996,
+          "p95Ms": 0.199,
+          "maxMs": 0.913,
+          "worstMs": 0.972
+        },
+        "Paint": {
+          "count": 470,
+          "totalMs": 814.5619999999997,
+          "p95Ms": 3.279,
+          "maxMs": 4.253,
+          "worstMs": 4.266
+        },
+        "Layerize": {
+          "count": 252,
+          "totalMs": 220.591,
+          "p95Ms": 1.588,
+          "maxMs": 2.282,
+          "worstMs": 2.403
+        }
+      }
+    },
+    "after": {
+      "fps": 59.952537574271474,
+      "frameP95Ms": 16.799999999999272,
+      "frameMaxMs": 33.40000000000009,
+      "over25": 2,
+      "over33": 1,
+      "iframeCreated": 0,
+      "motionIframeCreated": 0,
+      "maxIframes": 0,
+      "activeIframes": 0,
+      "renderP95Ms": 14.400000005960464,
+      "commitToProfilerP95Ms": 1.7999999970197678,
+      "maxCompositorLayers": 53,
+      "fpsMean": 59.73238942558543,
+      "frameWorstMs": 83.30000000000018,
+      "over25Total": 6,
+      "over33Total": 3,
+      "phases": {
+        "Layout": {
+          "count": 24,
+          "totalMs": 15.301,
+          "p95Ms": 1.299,
+          "maxMs": 1.697,
+          "worstMs": 1.761
+        },
+        "UpdateLayoutTree": {
+          "count": 286,
+          "totalMs": 33.56500000000001,
+          "p95Ms": 0.393,
+          "maxMs": 1.125,
+          "worstMs": 1.151
+        },
+        "Paint": {
+          "count": 72,
+          "totalMs": 244.223,
+          "p95Ms": 6.309,
+          "maxMs": 8.438,
+          "worstMs": 8.493
+        },
+        "Layerize": {
+          "count": 287,
+          "totalMs": 753.0349999999997,
+          "p95Ms": 4.193,
+          "maxMs": 7.862,
+          "worstMs": 8.809
+        }
+      }
+    }
+  },
+  "notebook": {
+    "before": {
+      "fps": 43.82247762363714,
+      "frameP95Ms": 66.69999999999982,
+      "frameMaxMs": 66.70000000000073,
+      "over25": 34,
+      "over33": 33,
+      "iframeCreated": 166,
+      "motionIframeCreated": 130,
+      "maxIframes": 48,
+      "activeIframes": 42,
+      "renderP95Ms": 6.899999991059303,
+      "commitToProfilerP95Ms": 22,
+      "maxCompositorLayers": 54,
+      "fpsMean": 43.97871749596024,
+      "frameWorstMs": 66.80000000000018,
+      "over25Total": 102,
+      "over33Total": 96,
+      "phases": {
+        "Layout": {
+          "count": 171,
+          "totalMs": 11.86199999999998,
+          "p95Ms": 0.224,
+          "maxMs": 0.605,
+          "worstMs": 0.652
+        },
+        "UpdateLayoutTree": {
+          "count": 338,
+          "totalMs": 27.949000000000012,
+          "p95Ms": 0.176,
+          "maxMs": 0.524,
+          "worstMs": 0.544
+        },
+        "Paint": {
+          "count": 388,
+          "totalMs": 509.76899999999995,
+          "p95Ms": 2.967,
+          "maxMs": 3.871,
+          "worstMs": 3.896
+        },
+        "Layerize": {
+          "count": 211,
+          "totalMs": 163.56799999999993,
+          "p95Ms": 1.707,
+          "maxMs": 2.18,
+          "worstMs": 2.216
+        }
+      }
+    },
+    "after": {
+      "fps": 60.192031324886884,
+      "frameP95Ms": 16.799999999999272,
+      "frameMaxMs": 16.800000000000182,
+      "over25": 0,
+      "over33": 0,
+      "iframeCreated": 0,
+      "motionIframeCreated": 0,
+      "maxIframes": 0,
+      "activeIframes": 0,
+      "renderP95Ms": 27.80000002682209,
+      "commitToProfilerP95Ms": 1.199999988079071,
+      "maxCompositorLayers": 12,
+      "fpsMean": 60.058768605067435,
+      "frameWorstMs": 33.400000000000546,
+      "over25Total": 3,
+      "over33Total": 3,
+      "phases": {
+        "Layout": {
+          "count": 78,
+          "totalMs": 57.48400000000001,
+          "p95Ms": 2.306,
+          "maxMs": 4.193,
+          "worstMs": 7.233
+        },
+        "UpdateLayoutTree": {
+          "count": 291,
+          "totalMs": 54.506,
+          "p95Ms": 0.75,
+          "maxMs": 2.46,
+          "worstMs": 2.514
+        },
+        "Paint": {
+          "count": 162,
+          "totalMs": 428.4310000000002,
+          "p95Ms": 5.02,
+          "maxMs": 9.181,
+          "worstMs": 16.249
+        },
+        "Layerize": {
+          "count": 288,
+          "totalMs": 662.5050000000001,
+          "p95Ms": 3.23,
+          "maxMs": 5.456,
+          "worstMs": 5.59
+        }
+      }
+    }
+  }
+}

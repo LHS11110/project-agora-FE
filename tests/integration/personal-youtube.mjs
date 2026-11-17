@@ -124,6 +124,9 @@ try {
   await page.goto(`${origin}/canvases/999001`);
   const a = page.locator('[data-item-id=one]');
   const other = page.locator('[data-item-id=two]');
+  assert.equal(await page.locator('.shared-youtube-independent iframe').count(),0);
+  await a.getByRole('button',{name:'YouTube 재생',exact:true}).click();
+  await other.getByRole('button',{name:'YouTube 재생',exact:true}).click();
   await a.locator('.shared-youtube-independent iframe.shared-video-player').waitFor();
   await other.locator('.shared-youtube-independent iframe.shared-video-player').waitFor();
 
@@ -141,11 +144,11 @@ try {
   });
 
   // Clicking player one activates only player one and emits zero shared canvas writes
-  assert.equal(await a.locator('.shared-media-activate').count(), 1);
-  assert.equal(await other.locator('.shared-media-activate').count(), 1);
+  assert.equal(await a.locator('.shared-media-activate').count(), 0);
+  assert.equal(await other.locator('.shared-media-activate').count(), 0);
   await a.click({ position: { x: 12, y: 12 } });
   assert.equal(await a.locator('.shared-media-activate').count(), 0);
-  assert.equal(await other.locator('.shared-media-activate').count(), 1);
+  assert.equal(await other.locator('.shared-media-activate').count(), 0);
 
   // Remote mediaState/mediaLoop updates are ignored by independent YouTube embeds
   mainSocket.send(
@@ -171,6 +174,9 @@ try {
     ),
     true,
   );
+  await page.locator('.canvas-stage').evaluate(stage=>stage.dispatchEvent(new WheelEvent('wheel',{deltaX:8000,deltaY:6000,bubbles:true,cancelable:true})));
+  await page.waitForTimeout(350);
+  assert.ok(await page.evaluate(()=>window.__ytOne===document.querySelector('[data-item-id=one] iframe')&&window.__ytTwo===document.querySelector('[data-item-id=two] iframe')),'active players retain identity outside the scene query window');
   assert.equal(writes, 0);
 
   console.log('PASS private YouTube playback for read-only users, independent controls/loop, historical/remote state ignored and zero shared writes');

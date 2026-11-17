@@ -9,14 +9,15 @@ test('finished and cancelled local or remote ink clears the whole surface after 
     const context={transform:[1,0,0,1,0,0],clears:[],setTransform(...value){this.transform=value;},
       clearRect(...rect){this.clears.push({transform:[...this.transform],rect});},
       save(){},restore(){},getTransform(){return {a:this.transform[0],b:this.transform[1]};},stroke(){}};
-    const canvas={width:300,height:150,getContext:()=>context,remove(){},context};canvases.push(canvas);return canvas;
+    const canvas={style:{},width:300,height:150,getContext:()=>context,remove(){},context};canvases.push(canvas);return canvas;
   }};
   try {
     const renderer=createInkStrokeRenderer({insertBefore(){},appendChild(){}},{}),live=canvases[1];
+    assert.equal(canvases[0].style.display,'none');assert.equal(live.style.display,'none');
     const stroke={id:'ink',points:[{x:.1,y:.1},{x:.9,y:.8}],strokeWidth:3,shadowEnabled:false};
     for(const camera of [{x:-800,y:-200,scale:.35},{x:250,y:80,scale:2}])for(const pixelRatio of [1,2]){
       const state={items:{},previews:[],draft:stroke,width:1600,height:1000,viewportWidth:1200,viewportHeight:800,camera,pixelRatio};
-      renderer.render(state);renderer.renderDraft(null);
+      renderer.render(state);assert.equal(live.style.display,'');renderer.renderDraft(null);assert.equal(live.style.display,'none');
       assert.deepEqual(live.context.clears.at(-1),{transform:[1,0,0,1,0,0],rect:[0,0,1200*pixelRatio,800*pixelRatio]});
       const cleared=live.context.clears.length;renderer.renderDraft(null);
       assert.equal(live.context.clears.length,cleared,'empty frames avoid unnecessary clears');
@@ -24,6 +25,8 @@ test('finished and cancelled local or remote ink clears the whole surface after 
       renderer.render({...state,draft:null,previews:[]});
       assert.deepEqual(live.context.clears.at(-1).transform,[1,0,0,1,0,0],'remote preview removal also resets the camera transform');
     }
+    const saved=canvases[0],state={items:{done:{...stroke,kind:'stroke'}},previews:[],draft:null,width:1600,height:1000,viewportWidth:1200,viewportHeight:800,camera:{x:0,y:0,scale:1},pixelRatio:1};
+    renderer.render(state);assert.equal(saved.style.display,'');renderer.render({...state,items:{}});assert.equal(saved.style.display,'none');
     renderer.destroy();
   }finally{globalThis.document=oldDocument;globalThis.Path2D=oldPath;}
 });

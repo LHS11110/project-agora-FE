@@ -1,0 +1,1322 @@
+[
+  {
+    "fallback": false,
+    "fps": 60.22845275181724,
+    "p95FrameMs": 16.799999999999727,
+    "maxFrameMs": 16.800000000000182,
+    "bitmapPresentationP95Ms": 0.09999999403953552,
+    "receiveP95Ms": 0.10000000894069672,
+    "maxLayers": 44,
+    "reasons": [
+      {
+        "id": "6",
+        "compositingReasons": [],
+        "compositingReasonIds": []
+      },
+      {
+        "id": "39",
+        "compositingReasons": [
+          "Is the document.rootScroller.",
+          "Is a scrollable overflow element using accelerated scrolling."
+        ],
+        "compositingReasonIds": [
+          "RootScroller",
+          "OverflowScrolling"
+        ]
+      },
+      {
+        "id": "100",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "101",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "99",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "98",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "22",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "23",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "24",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "25",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "166",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "167",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "168",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "169",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "170",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      }
+    ],
+    "layers": [
+      {
+        "depth": "0",
+        "engine": "rust-wgpu",
+        "thread": "worker",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 1712,
+            "height": 1312,
+            "transform": "translate3d(-256px, -256px, 0px) scale(1)"
+          },
+          {
+            "visible": false,
+            "width": 896,
+            "height": 448,
+            "transform": "translate3d(64px, 64px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "1",
+        "engine": "rust-wgpu",
+        "thread": "worker",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 1712,
+            "height": 1312,
+            "transform": "translate3d(-256px, -256px, 0px) scale(1)"
+          },
+          {
+            "visible": false,
+            "width": 896,
+            "height": 448,
+            "transform": "translate3d(64px, 64px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "2",
+        "engine": "rust-wgpu",
+        "thread": "worker",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 1712,
+            "height": 1312,
+            "transform": "translate3d(-256px, -256px, 0px) scale(1)"
+          },
+          {
+            "visible": false,
+            "width": 896,
+            "height": 448,
+            "transform": "translate3d(64px, 64px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "3",
+        "engine": "rust-wgpu",
+        "thread": "worker",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 1712,
+            "height": 1312,
+            "transform": "translate3d(-256px, -256px, 0px) scale(1)"
+          },
+          {
+            "visible": false,
+            "width": 896,
+            "height": 448,
+            "transform": "translate3d(64px, 64px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "4",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": "translate3d(71.0189px, 36.098px, 0px) scale(1)"
+          },
+          {
+            "visible": false,
+            "width": 896,
+            "height": 448,
+            "transform": "translate3d(64px, 64px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "5",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": "translate3d(71.0189px, 36.098px, 0px) scale(1)"
+          },
+          {
+            "visible": false,
+            "width": 896,
+            "height": 448,
+            "transform": "translate3d(64px, 64px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "6",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": "translate3d(71.0189px, 36.098px, 0px) scale(1)"
+          },
+          {
+            "visible": false,
+            "width": 896,
+            "height": 448,
+            "transform": "translate3d(64px, 64px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "7",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": "translate3d(71.0189px, 36.098px, 0px) scale(1)"
+          },
+          {
+            "visible": false,
+            "width": 896,
+            "height": 448,
+            "transform": "translate3d(64px, 64px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "8",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 896,
+            "height": 512,
+            "transform": "translate3d(64px, 0px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "9",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 896,
+            "height": 512,
+            "transform": "translate3d(64px, 0px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "10",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 896,
+            "height": 512,
+            "transform": "translate3d(64px, 0px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "11",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 896,
+            "height": 512,
+            "transform": "translate3d(64px, 0px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "12",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 896,
+            "height": 512,
+            "transform": "translate3d(64px, 0px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      }
+    ],
+    "empty": [
+      {
+        "objects": 0,
+        "surfaces": 3
+      },
+      {
+        "objects": 0,
+        "surfaces": 3
+      },
+      {
+        "objects": 0,
+        "surfaces": 3
+      },
+      {
+        "objects": 0,
+        "surfaces": 3
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      }
+    ],
+    "pixel": [
+      44,
+      168,
+      168,
+      255
+    ]
+  },
+  {
+    "fallback": true,
+    "fps": 60.12356429104645,
+    "p95FrameMs": 16.700000000000273,
+    "maxFrameMs": 16.800000000000182,
+    "bitmapPresentationP95Ms": 0.09999999403953552,
+    "receiveP95Ms": 0,
+    "maxLayers": 44,
+    "reasons": [
+      {
+        "id": "6",
+        "compositingReasons": [],
+        "compositingReasonIds": []
+      },
+      {
+        "id": "40",
+        "compositingReasons": [
+          "Is the document.rootScroller.",
+          "Is a scrollable overflow element using accelerated scrolling."
+        ],
+        "compositingReasonIds": [
+          "RootScroller",
+          "OverflowScrolling"
+        ]
+      },
+      {
+        "id": "22",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "23",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "24",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "25",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "220",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "221",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "222",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "223",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "224",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "225",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "226",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "227",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      },
+      {
+        "id": "228",
+        "compositingReasons": [
+          "Is an accelerated canvas, or is a display list backed canvas that was promoted to a layer based on a performance heuristic."
+        ],
+        "compositingReasonIds": [
+          "Canvas"
+        ]
+      }
+    ],
+    "layers": [
+      {
+        "depth": "0",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": "translate3d(72.2096px, 36.1535px, 0px) scale(1)"
+          },
+          {
+            "visible": false,
+            "width": 896,
+            "height": 448,
+            "transform": "translate3d(64px, 64px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "1",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": "translate3d(72.2096px, 36.1535px, 0px) scale(1)"
+          },
+          {
+            "visible": false,
+            "width": 896,
+            "height": 448,
+            "transform": "translate3d(64px, 64px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "2",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": "translate3d(72.2096px, 36.1535px, 0px) scale(1)"
+          },
+          {
+            "visible": false,
+            "width": 896,
+            "height": 448,
+            "transform": "translate3d(64px, 64px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "3",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": "translate3d(72.2096px, 36.1535px, 0px) scale(1)"
+          },
+          {
+            "visible": false,
+            "width": 896,
+            "height": 448,
+            "transform": "translate3d(64px, 64px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "4",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 896,
+            "height": 512,
+            "transform": "translate3d(64px, 0px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "5",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 896,
+            "height": 512,
+            "transform": "translate3d(64px, 0px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "6",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 896,
+            "height": 512,
+            "transform": "translate3d(64px, 0px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "7",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 896,
+            "height": 512,
+            "transform": "translate3d(64px, 0px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "8",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 896,
+            "height": 512,
+            "transform": "translate3d(64px, 0px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "9",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 896,
+            "height": 512,
+            "transform": "translate3d(64px, 0px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "10",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 896,
+            "height": 512,
+            "transform": "translate3d(64px, 0px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "11",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 896,
+            "height": 512,
+            "transform": "translate3d(64px, 0px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      },
+      {
+        "depth": "12",
+        "engine": "canvas2d",
+        "objects": 12,
+        "frames": 143,
+        "surfaces": [
+          {
+            "visible": false,
+            "width": 1712,
+            "height": 1312,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          },
+          {
+            "visible": true,
+            "width": 896,
+            "height": 512,
+            "transform": "translate3d(64px, 0px, 0px)"
+          },
+          {
+            "visible": true,
+            "width": 300,
+            "height": 150,
+            "transform": ""
+          }
+        ]
+      }
+    ],
+    "empty": [
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      },
+      {
+        "objects": 0,
+        "surfaces": 2
+      }
+    ],
+    "pixel": [
+      44,
+      168,
+      168,
+      255
+    ]
+  }
+]

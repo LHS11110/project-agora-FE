@@ -110,7 +110,7 @@ export default function DepthVectorLayer(props) {
         if(candidate.threaded){
           surface.style.display='none';let first=true;
           candidate.onError=error=>{stats.gpuError=error;fallBackToCanvas();};
-          candidate.onFrame=()=>{stats.gpuWorkerFrames=(stats.gpuWorkerFrames||0)+1;if(first){first=false;element.dataset.renderer=candidate.backend_kind();surface.style.display='';compositor?.destroy();compositor=null;canvas.style.display='none';buffer.style.display='none';sceneInputs=null;schedule();}};
+          candidate.onFrame=()=>{stats.gpuWorkerFrames=(stats.gpuWorkerFrames||0)+1;if(first){first=false;element.dataset.renderer=candidate.backend_kind();surface.style.display=preparation?.count?'':'none';compositor?.destroy();compositor=null;canvas.style.display='none';buffer.style.display='none';sceneInputs=null;schedule();}};
         }else{canvas.style.display = 'none'; buffer.style.display = 'none';}
         element.dataset.renderer = candidate.backend_kind();
         atlas.resetGpuState(); sceneInputs = null;
@@ -148,6 +148,8 @@ export default function DepthVectorLayer(props) {
       const gpu = app && !gpuFailed && (!app.threaded || app.hasFrame);
       if (gpu && (app.width() !== pixelWidth || app.height() !== pixelHeight)) app.resize(pixelWidth,pixelHeight);
       const presentGpu = () => {
+        const display=preparation?.count?'':'none';
+        if(gpuCanvas.style.display!==display)gpuCanvas.style.display=display;
         if (!app.render_frame(camera.x,camera.y,camera.scale,width,height)) throw new Error("GPU surface unavailable");
         stats.presentedCamera={x:camera.x,y:camera.y,scale:camera.scale};
       };
