@@ -184,3 +184,5 @@ ORCID 비밀키는 FE에 추가하지 않습니다. 설정은 BE의 보호된 �
 검증: `node --test tests/authSession.test.js tests/oauthReturn.test.js`; 브라우저 테스트는 `tests/integration/orcid-login.mjs`와 `tests/integration/social-oauth.mjs`입니다. `AGORA_E2E_PLAYWRIGHT_MODULE`로 설치된 Playwright 모듈 경로, `AGORA_E2E_ORIGIN`으로 검증할 HTTPS 앱 주소를 지정합니다. 브라우저 통합 테스트는 ORCID 제공자·로그인 결과를 fixture로 검증하며 실제 연구자의 로그인·동의를 대신하지 않습니다.
 
 Rust GPU 구현과 WASM 재빌드는 [Rust·wgpu 렌더링](docs/rust-wgpu-renderer.md)을 참고하세요.
+
+화면 크기·확대 배율에 맞춰 주변 객체와 이미지도 미리 준비합니다. 범위·우선순위·캐시 제한은 [화면 기반 사전 준비](docs/viewport-preloading.md)를 참고하세요.

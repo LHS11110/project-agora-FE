@@ -130,3 +130,30 @@ test('shared authenticated image cache retains media across unmount/remount, pre
     names.forEach((name, i) => (originals[i] ? Object.defineProperty(globalThis, name, originals[i]) : delete globalThis[name]));
   }
 });
+
+test('viewport prefetch drains the entire batch at three transfers, shares raster bytes, and cancels stale queued windows', async()=>{
+ const names=['window','URL','fetch'],originals=names.map(name=>Object.getOwnPropertyDescriptor(globalThis,name));
+ const pending=[],fetched=[];let active=0,maxActive=0;
+ const NativeURL=globalThis.URL;
+ Object.assign(globalThis,{window:{location:{href:'https://preload.example.test/'}},URL:class extends NativeURL{static createObjectURL(){return 'blob:prefetch';}static revokeObjectURL(){}},fetch:(url)=>{fetched.push(url);active++;maxActive=Math.max(maxActive,active);return new Promise(resolve=>pending.push(()=>{active--;resolve({ok:true,status:200,headers:new Headers({'content-type':'image/png'}),blob:async()=>new Blob(['image'],{type:'image/png'})});}));}});
+ try{
+  const cache=await import('../src/components/authenticatedImageCache.js');
+  const sources=Array.from({length:8},(_,i)=>`/api/canvases/72/media/warm-${i}.png`);
+  cache.prefetchAuthenticatedImages(sources,'prefetch-test');assert.equal(pending.length,3);
+  const shared=cache.sharedAuthenticatedImageBlob(sources[0],'prefetch-test');assert.equal(pending.length,3);
+  while(pending.length){pending.shift()();await tick();}await shared;
+  assert.equal(fetched.length,8);assert.equal(maxActive,3);
+  assert.ok(await cache.sharedAuthenticatedImageBlob(sources[0],'prefetch-test'));assert.equal(fetched.length,8);
+  const controller=new AbortController();cache.prefetchAuthenticatedImages(sources.map(x=>x.replace('warm','stale')),'prefetch-test',{signal:controller.signal});controller.abort();
+  while(pending.length){pending.shift()();await tick();}assert.equal(fetched.length,11);
+ }finally{names.forEach((name,i)=>originals[i]?Object.defineProperty(globalThis,name,originals[i]):delete globalThis[name]);}
+});
+
+test('newly visible previews overtake queued offscreen decodes without duplicating requests',async()=>{
+ const pending=[],started=[];const cache=new ImagePreviewCache(source=>{started.push(source);return new Promise(resolve=>pending.push(resolve));},()=>{},{concurrency:1});
+ try{cache.request('first','1');cache.request('offscreen','2');cache.request('visible','3');cache.request('visible','3',true);await tick();
+ pending.shift()({width:10,height:10});await tick();assert.deepEqual(started,['first','visible']);
+ pending.shift()({width:10,height:10});await tick();assert.deepEqual(started,['first','visible','offscreen']);
+ pending.shift()({width:10,height:10});await tick();assert.equal(cache.queued,0);
+ }finally{cache.destroy();}
+});

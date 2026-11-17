@@ -98,7 +98,8 @@ import automergeWasmUrl from '@automerge/automerge/automerge.wasm?url';
 import { Link, useNavigate, useParams } from '../routing.jsx';
 import Icon from '../components/Icon.jsx';
 import InteractiveAtmosphere from '../components/frelog/InteractiveAtmosphere.jsx';
-import { prefetchAuthenticatedImage } from '../components/authenticatedImageCache.js';
+import { PreloadImageSelector } from '../canvas/viewportPreload.js';
+import { prefetchAuthenticatedImages } from '../components/authenticatedImageCache.js';
 import ShareComposer from '../components/ShareComposer.jsx';
 const CanvasLayerObjects = lazy(() => import('../canvas/CanvasLayerObjects.jsx'));
 const VectorLayer = lazy(() => import('../canvas/DepthVectorLayer.jsx'));
@@ -1352,7 +1353,7 @@ function CanvasWorkspace() {
   const axisOriginX = boardSize.width * camera.scale / 2 + camera.x;
   const axisOriginY = boardSize.height * camera.scale / 2 + camera.y;
   const coordinatePlaneStyle = EMPTY_STYLE_OBJ;
-  const sceneWindow = renderWindow(visibleBounds, boardSize, camera.scale);
+  const sceneWindow = renderWindow(visibleBounds, boardSize, camera.scale,viewportSize);
   const zoomingActive = Boolean(boardRef.current?.classList?.contains('camera-zooming'));
   const cameraMoving = Boolean(boardRef.current?.classList?.contains('camera-moving'));
   const sceneQueryRef = useRef(null);
@@ -1361,7 +1362,7 @@ function CanvasWorkspace() {
   const visibleEntries = useMemo(() => {
     const cached = zoomEntriesCacheRef.current;
     const b = sceneWindow.bounds;
-    const covered = containsViewport(cached?.bounds, visibleBounds, boardSize, camera.scale);
+    const covered = containsViewport(cached?.bounds, visibleBounds, boardSize, camera.scale,viewportSize);
     if (cameraMoving && covered && cached && cached.items === items && cached.spatialIndex === spatialIndex && cached.spatialRevision === spatialRevision && cached.editingId === editingId && cached.width === boardSize.width && cached.height === boardSize.height && !dragRef.current?.id) {
       return cached.entries;
     }
@@ -1380,21 +1381,12 @@ function CanvasWorkspace() {
     zoomEntriesCacheRef.current = { items, spatialIndex, spatialRevision, editingId, width: boardSize.width, height: boardSize.height, bounds: b, entries };
     return entries;
   }, [boardSize.height, boardSize.width, editingId, items, spatialIndex, spatialRevision, sceneWindow.key, zoomingActive, cameraMoving, camera]);
-  const prevPrefetchCenterRef = useRef({ x: 0, y: 0 });
+  useLayoutEffect(()=>{
+    const stage=boardRef.current,cached=zoomEntriesCacheRef.current;
+    if(stage&&cached)stage.__agoraPreparedScene={bounds:cached.bounds,world:boardSize};
+  });
   useEffect(() => {
-    const cx = (visibleBounds.minX + visibleBounds.maxX) / 2;
-    const cy = (visibleBounds.minY + visibleBounds.maxY) / 2;
-    const dx = cx - prevPrefetchCenterRef.current.x;
-    const dy = cy - prevPrefetchCenterRef.current.y;
-    prevPrefetchCenterRef.current = { x: cx, y: cy };
-    const viewW = Math.max(0.1, visibleBounds.maxX - visibleBounds.minX);
-    const viewH = Math.max(0.1, visibleBounds.maxY - visibleBounds.minY);
-    const prefetchBounds = {
-      minX: visibleBounds.minX - (dx < 0 ? viewW * 0.9 : viewW * 0.4),
-      maxX: visibleBounds.maxX + (dx > 0 ? viewW * 0.9 : viewW * 0.4),
-      minY: visibleBounds.minY - (dy < 0 ? viewH * 0.9 : viewH * 0.4),
-      maxY: visibleBounds.maxY + (dy > 0 ? viewH * 0.9 : viewH * 0.4),
-    };
+    const controller = new AbortController();
     const scheduleIdle = typeof window.requestIdleCallback === 'function'
       ? (fn) => window.requestIdleCallback(fn, { timeout: 180 })
       : (fn) => window.setTimeout(fn, 80);
@@ -1402,20 +1394,17 @@ function CanvasWorkspace() {
       ? (id) => window.cancelIdleCallback(id)
       : (id) => window.clearTimeout(id);
     let active = true;
-    const handle = scheduleIdle(() => {
-      if (!active) return;
-      const nearby = spatialIndex.query(prefetchBounds);
-      let queued = 0;
-      for (const entry of nearby) {
-        if (queued >= 6) break;
-        const candidate = entry?.item;
-        const src = candidate?.kind === 'image' ? candidate.src : candidate?.kind === 'pdf' ? candidate.thumbnail : '';
-        if (!src || /^(data|blob):/i.test(src)) continue;
-        if (prefetchAuthenticatedImage(src, token)) queued += 1;
-      }
-    });
-    return () => { active = false; cancelIdle(handle); };
-  }, [sceneWindow.key, spatialRevision, token]);
+    const selector=new PreloadImageSelector(visibleBounds);let cursor=0,handle;
+    const prepare=()=>{
+      if(!active)return;
+      const start=performance.now();let visited=0;
+      while(cursor<visibleEntries.length && (visited%64!==0||performance.now()-start<2)){selector.add(visibleEntries[cursor++]);visited++;}
+      if(cursor<visibleEntries.length)handle=scheduleIdle(prepare);
+      else prefetchAuthenticatedImages(selector.sources(),token,{signal:controller.signal});
+    };
+    handle=scheduleIdle(prepare);
+    return () => { active = false; controller.abort(); cancelIdle(handle); };
+  }, [visibleEntries, spatialRevision, token, cameraMoving]);
   const previewHiddenEffective = Boolean(previewHiddenObjects && !portfolioViewing && !watchState.watching_id);
   const revealNow = useMemo(() => Date.now(), [items, revealTick, previewHiddenEffective]);
   const visibilityContextValue = useMemo(() => ({ previewHidden: previewHiddenEffective }), [previewHiddenEffective]);

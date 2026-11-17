@@ -1,3 +1,4 @@
+import {sharedAuthenticatedImageBlob} from '../components/authenticatedImageCache.js';
 import {canvasFetch} from '../api/client.js';
 import {decodeDataUriBlob} from '../api/canvasTransport.js';
 import { objectCornerRadius } from './objectCorners.js';
@@ -7,23 +8,25 @@ export default class ImagePreviewCache {
   constructor(load, onReady, { concurrency = 2, maxEntries = 2048, maxPixels = 8_000_000 } = {}) {
     this.load = load; this.onReady = onReady; this.concurrency = concurrency;
     this.maxEntries = maxEntries; this.maxPixels = maxPixels;
-    this.entries = new Map(); this.queue = []; this.cursor = 0; this.settled = 0; this.active = 0; this.pixels = 0; this.version = 0; this.disposed = false;
+    this.entries = new Map(); this.queue = []; this.cursor = 0; this.priorityQueue=[];this.priorityCursor=0; this.settled = 0; this.active = 0; this.pixels = 0; this.version = 0; this.disposed = false;
   }
-  get queued() { return this.queue.length - this.cursor; }
+  get queued() { return this.queue.length - this.cursor + this.priorityQueue.length-this.priorityCursor; }
   peek(source) { return this.entries.get(source); }
-  request(source, id) {
+  request(source, id, priority=false) {
     let entry = this.entries.get(source);
     if (entry) {
       this.entries.delete(source); this.entries.set(source, entry);
       if (entry.state === 'loading') entry.ids.add(id);
+      if(priority&&!entry.started&&!entry.urgent){entry.urgent=true;this.priorityQueue.push(entry);this.pump();}
       return entry;
     }
     entry = { source, ids: new Set([id]), state: 'loading', version: 0, controller: new AbortController() };
-    this.entries.set(source, entry); this.queue.push(entry); this.pump(); return entry;
+    this.entries.set(source, entry);if(priority){entry.urgent=true;this.priorityQueue.push(entry);}else this.queue.push(entry);this.pump();return entry;
   }
   pump() {
     while (!this.disposed && this.active < this.concurrency && this.queued) {
-      const entry = this.queue[this.cursor++]; this.active++;
+      const entry = this.priorityCursor<this.priorityQueue.length?this.priorityQueue[this.priorityCursor++]:this.queue[this.cursor++];
+      if(entry.started)continue;entry.started=true;this.active++;
       Promise.resolve().then(() => this.load(entry.source, entry.controller.signal)).then(canvas => {
         if (this.disposed) { canvas.width = canvas.height = 1; return; }
         entry.canvas = canvas; entry.pixels = canvas.width * canvas.height;
@@ -34,6 +37,7 @@ export default class ImagePreviewCache {
         entry.state = 'failed'; this.settled++; entry.ids.clear(); this.trim();
       }).finally(() => { this.active--; this.pump(); });
     }
+    if(this.priorityCursor===this.priorityQueue.length){this.priorityQueue.length=0;this.priorityCursor=0;}
     if (this.cursor === this.queue.length) { this.queue.length = 0; this.cursor = 0; }
   }
   trim() {
@@ -51,7 +55,7 @@ export default class ImagePreviewCache {
       entry.controller.abort();
       if (entry.canvas) entry.canvas.width = entry.canvas.height = 1;
     }
-    this.entries.clear(); this.queue.length = 0; this.cursor = 0; this.settled = 0; this.pixels = 0;
+    this.entries.clear();this.priorityQueue.length=0;this.priorityCursor=0; this.queue.length = 0; this.cursor = 0; this.settled = 0; this.pixels = 0;
   }
 }
 
@@ -71,9 +75,13 @@ export async function loadImagePreview(source, token, apiUrl, signal, maxSide=96
         blob = decodeDataUriBlob(url.href);
       } else {
         const apiOrigin = new URL(apiUrl('/')).origin;
-        const response = await canvasFetch(url.href, { signal, cache: 'no-store', headers: url.origin === apiOrigin && token ? { Authorization: `Bearer ${token}` } : {} });
-        if (!response.ok) throw Error('Image preview unavailable');
-        blob = await response.blob();
+        const shared=sharedAuthenticatedImageBlob(url.href,token);
+        if(shared)blob=await shared;
+        if(!blob) {
+          const response = await canvasFetch(url.href, { signal, cache: 'no-store', headers: url.origin === apiOrigin && token ? { Authorization: `Bearer ${token}` } : {} });
+          if (!response.ok) throw Error('Image preview unavailable');
+          blob = await response.blob();
+        }
       }
       try { bitmap = await createImageBitmap(blob); }
       catch {

@@ -115,7 +115,7 @@ export function useCanvasCamera(boardRef, sceneRef) {
     if (!work.current.frame) work.current.frame = requestAnimationFrame(() => {
       work.current.frame = 0; apply();
       const before = committed.current, now = current.current;
-      if (shouldCommitCamera(before, now, work.current.size)) commit();
+      if (shouldCommitCamera(before, now, work.current.size, boardRef.current?.__agoraPreparedScene)) commit();
     });
     work.current.idle ||= new CameraIdleTask(() => { boardRef.current?.classList.remove('camera-moving', 'camera-zooming'); commit(true); },160);
     work.current.idle.touch();

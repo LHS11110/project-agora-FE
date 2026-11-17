@@ -280,7 +280,9 @@ export default function DepthVectorLayer(props) {
         const sameImage = record?.item.__imagePreview === item.__imagePreview;
         let preview = item.__imagePreview ? imagePreviews.peek(item.__imagePreview) : null;
         if (item.__imagePreview && (!sameImage || !record?.previewVersion || !sameRasterInput(record.item, item) || record.worldKey !== worldKey || record.graphicsQuality !== quality || (!cameraActive && targetRatio > record.quality * 1.25) || record.pixelBudget > pixelBudget * 1.1)) {
-          preview = imagePreviews.request(item.__imagePreview, id);
+          const left=Number(item.x)*world.width*camera.scale+camera.x,top=Number(item.y)*world.height*camera.scale+camera.y;
+          const visible=left<=width+64&&top<=height+64&&left+Number(item.width)*world.width*camera.scale>=-64&&top+Number(item.height)*world.height*camera.scale>=-64;
+          preview = imagePreviews.request(item.__imagePreview, id,visible);
         }
         const previewVersion = preview?.version || (sameImage ? record?.previewVersion : 0) || 0;
         const routeVersion = item.__imagePreview ? `image:${previewEpoch}:${previewVersion}` : item.kind === 'connector'  ? `${routingRevision}:${metricsRevision}`

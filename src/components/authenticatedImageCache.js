@@ -8,6 +8,7 @@ const entries = new Map();
 const inflight = new Map();
 let totalBytes = 0;
 let activePrefetches = 0;
+const prefetchQueue = new Map();
 
 function resolveTarget(source, token) {
   const trimmed = typeof source === 'string' ? source.trim() : '';
@@ -64,6 +65,7 @@ async function fetchImageEntry(target) {
   const objectUrl = URL.createObjectURL(blob);
   const entry = {
     key: target.key,
+    blob,
     src: objectUrl,
     objectUrl,
     size: blob.size,
@@ -144,6 +146,7 @@ export function prefetchAuthenticatedImage(source, token) {
     .finally(() => {
       activePrefetches = Math.max(0, activePrefetches - 1);
       inflight.delete(target.key);
+      pumpPrefetchQueue();
     });
   inflight.set(target.key, promise);
   return true;
@@ -158,4 +161,40 @@ export function invalidateAuthenticatedImage(source, token) {
   entries.delete(target.key);
   entry.retain = false;
   revokeIfUnused(entry);
+}
+
+// Queue a complete viewport batch; finishing one transfer starts the next.
+// Cancelled windows stop scheduling new transfers, while already shared fetches
+// may finish for active consumers. No full-resolution video/iframe is started.
+export function prefetchAuthenticatedImages(sources,token,{signal}={}) {
+  if(signal?.aborted)return;
+  const owner={};
+  for(const source of sources.slice(0,MAX_ENTRIES)){
+    let target;try{target=resolveTarget(source,token);}catch{continue;}
+    if(!target||target.direct||!target.retain||entries.has(target.key)||inflight.has(target.key))continue;
+    const previous=prefetchQueue.get(target.key);
+    if(previous&&!previous.signal?.aborted)continue;
+    prefetchQueue.set(target.key,{target,signal,owner});
+    while(prefetchQueue.size>MAX_ENTRIES)prefetchQueue.delete(prefetchQueue.keys().next().value);
+  }
+  const cancel=()=>{for(const [key,job] of prefetchQueue)if(job.owner===owner)prefetchQueue.delete(key);};
+  signal?.addEventListener('abort',cancel,{once:true});
+  pumpPrefetchQueue();
+}
+function pumpPrefetchQueue(){
+  while(activePrefetches<MAX_PREFETCH&&prefetchQueue.size){
+    const [key,job]=prefetchQueue.entries().next().value;prefetchQueue.delete(key);
+    if(!job.signal?.aborted)prefetchAuthenticatedImage(job.target.href,job.target.token);
+  }
+}
+
+// Raster previews and DOM images share bytes and in-flight requests. Returning a
+// Blob keeps decoding safe even if its unused object URL is evicted meanwhile.
+export function sharedAuthenticatedImageBlob(source,token){
+  let target;try{target=resolveTarget(source,token);}catch{return null;}
+  if(!target||target.direct||!target.retain)return null;
+  const entry=entries.get(target.key);if(entry&&!entry.revoked){touch(entry);return Promise.resolve(entry.blob);}
+  let promise=inflight.get(target.key);
+  if(!promise){promise=fetchImageEntry(target).finally(()=>inflight.delete(target.key));inflight.set(target.key,promise);}
+  return promise.then(entry=>entry?.blob||null);
 }
