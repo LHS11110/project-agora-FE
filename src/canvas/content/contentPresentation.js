@@ -11,3 +11,4 @@ export function contentMode(item) {
   return item?.format === 'markdown' ? 'markdown' : 'plain';
 }
 export const contentSource = item => String(item?.[item?.kind === 'code' ? 'code' : item?.kind === 'math' ? 'formula' : 'text'] ?? '');
+export const isHtmlContent = item => Boolean(item && ['text', 'code'].includes(item.kind) && contentMode(item) === 'code' && item.language === 'html');

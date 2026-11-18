@@ -273,7 +273,6 @@ async function verifyHtmlWheelAndPan(page) {
   const htmlObj = page.locator('[data-item-id="html1"]');
   const iframeEl = htmlObj.locator('.html-object-content > iframe');
   const stageWorld = page.locator('.canvas-world-layer').first();
-  await htmlObj.getByRole('button',{name:'미리보기 실행',exact:true}).click();
   await iframeEl.waitFor({ state: 'visible' });
 
   // Wait for iframe srcDoc to render tall content.

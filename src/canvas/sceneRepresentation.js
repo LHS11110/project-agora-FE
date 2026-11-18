@@ -1,4 +1,5 @@
-import {isRasterCode,codePreviewHeight} from './codePreviewMetrics.js';
+import { isRasterCode, codePreviewHeight } from './codePreviewMetrics.js';
+import { isHtmlContent } from './content/contentPresentation.js';
 import { contentSource } from './content/contentPresentation.js';
 import { normalizeGraphicsQuality } from './graphicsQuality.js';
 import { objectFontSize } from './objectSize.js';
@@ -8,6 +9,7 @@ const colors={project:'#dfe8f3',value:'#e4def7',text:'#e1e9e2',code:'#dce9df',ma
 // Small rich objects use overview rendering. Selecting or zooming restores
 // their full renderer; persisted objects are never replaced.
 export function isOverviewProxy(item,world,scale,quality='low'){
+  if(isHtmlContent(item))return false;
   const heightValue=Number(item?.height)>0?item.height:isRasterCode(item)?codePreviewHeight(item,world.height)/world.height:0;
   if(!(richKinds.has(item?.kind)||item?.runtimeRole) || !(Number(item.width)>0 && heightValue>0))return false;
   const width=item.width*world.width*scale,height=heightValue*world.height*scale;
@@ -20,12 +22,7 @@ export function overviewScale(scale) {
 }
 export function overviewProxyTier(item, world, scale, quality = 'low') {
   if (!isOverviewProxy(item, world, scale, quality)) return 'full';
-  if (!world || !scale) return 'ov';
-  const heightValue = Number(item?.height) > 0 ? item.height : isRasterCode(item) ? codePreviewHeight(item, world.height) / world.height : 0;
-  const w = item.width * world.width, h = heightValue * world.height, m = Math.min(w, h) * scale;
-  if (item.kind === 'image') return (m < 1 || w * h * scale * scale < 2) ? 'img-s' : 'img-p';
-  if (m < 3) return 'tiny';
-  return 'ov';
+  return item?.kind === 'image' ? 'img' : 'ov';
 }
 export function overviewProxy(item, world, scale){
   if(world&&!(Number(item.height)>0)&&isRasterCode(item))item={...item,height:codePreviewHeight(item,world.height)/world.height};
@@ -37,16 +34,10 @@ export function overviewProxy(item, world, scale){
     shadowOffsetY: item.shadowOffsetY,
   };
   if (item.kind === 'image') {
-    if (world && scale && (Math.min(item.width * world.width, item.height * world.height) * scale < 1 || item.width * world.width * item.height * world.height * scale * scale < 2)) {
-      return { kind: 'shape', shapeType: 'rectangle', x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, depth: item.depth, cornerStyle: item.cornerStyle, fill: '', color: '#9ca99f', strokeEnabled: true, shadowEnabled: false };
-    }
     return { kind: 'shape', shapeType: 'rectangle',
       x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, depth: item.depth,
       __imagePreview: item.src, cornerStyle: item.cornerStyle, imageFrameEnabled: Boolean(item.imageFrameEnabled),
       brush: item.brush, format: item.format, strokeEnabled: false, ...shadowProps };
-  }
-  if (world && scale && Math.min(item.width * world.width, item.height * world.height) * scale < 3) {
-    return { kind: 'shape', shapeType: 'rectangle', x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, depth: item.depth, fill: colors[item.kind] || '#dce9df', strokeEnabled: false, shadowEnabled: false };
   }
   if (!item.runtimeRole && ['text', 'code', 'math'].includes(item.kind)) {
     const text = contentSource(item);

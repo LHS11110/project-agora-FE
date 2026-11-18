@@ -37,7 +37,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
     const element = host.current, canvas = document.createElement('canvas');
     element.appendChild(canvas);
     canvas.style.display='none';
-    const viewportContext=canvas.getContext('2d',{alpha:true,desynchronized:false});
+    const viewportContext=canvas.getContext('2d',{alpha:true,desynchronized:true});
     const buffer=document.createElement('canvas'),bufferContext=buffer.getContext('2d',{alpha:true,desynchronized:true});
     const margin=256;
     buffer.className='vector-composite-surface';element.insertBefore(buffer,canvas);
@@ -166,7 +166,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       const gpu = app && !gpuFailed && (!app.threaded || app.hasFrame);
       if (gpu && (app.width() !== pixelWidth || app.height() !== pixelHeight)) app.resize(pixelWidth,pixelHeight);
       const canReuseWorkerFrame = (hasPendingGpuSync = false) => {
-        if (!app.threaded || !app.hasFrame || hasPendingGpuSync || app.scene || app.uploads?.size || app.removed?.size || app.inFlight || app.preparing || app.needsFrame) return false;
+        if (!app.threaded || !app.hasFrame || hasPendingGpuSync || gpuSceneDirty || app.scene || app.uploads?.size || app.removed?.size || app.inFlight || app.preparing || app.needsFrame) return false;
         const prev = app.presented;
         if (!prev || prev.version !== app.version) return false;
         if (width !== prev.viewportWidth || height !== prev.viewportHeight) return false;
@@ -192,7 +192,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
           const display=preparation?.count?'':'none';
           if(gpuCanvas.style.display!==display)gpuCanvas.style.display=display;
         }
-        if (canReuseWorkerFrame(hasPendingGpuSync)) {
+        if (canReuseWorkerFrame(hasPendingGpuSync) || (app.threaded && app.hasFrame && gpuSceneDirty && (app.inFlight || app.preparing))) {
           app.target = { camera: { x: camera.x, y: camera.y, scale: camera.scale }, viewportWidth: width, viewportHeight: height };
           app.project();
           stats.presentedCamera = { x: camera.x, y: camera.y, scale: camera.scale };
@@ -201,7 +201,10 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         if (!app.render_frame(camera.x,camera.y,camera.scale,width,height)) throw new Error("GPU surface unavailable");
         stats.presentedCamera={x:camera.x,y:camera.y,scale:camera.scale};
       };
-      const rawDesiredRatio = graphicsRasterRatio(quality,camera.scale,window.devicePixelRatio);
+      const rawDesiredRatio = Math.max(
+        types.kinds.size <= 512 ? Math.min(1, graphicsResolution(quality, window.devicePixelRatio)) : 0,
+        graphicsRasterRatio(quality, camera.scale, window.devicePixelRatio),
+      );
       if(!cameraZooming || settledDesiredRatio===null || settledQuality!==quality || rawDesiredRatio/settledDesiredRatio>1.5 || settledDesiredRatio/rawDesiredRatio>1.5){
         settledDesiredRatio=rawDesiredRatio;
         settledQuality=quality;
@@ -409,7 +412,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         ordered[index]=record;
         if (gpu) paintIndexValid = false;
         else paintIndex.update(record,index);
-      },cameraActive?2:4);
+      },cameraActive?(preparationQueue.entries.length<=512?6:2):8);
       const deferredQuality=preparationQueue.pending;
       stats.preparedThisFrame=preparedThisFrame;stats.preparationCursor=preparationQueue.cursor;
       stats.preparationVisited=(stats.preparationVisited||0)+preparedThisFrame;
@@ -425,9 +428,13 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       const workerBusy = Boolean(app?.threaded && (app.inFlight || app.preparing));
       const syncAllowed = gpuSceneDirty && (
         !app?.threaded
-        || !deferredQuality
-        || urgentJustFinished
-        || (!workerBusy && (!app.hasFrame || structuralGpuChange && preparedSinceGpuSync >= 2048 || preparedSinceGpuSync >= 2048))
+        || (!workerBusy && (
+          !deferredQuality
+          || urgentJustFinished
+          || !app.hasFrame
+          || (ordered.length <= 512 && preparedThisFrame > 0)
+          || preparedSinceGpuSync >= (ordered.length <= 2048 ? 256 : 2048)
+        ))
       );
       let drawn = 0;
       if (gpu) {
@@ -524,7 +531,24 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       ensureGpu();
       if (deferredQuality) schedule();
     };
-    const schedule = () => { if (!disposed && frame === null) frame = requestAnimationFrame(render); };
+    const scheduleChannel = typeof MessageChannel === 'function' ? new MessageChannel() : null;
+    if (scheduleChannel) scheduleChannel.port1.onmessage = () => {
+      if (!disposed && frame !== null) render();
+    };
+    const cancelScheduledRender = () => {
+      if (frame === null) return;
+      if (!scheduleChannel) clearTimeout(frame);
+      frame = null;
+    };
+    const schedule = () => {
+      if (disposed || frame !== null) return;
+      if (scheduleChannel) {
+        frame = 1;
+        scheduleChannel.port2.postMessage(null);
+      } else {
+        frame = setTimeout(render, 0);
+      }
+    };
     const metricsChanged=()=>{if(!types.connectors)return;metricsRevision++;schedule();};
     const appearanceChanged=()=>{fontRevision++;metricsRevision++;textAppearanceCache=null;schedule();};
     renderer.current = schedule;
@@ -532,16 +556,16 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
     const observer = new ResizeObserver(([entry])=>{viewportMetrics={width:entry.contentRect.width,height:entry.contentRect.height};schedule();}); observer.observe(element);
     const themeObserver=new MutationObserver(appearanceChanged);const themeRoot=element.closest('[data-theme]');if(themeRoot)themeObserver.observe(themeRoot,{attributes:true,attributeFilter:['data-theme']});
     const stage=element.closest('.canvas-stage');
-    // DOM world layers are transformed in this camera event's animation frame.
-    // Present cached pixels/GPU in the same frame, rather than scheduling a
-    // second rAF that leaves vector objects one frame behind DOM objects.
-    const cameraChanged=()=>{if(disposed)return;if(frame!==null){cancelAnimationFrame(frame);frame=null;}render();};
+    // DOM world layers are transformed in this camera event's turn.
+    // Present cached pixels/GPU in the same turn, rather than scheduling a
+    // second frame that leaves vector objects one step behind DOM objects.
+    const cameraChanged=()=>{if(disposed)return;cancelScheduledRender();render();};
     stage?.addEventListener('agora-camera',cameraChanged);
     window.addEventListener(CONNECTOR_METRICS_EVENT,metricsChanged);
     document.fonts?.addEventListener('loadingdone',appearanceChanged);
     element.dataset.renderer = 'canvas2d';schedule();
     return () => {
-      disposed = true;delete element.__agoraGpuRenderer;cameraIdleTimer?.cancel();clearTimeout(budgetIdleTimer); if (frame !== null) cancelAnimationFrame(frame);
+      disposed = true;delete element.__agoraGpuRenderer;cameraIdleTimer?.cancel();clearTimeout(budgetIdleTimer); cancelScheduledRender(); scheduleChannel?.port1?.close?.(); scheduleChannel?.port2?.close?.();
       observer.disconnect();themeObserver.disconnect();stage?.removeEventListener('agora-camera',cameraChanged); window.removeEventListener(CONNECTOR_METRICS_EVENT,metricsChanged);
       document.fonts?.removeEventListener('loadingdone',appearanceChanged);
       latest.current.onReady?.(null); renderer.current = null;

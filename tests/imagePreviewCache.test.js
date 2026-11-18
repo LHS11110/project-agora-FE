@@ -35,14 +35,14 @@ test('late image decode completion after layer cleanup releases its bitmap witho
   const bitmap = { width: 96, height: 64 }; resolve(bitmap); await tick();
   assert.equal(bitmap.width, 1); assert.equal(published, false);
 });
-test('overview preserves actual text and image source, while subpixel images do not start downloads', () => {
+test('overview preserves actual text and image source without blank subpixel fallback', () => {
   const world = { width: 1600, height: 1000 };
   const text = { kind: 'text', text: '# Actual heading', renderMode: 'markdown', width: .2, height: .1 };
   const preview = overviewProxy(text, world, .1);
   assert.equal(preview.kind, 'text'); assert.equal(preview.text, text.text); assert.equal(text.renderMode, 'markdown');
   const image = { kind: 'image', src: '/api/image.png', width: .2, height: .1, imageFrameEnabled: false };
   assert.equal(overviewProxy(image, world, .1).__imagePreview, image.src);
-  assert.equal(overviewProxy(image, world, .001).__imagePreview, undefined);
+  assert.equal(overviewProxy(image, world, .001).__imagePreview, image.src);
   assert.equal(overviewScale(.1), overviewScale(.101));
   assert.notEqual(overviewScale(.1), overviewScale(.2));
 });

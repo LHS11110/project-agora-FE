@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import {snapPosition, snappedTranslation} from './gridPlacement.js';
 import { isObjectLocked, OBJECT_LOCK_MESSAGE } from './locks/objectLock.js';
 import { isLogicGate, nearestLogicPort } from './logicGates.js';
@@ -200,6 +201,42 @@ export function useCanvasObjectInteractions(options) {
     };
     captureObjectPointer(boardRef.current, dragRef.current, event);
   };
+  const moveStateRef = useRef({ scheduled: false, token: 0, disposed: false });
+  const pendingMoveRef = useRef(null);
+  const cancelScheduledMove = () => {
+    moveStateRef.current.scheduled = false;
+    moveStateRef.current.token += 1;
+    pendingMoveRef.current = null;
+  };
+  const flushScheduledMove = () => {
+    moveStateRef.current.scheduled = false;
+    moveStateRef.current.token += 1;
+    const pending = pendingMoveRef.current;
+    pendingMoveRef.current = null;
+    if (!pending || dragRef.current !== pending.drag) return;
+    if (previewObjectMove(pending.dx, pending.dy) && pending.drag.mode === 'multi-move') {
+      pending.drag.lastMove = { dx: pending.dx, dy: pending.dy };
+    }
+  };
+  const scheduleObjectMovePreview = (drag, dx, dy) => {
+    pendingMoveRef.current = { drag, dx, dy };
+    if (!moveStateRef.current.scheduled) {
+      moveStateRef.current.scheduled = true;
+      const token = (moveStateRef.current.token += 1);
+      queueMicrotask(() => {
+        if (!moveStateRef.current.disposed && moveStateRef.current.scheduled && moveStateRef.current.token === token) {
+          flushScheduledMove();
+        }
+      });
+    }
+  };
+  useEffect(() => {
+    moveStateRef.current.disposed = false;
+    return () => {
+      moveStateRef.current.disposed = true;
+      cancelScheduledMove();
+    };
+  }, []);
   const moveObject = (event) => {
     if (!dragRef.current || dragRef.current.pointerId !== event.pointerId) return;
     const movingIds = dragRef.current.ids || [dragRef.current.id];
@@ -225,7 +262,7 @@ export function useCanvasObjectInteractions(options) {
       const rawDx=point.x-startPoint.x,rawDy=point.y-startPoint.y;
       const first=initialItems[ids[0]],anchor=first?.kind==='stroke'?first.points[0]:first;
       const {dx,dy}=snapToGrid&&anchor?snappedTranslation(anchor,rawDx,rawDy,gridSpacing,boardSize):{dx:rawDx,dy:rawDy};
-      if(previewObjectMove(dx,dy))dragRef.current.lastMove={dx,dy};
+      scheduleObjectMovePreview(dragRef.current, dx, dy);
       return;
     }
     if (mode === 'bend') {
@@ -248,7 +285,7 @@ export function useCanvasObjectInteractions(options) {
       const anchor=initial.kind==='stroke'?initial.points[0]:initial;
       const raw={dx:point.x-startX,dy:point.y-startY};
       const delta=snapToGrid?snappedTranslation(anchor,raw.dx,raw.dy,gridSpacing,boardSize):raw;
-      previewObjectMove(delta.dx,delta.dy);return;
+      scheduleObjectMovePreview(dragRef.current, delta.dx, delta.dy);return;
     }
     let next = mode === 'resize'
       ? resizeItemAtPointer(initial, resize, point, viewport)
@@ -266,7 +303,7 @@ export function useCanvasObjectInteractions(options) {
     if (!dragRef.current) return;
     if (event && dragRef.current.pointerId !== event.pointerId) return;
     if (event?.type === 'lostpointercapture' && event.target !== dragRef.current.captureElement) return;
-    if(event?.type==='pointerup' && ['move','multi-move'].includes(dragRef.current.mode))moveObject(event);
+    if(event?.type==='pointerup' && ['move','multi-move'].includes(dragRef.current.mode)){moveObject(event);flushScheduledMove();}else{cancelScheduledMove();}
     const drag = dragRef.current;
     dragRef.current = null;
     releaseObjectPointer(drag);

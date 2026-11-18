@@ -4,7 +4,6 @@ import useCanvasWatch from '../canvas/useCanvasWatch.js';
 import CanvasWatchOverlay from '../components/canvas/CanvasWatchOverlay.jsx';
 import { createWebAssetStore } from '../canvas/content/webAssetStore.js';
 import { WebAssetsContext } from '../canvas/content/WebAssetsContext.js';
-import { graphicsLodScale } from '../canvas/graphicsQuality.js';
 import { isChessShape } from '../canvas/chessShapes.js';
 import usePersonalAnchors from '../canvas/usePersonalAnchors.js';
 import ScreenShareViewer from '../canvas/voice/ScreenShareViewer.jsx';
@@ -48,7 +47,6 @@ import useCanvasKeyboardNudge from '../canvas/useCanvasKeyboardNudge.js';
 import { supportsAnyCorners, supportsObjectCorners, validObjectCornerStyle } from '../canvas/objectCorners.js';
 import { validShapeAppearance } from '../canvas/shapeAppearance.js';
 import { isVolumeShape } from '../canvas/volumeGeometry.js';
-import { overviewScale } from '../canvas/sceneRepresentation.js';
 import { numericObjectPatch } from '../canvas/objectNumericGeometry.js';
 import SceneViewModel from '../canvas/SceneViewModel.js';
 import { itemCount } from '../canvas/itemSnapshots.js';
@@ -1439,13 +1437,17 @@ function CanvasWorkspace() {
   }, [visibleEntries, previewHiddenEffective, revealNow, hiddenCandidates]);
   const portfolioEntries = useMemo(() => { if (!portfolioViewing) return stageEntries; const ids = new Set(presentationPage?.objectIds || []); return stageEntries.filter(entry => ids.has(entry.id)); }, [stageEntries, portfolioViewing, presentationPage]);
   const pendingEntrance = useMemo(() => portfolioViewing ? new Set(animationGroups(presentationPage, items).slice(cursor?.frameId === presentationPage?.frameId ? cursor?.step || 0 : 0).flatMap(g => g.ids).filter(id => ['fade', 'slide-up', 'slide-left', 'zoom'].includes(items[id]?.animation?.effect))) : null, [portfolioViewing, presentationPage, cursor, items]);
-  const usesOverview = useMemo(() => portfolioEntries.some(({ item }) => Boolean(item.runtimeRole) || !['shape', 'stroke', 'connector'].includes(item.kind)), [portfolioEntries, items[selectedItemId]?.renderMode]);
-  const lodCountRef = useRef(portfolioEntries.length);
-  if (!cameraMoving) lodCountRef.current = portfolioEntries.length;
-  const effectiveDetailScale = cameraMoving && !zoomingActive
-    ? (camera.detailScale ?? camera.scale)
-    : (zoomingActive ? (camera.detailScale ?? camera.scale) : Math.min(camera.scale, camera.detailScale ?? camera.scale));
-  const representationScale = usesOverview ? overviewScale(graphicsLodScale(effectiveDetailScale, lodCountRef.current, graphicsQuality)) : 1;
+  const representationScale = useMemo(() => {
+    let richCount = 0;
+    for (let i = 0; i < portfolioEntries.length; i++) {
+      const item = portfolioEntries[i].item;
+      if (item.runtimeRole || (!['shape', 'stroke', 'connector'].includes(item.kind) && !isRasterText(item))) {
+        richCount++;
+        if (richCount > 160) return 1;
+      }
+    }
+    return Infinity;
+  }, [portfolioEntries, items[selectedItemId]?.renderMode]);
   const selectedObjectIdsKey = selectedItemIds.filter(id => Boolean(items[id])).join('|');
   const selectedObjectIds = useMemo(() => selectedItemIds.filter(id => Boolean(items[id])), [selectedObjectIdsKey]);
   const selectedObjectIdSet = useMemo(() => (selectedObjectIds.length ? new Set(selectedObjectIds) : EMPTY_ID_SET), [selectedObjectIds]);

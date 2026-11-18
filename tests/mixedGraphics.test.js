@@ -9,7 +9,8 @@ test('quality changes rich-object detail; heightless code and runtime shapes par
  const image={kind:'image',width:.025,height:.035};assert.equal(isOverviewProxy(image,world,1,'low'),true);assert.equal(isOverviewProxy(image,world,1,'high'),false);
  assert.equal(isOverviewProxy({kind:'shape',runtimeRole:'output',width:.2,height:.2},world,.01),true);
  const code={kind:'code',width:.2,code:'print(1)',renderMode:'code'};assert.equal(isOverviewProxy(code,world,.01),true);
- assert.equal(overviewProxy(code,world,.001).kind,'shape');
+ assert.equal(overviewProxy(code,world,.001).kind,'text');
+ assert.equal(isOverviewProxy({kind:'code',width:.2,code:'<h1>Hi</h1>',language:'html',renderMode:'code'},world,.01),false);
  const e={id:'image',item:image,bounds:{minX:0,minY:0,maxX:.025,maxY:.035}},model=new SceneViewModel(),items={image};
  model.update([e],items,world,1,new Set(),new Set(),0,null,'low');assert.equal(model.depthLayers[0].domObjects.length,0);
  model.update(model.entries,items,world,1,new Set(),new Set(),0,null,'high');assert.equal(model.depthLayers[0].domObjects.length,1);
@@ -26,12 +27,10 @@ test('200,000 mixed objects use bounded rich DOM and selected objects regain ful
 });
 
 test('dormant animation effects do not force individual DOM renderers',()=>{const item={animation:{...defaultAnimation(),effect:'pulse'}};assert.equal(hasRenderedAnimation(item),false);assert.equal(hasRenderedAnimation({...item,animationPlayback:{action:'play',startedAt:Date.now()}}),true);assert.equal(hasRenderedAnimation({...item,animationPlayback:{action:'stop',startedAt:Date.now()}}),false);});
-test('zooming restores text detail instead of retaining the tiny-object silhouette',()=>{
+test('zooming out never collapses code objects into tiny silhouette boxes',()=>{
  const item={kind:'code',renderMode:'code',code:'print(42)',width:.1,height:.1},entry={id:'code',item,bounds:{minX:0,minY:0,maxX:.1,maxY:.1}},items={code:item},scene=new SceneViewModel(),entries=[entry];
- scene.update(entries,items,world,.02,new Set(),new Set());assert.equal(scene.depthLayers[0].vectors.code.kind,'shape');
- const tinyVectors=scene.depthLayers[0].vectors;
- scene.update(entries,items,world,.01,new Set(),new Set());assert.equal(scene.depthLayers[0].vectors,tinyVectors,'zooming within same tiny proxy tier retains vector snapshot identity');
+ scene.update(entries,items,world,.02,new Set(),new Set());assert.equal(scene.depthLayers[0].vectors.code.kind,'text');
+ const tierVectors=scene.depthLayers[0].vectors;
+ scene.update(entries,items,world,.01,new Set(),new Set());assert.equal(scene.depthLayers[0].vectors,tierVectors,'zooming out preserves non-box text vector identity');
  scene.update(entries,items,world,.04,new Set(),new Set());assert.equal(scene.depthLayers[0].vectors.code.kind,'text');
- const plainVectors=scene.depthLayers[0].vectors;
- scene.update(entries,items,world,.08,new Set(),new Set());assert.equal(scene.depthLayers[0].vectors,plainVectors,'zooming within same overview proxy tier retains vector snapshot identity');
 });

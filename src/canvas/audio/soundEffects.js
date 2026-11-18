@@ -101,67 +101,22 @@ export function unlockSoundEffects() {
 export function installSoundUnlock(target = globalThis.window) {
   if (!target?.addEventListener) return () => {};
   let disposed = false;
-  let scheduled = false;
-  let idleHandle = null;
-  let timerHandle = null;
 
-  const removeListeners = () => {
-    target.removeEventListener('pointerup', scheduleUnlock, true);
-    target.removeEventListener('keyup', scheduleUnlock, true);
-    target.removeEventListener('touchend', scheduleUnlock, true);
+  const resumeIfNeeded = () => {
+    if (disposed || !sharedContext || sharedContext.state !== 'suspended') return;
+    sharedContext.resume().catch(() => {});
   };
 
-  const cleanup = () => {
+  target.addEventListener('pointerup', resumeIfNeeded, { passive: true, capture: true });
+  target.addEventListener('keyup', resumeIfNeeded, { passive: true, capture: true });
+  target.addEventListener('touchend', resumeIfNeeded, { passive: true, capture: true });
+  return () => {
     if (disposed) return;
     disposed = true;
-    removeListeners();
-    if (idleHandle !== null && typeof globalThis.cancelIdleCallback === 'function') {
-      globalThis.cancelIdleCallback(idleHandle);
-    }
-    if (timerHandle !== null) {
-      globalThis.clearTimeout(timerHandle);
-    }
-    idleHandle = null;
-    timerHandle = null;
+    target.removeEventListener('pointerup', resumeIfNeeded, true);
+    target.removeEventListener('keyup', resumeIfNeeded, true);
+    target.removeEventListener('touchend', resumeIfNeeded, true);
   };
-
-  const scheduleIdle = (delayMs = 1500) => {
-    if (disposed) return;
-    if (delayMs > 0) {
-      timerHandle = globalThis.setTimeout(() => { timerHandle = null; scheduleIdle(0); }, delayMs);
-      return;
-    }
-    if (typeof globalThis.requestIdleCallback === 'function') {
-      idleHandle = globalThis.requestIdleCallback(runUnlock, { timeout: 2000 });
-    } else {
-      timerHandle = globalThis.setTimeout(runUnlock, 500);
-    }
-  };
-
-  const runUnlock = () => {
-    idleHandle = null;
-    timerHandle = null;
-    if (disposed) return;
-    if (globalThis.document?.querySelector?.('.canvas-stage:is(.camera-moving, .camera-zooming, .panning, .camera-coasting)')) {
-      scheduleIdle(1200);
-      return;
-    }
-    unlockSoundEffects();
-    cleanup();
-  };
-
-  const scheduleUnlock = () => {
-    if (disposed || scheduled) return;
-    scheduled = true;
-    // Remove gesture hooks immediately so subsequent pan/zoom frames pay zero listener overhead.
-    removeListeners();
-    scheduleIdle(1500);
-  };
-
-  target.addEventListener('pointerup', scheduleUnlock, { passive: true, capture: true });
-  target.addEventListener('keyup', scheduleUnlock, { passive: true, capture: true });
-  target.addEventListener('touchend', scheduleUnlock, { passive: true, capture: true });
-  return cleanup;
 }
 
 /**

@@ -165,11 +165,16 @@ export function useCanvasCamera(boardRef, sceneRef) {
       if (!stage.classList.contains('camera-moving')) stage.classList.add('camera-moving');
       if (zooming && !stage.classList.contains('camera-zooming')) stage.classList.add('camera-zooming');
     }
-    if (!work.current.frame) work.current.frame = requestAnimationFrame(() => {
-      work.current.frame = 0; apply();
-      const before = committed.current, now = current.current;
-      if (shouldCommitCamera(before, now, work.current.size, boardRef.current?.__agoraPreparedScene)) commit();
-    });
+    if (!work.current.frame) {
+      const token = (work.current.token = (work.current.token || 0) + 1);
+      work.current.frame = 1;
+      queueMicrotask(() => {
+        if (work.current.disposed || !work.current.frame || work.current.token !== token) return;
+        work.current.frame = 0; apply();
+        const before = committed.current, now = current.current;
+        if (shouldCommitCamera(before, now, work.current.size, boardRef.current?.__agoraPreparedScene)) commit();
+      });
+    }
     work.current.idle ||= new CameraIdleTask(() => {
       const target = boardRef.current;
       if (target && (target.classList.contains('camera-moving') || target.classList.contains('camera-zooming'))) {
@@ -181,12 +186,15 @@ export function useCanvasCamera(boardRef, sceneRef) {
   }, [apply, commit, boardRef]);
   const camera = useMemo(() => ({ get x() { return current.current.x }, get y() { return current.current.y }, get scale() { return current.current.scale }, get detailScale() { return work.current.detailScale } }), [revision]);
   useLayoutEffect(apply);
-  useLayoutEffect(() => () => {
-    cancelAnimationFrame(work.current.frame); work.current.frame = 0; work.current.idle?.cancel(); work.current.idle = null; work.current.observer?.disconnect(); work.current.observer = null; work.current.size = null;
-    const target = boardRef.current;
-    if (target && (target.classList.contains('camera-moving') || target.classList.contains('camera-zooming'))) {
-      target.classList.remove('camera-moving', 'camera-zooming');
-    }
+  useLayoutEffect(() => {
+    work.current.disposed = false;
+    return () => {
+      work.current.disposed = true; work.current.frame = 0; work.current.idle?.cancel(); work.current.idle = null; work.current.observer?.disconnect(); work.current.observer = null; work.current.size = null;
+      const target = boardRef.current;
+      if (target && (target.classList.contains('camera-moving') || target.classList.contains('camera-zooming'))) {
+        target.classList.remove('camera-moving', 'camera-zooming');
+      }
+    };
   }, [boardRef]);
   return [camera, setCamera];
 }

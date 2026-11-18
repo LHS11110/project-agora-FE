@@ -1,6 +1,15 @@
-// Raw input samples are collected cheaply; expensive ink work runs once per frame.
+// Raw input samples are collected cheaply; expensive ink work flushes per microtask turn without VSync waits.
+const defaultRequest = fn => {
+  const token = { cancelled: false };
+  queueMicrotask(() => { if (!token.cancelled) fn(); });
+  return token;
+};
+const defaultCancel = token => {
+  if (token && typeof token === 'object') token.cancelled = true;
+  else if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(token);
+};
 export default class RawInkQueue {
- constructor(deliver,request=fn=>requestAnimationFrame(fn),cancel=id=>cancelAnimationFrame(id)){Object.assign(this,{deliver,request,cancel});this.samples=[];this.frame=null;this.pointerId=null;}
+ constructor(deliver,request=defaultRequest,cancel=defaultCancel){Object.assign(this,{deliver,request,cancel});this.samples=[];this.frame=null;this.pointerId=null;}
  push(event){
   if(this.pointerId!==null&&this.pointerId!==event.pointerId)this.clear();this.pointerId=event.pointerId;
   let samples;try{samples=event.getCoalescedEvents?.();}catch{}

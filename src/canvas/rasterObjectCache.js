@@ -68,7 +68,7 @@ export function rasterDescriptor(id, item, world, referenceItems, routeKey = '',
     for (const p of points) { minX = Math.min(minX,p.x); minY = Math.min(minY,p.y); maxX = Math.max(maxX,p.x); maxY = Math.max(maxY,p.y); }
     x = minX * world.width; y = minY * world.height;
     centerX = (maxX - minX) * world.width / 2; centerY = (maxY - minY) * world.height / 2;
-    local.points = points.map(p => ({ ...p, x: Number((p.x-minX).toFixed(8)), y: Number((p.y-minY).toFixed(8)) }));
+    local.points = points.map(p => ({ ...p, x: Number((p.x-minX).toFixed(5)), y: Number((p.y-minY).toFixed(5)) }));
   }
   local.rotation = item.kind === 'connector' ? item.rotation : 0;
   local.shadowEnabled = false;
