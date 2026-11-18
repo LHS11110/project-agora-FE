@@ -1,0 +1,171 @@
+{
+  "baselineCommit": "ec53793",
+  "browser": "157.0.8103.78",
+  "input": "120Hz timer requested, observed approximately 125Hz; 4 seconds per motion",
+  "fixture": "20,000/200,000 cached rectangle objects; low graphics; 1200x800 surface; hardware GPU; warmed scene",
+  "results": [
+    {
+      "objects": 20000,
+      "motion": "pan",
+      "beforeWorkerFps": 0,
+      "afterWorkerFps": 124.72817256970737,
+      "screenRafHz": 59.98950183713381,
+      "p95FrameMs": 16.700000000000728,
+      "completed": 499,
+      "elapsedMs": 4000.7000000029802,
+      "inputHz": 124.9781288273621,
+      "maxPending": 1,
+      "discarded": 0,
+      "timingP95Ms": {
+        "roundTripMs": 1.300000011920929,
+        "captureMs": 0.09999999403953552,
+        "presentationMs": 0.20000000298023224,
+        "sceneMs": 0.10000000894069672,
+        "submitMs": 0.7999999970197678,
+        "exportMs": 0.10000000894069672,
+        "workerMs": 0.9000000059604645
+      }
+    },
+    {
+      "objects": 20000,
+      "motion": "zoom",
+      "beforeWorkerFps": 0,
+      "afterWorkerFps": 124.48755124469002,
+      "screenRafHz": 60.24397560234999,
+      "p95FrameMs": 16.799999999999272,
+      "completed": 498,
+      "elapsedMs": 4000.4000000059605,
+      "inputHz": 124.98750124968879,
+      "maxPending": 1,
+      "discarded": 0,
+      "timingP95Ms": {
+        "roundTripMs": 1.1000000089406967,
+        "captureMs": 0.09999999403953552,
+        "presentationMs": 0.20000000298023224,
+        "sceneMs": 0.10000000894069672,
+        "submitMs": 0.7000000029802322,
+        "exportMs": 0.10000000894069672,
+        "workerMs": 0.7000000029802322
+      }
+    },
+    {
+      "objects": 200000,
+      "motion": "pan",
+      "beforeWorkerFps": 0.2499625056245288,
+      "afterWorkerFps": 124.9750049990933,
+      "screenRafHz": 59.988002399564785,
+      "p95FrameMs": 16.800000000000182,
+      "completed": 500,
+      "elapsedMs": 4000.7999999970198,
+      "inputHz": 124.9750049990933,
+      "maxPending": 1,
+      "discarded": 0,
+      "timingP95Ms": {
+        "roundTripMs": 1.3999999910593033,
+        "captureMs": 0.09999999403953552,
+        "presentationMs": 0.20000000298023224,
+        "sceneMs": 0.09999999403953552,
+        "submitMs": 0.7999999970197678,
+        "exportMs": 0.10000000894069672,
+        "workerMs": 0.8999999910593033
+      }
+    },
+    {
+      "objects": 200000,
+      "motion": "zoom",
+      "beforeWorkerFps": 0,
+      "afterWorkerFps": 124.74064445175905,
+      "screenRafHz": 60.24548158892572,
+      "p95FrameMs": 16.700000000000728,
+      "completed": 499,
+      "elapsedMs": 4000.2999999970198,
+      "inputHz": 124.99062570316539,
+      "maxPending": 1,
+      "discarded": 0,
+      "timingP95Ms": {
+        "roundTripMs": 1.0999999940395355,
+        "captureMs": 0.09999999403953552,
+        "presentationMs": 0.10000000894069672,
+        "sceneMs": 0.09999999403953552,
+        "submitMs": 0.699999988079071,
+        "exportMs": 0.10000000894069672,
+        "workerMs": 0.7000000029802322
+      }
+    }
+  ],
+  "baselineDirectCapacity": [
+    {
+      "objects": 20000,
+      "motion": "pan",
+      "elapsed": 4000.300000011921,
+      "inputHz": 124.7406444512944,
+      "completed": 498,
+      "workerFps": 124.490663199889,
+      "screenRafHz": 59.9955003372959,
+      "p95FrameMs": 16.799999999999727,
+      "maxFrameMs": 16.800000000000182,
+      "renderer": "rust-wgpu",
+      "thread": "worker",
+      "telemetry": null
+    },
+    {
+      "objects": 20000,
+      "motion": "zoom",
+      "elapsed": 4000.3999999910593,
+      "inputHz": 124.98750125015435,
+      "completed": 499,
+      "workerFps": 124.73752624765405,
+      "screenRafHz": 60.2439756025744,
+      "p95FrameMs": 16.700000000000728,
+      "maxFrameMs": 16.80000000000109,
+      "renderer": "rust-wgpu",
+      "thread": "worker",
+      "telemetry": null
+    },
+    {
+      "objects": 200000,
+      "motion": "pan",
+      "elapsed": 4000.2999999970198,
+      "inputHz": 124.99062570316539,
+      "completed": 500,
+      "workerFps": 124.99062570316539,
+      "screenRafHz": 59.99550033751939,
+      "p95FrameMs": 16.799999999999272,
+      "maxFrameMs": 16.800000000000182,
+      "renderer": "rust-wgpu",
+      "thread": "worker",
+      "telemetry": null
+    },
+    {
+      "objects": 200000,
+      "motion": "zoom",
+      "elapsed": 4000.1000000089407,
+      "inputHz": 124.99687507784367,
+      "completed": 499,
+      "workerFps": 124.74688132768797,
+      "screenRafHz": 60.248493787520644,
+      "p95FrameMs": 16.700000000000728,
+      "maxFrameMs": 16.80000000000109,
+      "renderer": "rust-wgpu",
+      "thread": "worker",
+      "telemetry": null
+    }
+  ],
+  "multiLayer": {
+    "inputHz": 124.99062570316539,
+    "elapsed": 4000.2999999970198,
+    "layers": 13,
+    "workerFps": [
+      124.74064445175905,
+      124.74064445175905,
+      124.74064445175905,
+      124.74064445175905
+    ],
+    "pending": [
+      1,
+      1,
+      1,
+      1
+    ]
+  }
+}

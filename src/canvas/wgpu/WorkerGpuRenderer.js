@@ -25,6 +25,7 @@ export default class WorkerGpuRenderer {
   }
   constructor(canvas,width,height){
     Object.assign(this,{canvas,pixelWidth:Math.max(1,Math.round(width)),pixelHeight:Math.max(1,Math.round(height)),threaded:true,hasFrame:false,version:0,seq:0,inFlight:false,preparing:false,needsFrame:false,disposed:false});
+    this.telemetry={submitted:0,completed:0,presented:0,discarded:0,maxPending:0,samples:[]};
     this.uploads=new Map();this.removed=new Set();
     this.worker=new Worker(new URL('./gpuRenderer.worker.js',import.meta.url),{type:'module',name:'agora-gpu-renderer'});
     canvas.className='vector-gpu-worker-surface';
@@ -49,16 +50,17 @@ export default class WorkerGpuRenderer {
     if(!this.hasFrame||!this.target)return;
     const current=this.target.camera,previous=this.presented.camera,scale=current.scale/previous.scale;
     const x=current.x-(previous.x+this.presented.margin)*scale,y=current.y-(previous.y+this.presented.margin)*scale;
-    this.canvas.style.transform=`translate3d(${x}px,${y}px,0) scale(${scale})`;
+    const transform=`translate3d(${x}px,${y}px,0) scale(${scale})`;
+    if(this.canvas.style.transform!==transform)this.canvas.style.transform=transform;
   }
   async pump(){
     if(this.disposed||this.inFlight||this.preparing||!this.needsFrame||!this.target)return;
     this.preparing=true;this.needsFrame=false;this.timeout=setTimeout(()=>this.fail('GPU worker frame timed out'),12000);const uploads=[...this.uploads.values()];this.uploads.clear();
     const scene=this.scene;this.scene=null;const version=this.version,removed=[...this.removed];this.removed.clear();
-    let textures=[];
+    let textures=[];const captureStart=performance.now();
     try{
       // Snapshot atlas pixels once per submitted frame, not once per input event.
-      const captured=await Promise.allSettled(uploads.map(async image=>({...image,canvas:undefined,bitmap:await createImageBitmap(image.canvas,{premultiplyAlpha:'premultiply'})})));
+      const captured=uploads.length?await Promise.allSettled(uploads.map(async image=>({...image,canvas:undefined,bitmap:await createImageBitmap(image.canvas,{premultiplyAlpha:'premultiply'})}))):[];
       textures=captured.filter(result=>result.status==='fulfilled').map(result=>result.value);
       const rejected=captured.find(result=>result.status==='rejected');if(rejected)throw rejected.reason;
       if(this.disposed){for(const image of textures)image.bitmap.close();return;}
@@ -66,23 +68,31 @@ export default class WorkerGpuRenderer {
       const packet={type:'frame',seq:++this.seq,version,scene,textures,removed,...target,margin:MARGIN,pixelWidth:Math.round((target.viewportWidth+MARGIN*2)*ratio),pixelHeight:Math.round((target.viewportHeight+MARGIN*2)*ratio)};
       const transfer=textures.map(image=>image.bitmap);
       if(scene)transfer.push(scene.words.buffer,scene.ids.buffer,scene.starts.buffer,scene.counts.buffer);
+      this.captureMs=performance.now()-captureStart;this.sentAt=performance.now();
+      this.telemetry.submitted++;this.telemetry.maxPending=Math.max(this.telemetry.maxPending,1);
       this.preparing=false;this.inFlight=true;
       this.worker.postMessage(packet,transfer);
     }catch(error){for(const image of textures)try{image.bitmap.close();}catch{}this.fail(error);}
   }
   receive(frame){
     if(this.disposed){frame.bitmap.close();return;}
+    const receivedAt=performance.now();this.telemetry.completed++;
     clearTimeout(this.timeout);this.inFlight=false;
     if(frame.version===this.version){
       try{
         if(this.canvas.width!==frame.bitmap.width)this.canvas.width=frame.bitmap.width;
         if(this.canvas.height!==frame.bitmap.height)this.canvas.height=frame.bitmap.height;
         this.context.transferFromImageBitmap(frame.bitmap);
+        this.telemetry.presented++;
         this.presented=frame;this.hasFrame=true;
-        this.canvas.style.width=`${frame.viewportWidth+frame.margin*2}px`;this.canvas.style.height=`${frame.viewportHeight+frame.margin*2}px`;
+        const width=`${frame.viewportWidth+frame.margin*2}px`,height=`${frame.viewportHeight+frame.margin*2}px`;
+        if(this.canvas.style.width!==width)this.canvas.style.width=width;
+        if(this.canvas.style.height!==height)this.canvas.style.height=height;
         this.project();this.onFrame?.(frame);
       }catch(error){frame.bitmap.close();this.fail(error);return;}
-    }else frame.bitmap.close();
+    }else{this.telemetry.discarded++;frame.bitmap.close();}
+    this.telemetry.samples.push({roundTripMs:Math.max(0,receivedAt-(this.sentAt||receivedAt)),captureMs:this.captureMs||0,presentationMs:performance.now()-receivedAt,...frame.timings});
+    if(this.telemetry.samples.length>240)this.telemetry.samples.shift();
     this.pump();
   }
   lose_context(){this.worker?.postMessage({type:'lose-context'});}

@@ -10,15 +10,18 @@ self.onmessage=async({data})=>{
       self.postMessage({type:'ready',backend:renderer.backend_kind(),adapter:renderer.adapter_name(),contextAttributes:gl?.getContextAttributes?.()||null});
     }else if(data.type==='frame'){
       if(!renderer)throw Error('GPU worker not initialized');
+      const start=performance.now();
       for(const id of data.removed)renderer.remove_texture(id);
       for(const image of data.textures){if(!renderer.upload_canvas_texture(image.id,image.bitmap,image.width,image.height))throw Error('Texture upload failed');}
       if(data.scene)renderer.update_scene(data.scene.words,data.scene.ids,data.scene.starts,data.scene.counts);
       const {camera,viewportWidth,viewportHeight,pixelWidth,pixelHeight,margin}=data;
       renderer.resize(pixelWidth,pixelHeight);
+      const prepared=performance.now();
       if(!renderer.render_frame(camera.x+margin,camera.y+margin,camera.scale,viewportWidth+margin*2,viewportHeight+margin*2))throw Error(renderer.last_error()||'GPU surface unavailable');
+      const submitted=performance.now();
       for(const image of data.textures)image.bitmap.close();
       const bitmap=canvas.transferToImageBitmap();
-      self.postMessage({type:'frame',seq:data.seq,version:data.version,camera,viewportWidth,viewportHeight,margin,bitmap},[bitmap]);
+      self.postMessage({type:'frame',seq:data.seq,version:data.version,camera,viewportWidth,viewportHeight,margin,bitmap,timings:{sceneMs:prepared-start,submitMs:submitted-prepared,exportMs:performance.now()-submitted,workerMs:performance.now()-start}},[bitmap]);
     }else if(data.type==='lose-context'){
       canvas?.getContext('webgl2')?.getExtension('WEBGL_lose_context')?.loseContext();
     }

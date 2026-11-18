@@ -1,3 +1,4 @@
+import {needsFreshWorkerFrame} from './wgpu/workerFramePolicy.js';
 import CameraIdleTask from './CameraIdleTask.js';
 import RasterPaintIndex from './RasterPaintIndex.js';
 import {isRasterCode} from './codePreviewMetrics.js';
@@ -166,6 +167,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       const gpu = app && !gpuFailed && (!app.threaded || app.hasFrame);
       if (gpu && (app.width() !== pixelWidth || app.height() !== pixelHeight)) app.resize(pixelWidth,pixelHeight);
       const canReuseWorkerFrame = (hasPendingGpuSync = false) => {
+        if(needsFreshWorkerFrame({moving:cameraActive,changed:moved,hasFrame:app.hasFrame}))return false;
         if (!app.threaded || !app.hasFrame || hasPendingGpuSync || gpuSceneDirty || app.scene || app.uploads?.size || app.removed?.size || app.inFlight || app.preparing || app.needsFrame) return false;
         const prev = app.presented;
         if (!prev || prev.version !== app.version) return false;

@@ -28,3 +28,17 @@ test('failed texture snapshot releases other snapshots and terminates the worker
  try{app.upload_canvas_texture(1,'ok',10,10);app.upload_canvas_texture(2,'bad',10,10);app.render_frame(0,0,1,100,80);await tick();assert.equal(app.disposed,true);assert.equal(closed,1);assert.match(failed,/snapshot failed/);}
  finally{app.destroy();globalThis.Worker=previousWorker;globalThis.createImageBitmap=previousBitmap;}
 });
+
+test('camera-only dispatch is synchronous, bounded and has no idle render loop',async()=>{
+ const previous=globalThis.Worker,sent=[];globalThis.Worker=class{postMessage(packet){sent.push(packet);}terminate(){}};
+ const app=new Renderer({style:{}},100,80);let frames=0;app.context={transferFromImageBitmap(){}};app.onFrame=()=>frames++;
+ const done=()=>({version:0,camera:{x:0,y:0,scale:1},viewportWidth:100,viewportHeight:80,margin:256,bitmap:{width:612,height:592,close(){}}});
+ try{
+  app.render_frame(0,0,1,100,80);assert.equal(sent.length,1,'no Promise hop for empty upload batches');assert.equal(app.telemetry.completed,0,'requests are not counted as completed frames');
+  for(let i=1;i<=100;i++)app.render_frame(i,0,1,100,80);assert.equal(sent.length,1,'retain only latest unsent camera');
+  app.receive(done());assert.equal(sent.length,2);assert.equal(sent[1].camera.x,100);assert.equal(frames,1);
+  app.receive(done());await tick();assert.equal(sent.length,2,'idle does not manufacture extra frames');assert.equal(app.telemetry.presented,2);assert.equal(app.telemetry.completed,2);
+  for(let i=0;i<300;i++){app.render_frame(i,0,1,100,80);app.receive(done());}
+  assert.equal(app.telemetry.samples.length,240,'telemetry memory is bounded');assert.equal(app.telemetry.maxPending,1);
+ }finally{app.destroy();globalThis.Worker=previous;}
+});
