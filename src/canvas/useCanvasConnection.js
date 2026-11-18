@@ -244,7 +244,7 @@ export function useCanvasConnection(options) {
       joinedCanvasConnectionId = canvasConnectionId;
     };
     const resetPeerMesh = (recoverable=false) => {
-      if(recoverable)voiceCallRef?.current?.reconnect();else voiceCallRef?.current?.suspend();
+      if(recoverable)voiceCallRef?.current?.reconnect({ seamless: typeof navigator === 'undefined' || navigator.onLine !== false });else voiceCallRef?.current?.suspend();
       if (peerMeshRef.current) peerMeshRef.current.close();
       peerMeshRef.current = null;
       syncedPeersRef.current.clear();
@@ -267,11 +267,12 @@ export function useCanvasConnection(options) {
       try {
         await waitForActiveNetwork();
         if (cancelled) return;
-        const summary = await api(`/api/canvases/${canvasId}`, { token, signal: connectAbort.signal });
+        const [summary, canvasSettings] = await Promise.all([
+          api(`/api/canvases/${canvasId}`, { token, signal: connectAbort.signal }),
+          api(`/api/canvases/${canvasId}/settings`, { token, signal: connectAbort.signal }),
+        ]);
         if (cancelled) return;
         setCanvas(summary);
-        const canvasSettings = await api(`/api/canvases/${canvasId}/settings`, { token, signal: connectAbort.signal });
-        if (cancelled) return;
         setSettings(canvasSettings);
 
         const passwordGrantKey = canvasPasswordGrantKey(canvasId, user);
@@ -434,7 +435,7 @@ export function useCanvasConnection(options) {
           }
           if(data.type==='error'&&canvasSnapshotLoadedRef.current&&['RTC_CANVAS_CONNECTION_INVALID','RTC_ALREADY_JOINED','SESSION_NOT_FOUND'].includes(data.code)){
             const attempt=Math.min(rtcMembershipRetryRef.current++,5);
-            voiceCallRef?.current?.reconnect();requestServerReconnect({retry_after_ms:Math.min(500*2**attempt,15000)});return;
+            voiceCallRef?.current?.reconnect({ seamless: typeof navigator === 'undefined' || navigator.onLine !== false });requestServerReconnect({retry_after_ms:Math.min(500*2**attempt,15000)});return;
           }
           if (rtcMembershipRecovery.handle(data, hostSessionRef.current.term)) return;
           if (data.type === 'error' && (data.code?.startsWith('RTC_') || data.code?.startsWith('CANVAS_RELAY_') || ['HOST_FENCED', 'ITEM_ACCESS_DENIED', 'RATE_LIMITED'].includes(data.code))) {
@@ -451,7 +452,7 @@ export function useCanvasConnection(options) {
           rtcJoined = false;
           if(cancelled||rtcWsRef.current!==rtcSocket)return;
           const recoverable=event.code!==1008&&canvasSnapshotLoadedRef.current;
-          if(recoverable){voiceCallRef?.current?.reconnect();requestServerReconnect({retry_after_ms:500});}
+          if(recoverable){voiceCallRef?.current?.reconnect({ seamless: typeof navigator === 'undefined' || navigator.onLine !== false });requestServerReconnect({retry_after_ms:500});}
           else{
             voiceCallRef?.current?.suspend();
             if(event.code===1008){autoReconnectRef.current=false;serverReconnectRequestedRef.current=false;if(reconnectTimer!==null){clearTimeout(reconnectTimer);reconnectTimer=null;}}
@@ -728,7 +729,7 @@ export function useCanvasConnection(options) {
               rtcSocket.onmessage = null;
               rtcSocket.onerror = null;
               rtcSocket.onclose = null;
-              voiceCallRef?.current?.reconnect();
+              voiceCallRef?.current?.reconnect({ seamless: typeof navigator === 'undefined' || navigator.onLine !== false });
             }
             rtcSocket.close();
           }
@@ -785,7 +786,8 @@ export function useCanvasConnection(options) {
       canvasConnectionId = '';
       canvasConnectionHash = '';
       joinedCanvasConnectionId = '';
-      voiceCallRef?.current?.reconnect();
+      const seamlessVoice = preservePeerMesh && (typeof navigator === 'undefined' || navigator.onLine !== false);
+      voiceCallRef?.current?.reconnect({ seamless: seamlessVoice });
       if (!preservePeerMesh) resetPeerMesh(true);
       if (rtcSocket && rtcSocket.readyState !== WebSocket.CLOSED) {
         if (preservePeerMesh) {
@@ -793,7 +795,7 @@ export function useCanvasConnection(options) {
           rtcSocket.onmessage = null;
           rtcSocket.onerror = null;
           rtcSocket.onclose = null;
-          voiceCallRef?.current?.reconnect();
+          voiceCallRef?.current?.reconnect({ seamless: seamlessVoice });
         }
         rtcSocket.close();
       }

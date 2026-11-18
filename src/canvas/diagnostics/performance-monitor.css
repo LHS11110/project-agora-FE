@@ -1,0 +1,323 @@
+.canvas-inspector .perf-monitor-section {
+  --pm-fps: #1ea96c;
+  --pm-fps-fill: #1ea96c22;
+  --pm-cpu: #d97706;
+  --pm-cpu-fill: #d977061f;
+  --pm-danger: #d9534f;
+  padding-top: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.canvas-app-page[data-theme="dark"] .canvas-inspector .perf-monitor-section {
+  --pm-fps: #4ade80;
+  --pm-fps-fill: #4ade8024;
+  --pm-cpu: #fbbf24;
+  --pm-cpu-fill: #fbbf2422;
+  --pm-danger: #f87171;
+}
+
+.perf-monitor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.perf-monitor-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.perf-monitor-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: var(--pm-fps);
+  box-shadow: 0 0 0 3px var(--pm-fps-fill);
+}
+
+.perf-monitor-dot.is-paused {
+  background: var(--pm-cpu);
+  box-shadow: 0 0 0 3px var(--pm-cpu-fill);
+}
+
+.perf-monitor-title .inspector-label {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.perf-monitor-badge {
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: var(--panel-soft);
+  color: var(--ink-muted);
+  font: 600 9px/1 var(--mono);
+  white-space: nowrap;
+}
+
+.perf-monitor-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.canvas-inspector .perf-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: background .14s, color .14s, border-color .14s;
+}
+
+.canvas-inspector .perf-icon-btn:hover {
+  background: var(--panel-soft);
+  color: var(--ink-strong);
+  border-color: var(--ink-muted);
+}
+
+.canvas-inspector .perf-icon-btn:focus-visible {
+  outline: 2px solid var(--studio-accent, var(--ink-strong));
+  outline-offset: 1px;
+}
+
+.perf-chart-card {
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  margin-bottom: 8px;
+}
+
+.perf-chart-legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 5px;
+  font: 600 9px/1.2 var(--mono);
+}
+
+.perf-legend-series {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.perf-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-strong);
+}
+
+.perf-legend-item i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.perf-legend-item.is-fps i { background: var(--pm-fps); }
+.perf-legend-item.is-cpu i { background: var(--pm-cpu); }
+
+.perf-chart-window {
+  color: var(--ink-muted);
+  font: 500 9px/1 var(--mono);
+  white-space: nowrap;
+}
+
+.perf-chart-frame {
+  position: relative;
+  width: 100%;
+  height: 92px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  cursor: crosshair;
+}
+
+.perf-chart-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.perf-chart-grid {
+  stroke: var(--line);
+  stroke-width: 0.8;
+}
+
+.perf-chart-ref60 {
+  stroke: var(--pm-fps);
+  stroke-opacity: 0.45;
+  stroke-width: 0.9;
+  stroke-dasharray: 3 3;
+}
+
+.perf-chart-axis-text {
+  fill: var(--ink-muted);
+  font: 600 8px var(--mono);
+}
+
+.perf-chart-area-fps { fill: var(--pm-fps-fill); }
+.perf-chart-area-cpu { fill: var(--pm-cpu-fill); }
+
+.perf-chart-line-fps {
+  fill: none;
+  stroke: var(--pm-fps);
+  stroke-width: 1.75;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.perf-chart-line-cpu {
+  fill: none;
+  stroke: var(--pm-cpu);
+  stroke-width: 1.65;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.perf-chart-cursor {
+  stroke: var(--ink-muted);
+  stroke-width: 0.9;
+  stroke-dasharray: 2 2;
+}
+
+.perf-chart-footer {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font: 500 9px/1.3 var(--mono);
+  color: var(--ink-muted);
+  min-width: 0;
+}
+
+.perf-chart-footer span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.perf-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.perf-metric-card {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.perf-metric-label {
+  font: 600 9px/1.2 var(--display);
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.perf-metric-value {
+  font: 700 14px/1.15 var(--mono);
+  color: var(--ink-strong);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.perf-metric-value.is-fps { color: var(--pm-fps); }
+.perf-metric-value.is-cpu { color: var(--pm-cpu); }
+.perf-metric-value.is-warn { color: var(--pm-danger); }
+
+.perf-metric-sub {
+  font: 500 9px/1.2 var(--mono);
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.perf-cpu-bar {
+  height: 3px;
+  width: 100%;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+  margin-top: 1px;
+}
+
+.perf-cpu-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--pm-cpu);
+  transition: width .16s linear;
+}
+
+.perf-details-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.perf-detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  font-size: 10px;
+}
+
+.perf-detail-row > span {
+  color: var(--ink-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.perf-detail-row > strong {
+  font: 600 10px/1.3 var(--mono);
+  color: var(--ink-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  min-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .perf-cpu-bar > i,
+  .canvas-inspector .perf-icon-btn {
+    transition: none;
+  }
+}

@@ -47,6 +47,7 @@ const paths = {
   shape: <><rect x="3" y="4" width="10" height="10" rx="2"/><circle cx="17.5" cy="16.5" r="3.5"/></>,
   text: <><path d="M4 5h16M12 5v14M8 19h8"/></>,
   sticky: <><path d="M5 3h10l4 4v14H5z"/><path d="M15 3v5h4M8 12h8M8 16h5"/></>,
+  timer: <><circle cx="12" cy="13" r="8"/><path d="M9 2h6M12 5V2m0 7v4l3 2"/></>,
   table: <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16M15 4v16"/></>,
   chart: <><path d="M4 20V4M4 20h17"/><path d="M8 16v-5M12 16V7M16 16v-3M20 16V5"/></>,
   math: <><path d="m3 6 5 6-5 6M10 18h4l4-12h3"/><path d="M13 12h7"/></>,

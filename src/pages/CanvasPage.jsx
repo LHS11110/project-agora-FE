@@ -74,6 +74,7 @@ import { CONNECTOR_METRICS_EVENT } from '../canvas/connectors/objectMetrics.js';
 import CanvasVersionDialog from '../canvas/github/CanvasVersionDialog.jsx';
 import CanvasAsCodeDialog from '../canvas/asCode/CanvasAsCodeDialog.jsx';
 import { createBlueprintStore } from '../canvas/runtime/blueprintStore.js';
+import Timer, {initialTimer} from '../canvas/timer/Timer.jsx';
 import CanvasAgentLauncher from '../components/CanvasAgentLauncher.jsx';
 import CanvasAgentPanel from '../components/CanvasAgentPanel.jsx';
 import RuntimeSettingsDialog from '../canvas/runtime/RuntimeSettingsDialog.jsx';
@@ -179,9 +180,11 @@ function CanvasWorkspace() {
   const versionsOpened = useRef(false); if (showVersions) versionsOpened.current = true;
   const [canvasCodeSource, setCanvasCodeSource] = useState(null);
   const [showRuntimeSettings, setShowRuntimeSettings] = useState(false);
+  const [showMonitoring, setShowMonitoring] = useState(false);
   const [showAgent, setShowAgent] = useState(false);
   const [agentBusy, setAgentBusy] = useState(false);
   const { canvasId } = useParams();
+  const [personalTimer, setPersonalTimer] = useState(initialTimer);
   const liveContent=useMemo(()=>createLiveContentRegistry(),[canvasId]);
   const liveContentIds=useSyncExternalStore(liveContent.subscribe,liveContent.getSnapshot,liveContent.getSnapshot);
   const { token, user } = useAuth();
@@ -288,6 +291,24 @@ function CanvasWorkspace() {
   const eraserCursorRef = useRef(null);
   const draftRef = useRef([]);
   const vectorDraftRef = useRef(null);
+  const vectorDragUpdatersRef = useRef(new Set());
+  const vectorDragCallbacksRef = useRef(new Map());
+  const vectorDragRef = useRef((preview) => {
+    for (const fn of vectorDragUpdatersRef.current) fn(preview);
+  });
+  const getVectorDragCallback = useCallback((depth) => {
+    let cb = vectorDragCallbacksRef.current.get(depth);
+    if (!cb) {
+      let current = null;
+      cb = (fn) => {
+        if (current) vectorDragUpdatersRef.current.delete(current);
+        current = typeof fn === 'function' ? fn : null;
+        if (current) vectorDragUpdatersRef.current.add(current);
+      };
+      vectorDragCallbacksRef.current.set(depth, cb);
+    }
+    return cb;
+  }, []);
   const chrome = useCanvasChrome();
   const [canvas, setCanvas] = useState(null);
   const [spatialRevision, setSpatialRevision] = useState(0);
@@ -811,7 +832,7 @@ function CanvasWorkspace() {
     const key = String(id);
     const previous = itemsRef.current[key];
     const mediaOnly = (portfolioViewingRef.current && ['pdf', 'link'].includes(previous?.kind) && update && typeof update === 'object' && Object.keys(update).length > 0 && Object.keys(update).every(key => ['mediaState', 'mediaLoop', 'pdfPage'].includes(key)) || portfolioViewingRef.current && previous?.kind === 'value' && update && typeof update === 'object' && Object.keys(update).length > 0 && Object.keys(update).every(key => ['valueNumber', 'valueText'].includes(key))) && canUseItem(previous, accessRef.current, 'write');
-    if (!(['table', 'chart', 'question', 'value', 'pdf', 'link'].includes(previous?.kind) || ['notebook', 'notebook-cell'].includes(previous?.runtimeRole)) || !hostSessionRef.current.editable || isObjectLocked(previous) || (!canWriteItem(previous) && !mediaOnly)) return false;
+    if (!(['table', 'chart', 'question', 'value', 'pdf', 'link'].includes(previous?.kind) || ['notebook', 'notebook-cell', 'timer'].includes(previous?.runtimeRole)) || !hostSessionRef.current.editable || isObjectLocked(previous) || (!canWriteItem(previous) && !mediaOnly)) return false;
     const nextItem = typeof update === 'function' ? update(previous) : { ...previous, ...update };
     if (!nextItem || nextItem === previous) return false;
     itemsRef.current = { ...itemsRef.current, [key]: nextItem };
@@ -1837,6 +1858,7 @@ function CanvasWorkspace() {
       setToast,
       spacePressedRef,
       startPan,
+      vectorDragRef,
     });
     const touchNavigation = useCanvasTouchNavigation({
       boardRef, setCamera, onStart: point => {
@@ -2157,6 +2179,20 @@ function CanvasWorkspace() {
         baseInspectorHandle.onToggle();
       },
     };
+    const personalTimerElement = useMemo(
+      () => <Timer state={personalTimer} onChange={patch => setPersonalTimer(current => ({ ...current, ...patch }))} />,
+      [personalTimer],
+    );
+    const toggleMonitoring = () => {
+      if (!showMonitoring || panelLayout.isCollapsed('inspector')) {
+        autoOpenedInspectorRef.current = false;
+        panelLayout.setCollapsedState('inspector', false, { persist: true });
+        setShowMonitoring(true);
+      } else {
+        setShowMonitoring(false);
+      }
+    };
+    const closeMonitoring = useCallback(() => setShowMonitoring(false), []);
     const watch = useCanvasWatch({ canvasId, connection, sendRaw, camera, setCamera: applyCanvasCamera, boardRef, state: watchState, setState: setWatchState, onFollow: () => { setPortfolioViewing(false); setPortfolioLocked(false); finishEditing(editingIdRef.current); cancelStageGesture(); cancelPanInertia(); setShowAgent(false); setShowRuntimeSettings(false); setShowCanvasCode(false); setShowVersions(false); } });
     useEffect(() => { if (!watchState.watching_id) return; const block = event => { if (event.target.closest?.('input,textarea,[contenteditable="true"]') || event.key === 'Escape' || event.key === 'Tab') return; event.preventDefault(); event.stopImmediatePropagation(); }; window.addEventListener('keydown', block, true); return () => window.removeEventListener('keydown', block, true); }, [watchState.watching_id]);
     const canvasParticipants = useParticipantProfiles(settings?.participants, token, user);
@@ -2345,8 +2381,8 @@ function CanvasWorkspace() {
           {chrome.collapsed.info && <span className="canvas-chrome-label">{ui("캔버스 정보")}</span>}
           <div id="canvas-info-content" className="canvas-info-content" hidden={chrome.collapsed.info}>
             <div className="canvas-title-group"><div className="canvas-title-copy"><h1 title={canvas?.canvas_name}>{canvas?.canvas_name || ui('캔버스 {id}', { id: canvasId })}</h1></div></div>
-            <div className="canvas-header-right"><div className="canvas-top-right"><LanguageSwitcher />{!chrome.collapsed.info && <button type="button" className={`canvas-voice-trigger${voice.state.active ? ' is-active' : ''}`} title={ui(voice.state.active ? '통화 중' : '음성 통화')} aria-label={ui(voice.state.active ? '통화 중' : '음성 통화')} aria-expanded={!panelLayout.handle('chat').collapsed && communicationTab === 'voice'} aria-controls="canvas-communication-panel" onClick={() => { const panel = panelLayout.handle('chat'); if (!panel.collapsed && communicationTab === 'voice') panel.onToggle(); else { setCommunicationTab('voice'); if (panel.collapsed) panel.onToggle(); } }}><Icon name="microphone" size={16} /><span>{ui(voice.state.active ? '통화 중' : '음성 통화')}</span>{voice.state.active && <i aria-hidden="true" />}</button>}<span className={`connection-pill ${connection}`} role="status" aria-live="polite" title={connection === 'connecting' ? ui("다시 연결하는 중입니다. 캔버스 편집은 계속할 수 있고 변경 사항은 연결 후 저장됩니다.") : connection === 'connected' ? ui("서버에 연결되어 변경 사항을 동기화하고 있습니다.") : ui("서버 연결이 해제되었습니다.")}><i />{connection === 'connected' ? ui("연결됨") : connection === 'connecting' ? ui("연결 중") : ui("연결 해제")}</span><CanvasPresenceStack watch={watch} participants={onlineParticipants} token={token} onManage={() => { setShowSettings(false); setShowParticipants(true); }} /><button className="button button-outline canvas-settings-button" onClick={() => { setShowParticipants(false); setShowSettings(true); }}><Icon name="settings" size={17} /><span>{ui("설정")}</span></button></div></div>
-          </div>{chrome.collapsed.info && <div className="canvas-folded-language"><LanguageSwitcher /><button type="button" className={`canvas-voice-trigger${voice.state.active ? ' is-active' : ''}`} aria-label={ui(voice.state.active ? '통화 중' : '음성 통화')} aria-expanded={!panelLayout.handle('chat').collapsed && communicationTab === 'voice'} aria-controls="canvas-communication-panel" onClick={() => { const panel = panelLayout.handle('chat'); if (!panel.collapsed && communicationTab === 'voice') panel.onToggle(); else { setCommunicationTab('voice'); if (panel.collapsed) panel.onToggle(); } }}><Icon name="microphone" size={16} />{voice.state.active && <i aria-hidden="true" />}</button></div>}
+            <div className="canvas-header-right"><div className="canvas-top-right"><LanguageSwitcher />{!chrome.collapsed.info && <button type="button" className={`canvas-monitor-trigger${showMonitoring ? ' is-active' : ''}`} title={ui(showMonitoring ? '모니터링 닫기' : '모니터링')} aria-label={ui(showMonitoring ? '모니터링 닫기' : '모니터링')} aria-pressed={showMonitoring} onClick={toggleMonitoring}><Icon name="chart" size={16} /><span>{ui('모니터링')}</span></button>}{!chrome.collapsed.info && <button type="button" className={`canvas-voice-trigger${voice.state.active ? ' is-active' : ''}`} title={ui(voice.state.active ? '통화 중' : '음성 통화')} aria-label={ui(voice.state.active ? '통화 중' : '음성 통화')} aria-expanded={!panelLayout.handle('chat').collapsed && communicationTab === 'voice'} aria-controls="canvas-communication-panel" onClick={() => { const panel = panelLayout.handle('chat'); if (!panel.collapsed && communicationTab === 'voice') panel.onToggle(); else { setCommunicationTab('voice'); if (panel.collapsed) panel.onToggle(); } }}><Icon name="microphone" size={16} /><span>{ui(voice.state.active ? '통화 중' : '음성 통화')}</span>{voice.state.active && <i aria-hidden="true" />}</button>}<span className={`connection-pill ${connection}`} role="status" aria-live="polite" title={connection === 'connecting' ? ui("다시 연결하는 중입니다. 캔버스 편집은 계속할 수 있고 변경 사항은 연결 후 저장됩니다.") : connection === 'connected' ? ui("서버에 연결되어 변경 사항을 동기화하고 있습니다.") : ui("서버 연결이 해제되었습니다.")}><i />{connection === 'connected' ? ui("연결됨") : connection === 'connecting' ? ui("연결 중") : ui("연결 해제")}</span><CanvasPresenceStack watch={watch} participants={onlineParticipants} token={token} onManage={() => { setShowSettings(false); setShowParticipants(true); }} /><button className="button button-outline canvas-settings-button" onClick={() => { setShowParticipants(false); setShowSettings(true); }}><Icon name="settings" size={17} /><span>{ui("설정")}</span></button></div></div>
+          </div>{chrome.collapsed.info && <div className="canvas-folded-language"><LanguageSwitcher /><button type="button" className={`canvas-monitor-trigger${showMonitoring ? ' is-active' : ''}`} title={ui(showMonitoring ? '모니터링 닫기' : '모니터링')} aria-label={ui(showMonitoring ? '모니터링 닫기' : '모니터링')} aria-pressed={showMonitoring} onClick={toggleMonitoring}><Icon name="chart" size={16} /><span>{ui('모니터링')}</span></button><button type="button" className={`canvas-voice-trigger${voice.state.active ? ' is-active' : ''}`} aria-label={ui(voice.state.active ? '통화 중' : '음성 통화')} aria-expanded={!panelLayout.handle('chat').collapsed && communicationTab === 'voice'} aria-controls="canvas-communication-panel" onClick={() => { const panel = panelLayout.handle('chat'); if (!panel.collapsed && communicationTab === 'voice') panel.onToggle(); else { setCommunicationTab('voice'); if (panel.collapsed) panel.onToggle(); } }}><Icon name="microphone" size={16} />{voice.state.active && <i aria-hidden="true" />}</button></div>}
         </header>
         {error ? <div className="canvas-error-state"><div className="error-art"><Icon name="grid" size={30} /></div><span className="section-kicker">CANVAS CONNECTION</span><h1>{ui("캔버스를 열 수 없어요.")}</h1><p>{error}</p><div><button className="button button-dark" onClick={() => window.location.reload()}>{ui("다시 연결하기")}</button><Link className="button button-outline" to="/search">{ui("캔버스 목록")}</Link></div></div> : <div className="canvas-workspace resizable-workspace" ref={panelLayout.ref} style={panelLayout.style}>
           <ResizablePanel {...toolsHandle}><CanvasToolPanel onOpenAnchors={uiActions.onOpenAnchors} activeTool={activeTool} onSelectTool={uiActions.onSelectTool} color={color} onColorChange={uiActions.onColorChange} onUploadPdf={uiActions.onUploadPdf} onUploadSheet={uiActions.onUploadSheet} onUploadImage={uiActions.onUploadImage} onUploadMedia={uiActions.onUploadMedia} favoriteColors={favoriteColors} onSaveFavorite={uiActions.onSaveFavorite} /></ResizablePanel>
@@ -2385,7 +2421,7 @@ function CanvasWorkspace() {
               <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true">{(showXAxis || showYAxis) && <CanvasAxisTicks boardRef={boardRef} camera={camera} showXAxis={showXAxis} showYAxis={showYAxis} />}{showXAxis && <span className="coordinate-x" />}{showYAxis && <span className="coordinate-y" />}{(showXAxis || showYAxis) && <i className="coordinate-origin">0</i>}</div>
               <BlurBudgetContext.Provider value={blurBudgetIds}><div className="canvas-scene" ref={sceneRef} style={sceneStyle}>
                 {depthLayers.map((layer, index) => <div className="canvas-depth-layer" key={layer.depth} data-depth={layer.depth} style={{ position: 'absolute', inset: 0, zIndex: index + 1, pointerEvents: 'none' }}>
-                  <Suspense fallback={null}><VectorLayer token={token} graphicsQuality={graphicsQuality} style={vectorLayerStyle} worldSize={boardSize} items={layer.vectors} referenceItems={items} routingRevision={spatialIndex.stats.boundsCalculated} inkItems={layer.inkItems} previewStrokes={layer.depth === 0 ? remoteDrawingStrokes : undefined} camera={camera} onReady={layer.depth === 0 ? uiActions.onVectorDraftReady : undefined} /></Suspense>
+                  <Suspense fallback={null}><VectorLayer token={token} graphicsQuality={graphicsQuality} style={vectorLayerStyle} worldSize={boardSize} items={layer.vectors} referenceItems={items} routingRevision={spatialIndex.stats.boundsCalculated} inkItems={layer.inkItems} previewStrokes={layer.depth === 0 ? remoteDrawingStrokes : undefined} camera={camera} onReady={layer.depth === 0 ? uiActions.onVectorDraftReady : undefined} onDragReady={getVectorDragCallback(layer.depth)} /></Suspense>
                   <div className="canvas-world-layer" style={worldLayerStyle}><PresentationContext.Provider value={portfolioViewing}><VisibilityContext.Provider value={visibilityContextValue}><Suspense fallback={null}><CanvasLayerObjects pendingEntrance={pendingEntrance} objects={layer.domObjects} allItems={items} domSelection={domSelection} editingId={editingId} connectionStartId={connectionStartId} world={boardSize} scale={representationScale} token={token} runtimeStore={runtimeStore} selected={selectedObjectIdSet} singleSelection={hasSingleSelection} activeTool={activeTool} dirtyItems={dirtyItems} editorsByItem={editorsByItem} actions={objectActions} access={capabilities} canWriteItem={uiActions.canWriteItem} canExecuteItem={canExecuteItem} /></Suspense></VisibilityContext.Provider></PresentationContext.Provider></div>
                 </div>)}
                 <div className="canvas-world-layer" style={worldLayerOverlayStyle}>
@@ -2420,7 +2456,7 @@ function CanvasWorkspace() {
               {activeTool === 'anchor' && <div className="draw-cursor-label"><Icon name="anchor" size={13} /> {ui('저장할 위치를 클릭하세요.')}</div>}{activeTool === 'laser' && <div className="draw-cursor-label laser-cursor-label"><Icon name="laser" size={13} />{" " + ui("가리키는 중 · 1.6초 후 사라짐") + ""}</div>}{activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} />{" " + ui("그리는 중") + ""}</div>}{activeTool === 'eraser' && <div className="draw-cursor-label"><Icon name="eraser" size={13} />{" " + ui("드로잉을 드래그해 지우기") + ""}</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? ui("도착 오브젝트 선택") : ui("시작 오브젝트 선택")}</div>}{activeTool === 'link' && !sharePosition && <div className="draw-cursor-label"><Icon name="link" size={13} />{" " + ui("공유 자료를 놓을 위치 선택") + ""}</div>}
             </div>
           </main>
-          <ResizablePanel {...inspectorHandle}><Suspense fallback={null}><CanvasInspectorPanel onSaveAnchor={uiActions.onSaveAnchor} portfolioFrames={framePages} portfolioActions={portfolioActions} portfolioViewing={portfolioViewing} graphicsQuality={graphicsQuality} changeGraphicsQuality={uiActions.changeGraphicsQuality} spatialIndex={spatialIndex} updateContentSetting={uiActions.updateContentSetting} updateChartItem={uiActions.updateChartItem} onNavigateObject={uiActions.onNavigateObject} onOpenComments={uiActions.onOpenComments} {...{
+          <ResizablePanel {...inspectorHandle}><Suspense fallback={null}><CanvasInspectorPanel personalTimer={personalTimerElement} onSaveAnchor={uiActions.onSaveAnchor} portfolioFrames={framePages} portfolioActions={portfolioActions} portfolioViewing={portfolioViewing} graphicsQuality={graphicsQuality} changeGraphicsQuality={uiActions.changeGraphicsQuality} spatialIndex={spatialIndex} updateContentSetting={uiActions.updateContentSetting} updateChartItem={uiActions.updateChartItem} onNavigateObject={uiActions.onNavigateObject} onOpenComments={uiActions.onOpenComments} {...{
             activeTool,
             canvasId,
             canvasParticipants: mentionParticipants,
@@ -2468,6 +2504,8 @@ function CanvasWorkspace() {
             setNoteColor: uiActions.setNoteColor,
             setShapeType: uiActions.setShapeType,
             setShowSettings: uiActions.setShowSettings,
+            showMonitoring,
+            onCloseMonitoring: closeMonitoring,
             settings,
             capabilities,
             updateItemGroups: uiActions.updateItemGroups,

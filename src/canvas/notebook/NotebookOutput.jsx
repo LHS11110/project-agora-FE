@@ -1,15 +1,11 @@
-import {useMemo,useState} from 'react';
+import {useMemo} from 'react';
 import {ui} from '../../i18n/locale.js';
 import {notebookHtml} from './notebookData.js';
-import StaticMarkupPreview from '../content/StaticMarkupPreview.jsx';
-import {useLiveContent} from '../content/LiveContentContext.js';
-function RichOutput({source,svg,fontSize,ownerId}){
- const live=useLiveContent(ownerId,'notebook'),[opened,setOpened]=useState(false),active=opened&&live.active&&opened===live.generation;
- const document=useMemo(()=>active?notebookHtml(source,fontSize):'', [active,source,fontSize]);
- const svgUri=useMemo(()=>svg?'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(source):null,[svg,source]);
- const show=()=>setOpened(live.activate());
+import '../content/static-preview.css';
+function RichOutput({source,svg,fontSize}){
+ const document=useMemo(()=>notebookHtml(source,fontSize),[source,fontSize]);
  const height=svg?240:Math.max(80,Math.min(480,(source.match(/<tr\b/gi)?.length||5)*28+32));
- return active?<div className="notebook-live-output"><button type="button" data-object-action onClick={()=>{setOpened(false);live.deactivate();}}>{ui('실제 출력 닫기')}</button><iframe title={ui(svg?'노트북 그래프':'노트북 HTML 출력')} sandbox="" referrerPolicy="no-referrer" style={{height}} srcDoc={document}/></div>:svg?<div className="notebook-live-output"><img className="notebook-static-svg" alt={ui('노트북 그래프')} src={svgUri}/><button type="button" data-object-action onPointerDown={event=>event.stopPropagation()} onClick={show}>{ui('실제 출력 보기')}</button></div>:<StaticMarkupPreview source={source} revision={fontSize} fontSize={fontSize} onActivate={show}/>;
+ return <div className="notebook-live-output"><iframe title={ui(svg?'노트북 그래프':'노트북 HTML 출력')} sandbox="" referrerPolicy="no-referrer" style={{height}} srcDoc={document}/></div>;
 }
 export default function NotebookOutput({output,fontSize,ownerId}){
  const o=output||{},d=o.data||{},plain=value=>Array.isArray(value)?value.join(''):String(value??'');

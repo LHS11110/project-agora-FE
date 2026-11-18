@@ -113,4 +113,19 @@ test('rasterDescriptor preserves shadows consistently across rich overviews and 
   assert.equal(hiddenDesc.shadow.enabled, false);
 
   assert.notEqual(richPreviewSignature(note), richPreviewSignature({ ...note, text: 'changed' }));
+
+  const htmlItem = { id: 'h1', kind: 'code', language: 'html', code: '<h1>Live</h1>', x: 0.1, y: 0.1, width: 0.25, height: 0.2 };
+  const notebookWithOutput = {
+    id: 'nb1', kind: 'shape', shapeType: 'rectangle', runtimeRole: 'notebook',
+    x: 0.1, y: 0.1, width: 0.3, height: 0.22,
+    notebookResults: { cell1: { exitCode: 0, outputs: [{ output_type: 'display_data', data: { 'text/html': '<p>Result</p>' } }] } },
+  };
+  const cellWithOutput = {
+    id: 'nbc1', kind: 'shape', shapeType: 'rectangle', runtimeRole: 'notebook-cell',
+    x: 0.1, y: 0.4, width: 0.3, height: 0.2,
+    notebookResult: { exitCode: 0, outputs: [{ output_type: 'display_data', data: { 'image/svg+xml': '<svg></svg>' } }] },
+  };
+  assert.equal(isOverviewProxy(htmlItem, world, 0.08, 'high'), false);
+  assert.equal(isOverviewProxy(notebookWithOutput, world, 0.08, 'high'), false);
+  assert.equal(isOverviewProxy(cellWithOutput, world, 0.08, 'high'), false);
 });

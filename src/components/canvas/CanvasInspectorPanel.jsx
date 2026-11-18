@@ -16,6 +16,7 @@ import { memo, useEffect, useId, useMemo, useState } from 'react';
 import ObjectDepthControls from '../../canvas/ObjectDepthControls.jsx';
 import CanvasBackgroundControls from '../../canvas/background/CanvasBackgroundControls.jsx';
 import ObjectRecoveryControls from '../../canvas/diagnostics/ObjectRecoveryControls.jsx';
+import PerformanceMonitorSection from '../../canvas/diagnostics/PerformanceMonitorSection.jsx';
 import ObjectClipboardControls from '../../canvas/clipboard/ObjectClipboardControls.jsx';
 import UserGroupControls from '../../canvas/userGroups/UserGroupControls.jsx';
 import UserGroupToolSettings from '../../canvas/userGroups/UserGroupToolSettings.jsx';
@@ -97,6 +98,8 @@ const CanvasInspectorPanel = memo(function CanvasInspectorPanel({
   setNoteColor,
   setShapeType,
   setShowSettings,
+  showMonitoring = false,
+  onCloseMonitoring,
   backgroundColor,
   setBackgroundColor,
   settings,
@@ -110,7 +113,7 @@ const CanvasInspectorPanel = memo(function CanvasInspectorPanel({
   shapeVisualStyle, setShapeVisualStyle, shapeStrokeEnabled, setShapeStrokeEnabled, shapeBorderWidth, setShapeBorderWidth, updateShapeAppearance,
   connectorVisualStyle, setConnectorVisualStyle,
   portfolioActions, portfolioViewing, portfolioFrames,
-  showGrid, gridSpacing=20, changeGridSpacing, snapToGrid=false, toggleSnapToGrid, showXAxis, showYAxis, toggleXAxis, toggleYAxis,
+  personalTimer, showGrid, gridSpacing=20, changeGridSpacing, snapToGrid=false, toggleSnapToGrid, showXAxis, showYAxis, toggleXAxis, toggleYAxis,
   strokeWidth,
   penBrush, penOpacity, changePenBrush, changePenOpacity,
   tableConfig,
@@ -169,6 +172,7 @@ const CanvasInspectorPanel = memo(function CanvasInspectorPanel({
     ? ui(KIND_EDIT_LABELS[selectedItem?.kind] || '객체 편집')
     : ui('객체 {count}개 편집', { count: selectedObjectIds.length });
   const envSections = <>
+    <details className="inspector-section"><summary>{ui('개인 타이머')}</summary>{personalTimer}</details>
     <ObjectRecoveryControls items={items} spatialIndex={spatialIndex} onDelete={deleteItem} />
     <GraphicsQualityControls value={graphicsQuality} onChange={changeGraphicsQuality} />
     <section className="inspector-section"><div className="inspector-label">{ui("화면 모드")}</div><div className="theme-switch" role="group" aria-label={ui("테마 선택")}><button className={theme === 'light' ? 'active' : ''} aria-pressed={theme === 'light'} onClick={() => changeTheme('light')}><Icon name="sun" size={16} />{ui("라이트")}</button><button className={theme === 'dark' ? 'active' : ''} aria-pressed={theme === 'dark'} onClick={() => changeTheme('dark')}><Icon name="moon" size={16} />{ui("다크")}</button></div></section>
@@ -185,6 +189,7 @@ const CanvasInspectorPanel = memo(function CanvasInspectorPanel({
             <button className="icon-button" onClick={() => setShowSettings(true)} aria-label={ui("캔버스 세부 설정")}><Icon name="settings" size={18} /></button>
           </div>}
         </div>
+        {showMonitoring && <PerformanceMonitorSection items={items} onClose={onCloseMonitoring} />}
         {hasSelection && <div className="inspector-object-editor">
           {(selectedObjectIds.length > 1 || selectionSummary.grouped) && <section className="inspector-section selection-actions-section"><div className="selection-actions-heading"><strong>{selectedObjectIds.length}{ui("개 오브젝트 선택됨")}</strong><button type="button" onClick={() => selectItems([])}>{ui("선택 해제")}</button></div><small className="inspector-hint">{ui("빈 공간을 드래그해 여러 개를 선택하고, Shift를 누른 채 개별 선택을 더할 수 있어요.")}</small>{selectionSummary.savedText && <small className="inspector-hint">{ui("텍스트와 코드는 Ctrl + S로 저장하며, 포스트잇은 변경 후 자동 저장합니다.")}</small>}<div className="selection-actions-buttons"><button type="button" className="button button-dark" disabled={!selectionIsSingleGroup && selectionSummary.groupable < 2} onClick={() => changeSelectionGroup(!selectionIsSingleGroup)}>{selectionIsSingleGroup ? ui("그룹 해제") : ui("그룹화")}</button></div></section>}
           <button type="button" className="inspector-secondary-action" onClick={() => onSaveAnchor(selectedObjectIds)}><Icon name="anchor" size={14} /><span>{ui('위치 저장')}</span></button>

@@ -16,7 +16,7 @@ export const DRAG_CREATE_THRESHOLD_PX = 6;
 
 export const BOX_CREATION_TOOLS = new Set([
   'link', 'user-group', 'table', 'frame', 'project', 'question', 'chart',
-  'continuous-value', 'discrete-value', 'notebook', 'terminal', 'executor',
+  'timer', 'continuous-value', 'discrete-value', 'notebook', 'terminal', 'executor',
   'execution-output', 'html', 'css', 'js', 'shape', 'text', 'markdown',
   'math', 'code', 'note',
 ]);
@@ -144,6 +144,8 @@ export function buildCreatedObject(tool, placement, context = {}) {
   } else if (tool === 'chart') {
     item = { kind: 'chart', ...newChartData(), ...box(0.3, 0.25), permission };
     errorToast = '실시간 서버에 연결된 뒤 그래프를 놓을 수 있어요.';
+  } else if (tool === 'timer') {
+    item = {kind:'shape', shapeType:'rectangle', runtimeRole:'timer', timerDuration:300, timerRemaining:300000, timerDeadline:0, ...box(.24,.27), permission};
   } else if (tool === 'continuous-value' || tool === 'discrete-value') {
     const base = createValue(tool === 'continuous-value' ? 'real' : 'integer');
     item = { ...base, ...box(base.width, base.height), permission };

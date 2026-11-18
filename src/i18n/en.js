@@ -1,5 +1,9 @@
 // UI messages only. User-authored content is never translated.
 export default {
+  "개인 타이머": "Personal timer",
+  "타이머": "Timer",
+  "시간(초)": "Duration (seconds)",
+  "시간 종료": "Time is up",
  '복구':'Restore',
  '현재 브랜치의 이력만 표시합니다. 이미 병합된 커밋은 포함됩니다.':'Only the current branch history is shown, including commits already merged into it.',
 
@@ -2841,4 +2845,30 @@ export default {
   "목록에서 제거": "Remove from list",
   "플레이어 정보": "Playlist loader",
   "미디어 중계 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.": "The media relay is unavailable. Please try again shortly.",
+
+  // Canvas Performance Monitor
+  "모니터링": "Monitor",
+  "성능 모니터링": "Performance Monitor",
+  "모니터링 재개": "Resume monitoring",
+  "모니터링 일시정지": "Pause monitoring",
+  "그래프 초기화": "Reset chart",
+  "모니터링 닫기": "Close monitor",
+  "{v0}/{v1}개 · 0.2s": "{v0}/{v1} · 0.2s",
+  "0.2초 단위 최대 30개 FPS 및 CPU 사용률 그래프": "FPS and CPU usage chart across up to 30 samples at 0.2s intervals",
+  "평균 {v0} FPS · 최저 {v1} · 최고 CPU {v2}%": "Avg {v0} FPS · Min {v1} · Peak CPU {v2}%",
+  "0.2초 간격으로 측정 중…": "Sampling every 0.2s…",
+  "평균 {v0} · 최저 {v1}": "Avg {v0} · Min {v1}",
+  "CPU (메인 스레드)": "CPU (Main Thread)",
+  "최고 {v0}% · {v1}코어": "Peak {v0}% · {v1} cores",
+  "최고 {v0}%": "Peak {v0}%",
+  "프레임 시간": "Frame Time",
+  "최대 {v0}ms": "Max {v0}ms",
+  "JS 힙 메모리": "JS Heap Memory",
+  "미지원": "Unsupported",
+  "한도 {v0}MB": "Limit {v0}MB",
+  "브라우저 측정": "Browser metric",
+  "렌더러": "Renderer",
+  "표시 객체": "Visible Objects",
+  "아틀라스 · 래스터": "Atlas · Raster",
+  "{v0}p · +{v1}/0.2s": "{v0}p · +{v1}/0.2s",
 };

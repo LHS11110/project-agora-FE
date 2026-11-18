@@ -281,3 +281,71 @@ test('only the elected peer sends the initial offer, avoiding TURN gathering rol
   call.self='a';link.pc.onnegotiationneeded();await link.serial;assert.equal(link.pc.offers,1);
  }finally{call.close();}
 });
+
+test('seamless token rotation preserves connected WebRTC audio, skips duplicate ICE restarts, and hands off without mute or chimes',async()=>{
+ const cues=[];
+ const tracks=[{kind:'audio',enabled:true,stop(){},getSettings(){return {channelCount:1};}}];
+ const media={getUserMedia:async()=>({getAudioTracks:()=>tracks,getTracks:()=>tracks})};
+ class ConfigPeer extends FakePeer{
+  constructor(config){super();this.config=config;}
+  getConfiguration(){return this.config;}
+  setConfiguration(config){this.config=config;}
+ }
+ const servers=[{urls:'turns:frelog.p-e.kr:443?transport=tcp',username:'user1',credential:'cred1'}];
+ const call=new CanvasVoiceCall({send:()=>true,media,Peer:ConfigPeer,audio:()=>({muted:false,volume:1,paused:false,pause(){this.paused=true;},play:async()=>{}}),AudioContext:null,onCue:c=>cues.push(c),handoffTimeout:300,leaveCueGrace:60});
+ try{
+  call.handle({type:'rtc_peers',self_peer_id:'a1',peers:[{peer_id:'b1',nickname:'PeerB',tag_number:2,voice_active:true}],media_relay:{ice_servers:servers,expires_at:Math.floor(Date.now()/1000)+86400}});
+  await call.join();
+  const linkOld=call.links.get('b1');
+  linkOld.pc.connectionState='connected';linkOld.pc.iceConnectionState='connected';
+  linkOld.pc.ontrack({streams:[{}],track:{kind:'audio'}});
+  linkOld.pc.onconnectionstatechange();
+
+  // Repeating identical relay credentials must not restart ICE.
+  call.applyRelay({ice_servers:servers,expires_at:Math.floor(Date.now()/1000)+86400});
+  assert.equal(linkOld.pc.restarts,0);
+
+  // Seamless broker rotation keeps active audio/mic live via handoff instead of muting or dropping.
+  call.reconnect({seamless:true});
+  assert.equal(call.snapshot.reconnecting,false);
+  assert.equal(tracks[0].enabled,true);
+  assert.equal(call.handoffs.size,1);
+  assert.equal(linkOld.audio.muted,false);
+  assert.notEqual(linkOld.pc.connectionState,'closed');
+
+  // Rejoined with new self_peer_id while PeerB keeps its peer_id -> new link stays muted until connected, then atomically replaces handoff.
+  call.handle({type:'rtc_peers',self_peer_id:'a2',peers:[{peer_id:'b1',nickname:'PeerB',tag_number:2,voice_active:true}],media_relay:{ice_servers:servers,expires_at:Math.floor(Date.now()/1000)+86400}});
+  const linkNew=call.links.get('b1');
+  assert.equal(linkNew.waitingHandoff,true);
+  linkNew.pc.ontrack({streams:[{}],track:{kind:'audio'}});
+  assert.equal(linkNew.audio.muted,true,'replacement link stays muted until ICE/DTLS connects');
+  assert.equal(call.snapshot.participants[0].status,'connected');
+
+  linkNew.pc.connectionState='connected';linkNew.pc.iceConnectionState='connected';
+  linkNew.pc.onconnectionstatechange();
+  assert.equal(linkNew.waitingHandoff,false);
+  assert.equal(linkNew.audio.muted,false);
+  assert.equal(call.handoffs.size,0);
+  assert.equal(linkOld.pc.connectionState,'closed');
+  assert.deepEqual(cues,['voice_join']);
+
+  // PeerB rotating within leaveCueGrace keeps PeerB handoff live and suppresses leave/join chimes.
+  linkNew.pc.connectionState='connected';linkNew.pc.iceConnectionState='connected';
+  call.handle({type:'rtc_peer_left',peer_id:'b1'});
+  call.handle({type:'voice_notice',event:'voice_leave',peer_id:'b1'});
+  assert.equal(call.handoffs.size,1);
+  await wait(15);
+  call.handle({type:'rtc_peer_joined',peer:{peer_id:'b2',nickname:'PeerB',tag_number:2,voice_active:true}});
+  call.handle({type:'voice_notice',event:'voice_join',peer_id:'b2'});
+  await wait(80);
+  assert.deepEqual(cues,['voice_join'],'brief credential rotation must not play leave/join chimes');
+
+  // Genuine departure past leaveCueGrace plays voice_leave.
+  const b2Link=call.links.get('b2');
+  b2Link.pc.connectionState='connected';b2Link.pc.iceConnectionState='connected';
+  call.handle({type:'rtc_peer_left',peer_id:'b2'});
+  call.handle({type:'voice_notice',event:'voice_leave',peer_id:'b2'});
+  await wait(90);
+  assert.deepEqual(cues,['voice_join','voice_leave']);
+ }finally{call.close();}
+});

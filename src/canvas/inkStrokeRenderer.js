@@ -147,7 +147,16 @@ export function createInkStrokeRenderer(host, vectorCanvas) {
       if(entries.length || savedPainted)prepare(saved,savedContext);
       savedPainted=entries.length>0;
       saved.style.display=savedPainted?'':'none';
-      for(const [,stroke] of entries)drawStroke(savedContext,stroke,state.width,state.height);
+      for(const [id,stroke] of entries){
+        if(state.dragPreview?.ids?.has(String(id))){
+          savedContext.save();
+          savedContext.translate((state.dragPreview.dx||0)*state.width,(state.dragPreview.dy||0)*state.height);
+          drawStroke(savedContext,stroke,state.width,state.height);
+          savedContext.restore();
+        }else{
+          drawStroke(savedContext,stroke,state.width,state.height);
+        }
+      }
       renderDraft(state.draft);
     },
     renderDraft,

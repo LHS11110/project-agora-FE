@@ -1,3 +1,4 @@
+import Timer from './timer/Timer.jsx';
 import {hasAnimation} from './portfolio/portfolioModel.js';
 import {useObjectAnimation} from './portfolio/animationStore.js';
 import AnimatedVector from './portfolio/AnimatedVector.jsx';
@@ -262,6 +263,7 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
     <svg className="portfolio-frame-outline" width="100%" height="100%"><rect x="1" y="1" width="calc(100% - 2px)" height="calc(100% - 2px)" rx={frameRadius} ry={frameRadius} fill="none" style={frameStroke.explicit?{stroke:frameStroke.enabled?frameStroke.color:'none',strokeWidth:frameStroke.width,strokeDasharray:frameDash}:undefined}/><rect className="portfolio-frame-hit" x="1" y="1" width="calc(100% - 2px)" height="calc(100% - 2px)" rx={frameRadius} ry={frameRadius}/></svg>
     <span className="portfolio-frame-caption">{item.title||ui('프레임')}</span>
   </div>);}
+  if (item.kind === 'shape' && item.runtimeRole==='timer') return withResizeHandles(<div className={classes} style={style} {...handlers}><Timer state={item} onChange={readOnly||item.locked?undefined:contentActions.change}/></div>);
   if (item.kind === 'shape' && item.runtimeRole==='notebook') return withResizeHandles(<div className={`${classes} notebook-object`} style={style} {...handlers}><NotebookObject id={id} item={item} cellItems={notebookCells} store={runtimeStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} canExecute={canExecute} onChange={onQuestionChange}/></div>);
   if (item.kind === 'shape' && item.runtimeRole==='notebook-cell') return withResizeHandles(<div className={`${classes} notebook-cell-object`} style={style} {...handlers}><NotebookCellObject id={id} item={item} notebook={notebookParent} notebookSiblings={notebookSiblingCells} notebookOrder={notebookOrder} notebookCellCount={notebookCellCount} store={runtimeStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} canExecute={canExecute} onChange={onQuestionChange}/></div>);
   if (item.kind === 'shape' && item.runtimeRole==='terminal') return withResizeHandles(<div className={`${classes} terminal-object`} style={style} {...handlers}><TerminalObject id={id} item={item} store={runtimeStore} selected={selected && activeTool==='select'} canExecute={canExecute}/></div>);

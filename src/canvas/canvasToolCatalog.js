@@ -26,6 +26,7 @@ export const canvasToolCategories = [
     {id:'frame',label:'프레임',description:'발표 화면 프레임',icon:'grid'},
     {id:'project',label:'프로젝트 관리',description:'이슈·칸반·스크럼·스프린트·로드맵',icon:'table'},
     { id: 'continuous-value', label: '연속 값', description: '실수 슬라이더와 수치 입력', icon: 'settings' },
+    { id: 'timer', label: '타이머', icon: 'timer' },
     { id: 'discrete-value', label: '이산 값', description: '정수·버튼·선택·문자 입력', icon: 'table' },
     { id: 'notebook', label: '주피터 노트북', description: '셀 편집과 표·그래프·이미지 출력', icon: 'document' },
     { id: 'terminal', label: '터미널', description: '캔버스 VM 셸', icon: 'code' },

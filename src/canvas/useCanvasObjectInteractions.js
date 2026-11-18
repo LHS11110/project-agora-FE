@@ -49,6 +49,7 @@ export function useCanvasObjectInteractions(options) {
     setToast,
     spacePressedRef,
     startPan,
+    vectorDragRef,
   } = options;
   const commitGeometry = (next,ids) => {
     for(const id of ids)inheritConnectorObjectSize(itemsRef.current[id],next[id]);
@@ -120,15 +121,20 @@ export function useCanvasObjectInteractions(options) {
     const moveTargets=new Set(targetIds);for(const targetId of targetIds)if(itemsRef.current[targetId]?.kind==='frame')for(const memberId of frameMemberIds(targetId)){const member=itemsRef.current[memberId];if(member&&(member.locked||!canWriteItem(member))){setToast(OBJECT_LOCK_MESSAGE);return;}moveTargets.add(memberId);}
     const movableIds = [...moveTargets].filter((targetId) => itemsRef.current[targetId] && !isObjectLocked(itemsRef.current[targetId]) && canWriteItem(itemsRef.current[targetId]) && !['connector'].includes(itemsRef.current[targetId].kind));
     if (!movableIds.length || !beginObjectMove(movableIds)) return;
+    const movingSet = new Set(movableIds);
+    const domElements = [...(sceneRef.current?.querySelectorAll('[data-item-id]') || [])].filter((node) => movingSet.has(node.dataset.itemId));
+    const connIndex = spatialIndexRef?.current?.connectionIndex;
+    const hasAttachedConnectors = connIndex
+      ? connIndex.related(movableIds).size > 0
+      : Object.values(itemsRef.current).some((candidate) => candidate?.kind === 'connector' && (movingSet.has(String(candidate.from)) || movingSet.has(String(candidate.to))));
+    const fastPreview = !hasAttachedConnectors;
     if (movableIds.length > 1) {
       const initialItems = Object.fromEntries(movableIds.map((targetId) => [targetId, itemsRef.current[targetId]]));
-      const moving=new Set(movableIds);
-      const elements=[...(sceneRef.current?.querySelectorAll('[data-item-id]') || [])].filter(node=>moving.has(node.dataset.itemId));
-      elements.forEach((element) => element.classList.add('object-dragging', 'multi-object-dragging'));
-      dragRef.current = { mode: 'multi-move', ids: movableIds, initialItems, startPoint: start, lastMove:{dx:0,dy:0}, touchStart, elements };
+      domElements.forEach((element) => element.classList.add('object-dragging', 'multi-object-dragging'));
+      dragRef.current = { mode: 'multi-move', ids: movableIds, movingSet, domElements, fastPreview, initialItems, startPoint: start, lastMove: { dx: 0, dy: 0 }, touchStart, elements: domElements };
     } else {
       objectElement.classList.add('object-dragging');
-      dragRef.current = { mode: 'move', id, initial: item, offsetX: start.x - (item.x || 0), offsetY: start.y - (item.y || 0), startX: start.x, startY: start.y, touchStart, element: objectElement };
+      dragRef.current = { mode: 'move', id, movingSet, domElements: domElements.length ? domElements : [objectElement], fastPreview, initial: item, offsetX: start.x - (item.x || 0), offsetY: start.y - (item.y || 0), startX: start.x, startY: start.y, lastMove: { dx: 0, dy: 0 }, touchStart, element: objectElement };
     }
     captureObjectPointer(boardRef.current, dragRef.current, event);
   };
@@ -201,29 +207,70 @@ export function useCanvasObjectInteractions(options) {
     };
     captureObjectPointer(boardRef.current, dragRef.current, event);
   };
-  const moveStateRef = useRef({ scheduled: false, token: 0, disposed: false });
+  const moveStateRef = useRef({ scheduled: false, rafId: 0, token: 0, disposed: false });
   const pendingMoveRef = useRef(null);
+  const clearFastDragPreview = (drag) => {
+    if (!drag) return;
+    for (const element of drag.domElements || []) {
+      if (element?.style) element.style.translate = '';
+    }
+    for (const frame of drag.rotationFrames || []) {
+      if (frame?.style) frame.style.translate = '';
+    }
+    vectorDragRef?.current?.(null);
+  };
   const cancelScheduledMove = () => {
+    if (moveStateRef.current.rafId && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(moveStateRef.current.rafId);
+    }
+    moveStateRef.current.rafId = 0;
     moveStateRef.current.scheduled = false;
     moveStateRef.current.token += 1;
     pendingMoveRef.current = null;
   };
+  const applyScheduledMove = (pending) => {
+    const { drag, dx, dy } = pending;
+    if (drag.fastPreview) {
+      drag.lastMove = { dx, dy };
+      const pxX = dx * boardSize.width;
+      const pxY = dy * boardSize.height;
+      const translate = dx || dy ? `${pxX}px ${pxY}px` : '';
+      for (const element of drag.domElements || []) {
+        if (element?.style && element.style.translate !== translate) element.style.translate = translate;
+      }
+      const frames = drag.rotationFrames?.length
+        ? drag.rotationFrames
+        : (drag.rotationFrames = [...(sceneRef.current?.querySelectorAll('.object-rotation-frame') || [])]);
+      for (const frame of frames) {
+        if (frame?.style && frame.style.translate !== translate) frame.style.translate = translate;
+      }
+      vectorDragRef?.current?.(dx || dy ? { ids: drag.movingSet, dx, dy } : null);
+      return;
+    }
+    if (previewObjectMove(dx, dy) && drag.mode === 'multi-move') {
+      drag.lastMove = { dx, dy };
+    }
+  };
   const flushScheduledMove = () => {
+    if (moveStateRef.current.rafId && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(moveStateRef.current.rafId);
+    }
+    moveStateRef.current.rafId = 0;
     moveStateRef.current.scheduled = false;
     moveStateRef.current.token += 1;
     const pending = pendingMoveRef.current;
     pendingMoveRef.current = null;
     if (!pending || dragRef.current !== pending.drag) return;
-    if (previewObjectMove(pending.dx, pending.dy) && pending.drag.mode === 'multi-move') {
-      pending.drag.lastMove = { dx: pending.dx, dy: pending.dy };
-    }
+    applyScheduledMove(pending);
   };
   const scheduleObjectMovePreview = (drag, dx, dy) => {
     pendingMoveRef.current = { drag, dx, dy };
     if (!moveStateRef.current.scheduled) {
       moveStateRef.current.scheduled = true;
       const token = (moveStateRef.current.token += 1);
-      queueMicrotask(() => {
+      const scheduleFrame = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn) => setTimeout(fn, 0);
+      moveStateRef.current.rafId = scheduleFrame(() => {
+        moveStateRef.current.rafId = 0;
         if (!moveStateRef.current.disposed && moveStateRef.current.scheduled && moveStateRef.current.token === token) {
           flushScheduledMove();
         }
@@ -308,6 +355,10 @@ export function useCanvasObjectInteractions(options) {
     dragRef.current = null;
     releaseObjectPointer(drag);
     if(['move','multi-move'].includes(drag.mode)){
+      clearFastDragPreview(drag);
+      if (event?.type === 'pointerup' && drag.fastPreview && drag.lastMove) {
+        previewObjectMove(drag.lastMove.dx, drag.lastMove.dy);
+      }
       for(const element of drag.elements||[drag.element])element?.classList.remove('object-dragging','multi-object-dragging');
       finishObjectMove(event?.type==='pointercancel');refreshSpatialIndex();return;
     }

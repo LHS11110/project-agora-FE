@@ -39,7 +39,7 @@ export class WgpuSceneBatcher {
     this.batchCounts = counts;
   }
 
-  sync(renderer, ordered) {
+  sync(renderer, ordered, dragPreview = null) {
     const length = ordered.length;
     this.ensureCapacity(length);
     const f32 = this.f32;
@@ -47,6 +47,9 @@ export class WgpuSceneBatcher {
     let batchTexIds = this.batchTexIds;
     let batchStarts = this.batchStarts;
     let batchCounts = this.batchCounts;
+    const dragIds = dragPreview?.ids;
+    const dragDx = dragIds?.size ? (dragPreview.dx || 0) : 0;
+    const dragDy = dragIds?.size ? (dragPreview.dy || 0) : 0;
 
     let instanceCount = 0;
     let currentTexId = 0;
@@ -63,8 +66,9 @@ export class WgpuSceneBatcher {
       const base = instanceCount * WORDS_PER_INSTANCE;
       const centerX = descriptor.centerX;
       const centerY = descriptor.centerY;
-      f32[base] = descriptor.x + centerX;
-      f32[base + 1] = descriptor.y + centerY;
+      const shifted = Boolean(dragIds && dragIds.has(record.id));
+      f32[base] = descriptor.x + centerX + (shifted ? dragDx : 0);
+      f32[base + 1] = descriptor.y + centerY + (shifted ? dragDy : 0);
       f32[base + 2] = raster.left - centerX;
       f32[base + 3] = raster.top - centerY;
       f32[base + 4] = raster.width;

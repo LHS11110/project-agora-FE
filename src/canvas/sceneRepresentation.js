@@ -6,10 +6,15 @@ import { objectFontSize } from './objectSize.js';
 import { richPreviewSignature } from './richPreviewRaster.js';
 const richKinds=new Set(['project','text','code','math','note','table','chart','value','question','image','link','pdf','user-group']);
 const colors={project:'#dfe8f3',value:'#e4def7',text:'#e1e9e2',code:'#dce9df',math:'#e7def2',note:'#f3ebce',table:'#dfe6ef',chart:'#e6e1f4',question:'#eae3f8',image:'#eaded4',link:'#eaded4',pdf:'#eeded7','user-group':'#e7def2'};
+function hasNotebookOutputs(item){
+  if(item?.runtimeRole==='notebook-cell')return Boolean(item?.notebookResult?.error||item?.notebookResult?.outputs?.length);
+  if(item?.runtimeRole==='notebook')return Boolean(item?.notebookResults&&Object.values(item.notebookResults).some(result=>result?.error||result?.outputs?.length));
+  return false;
+}
 // Small rich objects use overview rendering. Selecting or zooming restores
 // their full renderer; persisted objects are never replaced.
 export function isOverviewProxy(item,world,scale,quality='low'){
-  if(isHtmlContent(item))return false;
+  if(isHtmlContent(item)||hasNotebookOutputs(item))return false;
   const heightValue=Number(item?.height)>0?item.height:isRasterCode(item)?codePreviewHeight(item,world.height)/world.height:0;
   if(!(richKinds.has(item?.kind)||item?.runtimeRole) || !(Number(item.width)>0 && heightValue>0))return false;
   const width=item.width*world.width*scale,height=heightValue*world.height*scale;

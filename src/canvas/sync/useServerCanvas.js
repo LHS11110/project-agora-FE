@@ -85,7 +85,7 @@ export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsR
   },[]);
   const previewObjectMove=useCallback((dx,dy)=>{
     const session=sessionRef.current,operation={...session.movePreview,dx,dy};
-    try{validateTranslation(operation);assertAccessOperations(working.current,[operation],accessRef?.current);assertObjectOperations(working.current,[operation]);return session.previewMove(dx,dy);}
+    try{validateTranslation(operation);return session.previewMove(dx,dy);}
     catch{return false;}
   },[]);
   const finishObjectMove=useCallback((cancel=false)=>{

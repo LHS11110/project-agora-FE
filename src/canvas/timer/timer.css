@@ -1,0 +1,5 @@
+.canvas-timer { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; height:100%; padding:12px; box-sizing:border-box; background:var(--surface,#fff); border-radius:inherit; color:var(--ink-strong,#253248); overflow:auto; }
+.canvas-timer output { font-size:2em; font-variant-numeric:tabular-nums; line-height:1.1; }
+.canvas-timer form,.canvas-timer>div { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:6px; }
+.canvas-timer input,.canvas-timer button { font:inherit; border:1px solid var(--line,#ccd4dc); background:var(--surface,#fff); color:inherit; border-radius:6px; padding:4px 7px; }
+.canvas-timer input { width:5em; }

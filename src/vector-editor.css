@@ -48,12 +48,11 @@
 .canvas-stage.laser-mode .canvas-object,.tutorial-stage.laser-mode .tutorial-scene .tutorial-item{cursor:crosshair!important}
 .canvas-stage .canvas-object.vector-object-hit{transform:none}
 .canvas-object.selected{outline:1px solid #c28b43;outline-offset:2px}
-.canvas-object.multi-object-dragging{filter:drop-shadow(0 12px 10px #3045383d)}
+.canvas-object.multi-object-dragging{will-change:translate}
 .canvas-object-connector.selected{outline:none}
-.canvas-object.object-dragging{z-index:12}
+.canvas-object.object-dragging{z-index:12;will-change:translate}
 .canvas-object-connector.movable{cursor:pointer}
-.canvas-object.object-dragging.sticky-note-object{filter:drop-shadow(0 20px 18px #30453852)}
-.canvas-object.object-dragging.canvas-table-object,.canvas-object.object-dragging.image-object,.canvas-object.object-dragging.code-object{filter:drop-shadow(0 17px 15px #30453840)}
+.canvas-stage.object-gesture-active .canvas-floating-context-bar{opacity:0;pointer-events:none}
 .vector-object-hit{background:transparent;overflow:visible;touch-action:none}
 .connector-hit-path,.tutorial-connector-hit-path{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
 .connector-hit-path path,.tutorial-connector-hit-path path{fill:none;stroke:transparent;stroke-width:18;stroke-linecap:round;stroke-linejoin:round;pointer-events:stroke}
@@ -62,7 +61,7 @@
 .vector-object-hit:hover>button,.vector-object-hit:focus-within>button{opacity:1}
 .canvas-stage .sticky-note-object{position:absolute;border-radius:2px;clip-path:polygon(0 0,calc(100% - 19px) 0,100% 19px,100% 100%,0 100%);background:linear-gradient(145deg,#ffffff35,transparent 48%),var(--sticky-note-color,#f6edcf);transform:rotate(var(--object-rotation,var(--sticky-note-rotation,-1deg)));transform-origin:center center;cursor:grab}
 .canvas-stage .sticky-note-object:before{content:"";position:absolute;z-index:2;top:0;right:0;width:19px;height:19px;background:linear-gradient(135deg,#d1c087,#fff1bf);clip-path:polygon(0 0,100% 100%,0 100%);filter:drop-shadow(-1px 2px 2px #55482a40);pointer-events:none}
-.canvas-stage .sticky-note-object.object-dragging{filter:drop-shadow(0 20px 18px #30453860);cursor:grabbing}
+.canvas-stage .sticky-note-object.object-dragging{cursor:grabbing}
 .sticky-note-head{position:relative;z-index:3;padding-right:14px}
 .sticky-note-content,.sticky-note-object textarea,.sticky-note-object>.collab-save-hint{position:relative;z-index:1}
 .canvas-stage .math-object{min-height:0;padding:0;border:0;border-radius:0;background:transparent!important;box-shadow:none;color:var(--ink-strong);overflow:visible}

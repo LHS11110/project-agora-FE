@@ -40,9 +40,11 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
     canvas.style.display='none';
     const viewportContext=canvas.getContext('2d',{alpha:true,desynchronized:true});
     const buffer=document.createElement('canvas'),bufferContext=buffer.getContext('2d',{alpha:true,desynchronized:true});
+    let scrollBuffer = null, scrollBufferContext = null;
     const margin=256;
     buffer.className='vector-composite-surface';element.insertBefore(buffer,canvas);
-    let compositor=null,bufferVersion=0,surfaceChanged=false,worldPaintBounds=null,bufferCamera=null,sceneInputs=null,lastCamera=null,cameraIdleTimer=null,budgetIdleTimer=null,refreshCamera=false,cameraActive=false,viewportMetrics=null,textAppearanceCache=null,inkHasContent=false,settledDesiredRatio=null,settledQuality=null;
+    let compositor=null,bufferVersion=0,surfaceChanged=false,worldPaintBounds=null,bufferCamera=null,previousPaintCamera=null,previousPaintRatio=0,sceneInputs=null,lastCamera=null,cameraIdleTimer=null,budgetIdleTimer=null,refreshCamera=false,cameraActive=false,viewportMetrics=null,textAppearanceCache=null,inkHasContent=false,settledDesiredRatio=null,settledQuality=null,dragPreview=null,previousDragPreview=null;
+    const activeDragPainted=new Map();
     const ink = createInkStrokeRenderer(element, canvas);
     const records = new Map();
     const paintIndex = new RasterPaintIndex();
@@ -147,7 +149,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         sceneInputs = null; previousPaintKey = ''; bufferCamera = null;
       }
       const moved=lastCamera && (lastCamera.x!==camera.x || lastCamera.y!==camera.y || lastCamera.scale!==camera.scale);
-      if(moved){cameraActive=true;cameraIdleTimer ||= new CameraIdleTask(()=>{cameraActive=false;refreshCamera=true;schedule();},120);cameraIdleTimer.touch();}
+      if(moved){cameraActive=true;cameraIdleTimer ||= new CameraIdleTask(()=>{cameraActive=false;refreshCamera=true;schedule();},180);cameraIdleTimer.touch();}
       lastCamera={...camera};
       const settling=refreshCamera;refreshCamera=false;
       const quality=normalizeGraphicsQuality(latest.current.graphicsQuality);
@@ -207,22 +209,50 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         types.kinds.size <= 512 ? Math.min(1, graphicsResolution(quality, window.devicePixelRatio)) : 0,
         graphicsRasterRatio(quality, camera.scale, window.devicePixelRatio),
       );
-      if(!cameraZooming || settledDesiredRatio===null || settledQuality!==quality || rawDesiredRatio/settledDesiredRatio>1.5 || settledDesiredRatio/rawDesiredRatio>1.5){
+      if((!cameraZooming && !cameraActive) || settledDesiredRatio===null || settledQuality!==quality){
         settledDesiredRatio=rawDesiredRatio;
         settledQuality=quality;
       }
       const desiredRatio = settledDesiredRatio;
-      const projection=cachedCameraProjection(bufferCamera,camera,width,height,margin,worldPaintBounds);
+      const getEffectivePaintBounds = () => {
+        if (!activeDragPainted.size) return worldPaintBounds;
+        let minX = worldPaintBounds ? worldPaintBounds.minX : Infinity;
+        let minY = worldPaintBounds ? worldPaintBounds.minY : Infinity;
+        let maxX = worldPaintBounds ? worldPaintBounds.maxX : -Infinity;
+        let maxY = worldPaintBounds ? worldPaintBounds.maxY : -Infinity;
+        for (const b of activeDragPainted.values()) {
+          if (b.minX < minX) minX = b.minX;
+          if (b.minY < minY) minY = b.minY;
+          if (b.maxX > maxX) maxX = b.maxX;
+          if (b.maxY > maxY) maxY = b.maxY;
+        }
+        return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : worldPaintBounds;
+      };
+      const projection=cachedCameraProjection(bufferCamera,camera,width,height,margin,getEffectivePaintBounds());
       const bufferFits=Boolean(projection);
       const blitBuffer=()=>{
+        const paintBoundsBox = getEffectivePaintBounds();
         stats.presentedCamera={x:camera.x,y:camera.y,scale:camera.scale};
-        buffer.style.display='none';
-        const region=rasterViewportRegion(worldPaintBounds,camera,width,height);
-        const projection=cachedCameraProjection(bufferCamera,camera,width,height,margin,worldPaintBounds);
-        const sourceCrop=bufferCamera?rasterViewportRegion(worldPaintBounds,{...bufferCamera,x:bufferCamera.x+margin,y:bufferCamera.y+margin},buffer.width/ratio,buffer.height/ratio,1):null;
+        const region=rasterViewportRegion(paintBoundsBox,camera,width,height);
+        const projection=cachedCameraProjection(bufferCamera,camera,width,height,margin,paintBoundsBox);
+        const sourceCrop=bufferCamera?rasterViewportRegion(paintBoundsBox,{...bufferCamera,x:bufferCamera.x+margin,y:bufferCamera.y+margin},buffer.width/ratio,buffer.height/ratio,1):null;
         const pixelCrop=sourceCrop?{x:Math.floor(sourceCrop.x*ratio),y:Math.floor(sourceCrop.y*ratio),width:Math.ceil(sourceCrop.width*ratio),height:Math.ceil(sourceCrop.height*ratio)}:null;
-        if(compositor?.send({width,height,ratio,region,projection,sourceCrop:pixelCrop,version:bufferVersion},buffer)){canvas.style.display='none';return;}
-        if(!region||!projection){canvas.style.display='none';stats.outputPixels=0;return;}
+        const interactiveMotion = cameraActive || Boolean(dragPreview?.ids?.size);
+        if(!interactiveMotion && compositor?.send({width,height,ratio,region,projection,sourceCrop:pixelCrop,version:bufferVersion},buffer)){buffer.style.display='none';canvas.style.display='none';return;}
+        if(compositor?.active && compositor.canvas){compositor.canvas.style.display='none';compositor.active=false;}
+        if(!region||!projection){buffer.style.display='none';canvas.style.display='none';stats.outputPixels=0;return;}
+        if(interactiveMotion){
+          canvas.style.display='none';
+          buffer.style.display='';
+          buffer.style.width=`${buffer.width/ratio}px`;
+          buffer.style.height=`${buffer.height/ratio}px`;
+          buffer.style.transformOrigin='top left';
+          buffer.style.transform=`translate3d(${projection.x}px,${projection.y}px,0) scale(${projection.scale})`;
+          stats.outputPixels=buffer.width*buffer.height;
+          stats.compositePanFrames=(stats.compositePanFrames||0)+1;
+          return;
+        }
+        buffer.style.display='none';
         const outputWidth=Math.max(1,Math.round(region.width*ratio)),outputHeight=Math.max(1,Math.round(region.height*ratio));
         if(canvas.width!==outputWidth || canvas.height!==outputHeight){canvas.width=outputWidth;canvas.height=outputHeight;}
         canvas.style.display='';canvas.style.width=`${region.width}px`;canvas.style.height=`${region.height}px`;
@@ -238,10 +268,15 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         else{for(const id of changed){const before=types.kinds.get(id),item=items[id],after=isRasterText(item)?'rasterText':item?.kind;if(before==='rasterText')types.texts--;if(before==='connector')types.connectors--;if(item)types.kinds.set(id,after);else types.kinds.delete(id);if(after==='rasterText')types.texts++;if(after==='connector')types.connectors++;}types.items=items;}
       }
       const hasAnyInk=Boolean(draft || previewStrokes?.length || hasStrokeItems(inkItems));
+      const activeDrag = dragPreview?.ids?.size ? dragPreview : null;
+      const dragPx = activeDrag ? { ids: activeDrag.ids, dx: (activeDrag.dx || 0) * world.width, dy: (activeDrag.dy || 0) * world.height } : null;
+      const dragMatchesInk = Boolean(activeDrag && hasAnyInk && [...activeDrag.ids].some(id => inkItems?.[id]));
+      const prevMatchesInk = Boolean(previousDragPreview?.ids && inkHasContent && [...previousDragPreview.ids].some(id => inkItems?.[id]));
+      const dragInkChanged = dragPreview !== previousDragPreview && (dragMatchesInk || prevMatchesInk);
       if(hasAnyInk || inkHasContent){
         const nextInkKey=`${quality}:${ratio}:${width}:${height}:${world.width}:${world.height}:${camera.x}:${camera.y}:${camera.scale}`;
-        if(nextInkKey!==inkKey || previousPreviews!==previewStrokes || previousDraft!==draft || previousInkItems!==inkItems){
-          ink.render({items:inkItems,previews:previewStrokes,draft,width:world.width,height:world.height,viewportWidth:width,viewportHeight:height,camera,pixelRatio:ratio});
+        if(nextInkKey!==inkKey || previousPreviews!==previewStrokes || previousDraft!==draft || previousInkItems!==inkItems || dragInkChanged){
+          ink.render({items:inkItems,previews:previewStrokes,draft,dragPreview:activeDrag,width:world.width,height:world.height,viewportWidth:width,viewportHeight:height,camera,pixelRatio:ratio});
           inkKey=nextInkKey;previousPreviews=previewStrokes;previousDraft=draft;previousInkItems=inkItems;
           inkHasContent=hasAnyInk;
           stats.inkFrames=(stats.inkFrames||0)+1;
@@ -249,26 +284,29 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       }else if(previousPreviews!==previewStrokes || previousDraft!==draft || previousInkItems!==inkItems){
         previousPreviews=previewStrokes;previousDraft=draft;previousInkItems=inkItems;
       }
+      const dragMatchesVector = Boolean(activeDrag && [...activeDrag.ids].some(id => records.has(id)));
+      const prevMatchesVector = Boolean(previousDragPreview?.ids && [...previousDragPreview.ids].some(id => records.has(id)));
+      const dragVectorChanged = dragPreview !== previousDragPreview && (dragMatchesVector || prevMatchesVector);
       const hiddenKey = (!previewStrokes.length && !draft?.id) ? '' : [...previewStrokes.map(stroke=>String(stroke.id)),...(draft?.id?[String(draft.id)]:[])].filter(id=>items[id]).sort().join('|');
       const inputs=[items,types.connectors?routingRevision:0,world.width,world.height,types.connectors?routingRevision:0,types.connectors?metricsRevision:0,hiddenKey,null,ratio,width,height,types.texts?textAppearance.font:'',types.texts?textAppearance.color:'',null,quality,types.texts?fontRevision:0];
       const unchanged=sceneInputs && inputs.every((value,i)=>value===sceneInputs[i]);
       if(sceneInputs && !unchanged){const names=['items','references','worldWidth','worldHeight','routing','metrics','previews','draft','ratio','width','height','font','color','gpu','graphicsQuality','fonts'];for(let i=0;i<inputs.length;i++)if(inputs[i]!==sceneInputs[i]){stats.refreshReasons ||= {};stats.refreshReasons[names[i]]=(stats.refreshReasons[names[i]]||0)+1;}}
-      const qualityRefresh = sceneInputs && !cameraActive && desiredRatio > sceneInputs.quality * 1.25;
+      const qualityRefresh = sceneInputs && !cameraActive && !cameraZooming && desiredRatio > sceneInputs.quality * 1.25;
       const pending = preparationQueue.pending;
       const imagesChanged = readyImageIds.size > 0;
       const zoomRatio=bufferCamera && camera.scale>0 && bufferCamera.scale>0 ? camera.scale/bufferCamera.scale : 0;
       const keepZoomedBuffer=cameraZooming && bufferFits && zoomRatio>=0.33 && zoomRatio<=3.5;
       const scaleSettling=!gpu && !cameraZooming && Boolean(bufferCamera && (zoomRatio<0.98 || zoomRatio>1.02));
       const needsFirstWorkerGpuFrame = Boolean(!cameraActive && app?.threaded && !app.hasFrame && !gpuFailed && !app.inFlight && !app.preparing && gpuSceneDirty);
-      if(unchanged && !pending && !imagesChanged && !qualityRefresh && !surfaceChanged && !moved && !settling && !scaleSettling && !(gpu && gpuSceneDirty) && !needsFirstWorkerGpuFrame && (gpu || bufferFits))return;
+      if(unchanged && !pending && !imagesChanged && !qualityRefresh && !surfaceChanged && !moved && !settling && !scaleSettling && !dragVectorChanged && !(gpu && gpuSceneDirty) && !needsFirstWorkerGpuFrame && (gpu || bufferFits)){previousDragPreview=dragPreview;return;}
       surfaceChanged=false;
-      if(unchanged && (!pending || (!gpu && keepZoomedBuffer)) && !imagesChanged && !qualityRefresh && !scaleSettling && (gpu || bufferFits)){
+      if(unchanged && (!pending || (!gpu && keepZoomedBuffer)) && !imagesChanged && !qualityRefresh && !scaleSettling && !dragVectorChanged && (gpu || bufferFits)){
         if(gpu){
           try {
             let didSync = false;
             if (gpuSceneDirty && (!app.threaded || (!app.inFlight && !app.preparing))) {
               atlas.flush(app); stats.texturePages = atlas.pages.length;
-              stats.lastDrawnObjects = gpuBatcher.sync(app, preparation.slots);
+              stats.lastDrawnObjects = gpuBatcher.sync(app, preparation.slots, dragPx);
               gpuSceneDirty = false; preparedSinceGpuSync = 0; didSync = true;
             }
             presentGpu(didSync);
@@ -277,15 +315,45 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
           blitBuffer();
           if (needsFirstWorkerGpuFrame) {
             try {
-              atlas.flush(app); gpuBatcher.sync(app, preparation.slots);
+              atlas.flush(app); gpuBatcher.sync(app, preparation.slots, dragPx);
               gpuSceneDirty = false; preparedSinceGpuSync = 0; presentGpu();
             } catch (error) { stats.gpuError = String(error); fallBackToCanvas(); }
           }
         }
         stats.frames++;stats.cachedPanFrames=(stats.cachedPanFrames||0)+1;stats.lastDrawnObjects=gpu?preparation.count:0;
-        return;
+        previousDragPreview=dragPreview;return;
       }
       const damage = [];
+      if (dragVectorChanged && !gpu) {
+        const dirtyDragIds = new Set([...(previousDragPreview?.ids || []), ...(activeDrag?.ids || [])]);
+        for (const id of dirtyDragIds) {
+          const prevBox = activeDragPainted.get(id);
+          const rec = records.get(id);
+          if (prevBox) damage.push(prevBox);
+          else if (rec?.paintedBounds) damage.push(rec.paintedBounds);
+          if (rec?.paintedBounds && dragPx?.ids.has(id)) {
+            const shifted = { minX: rec.paintedBounds.minX + dragPx.dx, minY: rec.paintedBounds.minY + dragPx.dy, maxX: rec.paintedBounds.maxX + dragPx.dx, maxY: rec.paintedBounds.maxY + dragPx.dy };
+            damage.push(shifted);
+            activeDragPainted.set(id, shifted);
+          } else {
+            activeDragPainted.delete(id);
+          }
+        }
+      }
+      if (unchanged && dragVectorChanged && !pending && !imagesChanged && !qualityRefresh && !scaleSettling && (gpu || bufferFits)) {
+        if (gpu) {
+          gpuSceneDirty = true;
+          try {
+            let didSync = false;
+            if (!app.threaded || (!app.inFlight && !app.preparing)) {
+              stats.lastDrawnObjects = gpuBatcher.sync(app, preparation.slots, dragPx);
+              gpuSceneDirty = false; preparedSinceGpuSync = 0; didSync = true;
+            }
+            presentGpu(didSync);
+          } catch { fallBackToCanvas(); return; }
+          stats.frames++; previousDragPreview = dragPreview; return;
+        }
+      }
       const expandBounds = bounds => {
         if (!bounds) return;
         if (!worldPaintBounds) worldPaintBounds = {...bounds};
@@ -298,11 +366,16 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       };
       let partial=false;
       let structuralGpuChange = false;
+      const computeScenePixelBudget = () => {
+        const effectiveCount = Math.max(1, preparationQueue.entries.length, Math.min(4096, records.size + resources.idle.size));
+        const raw = Math.min(2_000_000, profile.scenePixelBudget / effectiveCount);
+        return 2 ** Math.floor(Math.log2(Math.max(64, raw)));
+      };
       if (!unchanged || qualityRefresh || imagesChanged) {
         const compatible=sceneInputs && !qualityRefresh && inputs.every((value,i)=>i===0 || value===sceneInputs[i]);
         preparationQueue.setItems(items);
         partial=compatible && preparation && (unchanged || preparationQueue.changedIds!==null);
-        if(partial){const nextBudget=Math.min(2_000_000,profile.scenePixelBudget/Math.max(1,preparationQueue.entries.length));if(nextBudget<preparation.pixelBudget*.8){clearTimeout(budgetIdleTimer);budgetIdleTimer=setTimeout(()=>{sceneInputs=null;schedule();},240);}preparation.pixelBudget=nextBudget;preparationQueue.invalidate([...new Set([...(unchanged ? [] : preparationQueue.changedIds), ...[...readyImageIds].filter(id=>preparationQueue.positions.has(id))])]);sceneInputs=inputs;sceneInputs.quality=preparation.lowestQuality;}
+        if(partial){const nextBudget=computeScenePixelBudget();if(nextBudget<preparation.pixelBudget*.8){clearTimeout(budgetIdleTimer);budgetIdleTimer=setTimeout(()=>{sceneInputs=null;schedule();},240);}preparation.pixelBudget=nextBudget;preparationQueue.invalidate([...new Set([...(unchanged ? [] : preparationQueue.changedIds), ...[...readyImageIds].filter(id=>preparationQueue.positions.has(id))])]);sceneInputs=inputs;sceneInputs.quality=preparation.lowestQuality;}
         else {
         preparationQueue.restart();
         stats.sceneEnumerations=preparationQueue.enumerations;
@@ -315,7 +388,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         const hidden = new Set(previewStrokes.map(stroke => String(stroke.id)));
         if (draft?.id) hidden.add(String(draft.id));
         preparation = { slots:new Array(preparationQueue.entries.length), count:0, hidden,
-          targetRatio:desiredRatio, pixelBudget:Math.min(2_000_000,profile.scenePixelBudget/Math.max(1,preparationQueue.entries.length)),
+          targetRatio:desiredRatio, pixelBudget:computeScenePixelBudget(),
           lowestQuality:Infinity };
         worldPaintBounds=null;
         preparationQueue.entries.forEach(([id],index)=>{
@@ -357,12 +430,19 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       const worldKey = `${world.width}:${world.height}`;
       const lowQuality = quality === 'low';
       const hadUrgentBeforeRun = preparationQueue.urgent.size > 0;
-      const preparedThisFrame=preparationQueue.run((id,item,index)=>{
+      let frameRasterizations = 0;
+      const incrementalFrame = records.size > 0;
+      const frameBudgetMs = cameraActive ? 2 : (incrementalFrame ? 2.5 : 6);
+      const maxFrameRasters = incrementalFrame ? 6 : 48;
+      const qualityRatioThreshold = lowQuality && incrementalFrame ? 1.6 : 1.25;
+      const prepStart = performance.now();
+      const prepClock = () => (frameRasterizations >= maxFrameRasters ? prepStart + frameBudgetMs + 1 : performance.now());
+      const runPrep = unchanged && dragVectorChanged && !pending && !imagesChanged && !qualityRefresh ? 0 : preparationQueue.run((id,item,index)=>{
         if ((!['shape','connector','stroke'].includes(item?.kind) && !isRasterText(item)) || hidden.has(id)) return;
         let record=records.get(id);
         const sameImage = record?.item.__imagePreview === item.__imagePreview;
         let preview = item.__imagePreview ? imagePreviews.peek(item.__imagePreview) : null;
-        if (item.__imagePreview && (!sameImage || !record?.previewVersion || !sameRasterInput(record.item, item) || record.worldKey !== worldKey || record.graphicsQuality !== quality || (!cameraActive && targetRatio > record.quality * 1.25) || record.pixelBudget > pixelBudget * 1.1)) {
+        if (item.__imagePreview && (!sameImage || !record?.previewVersion || !sameRasterInput(record.item, item) || record.worldKey !== worldKey || record.graphicsQuality !== quality || (!cameraActive && !cameraZooming && targetRatio > record.quality * qualityRatioThreshold) || record.pixelBudget > pixelBudget * 1.1)) {
           const left=Number(item.x)*world.width*camera.scale+camera.x,top=Number(item.y)*world.height*camera.scale+camera.y;
           const visible=left<=width+64&&top<=height+64&&left+Number(item.width)*world.width*camera.scale>=-64&&top+Number(item.height)*world.height*camera.scale>=-64;
           preview = imagePreviews.request(item.__imagePreview, id,visible);
@@ -377,7 +457,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         if(!descriptor)return;
         const key=descriptor.key;
         const paintChanged = !record || (changed && (record.key!==key || record.tint!==tint || record.descriptor.x!==descriptor.x || record.descriptor.y!==descriptor.y || record.descriptor.rotation!==descriptor.rotation || record.descriptor.centerX!==descriptor.centerX || record.descriptor.centerY!==descriptor.centerY));
-        const qualityNeeded=record && !cameraActive && targetRatio>record.quality*1.25;
+        const qualityNeeded=record && !cameraActive && !cameraZooming && targetRatio>record.quality*qualityRatioThreshold;
         const deferPreview = item.__imagePreview && preview?.state !== 'ready' && sameImage && record?.previewVersion;
         const rebuild = !deferPreview && (!record || record.key !== key || record.graphicsQuality !== quality || qualityNeeded
           || (record.pixelBudget > pixelBudget*1.1 && record.raster.pixelWidth*record.raster.pixelHeight > pixelBudget*1.1));
@@ -386,6 +466,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
           const resourceKey=key+':'+targetRatio+':'+Math.round(pixelBudget);
           const resource=resources.acquire(resourceKey,()=>{
             stats.rasterizations++;
+            frameRasterizations++;
             const raster=rasterizeObject(id,descriptor,world,referenceItems,targetRatio,pixelBudget,{...textAppearance,smoothingQuality:quality==='high'?'high':quality==='medium'?'medium':'low',imagePreview:preview?.canvas});
             raster.pixelWidth=raster.canvas.width;raster.pixelHeight=raster.canvas.height;
             return raster;
@@ -397,7 +478,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
               resource.raster.canvas=null;
             }
           }
-          record = { key, graphicsQuality:quality, quality:targetRatio, pixelBudget, raster:resource.raster, resource };
+          record = { id, slotIndex: index, key, graphicsQuality:quality, quality:targetRatio, pixelBudget, raster:resource.raster, resource };
           records.set(id,record);
           structuralGpuChange = true;
         } else stats.cacheHits++;
@@ -407,14 +488,15 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
           if (!gpu) { damage.push(record.paintedBounds); expandBounds(record.paintedBounds); }
           if (paintChanged || record.hidden) structuralGpuChange = true;
         }
-        record.previewVersion=previewVersion;record.item=item;record.worldKey=worldKey;record.routeVersion=routeVersion;
+        record.id=id;record.slotIndex=index;record.previewVersion=previewVersion;record.item=item;record.worldKey=worldKey;record.routeVersion=routeVersion;
         record.descriptor=descriptor;record.tint=tint;record.hidden=false;
         preparation.lowestQuality=Math.min(preparation.lowestQuality,record.quality);
         if(!ordered[index])preparation.count++;
         ordered[index]=record;
         if (gpu) paintIndexValid = false;
         else paintIndex.update(record,index);
-      },cameraActive?(preparationQueue.entries.length<=512?6:2):8);
+      },frameBudgetMs,prepClock);
+      const preparedThisFrame = runPrep;
       const deferredQuality=preparationQueue.pending;
       stats.preparedThisFrame=preparedThisFrame;stats.preparationCursor=preparationQueue.cursor;
       stats.preparationVisited=(stats.preparationVisited||0)+preparedThisFrame;
@@ -443,7 +525,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         try {
           if (syncAllowed) {
             atlas.flush(app); stats.texturePages = atlas.pages.length;
-            drawn = gpuBatcher.sync(app, ordered);
+            drawn = gpuBatcher.sync(app, ordered, dragPx);
             gpuSceneDirty = false; preparedSinceGpuSync = 0;
             presentGpu(true);
           } else {
@@ -466,18 +548,122 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
           previousPaintKey = '';
         }
         const bufferWidth=Math.round((width+margin*2)*ratio),bufferHeight=Math.round((height+margin*2)*ratio);
-        if(buffer.width!==bufferWidth || buffer.height!==bufferHeight){buffer.width=bufferWidth;buffer.height=bufferHeight;bufferCamera=null;}
-        const activeBufferFits=Boolean(cachedCameraProjection(bufferCamera,camera,width,height,margin,worldPaintBounds));
-        if(!activeBufferFits || !bufferCamera || (!cameraZooming && (zoomRatio<0.98 || zoomRatio>1.02))){bufferCamera={...camera};previousPaintKey='';}
+        const prevPaintCamera = previousPaintKey ? previousPaintCamera : null;
+        const prevPaintRatio = previousPaintKey ? previousPaintRatio : 0;
+        if(buffer.width!==bufferWidth || buffer.height!==bufferHeight){buffer.width=bufferWidth;buffer.height=bufferHeight;bufferCamera=null;previousPaintKey='';}
+        const activeBufferFits=Boolean(cachedCameraProjection(bufferCamera,camera,width,height,margin,getEffectivePaintBounds()));
+        const region = mergeDamage(damage,2/Math.max(.01,camera.scale));
+        let scrollStrips = null;
+        if(!activeBufferFits || !bufferCamera || (!cameraZooming && (zoomRatio<0.98 || zoomRatio>1.02))){
+          const canScrollReuse = !region && !activeDrag && !cameraZooming && prevPaintCamera && prevPaintRatio === ratio && Math.abs(camera.scale - prevPaintCamera.scale) < 1e-6;
+          if (canScrollReuse) {
+            const dxPx = Math.round((camera.x - prevPaintCamera.x) * ratio);
+            const dyPx = Math.round((camera.y - prevPaintCamera.y) * ratio);
+            const ovW = buffer.width - Math.abs(dxPx);
+            const ovH = buffer.height - Math.abs(dyPx);
+            if ((dxPx !== 0 || dyPx !== 0) && ovW > buffer.width * 0.4 && ovH > buffer.height * 0.4) {
+              scrollBuffer ||= document.createElement('canvas');
+              if (scrollBuffer.width !== buffer.width || scrollBuffer.height !== buffer.height) {
+                scrollBuffer.width = buffer.width;
+                scrollBuffer.height = buffer.height;
+                scrollBufferContext = scrollBuffer.getContext('2d', { alpha: true });
+              }
+              scrollBufferContext.globalCompositeOperation = 'copy';
+              scrollBufferContext.drawImage(buffer, 0, 0);
+              bufferContext.setTransform(1,0,0,1,0,0);
+              bufferContext.clearRect(0,0,buffer.width,buffer.height);
+              const srcX = dxPx < 0 ? -dxPx : 0;
+              const srcY = dyPx < 0 ? -dyPx : 0;
+              const dstX = dxPx > 0 ? dxPx : 0;
+              const dstY = dyPx > 0 ? dyPx : 0;
+              bufferContext.drawImage(scrollBuffer, srcX, srcY, ovW, ovH, dstX, dstY, ovW, ovH);
+              bufferCamera = { x: prevPaintCamera.x + dxPx / ratio, y: prevPaintCamera.y + dyPx / ratio, scale: prevPaintCamera.scale };
+              scrollStrips = [];
+              if (dxPx > 0) scrollStrips.push({ left: 0, top: 0, right: dxPx, bottom: buffer.height });
+              else if (dxPx < 0) scrollStrips.push({ left: buffer.width + dxPx, top: 0, right: buffer.width, bottom: buffer.height });
+              if (dyPx > 0) scrollStrips.push({ left: dstX, top: 0, right: dstX + ovW, bottom: dyPx });
+              else if (dyPx < 0) scrollStrips.push({ left: dstX, top: buffer.height + dyPx, right: dstX + ovW, bottom: buffer.height });
+            } else {
+              bufferCamera={...camera};previousPaintKey='';
+            }
+          } else {
+            bufferCamera={...camera};previousPaintKey='';
+          }
+        }
         const paintCamera={...bufferCamera,x:bufferCamera.x+margin,y:bufferCamera.y+margin};
         const bufferKey=`${width}:${height}:${ratio}:${bufferCamera.x}:${bufferCamera.y}:${bufferCamera.scale}`;
-        const region = mergeDamage(damage,2/Math.max(.01,camera.scale));
-        const fullPaint = bufferKey !== previousPaintKey || (region && (region.maxX-region.minX)*(region.maxY-region.minY)*camera.scale**2 > width*height*.45);
-        if (fullPaint || region) {
+        const fullPaint = !scrollStrips && (bufferKey !== previousPaintKey || (region && (region.maxX-region.minX)*(region.maxY-region.minY)*camera.scale**2 > width*height*.45));
+        const drawPaintPass = (clipWorld, clipPixels) => {
           bufferContext.setTransform(1,0,0,1,0,0);
-          if (fullPaint) bufferContext.clearRect(0,0,buffer.width,buffer.height);
           bufferContext.save();
-          if (!fullPaint) {
+          if (clipPixels) {
+            const { left, top, right, bottom } = clipPixels;
+            bufferContext.beginPath(); bufferContext.rect(left,top,right-left,bottom-top); bufferContext.clip();
+            if (!scrollStrips) bufferContext.clearRect(left,top,right-left,bottom-top);
+          }
+          bufferContext.setTransform(ratio*camera.scale,0,0,ratio*camera.scale,ratio*paintCamera.x,ratio*paintCamera.y);
+          let activeAlpha=1,activeFill;
+          let candidates=paintIndex.query(clipWorld,ordered);
+          if (dragPx?.ids?.size) {
+            const extra = [];
+            const seen = new Set(candidates);
+            for (const id of dragPx.ids) {
+              const rec = records.get(id);
+              if (rec && !rec.hidden && !seen.has(rec)) extra.push(rec);
+            }
+            if (extra.length) candidates = [...candidates, ...extra].sort((a, b) => (a.slotIndex ?? 0) - (b.slotIndex ?? 0));
+          }
+          stats.paintCandidates=(stats.paintCandidates||0)+candidates.length;
+          for (const record of candidates) {
+            if (!record || record.hidden) continue;
+            const shifted = Boolean(dragPx && dragPx.ids.has(record.id));
+            const offX = shifted ? dragPx.dx : 0;
+            const offY = shifted ? dragPx.dy : 0;
+            const b = shifted
+              ? { minX: record.paintedBounds.minX + offX, minY: record.paintedBounds.minY + offY, maxX: record.paintedBounds.maxX + offX, maxY: record.paintedBounds.maxY + offY }
+              : record.paintedBounds;
+            if (!overlaps(b,clipWorld)) continue;
+            const descriptor=record.descriptor,raster=record.raster,handle=record.resource.textureHandle;
+            const rotated=Boolean(descriptor.rotation);
+            const drawX = descriptor.x + offX;
+            const drawY = descriptor.y + offY;
+            if(rotated){bufferContext.save(); bufferContext.translate(drawX+descriptor.centerX,drawY+descriptor.centerY); bufferContext.rotate(descriptor.rotation*Math.PI/180);}
+            if(record.tint!==null){
+              const alpha=shapeFillOpacity(record.item),fill=record.item.fill;
+              if(rotated || alpha!==activeAlpha){bufferContext.globalAlpha=alpha;if(!rotated)activeAlpha=alpha;}
+              if(rotated || fill!==activeFill){bufferContext.fillStyle=fill;if(!rotated)activeFill=fill;}
+              bufferContext.fillRect(rotated?-descriptor.centerX:drawX,rotated?-descriptor.centerY:drawY,Number(record.item.width)*world.width,Number(record.item.height)*world.height);
+            }else{
+              if(!rotated && activeAlpha!==1){bufferContext.globalAlpha=1;activeAlpha=1;}
+              const dx=rotated?raster.left-descriptor.centerX:drawX+raster.left;
+              const dy=rotated?raster.top-descriptor.centerY:drawY+raster.top;
+              if(handle?.page)bufferContext.drawImage(handle.page.canvas,handle.slot.x+2,handle.slot.y+2,raster.pixelWidth,raster.pixelHeight,dx,dy,raster.width,raster.height);
+              else bufferContext.drawImage(raster.canvas,dx,dy,raster.width,raster.height);
+            }
+            if(rotated)bufferContext.restore(); drawn++;
+          }
+          bufferContext.restore();
+        };
+        if (scrollStrips) {
+          stats.paintCandidates = 0;
+          for (const strip of scrollStrips) {
+            const stripWorld = {
+              minX: (strip.left / ratio - paintCamera.x) / camera.scale,
+              minY: (strip.top / ratio - paintCamera.y) / camera.scale,
+              maxX: (strip.right / ratio - paintCamera.x) / camera.scale,
+              maxY: (strip.bottom / ratio - paintCamera.y) / camera.scale,
+            };
+            drawPaintPass(stripWorld, strip);
+          }
+          bufferVersion++;
+        } else if (fullPaint || region) {
+          stats.paintCandidates = 0;
+          if (fullPaint) {
+            bufferContext.setTransform(1,0,0,1,0,0);
+            bufferContext.clearRect(0,0,buffer.width,buffer.height);
+            const bufferWorldBounds={minX:-paintCamera.x/bufferCamera.scale,minY:-paintCamera.y/bufferCamera.scale,maxX:(width+margin*2-paintCamera.x)/bufferCamera.scale,maxY:(height+margin*2-paintCamera.y)/bufferCamera.scale};
+            drawPaintPass(bufferWorldBounds, null);
+          } else {
             // Clip to whole device pixels: fractional edges retain old alpha and
             // blend it with the new frame, leaving seams beside changed objects.
             const left = Math.floor((region.minX*camera.scale+paintCamera.x)*ratio);
@@ -488,42 +674,16 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
             region.minY = (top/ratio-paintCamera.y)/camera.scale;
             region.maxX = (right/ratio-paintCamera.x)/camera.scale;
             region.maxY = (bottom/ratio-paintCamera.y)/camera.scale;
-            bufferContext.beginPath(); bufferContext.rect(left,top,right-left,bottom-top); bufferContext.clip();
-            bufferContext.clearRect(left,top,right-left,bottom-top);
+            drawPaintPass(region, { left, top, right, bottom });
           }
-          bufferContext.setTransform(ratio*camera.scale,0,0,ratio*camera.scale,ratio*paintCamera.x,ratio*paintCamera.y);
-          const bufferWorldBounds={minX:-paintCamera.x/bufferCamera.scale,minY:-paintCamera.y/bufferCamera.scale,maxX:(width+margin*2-paintCamera.x)/bufferCamera.scale,maxY:(height+margin*2-paintCamera.y)/bufferCamera.scale};
-          const clipRegion=fullPaint?bufferWorldBounds:region;
-          let activeAlpha=1,activeFill;
-          const candidates=paintIndex.query(clipRegion,ordered);
-          stats.paintCandidates=candidates.length;
-          for (const record of candidates) {
-            if (!record || record.hidden) continue;
-            if (!overlaps(record.paintedBounds,clipRegion)) continue;
-            const descriptor=record.descriptor,raster=record.raster,handle=record.resource.textureHandle;
-            const rotated=Boolean(descriptor.rotation);
-            if(rotated){bufferContext.save(); bufferContext.translate(descriptor.x+descriptor.centerX,descriptor.y+descriptor.centerY); bufferContext.rotate(descriptor.rotation*Math.PI/180);}
-            if(record.tint!==null){
-              const alpha=shapeFillOpacity(record.item),fill=record.item.fill;
-              if(rotated || alpha!==activeAlpha){bufferContext.globalAlpha=alpha;if(!rotated)activeAlpha=alpha;}
-              if(rotated || fill!==activeFill){bufferContext.fillStyle=fill;if(!rotated)activeFill=fill;}
-              bufferContext.fillRect(rotated?-descriptor.centerX:descriptor.x,rotated?-descriptor.centerY:descriptor.y,Number(record.item.width)*world.width,Number(record.item.height)*world.height);
-            }else{
-              if(!rotated && activeAlpha!==1){bufferContext.globalAlpha=1;activeAlpha=1;}
-              const dx=rotated?raster.left-descriptor.centerX:descriptor.x+raster.left;
-              const dy=rotated?raster.top-descriptor.centerY:descriptor.y+raster.top;
-              if(handle?.page)bufferContext.drawImage(handle.page.canvas,handle.slot.x+2,handle.slot.y+2,raster.pixelWidth,raster.pixelHeight,dx,dy,raster.width,raster.height);
-              else bufferContext.drawImage(raster.canvas,dx,dy,raster.width,raster.height);
-            }
-            if(rotated)bufferContext.restore(); drawn++;
-          }
-          bufferContext.restore();bufferVersion++;
+          bufferVersion++;
         }
-        previousPaintKey = bufferKey; element.dataset.renderer = 'canvas2d';blitBuffer();
+        previousPaintKey = bufferKey; previousPaintCamera = { ...bufferCamera }; previousPaintRatio = ratio; element.dataset.renderer = 'canvas2d';blitBuffer();
       }
       if(app?.threaded&&!app.hasFrame&&!gpuFailed&&!workerBusy&&gpuSceneDirty){
-        try{atlas.flush(app);gpuBatcher.sync(app,ordered);gpuSceneDirty=false;preparedSinceGpuSync=0;presentGpu();}catch(error){stats.gpuError=String(error);fallBackToCanvas();}
+        try{atlas.flush(app);gpuBatcher.sync(app,ordered,dragPx);gpuSceneDirty=false;preparedSinceGpuSync=0;presentGpu();}catch(error){stats.gpuError=String(error);fallBackToCanvas();}
       }
+      previousDragPreview = dragPreview;
       stats.drawnObjects += drawn; stats.lastDrawnObjects = drawn; stats.visibleObjects = preparation.count;
       stats.imagePreviews={scope:previewEpoch,active:imagePreviews.active,queued:imagePreviews.queued,entries:imagePreviews.entries.size,pixels:imagePreviews.pixels};
       stats.sharedRasters=resources.live.size;stats.retainedRasters=resources.idle.size;
@@ -555,6 +715,15 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
     const appearanceChanged=()=>{fontRevision++;metricsRevision++;textAppearanceCache=null;schedule();};
     renderer.current = schedule;
     latest.current.onReady?.(value => { draft = value; schedule(); });
+    latest.current.onDragReady?.(next => {
+      if (disposed) return;
+      const had = Boolean(dragPreview?.ids?.size);
+      const has = Boolean(next?.ids?.size);
+      if (!had && !has) return;
+      dragPreview = next || null;
+      cancelScheduledRender();
+      render();
+    });
     const observer = new ResizeObserver(([entry])=>{viewportMetrics={width:entry.contentRect.width,height:entry.contentRect.height};schedule();}); observer.observe(element);
     const themeObserver=new MutationObserver(appearanceChanged);const themeRoot=element.closest('[data-theme]');if(themeRoot)themeObserver.observe(themeRoot,{attributes:true,attributeFilter:['data-theme']});
     const stage=element.closest('.canvas-stage');
@@ -570,7 +739,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       disposed = true;delete element.__agoraGpuRenderer;cameraIdleTimer?.cancel();clearTimeout(budgetIdleTimer); cancelScheduledRender(); scheduleChannel?.port1?.close?.(); scheduleChannel?.port2?.close?.();
       observer.disconnect();themeObserver.disconnect();stage?.removeEventListener('agora-camera',cameraChanged); window.removeEventListener(CONNECTOR_METRICS_EVENT,metricsChanged);
       document.fonts?.removeEventListener('loadingdone',appearanceChanged);
-      latest.current.onReady?.(null); renderer.current = null;
+      latest.current.onReady?.(null); latest.current.onDragReady?.(null); renderer.current = null;
       stopGpuEvents();
       for (const record of records.values()) destroyRecord(record);
       imagePreviews.destroy();
@@ -578,7 +747,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       records.clear(); resources.destroy(); atlas.destroy(); app?.destroy(); app?.free(); gpuCanvas?.remove();
       // A pending init releases its slot after completion.
       if (!pendingApp) releaseGpu?.();
-      compositor?.destroy();buffer.width=buffer.height=1;buffer.remove();ink.destroy(); canvas.remove();
+      compositor?.destroy();if(scrollBuffer){scrollBuffer.width=scrollBuffer.height=1;scrollBuffer=null;scrollBufferContext=null;}buffer.width=buffer.height=1;buffer.remove();ink.destroy(); canvas.remove();
     };
   }, []);
   useLayoutEffect(() => { renderer.current?.(); });
