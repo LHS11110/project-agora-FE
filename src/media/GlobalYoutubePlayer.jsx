@@ -348,6 +348,9 @@ export default function GlobalYoutubePlayer() {
         setLauncher(null);
         return;
       }
+      if (document.querySelector('.canvas-stage:is(.camera-moving, .camera-zooming, .panning, .camera-coasting)')) {
+        return;
+      }
       const obstacles = [...document.querySelectorAll(PLAYER_OBSTACLES)]
         .filter((el) => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden')
         .map((el) => el.getBoundingClientRect())
@@ -358,7 +361,7 @@ export default function GlobalYoutubePlayer() {
       setSafeBottom(dock ? Math.max(24, innerHeight - dock.getBoundingClientRect().top + 20) : 100);
     };
     update();
-    const timer = setInterval(update, 250);
+    const timer = setInterval(update, 1200);
     window.addEventListener('resize', update);
     return () => {
       clearInterval(timer);

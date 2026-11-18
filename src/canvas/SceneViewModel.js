@@ -7,6 +7,12 @@ import { overviewProxy, overviewProxyTier } from './sceneRepresentation.js';
 import { needsVectorDom } from './vectorHitTest.js';
 import { connectorGeometry } from '../components/connectorGeometry.js';
 
+function sameTuples(before,after){
+ if(before===after)return true;
+ if(!before||!after||before.length!==after.length)return false;
+ for(let i=0;i<before.length;i++)if(before[i]!==after[i])return false;
+ return true;
+}
 function retainSnapshot(previous,next){
  if(!previous)return itemSnapshot(next);
  const changes={};for(const [id,item] of Object.entries(next))if(previous[id]!==item)changes[id]=item;
@@ -64,7 +70,7 @@ export default class SceneViewModel {
       }
       this.layers=new Map([[0,{depth:0,objects:[],domObjects:[],vectors:itemSnapshot({}),inkItems:itemSnapshot({})}]]);this.byId=new Map();this.connectorIds=new Set();
       this.sorted=sorted;
-      const present=new Set(sorted.map(tuple=>tuple[0]));for(const id of this.representations.keys())if(!present.has(id))this.representations.delete(id);
+      const present=new Set();for(let i=0;i<sorted.length;i++)present.add(sorted[i][0]);for(const id of this.representations.keys())if(!present.has(id))this.representations.delete(id);
       const maps=new Map();
       for(const [sortIndex,tuple] of this.sorted.entries()){const [id,item]=tuple,depth=itemDepth(item);if(!this.layers.has(depth))this.layers.set(depth,{depth,objects:[],domObjects:[]});
         if(!maps.has(depth))maps.set(depth,{vectors:{},inkItems:{}});const layer=this.layers.get(depth),objectIndex=layer.objects.length;layer.objects.push(tuple);this.byId.set(id,{depth,tuple,sortIndex,objectIndex});if(item.kind==='connector')this.connectorIds.add(id);
@@ -72,8 +78,9 @@ export default class SceneViewModel {
         if(representation.ink)maps.get(depth).inkItems[id]=item;else if(representation.vector)maps.get(depth).vectors[id]=representation.vector;
         if(needsVectorDom(id,item,domIds,null,null,world,scale,this.quality))layer.domObjects.push(tuple);
       }
-      for(const [depth,layer] of this.layers){layer.vectors=retainSnapshot(oldLayers.get(depth)?.vectors,maps.get(depth)?.vectors||{});layer.inkItems=retainSnapshot(oldLayers.get(depth)?.inkItems,maps.get(depth)?.inkItems||{});}
-      this.hitOrder=new Map(this.sorted.map(([id],i)=>[id,i]));this.revision++;
+      for(const [depth,layer] of this.layers){const prevLayer=oldLayers.get(depth);layer.vectors=retainSnapshot(prevLayer?.vectors,maps.get(depth)?.vectors||{});layer.inkItems=retainSnapshot(prevLayer?.inkItems,maps.get(depth)?.inkItems||{});if(prevLayer&&sameTuples(prevLayer.domObjects,layer.domObjects))layer.domObjects=prevLayer.domObjects;}
+      const hitOrder=new Map();for(let i=0;i<this.sorted.length;i++)hitOrder.set(this.sorted[i][0],i);
+      this.hitOrder=hitOrder;this.revision++;
     }else if(changed.length || appearanceDirty.size || this.routingRevision!==routingRevision){
       const layerChanges=new Map();this.stats.updates++;const dirty=new Set([...changed,...appearanceDirty]);if(index?.changedIds && this.routingRevision!==routingRevision)for(const id of index.changedIds)dirty.add(id);if(this.routingRevision!==routingRevision)for(const id of this.connectorIds)dirty.add(id);
 

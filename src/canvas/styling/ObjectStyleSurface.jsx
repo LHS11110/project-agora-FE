@@ -1,4 +1,5 @@
-import { useId } from 'react';
+import { useContext, useId } from 'react';
+import { BlurBudgetContext } from './BlurBudgetContext.js';
 import {
   readObjectStyle,
   fillLayerToCss,
@@ -61,7 +62,8 @@ function fillLayerBgStyle(layer) {
   };
 }
 
-export function ObjectStyleBackdrop({ item, borderRadius }) {
+export function ObjectStyleBackdrop({ id, item, borderRadius }) {
+  const allowedBlurIds = useContext(BlurBudgetContext);
   const uid = useId().replace(/:/g, '_');
   const style = readObjectStyle(item);
   const fills = (style.explicitFills || style.fills.some((f) => f.type !== 'solid'))
@@ -69,7 +71,8 @@ export function ObjectStyleBackdrop({ item, borderRadius }) {
     : [];
   const hasEffects = style.explicitEffects;
   const boxShadow = hasEffects ? buildBoxShadowString(style) : undefined;
-  const backdropFilter = hasEffects ? buildBackdropFilterString(style) : undefined;
+  const blurPermitted = !allowedBlurIds || allowedBlurIds.has(String(id ?? item?.id ?? ''));
+  const backdropFilter = hasEffects && blurPermitted ? buildBackdropFilterString(style) : undefined;
   const stroke = style.stroke;
   const showDomStroke = stroke?.explicit && !['shape', 'connector', 'stroke'].includes(item?.kind);
 
@@ -198,7 +201,9 @@ export function AdvancedShapeSurface({ id, item, widthPx, heightPx }) {
   const primaryPath = shapePaths[0] || `M 0 0 L ${w} 0 L ${w} ${h} L 0 ${h} Z`;
   const combinedPath = shapePaths.join(' ');
   const visibleFills = style.fills.filter((f) => f.visible !== false);
-  const hasBackdropBlur = style.effects.some((fx) => fx.enabled !== false && fx.type === 'background-blur' && fx.blur > 0);
+  const allowedBlurIds = useContext(BlurBudgetContext);
+  const blurPermitted = !allowedBlurIds || allowedBlurIds.has(String(id ?? item?.id ?? ''));
+  const hasBackdropBlur = blurPermitted && style.effects.some((fx) => fx.enabled !== false && fx.type === 'background-blur' && fx.blur > 0);
   const backdropCss = buildBackdropFilterString(style);
   const innerShadows = style.effects.filter((fx) => fx.enabled !== false && fx.type === 'inner-shadow');
   const isRectLike = ['rectangle', 'square'].includes(item?.shapeType || 'rectangle');

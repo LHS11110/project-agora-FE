@@ -96,19 +96,72 @@ export function unlockSoundEffects() {
 
 /**
  * Installs passive gesture listeners so WebSocket-driven cues (such as mentions)
- * can play immediately after the first user interaction.
+ * can play after the first user interaction without blocking pointerdown.
  */
 export function installSoundUnlock(target = globalThis.window) {
   if (!target?.addEventListener) return () => {};
-  const unlock = () => { unlockSoundEffects(); };
-  target.addEventListener('pointerdown', unlock, { passive: true, capture: true });
-  target.addEventListener('keydown', unlock, { passive: true, capture: true });
-  target.addEventListener('touchstart', unlock, { passive: true, capture: true });
-  return () => {
-    target.removeEventListener('pointerdown', unlock, true);
-    target.removeEventListener('keydown', unlock, true);
-    target.removeEventListener('touchstart', unlock, true);
+  let disposed = false;
+  let scheduled = false;
+  let idleHandle = null;
+  let timerHandle = null;
+
+  const removeListeners = () => {
+    target.removeEventListener('pointerup', scheduleUnlock, true);
+    target.removeEventListener('keyup', scheduleUnlock, true);
+    target.removeEventListener('touchend', scheduleUnlock, true);
   };
+
+  const cleanup = () => {
+    if (disposed) return;
+    disposed = true;
+    removeListeners();
+    if (idleHandle !== null && typeof globalThis.cancelIdleCallback === 'function') {
+      globalThis.cancelIdleCallback(idleHandle);
+    }
+    if (timerHandle !== null) {
+      globalThis.clearTimeout(timerHandle);
+    }
+    idleHandle = null;
+    timerHandle = null;
+  };
+
+  const scheduleIdle = (delayMs = 1500) => {
+    if (disposed) return;
+    if (delayMs > 0) {
+      timerHandle = globalThis.setTimeout(() => { timerHandle = null; scheduleIdle(0); }, delayMs);
+      return;
+    }
+    if (typeof globalThis.requestIdleCallback === 'function') {
+      idleHandle = globalThis.requestIdleCallback(runUnlock, { timeout: 2000 });
+    } else {
+      timerHandle = globalThis.setTimeout(runUnlock, 500);
+    }
+  };
+
+  const runUnlock = () => {
+    idleHandle = null;
+    timerHandle = null;
+    if (disposed) return;
+    if (globalThis.document?.querySelector?.('.canvas-stage:is(.camera-moving, .camera-zooming, .panning, .camera-coasting)')) {
+      scheduleIdle(1200);
+      return;
+    }
+    unlockSoundEffects();
+    cleanup();
+  };
+
+  const scheduleUnlock = () => {
+    if (disposed || scheduled) return;
+    scheduled = true;
+    // Remove gesture hooks immediately so subsequent pan/zoom frames pay zero listener overhead.
+    removeListeners();
+    scheduleIdle(1500);
+  };
+
+  target.addEventListener('pointerup', scheduleUnlock, { passive: true, capture: true });
+  target.addEventListener('keyup', scheduleUnlock, { passive: true, capture: true });
+  target.addEventListener('touchend', scheduleUnlock, { passive: true, capture: true });
+  return cleanup;
 }
 
 /**

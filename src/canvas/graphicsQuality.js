@@ -12,7 +12,7 @@ export function graphicsResolution(quality, deviceRatio = 1) {
 }
 export function graphicsRasterRatio(quality, scale, deviceRatio = 1) {
   const profile = GRAPHICS_PROFILES[normalizeGraphicsQuality(quality)];
-  const zoomRatio = scale > 1.25 ? 1.5 : scale < .5 ? .5 : 1;
+  const zoomRatio = scale > 1.25 ? 1.5 : scale >= 0.75 ? 1 : Math.max(0.25, Math.min(0.85, scale));
   return Math.min(profile.maxRasterRatio, zoomRatio * profile.rasterMultiplier * graphicsResolution(quality, deviceRatio));
 }
 
@@ -25,6 +25,6 @@ export function graphicsRasterItem(item,quality){return normalizeGraphicsQuality
 // Bound rich-object detail as visible density grows; selected objects keep their
 // full renderer. This affects presentation only, never stored object data.
 export function graphicsLodScale(scale,visibleCount,quality){
- const budget={low:256,medium:512,high:1024}[normalizeGraphicsQuality(quality)];
+ const budget={low:48,medium:96,high:192}[normalizeGraphicsQuality(quality)];
  return scale*Math.min(1,Math.sqrt(budget/Math.max(budget,visibleCount)));
 }

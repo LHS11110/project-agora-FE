@@ -65,3 +65,10 @@ test('progressive paste appends work without restarting a prepared 100k scene',(
  queue.setItems(after);queue.invalidate(queue.changedIds);const visited=[];queue.run(id=>visited.push(id),Infinity);
  assert.equal(queue.enumerations,enumerations);assert.ok(visited.every(id=>id.startsWith('new')));assert.equal(new Set(visited).size,32);
 });
+test('urgent on-screen entries are not visited a second time by the background cursor',()=>{
+ const queue=new ScenePreparationQueue(),items={a:{},b:{},c:{},d:{},e:{}};
+ queue.setItems(items);queue.invalidate(['b','d','a']);
+ const visited=[];queue.run(id=>visited.push(id),Infinity);
+ assert.deepEqual(visited,['b','d','a','c','e']);
+ assert.equal(queue.pending,false);
+});

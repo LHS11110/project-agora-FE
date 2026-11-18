@@ -249,7 +249,7 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
     : null;
   // Keep content mounted when selection adds controls, preserving double-click targets.
   const styleBackdrop = advancedStyled && isDomStylable
-    ? <ObjectStyleBackdrop key="canvas-object-style-backdrop" item={item} />
+    ? <ObjectStyleBackdrop key="canvas-object-style-backdrop" id={id} item={item} />
     : null;
   const withResizeHandles = (element) => { const framed=scaleObjectElement(cloneElement(element,
     { ref: node => { geometryElementRef.current = node; editingBoundary.ref.current = node; }, className: `${element.props.className}${item.locked ? ' object-locked' : ''}${resizeHandles ? ' resizeable' : ''}` },

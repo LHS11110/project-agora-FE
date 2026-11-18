@@ -1,30 +1,23 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, memo, useMemo } from 'react';
 import '../../canvas/code-block-theme.css';
 
 const TOKEN_CACHE_LIMIT = 400;
 const tokenCache = new Map();
-const primedLanguages = new Map();
-let monacoRuntimePromise = null;
 
-function loadMonacoRuntime() {
-  if (!monacoRuntimePromise) {
-    monacoRuntimePromise = import('../../canvas/monacoRuntime.js').catch((err) => {
-      monacoRuntimePromise = null;
-      throw err;
-    });
-  }
-  return monacoRuntimePromise;
-}
+const KEYWORDS = new Set([
+  'abstract', 'as', 'async', 'await', 'break', 'case', 'catch', 'class', 'const', 'continue',
+  'debugger', 'default', 'def', 'defer', 'delete', 'do', 'elif', 'else', 'enum', 'except',
+  'export', 'extends', 'false', 'finally', 'fn', 'for', 'from', 'func', 'function', 'go',
+  'if', 'impl', 'import', 'in', 'instanceof', 'interface', 'is', 'lambda', 'let', 'loop',
+  'match', 'mod', 'mut', 'new', 'None', 'null', 'or', 'package', 'pass', 'private', 'pub',
+  'public', 'raise', 'return', 'select', 'self', 'static', 'struct', 'super', 'switch',
+  'this', 'throw', 'trait', 'true', 'True', 'False', 'try', 'type', 'typeof', 'undefined',
+  'use', 'using', 'val', 'var', 'void', 'where', 'while', 'with', 'yield', 'and', 'not',
+  'SELECT', 'FROM', 'WHERE', 'INSERT', 'INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE', 'JOIN',
+  'LEFT', 'RIGHT', 'INNER', 'ON', 'GROUP', 'BY', 'ORDER', 'LIMIT', 'CREATE', 'TABLE', 'AS',
+]);
 
-function primeLanguageTokenizer(monaco, id) {
-  if (!primedLanguages.has(id)) {
-    // Monaco registers Monarch factories lazily; priming once per language enables tokenize().
-    primedLanguages.set(id, monaco.editor.colorize('', id, { theme: 'frelog-night', tabSize: 2 }).catch(() => {
-      primedLanguages.delete(id);
-    }));
-  }
-  return primedLanguages.get(id);
-}
+const TOKEN_RE = /\/\/[^\r\n]*|#[^\r\n]*|"(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|\b(?:0[xXbBoO][\da-fA-F_]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b|[A-Za-z_$][\w$]*|[()[\]{}.,:;]|==?=|!==?|[<>]=?|=>|\+\+|--|&&|\|\||[+\-*/%&|^~!?=]+|\s+/g;
 
 function cacheKey(language, source) {
   return `${language}\0${source}`;
@@ -39,104 +32,115 @@ function getCachedTokens(language, source) {
   return hit;
 }
 
-function putCachedTokens(language, source, tokens) {
+function putCachedTokens(language, source, lines) {
   const key = cacheKey(language, source);
   if (tokenCache.has(key)) tokenCache.delete(key);
   else if (tokenCache.size >= TOKEN_CACHE_LIMIT) {
     const oldest = tokenCache.keys().next().value;
     if (oldest !== undefined) tokenCache.delete(oldest);
   }
-  tokenCache.set(key, tokens);
+  tokenCache.set(key, lines);
 }
 
-function isStageInteracting() {
-  return typeof document !== 'undefined'
-    && Boolean(document.querySelector('.canvas-stage.camera-moving, .canvas-stage.camera-coasting, .canvas-stage.panning'));
-}
-
-function scheduleLowPriorityWork(fn) {
-  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-    const id = window.requestIdleCallback(fn, { timeout: 240 });
-    return () => window.cancelIdleCallback?.(id);
-  }
-  const id = setTimeout(fn, 16);
-  return () => clearTimeout(id);
-}
-
-function tokenKind(type, text, rest) {
-  if (/comment/.test(type)) return 'comment';
-  if (/string|regexp/.test(type)) return 'string';
-  if (/number/.test(type)) return 'number';
-  if (/keyword/.test(type)) return 'keyword';
-  if (/type|tag/.test(type)) return 'type';
-  if (/attribute/.test(type)) return 'attribute';
-  if (/operator/.test(type)) return 'operator';
-  if (/invalid/.test(type)) return 'invalid';
-  if (/identifier|predefined/.test(type) && /^\s*\(/.test(rest) && /^\w+$/.test(text)) return 'function';
-  if (/delimiter/.test(type)) return 'punctuation';
-  return 'plain';
-}
-
-export default function SyntaxCode({ value = '', language = 'text', title }) {
-  const source = String(value);
-  const [highlight, setHighlight] = useState(() => {
-    const cached = source.length <= 200000 ? getCachedTokens(language, source) : null;
-    return cached ? { source, language, tokens: cached } : null;
-  });
-  useEffect(() => {
-    let cancelled = false;
-    let cancelScheduled = null;
-    let retryTimer = 0;
-    // Full source remains visible; very large blocks use ordinary text.
-    if (source.length > 200000) return undefined;
-    const cached = getCachedTokens(language, source);
-    if (cached) {
-      setHighlight({ source, language, tokens: cached });
-      return undefined;
+function tokenizeLine(line, inBlockComment) {
+  const spans = [];
+  let idx = 0;
+  const len = line.length;
+  if (inBlockComment) {
+    const end = line.indexOf('*/');
+    if (end < 0) {
+      if (len) spans.push({ kind: 'comment', text: line });
+      return { spans, inBlockComment: true };
     }
+    spans.push({ kind: 'comment', text: line.slice(0, end + 2) });
+    idx = end + 2;
+  }
 
-    const commitTokens = (tokens) => {
-      if (cancelled) return;
-      if (isStageInteracting()) {
-        retryTimer = setTimeout(() => commitTokens(tokens), 180);
-        return;
+  while (idx < len) {
+    if (line[idx] === '/' && line[idx + 1] === '*') {
+      const end = line.indexOf('*/', idx + 2);
+      if (end < 0) {
+        spans.push({ kind: 'comment', text: line.slice(idx) });
+        return { spans, inBlockComment: true };
       }
-      setHighlight({ source, language, tokens });
-    };
-
-    const runTokenize = () => {
-      if (cancelled) return;
-      if (isStageInteracting()) {
-        retryTimer = setTimeout(() => {
-          cancelScheduled = scheduleLowPriorityWork(runTokenize);
-        }, 180);
-        return;
-      }
-      loadMonacoRuntime().then(async ({ monaco, ensureEditorLanguage, editorLanguage }) => {
-        await ensureEditorLanguage(language);
-        if (cancelled) return;
-        const id = editorLanguage(language);
-        await primeLanguageTokenizer(monaco, id);
-        if (cancelled) return;
-        const tokens = monaco.editor.tokenize(source, id);
-        putCachedTokens(language, source, tokens);
-        commitTokens(tokens);
-      }).catch(() => {});
-    };
-
-    cancelScheduled = scheduleLowPriorityWork(runTokenize);
-    return () => {
-      cancelled = true;
-      cancelScheduled?.();
-      if (retryTimer) clearTimeout(retryTimer);
-    };
-  }, [source, language]);
-  const current = highlight?.source === source && highlight.language === language ? highlight : null;
-  return <pre className="syntax-code-preview" title={title}><code>{current ? source.split(/\r\n?|\n/).map((line, lineIndex, lines) => <Fragment key={lineIndex}>
-    {(current.tokens[lineIndex] || [{ offset: 0, type: '' }]).map((token, index, tokens) => {
-      const end = tokens[index + 1]?.offset ?? line.length;
-      const text = line.slice(token.offset, end);
-      return <span key={index} className={`syntax-${tokenKind(token.type, text, line.slice(end))}`}>{text}</span>;
-    })}{lineIndex < lines.length - 1 ? '\n' : ''}
-  </Fragment>) : source}</code></pre>;
+      spans.push({ kind: 'comment', text: line.slice(idx, end + 2) });
+      idx = end + 2;
+      continue;
+    }
+    TOKEN_RE.lastIndex = idx;
+    const match = TOKEN_RE.exec(line);
+    if (!match) {
+      spans.push({ kind: 'plain', text: line.slice(idx) });
+      break;
+    }
+    if (match.index > idx) {
+      spans.push({ kind: 'plain', text: line.slice(idx, match.index) });
+    }
+    const text = match[0];
+    idx = TOKEN_RE.lastIndex;
+    let kind = 'plain';
+    const first = text[0];
+    if (first === ' ' || first === '\t') {
+      kind = 'plain';
+    } else if (text.startsWith('//') || first === '#') {
+      kind = 'comment';
+    } else if (first === '"' || first === "'" || first === '`') {
+      kind = 'string';
+    } else if (first >= '0' && first <= '9') {
+      kind = 'number';
+    } else if ('()[]{}.,:;'.includes(text)) {
+      kind = 'punctuation';
+    } else if ('=!<>+-*/%&|^~?'.includes(first)) {
+      kind = 'operator';
+    } else if (KEYWORDS.has(text)) {
+      kind = 'keyword';
+    } else if (/^\s*\(/.test(line.slice(idx))) {
+      kind = 'function';
+    } else if (first >= 'A' && first <= 'Z') {
+      kind = 'type';
+    }
+    spans.push({ kind, text });
+  }
+  return { spans, inBlockComment: false };
 }
+
+function tokenizeCode(source, language) {
+  if (source.length > 200000) return null;
+  const cached = getCachedTokens(language, source);
+  if (cached) return cached;
+  const rawLines = source.split(/\r\n?|\n/);
+  const result = new Array(rawLines.length);
+  let inBlockComment = false;
+  for (let i = 0; i < rawLines.length; i++) {
+    const out = tokenizeLine(rawLines[i], inBlockComment);
+    result[i] = out.spans;
+    inBlockComment = out.inBlockComment;
+  }
+  putCachedTokens(language, source, result);
+  return result;
+}
+
+const SyntaxCode = memo(function SyntaxCode({ value = '', language = 'text', title }) {
+  const source = String(value);
+  const lines = useMemo(() => tokenizeCode(source, language), [source, language]);
+  return (
+    <pre className="syntax-code-preview" title={title}>
+      <code>
+        {lines
+          ? lines.map((spans, lineIndex) => (
+            <Fragment key={lineIndex}>
+              {spans.map((span, idx) => (
+                span.kind === 'plain'
+                  ? span.text
+                  : <span key={idx} className={`syntax-${span.kind}`}>{span.text}</span>
+              ))}
+              {lineIndex < lines.length - 1 ? '\n' : ''}
+            </Fragment>
+          ))
+          : source}
+      </code>
+    </pre>
+  );
+});
+
+export default SyntaxCode;

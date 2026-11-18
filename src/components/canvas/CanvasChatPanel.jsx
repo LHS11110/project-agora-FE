@@ -1,5 +1,5 @@
 import {useLatestMessages} from '../../canvas/comments/useLatestMessages.js';
-import { useEffect, useId, useRef, useState } from 'react';
+import { memo, useEffect, useId, useRef, useState } from 'react';
 import CanvasVoicePanel from '../../canvas/voice/CanvasVoicePanel.jsx';
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
@@ -34,7 +34,7 @@ async function writeClipboardText(text) {
   }
 }
 
-export default function CanvasChatPanel({ token, voice, tab='chat', onTabChange, canWrite = true, chatHistoryLoading, connection, hasOlderMessages, loadOlderMessages, message, messages, setMessage, submitMessage, participants, highlight, onHighlightVisible, onHighlightExpired, chatMessageTotal = messages.length }) {
+const CanvasChatPanel = memo(function CanvasChatPanel({ token, voice, tab='chat', onTabChange, canWrite = true, chatHistoryLoading, connection, hasOlderMessages, loadOlderMessages, message, messages, setMessage, submitMessage, participants, highlight, onHighlightVisible, onHighlightExpired, chatMessageTotal = messages.length }) {
   const locale = useUiLocale(), list = useRef(null), tabId=useId();
   useLatestMessages(list,messages,'chat',highlight,onHighlightVisible,{followNearBottom:true,totalCount:chatMessageTotal,onHighlightExpired});
   const loadingOlder=useRef(false),touchY=useRef(null),copyTimer=useRef(null);
@@ -54,4 +54,6 @@ export default function CanvasChatPanel({ token, voice, tab='chat', onTabChange,
     </div>
     <div className="communication-call" role="tabpanel" id={`${tabId}-voice`} aria-labelledby={`${tabId}-voice-tab`} hidden={tab!=='voice'}>{voice&&<CanvasVoicePanel voice={voice}/>}</div>
   </section>;
-}
+});
+
+export default CanvasChatPanel;

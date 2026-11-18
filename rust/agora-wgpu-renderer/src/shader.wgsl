@@ -38,6 +38,28 @@ fn vs_main(
     @builtin(vertex_index) vertex_index: u32,
     instance: InstanceInput,
 ) -> VertexOutput {
+    let ndc_scale = vec2<f32>(
+        2.0 / max(1.0, camera.viewport_width),
+        2.0 / max(1.0, camera.viewport_height),
+    );
+    let screen_center = instance.center * camera.camera_scale + vec2<f32>(camera.camera_x, camera.camera_y);
+    let ndc_center = vec2<f32>(
+        screen_center.x * ndc_scale.x - 1.0,
+        1.0 - screen_center.y * ndc_scale.y,
+    );
+    let box_center = instance.offset + instance.size * 0.5;
+    let half_diag = (length(box_center) + length(instance.size) * 0.5) * camera.camera_scale;
+    let cull_margin = vec2<f32>(half_diag * ndc_scale.x, half_diag * ndc_scale.y);
+
+    var out: VertexOutput;
+    if (ndc_center.x + cull_margin.x < -1.0 || ndc_center.x - cull_margin.x > 1.0 ||
+        ndc_center.y + cull_margin.y < -1.0 || ndc_center.y - cull_margin.y > 1.0) {
+        out.clip_position = vec4<f32>(2.0, 2.0, 0.0, 1.0);
+        out.uv = vec2<f32>(0.0, 0.0);
+        out.tint = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+        return out;
+    }
+
     var corner: vec2<f32>;
     switch vertex_index {
         case 0u: { corner = vec2<f32>(0.0, 0.0); }
@@ -49,24 +71,25 @@ fn vs_main(
     }
 
     let local = instance.offset + corner * instance.size;
-    let c = cos(instance.rotation);
-    let s = sin(instance.rotation);
-    let rotated = vec2<f32>(
-        local.x * c - local.y * s,
-        local.x * s + local.y * c,
-    );
-    let world = instance.center + rotated;
-    let screen = world * camera.camera_scale + vec2<f32>(camera.camera_x, camera.camera_y);
+    var rotated = local;
+    if (instance.rotation != 0.0) {
+        let c = cos(instance.rotation);
+        let s = sin(instance.rotation);
+        rotated = vec2<f32>(
+            local.x * c - local.y * s,
+            local.x * s + local.y * c,
+        );
+    }
+    let screen = (instance.center + rotated) * camera.camera_scale + vec2<f32>(camera.camera_x, camera.camera_y);
     let ndc = vec2<f32>(
-        (screen.x / max(1.0, camera.viewport_width)) * 2.0 - 1.0,
-        1.0 - (screen.y / max(1.0, camera.viewport_height)) * 2.0,
+        screen.x * ndc_scale.x - 1.0,
+        1.0 - screen.y * ndc_scale.y,
     );
 
     let r = f32((instance.tint >> 16u) & 0xffu) / 255.0;
     let g = f32((instance.tint >> 8u) & 0xffu) / 255.0;
     let b = f32(instance.tint & 0xffu) / 255.0;
 
-    var out: VertexOutput;
     out.clip_position = vec4<f32>(ndc, 0.0, 1.0);
     out.uv = mix(instance.uv_min, instance.uv_max, corner);
     out.tint = vec4<f32>(r, g, b, 1.0);

@@ -1052,42 +1052,33 @@
 }
 
 /* Pan & zoom GPU compositing fast path: keep the outer world layer promoted on GPU,
- * isolate per-object layout/style subtrees, avoid per-frame child texture explosions,
- * skip backdrop blur readbacks, and pause flowing SVG animations while actively moving. */
+ * isolate per-object layout/style subtrees, and avoid full DOM shadow flicker on zoom/pan. */
 .canvas-stage .canvas-scene .canvas-world-layer {
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+.canvas-stage .canvas-scene .canvas-object {
+  contain: layout style;
   will-change: transform;
 }
 
-.canvas-stage .canvas-object {
+.canvas-app-page .zoom-value {
+  font-variant-numeric: tabular-nums;
+  display: inline-block;
   contain: layout style;
 }
 
-.canvas-stage:is(.camera-moving, .camera-coasting) .canvas-minimap,
-.canvas-stage:is(.camera-moving, .camera-coasting) .has-backdrop-blur {
+.canvas-stage:is(.camera-moving, .camera-coasting) .canvas-minimap {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
 
-.canvas-stage:is(.camera-moving, .camera-coasting) .connector-flow-forward .connector-visible-stroke,
-.canvas-stage:is(.camera-moving, .camera-coasting) .connector-flow-reverse .connector-visible-stroke {
+.canvas-stage:is(.camera-moving, .camera-coasting, .camera-zooming) .connector-flow-forward .connector-visible-stroke,
+.canvas-stage:is(.camera-moving, .camera-coasting, .camera-zooming) .connector-flow-reverse .connector-visible-stroke {
   animation-play-state: paused !important;
 }
 
-/* Simplify multi-pass Skia blurs, SVG luminance masks, blend modes, and text stroke halos
- * strictly while zoom scale is changing so re-rasterized GPU tiles stay fast at all zoom levels. */
-.canvas-stage.camera-zooming :is(.canvas-object, .canvas-object-style-backdrop, .canvas-shape-advanced-surface, .scalable-object-content) {
-  box-shadow: none !important;
-  filter: none !important;
-}
-
-.canvas-stage.camera-zooming :is(.canvas-object, .canvas-object-fill-layer) {
-  mix-blend-mode: normal !important;
-}
-
-.canvas-stage.camera-zooming .canvas-shape-svg [mask] {
-  mask: none !important;
-}
-
-.canvas-stage.camera-zooming .canvas-axis-ticks text {
+.canvas-stage:is(.camera-moving, .camera-coasting, .camera-zooming) .canvas-axis-ticks text {
   stroke: none !important;
 }

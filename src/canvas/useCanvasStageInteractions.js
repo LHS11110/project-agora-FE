@@ -48,7 +48,7 @@ export function useCanvasStageInteractions(options) {
   const cancelPanInertia = () => {
     if (cameraMotionRef.current.frame) cancelAnimationFrame(cameraMotionRef.current.frame);
     cameraMotionRef.current.frame = 0;
-    boardRef.current?.classList.remove('camera-coasting');
+    if (boardRef.current?.classList.contains('camera-coasting')) boardRef.current.classList.remove('camera-coasting');
   };
   useEffect(() => () => {
     if (cameraMotionRef.current.frame) cancelAnimationFrame(cameraMotionRef.current.frame);
@@ -211,7 +211,7 @@ export function useCanvasStageInteractions(options) {
     const stage = boardRef.current;
     if (!stage) return null;
     const cached = stageBoundsCacheRef.current;
-    if (cached.stage === stage && cached.rect && (panRef.current || performance.now() - cached.at < 250)) {
+    if (cached.stage === stage && cached.rect) {
       return cached.rect;
     }
     const rect = stage.getBoundingClientRect();
@@ -232,7 +232,7 @@ export function useCanvasStageInteractions(options) {
       lastX: event.clientX, lastY: event.clientY, lastAt: performance.now(),
       velocityX: 0, velocityY: 0, cameraX: camera.x, cameraY: camera.y,
     };
-    stage?.classList.add('panning');
+    if (stage && !stage.classList.contains('panning')) stage.classList.add('panning');
     stage?.setPointerCapture?.(event.pointerId);
   };
   const zoomBy = (factor, clientX, clientY) => {
@@ -627,7 +627,7 @@ export function useCanvasStageInteractions(options) {
       if (event.type === 'pointerup') samplePanVelocity(pan, event);
       panRef.current = null;
       const stage = boardRef.current;
-      stage?.classList.remove('panning');
+      if (stage?.classList.contains('panning')) stage.classList.remove('panning');
       if (stage?.hasPointerCapture?.(event.pointerId)) stage.releasePointerCapture(event.pointerId);
       setCamera((current) => ({
         ...current,
@@ -639,7 +639,7 @@ export function useCanvasStageInteractions(options) {
       let velocityY = Math.max(-1.25, Math.min(1.25, pan.velocityY * 0.82));
       if (Math.hypot(velocityX, velocityY) < 0.12) return;
       let previousAt = performance.now();
-      stage?.classList.add('camera-coasting');
+      if (stage && !stage.classList.contains('camera-coasting')) stage.classList.add('camera-coasting');
       const coast = (now) => {
         const elapsed = Math.min(32, Math.max(0, now - previousAt));
         previousAt = now;
@@ -648,7 +648,7 @@ export function useCanvasStageInteractions(options) {
         setCamera((current) => ({ ...current, x: current.x + velocityX * elapsed, y: current.y + velocityY * elapsed }));
         if (Math.hypot(velocityX, velocityY) < 0.025) {
           cameraMotionRef.current.frame = 0;
-          stage?.classList.remove('camera-coasting');
+          if (stage?.classList.contains('camera-coasting')) stage.classList.remove('camera-coasting');
           return;
         }
         cameraMotionRef.current.frame = requestAnimationFrame(coast);

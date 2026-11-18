@@ -28,7 +28,7 @@ export function useCanvasVoiceCall(canvasId,send,identity){
  const ref=useRef(call);ref.current=call;
  const state=useSyncExternalStore(call.subscribe,call.getSnapshot);
  useEffect(()=>{call.resume();const wake=()=>{if(document.visibilityState!=='hidden'){call.resumeAudio();call.retry();}};window.addEventListener('online',wake);document.addEventListener('visibilitychange',wake);return()=>{window.removeEventListener('online',wake);document.removeEventListener('visibilitychange',wake);call.close();};},[call]);
- return {call,ref,state};
+ return useMemo(()=>({call,ref,state}),[call,state]);
 }
 export default function CanvasVoicePanel({voice}){
  const fieldId=useId();

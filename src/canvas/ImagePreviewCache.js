@@ -110,8 +110,16 @@ export function drawImagePreview(context, item, world, bitmap) {
     if (radius) context.restore();
     return;
   }
-  const border = 0;
-  const footer = 0;
+  const framed = Boolean(item.imageFrameEnabled);
+  const border = framed ? Math.max(2, Math.min(7, width * 0.04)) : 0;
+  const footer = framed ? Math.max(5, Math.min(20, height * 0.14)) : 0;
+  if (framed) {
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, width, height);
+    context.strokeStyle = '#d8ded6';
+    context.lineWidth = 1;
+    context.strokeRect(0.5, 0.5, Math.max(1, width - 1), Math.max(1, height - 1));
+  }
   const boxWidth = Math.max(1, width - border * 2), boxHeight = Math.max(1, height - border - footer);
   const ratio = Math.min(boxWidth / bitmap.width, boxHeight / bitmap.height);
   const w = bitmap.width * ratio, h = bitmap.height * ratio;

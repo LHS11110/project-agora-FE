@@ -4,6 +4,7 @@ import {isRasterCode,codePreviewHeight} from './codePreviewMetrics.js';
 import {drawCodePreview} from './codePreviewRaster.js';
 import { shapeStrokeWidth } from './shapeAppearance.js';
 import { drawImagePreview } from './ImagePreviewCache.js';
+import { drawRichOverview } from './richPreviewRaster.js';
 import { objectBounds } from '../components/CanvasSpatialBTree.js';
 import { drawVectorItems } from './drawVectorItems.js';
 import { drawStroke } from './inkStrokeRenderer.js';
@@ -13,13 +14,45 @@ import { drawPlainText } from './plainTextRaster.js';
 import { objectFontSize } from './objectSize.js';
 import { textColorRanges } from './content/textColors.js';
 
-const fields = ['__codeStatus','renderMode','code','filename','language','__imagePreview','imageFrameEnabled','kind','shapeType','volumeStyle','vertexCount','cornerStyle','fillOpacity','sketchFillOpacity','width','height','color','fill','strokeEnabled','visualStyle','strokeWidth','startHead','endHead','headSize','bend','bendPoints','bendPointCount','from','to','fromPort','toPort','brush','opacity','simulatePressure','complete','text','fontSize','contentScale','contentScaleX','contentScaleY'];
+const fields = ['__overviewKind','__previewKey','__codeStatus','renderMode','code','filename','language','__imagePreview','imageFrameEnabled','kind','shapeType','volumeStyle','vertexCount','cornerStyle','fillOpacity','sketchFillOpacity','width','height','color','fill','strokeEnabled','visualStyle','strokeWidth','startHead','endHead','headSize','bend','bendPoints','bendPointCount','from','to','fromPort','toPort','brush','opacity','simulatePressure','complete','text','fontSize','contentScale','contentScaleX','contentScaleY'];
 const renderFields = [...fields,'runtimeState','x','y','rotation','points','shadowEnabled','shadowBlur','shadowOpacity','shadowOffsetX','shadowOffsetY','__selectionOutline'];
-export const sameRasterInput = (a,b) => a === b || (a && b && !(!isRasterCode(a) && a.kind === 'text' && (a.automerge_snapshot !== b.automerge_snapshot || a.automerge_changes !== b.automerge_changes) && JSON.stringify(textColorRanges(a)) !== JSON.stringify(textColorRanges(b))) && renderFields.every(field => a[field] === b[field]));
-export function rasterDescriptor(id, item, world, referenceItems, routeKey = '') {
-  const local = Object.fromEntries(fields.filter(field => item[field] !== undefined).map(field => [field, item[field]]));
-  if(isRasterCode(item)){local.height=codePreviewHeight(item,world.height)/world.height;local.__codeStatus=item.runtimeState?.source===contentSourceForCode(item)?item.runtimeState?.status:undefined;}
-  if (item.kind === 'text'&&!isRasterCode(item)) { const ranges = textColorRanges(item); if (ranges.length) local.__textColorRanges = ranges; }
+const DISABLED_SHADOW = Object.freeze({ enabled: false, blur: 0, opacity: 0, x: 0, y: 0 });
+export const sameRasterInput = (a,b) => {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.kind === 'text' && !isRasterCode(a) && (a.automerge_snapshot !== b.automerge_snapshot || a.automerge_changes !== b.automerge_changes) && JSON.stringify(textColorRanges(a)) !== JSON.stringify(textColorRanges(b))) return false;
+  for (let i = 0; i < renderFields.length; i++) {
+    const field = renderFields[i];
+    if (a[field] !== b[field]) return false;
+  }
+  return true;
+};
+const encodePart = value => {
+  if (value === undefined) return 'u;';
+  if (value === null) return 'n;';
+  const type = typeof value;
+  if (type === 'number') return 'd' + value + ';';
+  if (type === 'boolean') return value ? 't;' : 'f;';
+  if (type === 'string') return 's' + value.length + ':' + value + ';';
+  const json = JSON.stringify(value);
+  return 'j' + json.length + ':' + json + ';';
+};
+export function rasterDescriptor(id, item, world, referenceItems, routeKey = '', options = null) {
+  const local = {};
+  for (let i = 0; i < fields.length; i++) {
+    const field = fields[i];
+    const value = item[field];
+    if (value !== undefined) local[field] = value;
+  }
+  if (item.__overviewItem) local.__overviewItem = item.__overviewItem;
+  if (options && options.tint !== null && options.tint !== undefined) {
+    local.fill = '#ffffff';
+    local.color = '#ffffff';
+    local.strokeWidth = 0;
+  }
+  const rasterCode = isRasterCode(item);
+  if(rasterCode){local.height=codePreviewHeight(item,world.height)/world.height;local.__codeStatus=item.runtimeState?.source===contentSourceForCode(item)?item.runtimeState?.status:undefined;}
+  if (item.kind === 'text'&&!rasterCode) { const ranges = textColorRanges(item); if (ranges.length) local.__textColorRanges = ranges; }
   let x = 0, y = 0, centerX = 0, centerY = 0;
   const rotation = item.kind === 'connector' ? 0 : Number(item.rotation) || 0;
   if (item.kind === 'shape' || item.kind === 'text' || item.kind==='code') {
@@ -40,15 +73,27 @@ export function rasterDescriptor(id, item, world, referenceItems, routeKey = '')
   local.rotation = item.kind === 'connector' ? item.rotation : 0;
   local.shadowEnabled = false;
   if(item.__selectionOutline)local.__selectionOutline=true;
-  const shadow = objectShadow(item);
+  const keepLowShadow = options?.lowQuality && (['note', 'table', 'link'].includes(item.__overviewKind) || Boolean(item.brush || item.format));
+  const shadow = (options?.lowQuality && !keepLowShadow) || item.shadowEnabled === false ? DISABLED_SHADOW : objectShadow(item);
   // Standard shapes have no per-object randomness. Share their pixels regardless
   // of position/rotation; sketch strokes keep their object-specific seed.
   const seed = item.visualStyle === 'sketch' || item.kind === 'connector' ? id : '';
-  // Inline uploads can contain megabytes of base64. The layer's scoped image
-  // version identifies decoded pixels without copying source bytes into keys.
-  const appearance = local.__imagePreview ? { ...local, __imagePreview: true } : local;
-  const appearanceRoute=item.kind==='connector'?connectorGeometry(item,referenceItems,world.width,world.height)?.points:routeKey;
-  const key = JSON.stringify([seed, appearance, shadow, world.width, world.height, ['connector','text','code'].includes(item.kind) || item.__imagePreview ? appearanceRoute : '']);
+  const appearanceRoute = item.kind === 'connector'
+    ? connectorGeometry(item, referenceItems, world.width, world.height)?.points
+    : (item.kind === 'text' || item.kind === 'code' || item.__imagePreview ? routeKey : '');
+  let key = (seed ? seed.length + ':' + seed : '0') + '|' + world.width + 'x' + world.height + '|';
+  for (let i = 0; i < fields.length; i++) {
+    const field = fields[i];
+    const value = field === '__imagePreview' ? (local.__imagePreview ? true : undefined) : local[field];
+    if (value !== undefined) key += i + ':' + encodePart(value);
+  }
+  if (local.__textColorRanges !== undefined) key += 'r:' + encodePart(local.__textColorRanges);
+  if (local.__selectionOutline) key += 'sel1;';
+  if (local.x !== undefined) key += 'x:' + local.x + ',y:' + local.y + ';';
+  if (local.points !== undefined) key += 'p:' + encodePart(local.points);
+  key += 'rot:' + encodePart(local.rotation);
+  key += shadow.enabled ? 'sh:' + shadow.blur + ',' + shadow.opacity + ',' + shadow.x + ',' + shadow.y + '|' : 'sh0|';
+  if (appearanceRoute !== '') key += encodePart(appearanceRoute);
   return { key, local, shadow, x, y, centerX, centerY, rotation };
 }
 
@@ -66,7 +111,8 @@ export function rasterizeObject(id, descriptor, world, referenceItems, preferred
   const context = raw.getContext('2d');
   context.imageSmoothingQuality=textAppearance.smoothingQuality||'low';
   context.setTransform(ratio,0,0,ratio,-left*ratio,-top*ratio);
-  if (descriptor.local.__imagePreview) drawImagePreview(context, descriptor.local, world, textAppearance.imagePreview);
+  if (descriptor.local.__overviewKind) drawRichOverview(context, descriptor.local, world, textAppearance, textAppearance.imagePreview);
+  else if (descriptor.local.__imagePreview) drawImagePreview(context, descriptor.local, world, textAppearance.imagePreview);
   else if(isRasterCode(descriptor.local))drawCodePreview(context,descriptor.local,world,textAppearance.codeFont);
   else if (descriptor.local.kind === 'text') drawPlainText(context,descriptor.local,world,textAppearance.font || 'serif',textAppearance.color || '#3c5144');
   else if (descriptor.local.kind === 'stroke') drawStroke(context,descriptor.local,world.width,world.height);

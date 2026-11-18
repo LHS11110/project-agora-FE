@@ -12,7 +12,7 @@ import ObjectNumericControls from '../../canvas/ObjectNumericControls.jsx';
 import { SizeInput } from '../../canvas/ObjectSizeControls.jsx';
 import ObjectShadowControls from '../../canvas/ObjectShadowControls.jsx';
 import GraphicsQualityControls from '../../canvas/GraphicsQualityControls.jsx';
-import { useEffect, useId, useMemo, useState } from 'react';
+import { memo, useEffect, useId, useMemo, useState } from 'react';
 import ObjectDepthControls from '../../canvas/ObjectDepthControls.jsx';
 import CanvasBackgroundControls from '../../canvas/background/CanvasBackgroundControls.jsx';
 import ObjectRecoveryControls from '../../canvas/diagnostics/ObjectRecoveryControls.jsx';
@@ -51,7 +51,7 @@ const KIND_EDIT_LABELS = {
   value: '값 편집', pdf: 'PDF 편집', link: '링크 편집', 'user-group': '그룹 편집', stroke: '드로잉 편집',
 };
 
-export default function CanvasInspectorPanel({
+const CanvasInspectorPanel = memo(function CanvasInspectorPanel({
   activeTool,
   canvasId,
   graphicsQuality, changeGraphicsQuality,
@@ -294,4 +294,6 @@ export default function CanvasInspectorPanel({
         </>}
       </aside>
   );
-}
+});
+
+export default CanvasInspectorPanel;

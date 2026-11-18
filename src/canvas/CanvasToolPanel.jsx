@@ -1,7 +1,7 @@
 import { ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
 import { useFolderReorderMotion } from './toolFolders/useFolderReorderMotion.js';
-import { useRef, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import CanvasColorPicker from './CanvasColorPicker.jsx';
 import CanvasToolCategory from './CanvasToolCategory.jsx';
@@ -14,7 +14,7 @@ import ToolFolderScatter from './toolFolders/ToolFolderScatter.jsx';
 import './canvas-tool-panel.css';
 import './toolFolders/tool-folders.css';
 
-export default function CanvasToolPanel({ onOpenAnchors, activeTool, onSelectTool, color, onColorChange, onUploadImage, onUploadMedia, onUploadPdf, onUploadSheet, favoriteColors, onSaveFavorite }) {
+const CanvasToolPanel = memo(function CanvasToolPanel({ onOpenAnchors, activeTool, onSelectTool, color, onColorChange, onUploadImage, onUploadMedia, onUploadPdf, onUploadSheet, favoriteColors, onSaveFavorite }) {
   useUiLocale();
   const panelRef = useRef(null);
   const folders = useToolFolderLayout(activeTool);
@@ -62,4 +62,6 @@ export default function CanvasToolPanel({ onOpenAnchors, activeTool, onSelectToo
     {dragController.drag && createPortal(<div className="tool-folder-drag-preview" aria-hidden="true" style={{ left: dragController.drag.x + 12, top: dragController.drag.y + 12 }}>{dragController.drag.kind === 'folder' ? <span>▣ {folders.layout.folders.find(folder => folder.id === dragController.drag.folderId)?.label}</span> : <ToolLabel tool={toolsById[dragController.drag.toolId]} />}</div>, document.body)}
     <ToolFolderScatter flights={flights} panelRef={panelRef} onFinish={() => setFlights([])} />
   </aside>;
-}
+});
+
+export default CanvasToolPanel;
