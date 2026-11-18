@@ -2871,4 +2871,9 @@ export default {
   "표시 객체": "Visible Objects",
   "아틀라스 · 래스터": "Atlas · Raster",
   "{v0}p · +{v1}/0.2s": "{v0}p · +{v1}/0.2s",
+  "미리보기 실행": "Run preview",
+  "미리보기 닫기": "Close preview",
+  "실제 출력 보기": "Show live output",
+  "실제 출력 닫기": "Close live output",
+  "정적 콘텐츠 요약": "Static content summary",
 };
