@@ -2,7 +2,7 @@ import CameraIdleTask from './CameraIdleTask.js';
 import { shouldCommitCamera } from './cameraCommitSchedule.js';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, startTransition } from 'react';
 import { applyGridProjection, gridProjection } from './gridProjection.js';
-import { CANVAS_SPACE, formatCanvasZoom } from './canvasSpace.js';
+import { CANVAS_SPACE, clampCanvasScale, formatCanvasZoom } from './canvasSpace.js';
 
 // Camera motion is a compositor update. React refreshes scene membership at
 // viewport coverage changes, without a fixed refresh interval.
@@ -34,7 +34,7 @@ export function useCanvasCamera(boardRef, sceneRef) {
       state.observer = new ResizeObserver(([entry]) => { state.size = { stage, width: entry.contentRect.width, height: entry.contentRect.height }; }); state.observer.observe(stage);
     }
     const { width, height } = state.size;
-    const gx = Number(stage.dataset.gridSpacingX) || 20, gy = Number(stage.dataset.gridSpacingY) || 20;
+    const gx = Number(stage.dataset.gridSpacingX) || 1, gy = Number(stage.dataset.gridSpacingY) || 1;
     const worldLayers = scene.getElementsByClassName('canvas-world-layer');
     const refs = state.refs, last = state.last;
     const stageChanged = refs.stage !== stage;
@@ -155,8 +155,10 @@ export function useCanvasCamera(boardRef, sceneRef) {
     last.x = camera.x; last.y = camera.y; last.scale = camera.scale; last.width = width; last.height = height; last.gx = gx; last.gy = gy; last.layers = worldLayers.length; last.axisChildren = axisChildren; last.stageChildCount = stageChildCount; last.wasActive = stageActive;
   }, [boardRef, sceneRef]);
   const setCamera = useCallback(update => {
-    const next = typeof update === 'function' ? update(current.current) : update;
-    if (!next || ![next.x, next.y, next.scale].every(Number.isFinite) || next.scale <= 0) return;
+    const raw = typeof update === 'function' ? update(current.current) : update;
+    if (!raw || ![raw.x, raw.y, raw.scale].every(Number.isFinite) || raw.scale <= 0) return;
+    const clampedScale = clampCanvasScale(raw.scale);
+    const next = clampedScale === raw.scale ? raw : { ...raw, scale: clampedScale };
     if (next.x === current.current.x && next.y === current.current.y && next.scale === current.current.scale) return;
     const zooming = next.scale !== current.current.scale;
     current.current = next;

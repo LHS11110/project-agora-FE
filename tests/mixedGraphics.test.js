@@ -5,16 +5,17 @@ import {isOverviewProxy,overviewProxy} from '../src/canvas/sceneRepresentation.j
 import {hasRenderedAnimation,defaultAnimation} from '../src/canvas/portfolio/portfolioModel.js';
 import {itemSnapshot} from '../src/canvas/itemSnapshots.js';
 const world={width:1600,height:1000};
-test('quality changes rich-object detail; heightless code and runtime shapes participate',()=>{
- const image={kind:'image',width:.025,height:.035};assert.equal(isOverviewProxy(image,world,1,'low'),true);assert.equal(isOverviewProxy(image,world,1,'high'),false);
+test('unified high clarity keeps readable rich DOM intact while microscopic code and runtime shapes participate',()=>{
+ const image={kind:'image',width:.025,height:.035};assert.equal(isOverviewProxy(image,world,1,'low'),false);assert.equal(isOverviewProxy(image,world,1,'high'),false);
  assert.equal(isOverviewProxy({kind:'shape',runtimeRole:'output',width:.2,height:.2},world,.01),true);
  const code={kind:'code',width:.2,code:'print(1)',renderMode:'code'};assert.equal(isOverviewProxy(code,world,.01),true);
  assert.equal(overviewProxy(code,world,.001).kind,'text');
  assert.equal(isOverviewProxy({kind:'code',width:.2,code:'<h1>Hi</h1>',language:'html',renderMode:'code'},world,.01),false);
  const e={id:'image',item:image,bounds:{minX:0,minY:0,maxX:.025,maxY:.035}},model=new SceneViewModel(),items={image};
- model.update([e],items,world,1,new Set(),new Set(),0,null,'low');assert.equal(model.depthLayers[0].domObjects.length,0);
+ model.update([e],items,world,1,new Set(),new Set(),0,null,'low');assert.equal(model.depthLayers[0].domObjects.length,1);
  model.update(model.entries,items,world,1,new Set(),new Set(),0,null,'high');assert.equal(model.depthLayers[0].domObjects.length,1);
- assert.ok(graphicsLodScale(1,200000,'low')<graphicsLodScale(1,200000,'high'));
+ assert.equal(graphicsLodScale(1,200000,'low'),1);
+ assert.equal(graphicsLodScale(1,200000,'high'),1);
 });
 test('200,000 mixed objects use bounded rich DOM and selected objects regain full interaction',()=>{
  const entries=Array.from({length:200000},(_,i)=>{const kind=['shape','code','image','link','link'][i%5];const item={kind,shapeType:'rectangle',x:(i%500)*.02,y:Math.floor(i/500)*.02,width:.018,height:.016,code:'print(42)',renderMode:'code',src:'https://example.invalid/image.png',mediaType:i%5===3?'youtube':'video',url:'https://example.invalid/media.mp4',shadowEnabled:false};return {id:String(i),item,bounds:{minX:item.x,minY:item.y,maxX:item.x+item.width,maxY:item.y+item.height}};});

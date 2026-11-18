@@ -1,4 +1,4 @@
-import Timer from './timer/Timer.jsx';
+import Timer from './CanvasTimer.jsx';
 import {hasAnimation} from './portfolio/portfolioModel.js';
 import {useObjectAnimation} from './portfolio/animationStore.js';
 import AnimatedVector from './portfolio/AnimatedVector.jsx';

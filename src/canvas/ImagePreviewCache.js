@@ -59,7 +59,7 @@ export default class ImagePreviewCache {
   }
 }
 
-export async function loadImagePreview(source, token, apiUrl, signal, maxSide=96) {
+export async function loadImagePreview(source, token, apiUrl, signal, maxSide=1024) {
   if (signal?.aborted) throw new DOMException('The request was aborted', 'AbortError');
   const isInline = /^(data|blob):/i.test(source);
   const url = new URL(isInline ? source : apiUrl(source));
@@ -92,10 +92,10 @@ export async function loadImagePreview(source, token, apiUrl, signal, maxSide=96
       }
     }
     if (signal?.aborted) throw new DOMException('The request was aborted', 'AbortError');
-    const ratio = Math.min(1, Math.max(16,Math.min(1024,Number(maxSide)||96)) / Math.max(1, bitmap.width, bitmap.height));
+    const ratio = Math.min(1, Math.max(16,Math.min(2048,Number(maxSide)||1024)) / Math.max(1, bitmap.width, bitmap.height));
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(bitmap.width * ratio)); canvas.height = Math.max(1, Math.round(bitmap.height * ratio));
-    const context=canvas.getContext('2d');context.imageSmoothingQuality=maxSide>96?'high':'low';context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const context=canvas.getContext('2d');context.imageSmoothingQuality='high';context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     return canvas;
   } finally { bitmap?.close?.(); if (objectUrl) URL.revokeObjectURL(objectUrl); }
 }

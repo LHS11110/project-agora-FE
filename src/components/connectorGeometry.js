@@ -11,6 +11,7 @@ import { arrowPathGeometry } from './arrowheadGeometry.js';
 import { objectCornerRadius, supportsObjectCorners } from '../canvas/objectCorners.js';
 import { shapeOutlinePaths } from '../canvas/shapeGeometry.js';
 import { parseRawStyleEnvelope } from '../canvas/styling/objectStyleModel.js';
+import { lookupSpatialIndex, routeConnectorAStar, rectCoreBounds } from '../canvas/connectors/aStarRoute.js';
 
 export const OBJECT_SIZES = {
   value: [0.28,0.21],
@@ -113,19 +114,87 @@ function bezierPoint(points, t) {
   }), { x: 0, y: 0 });
 }
 
-function calculateConnectorGeometry(item, items, width, height) {
+function collectNearbyObstacles(item, items, from, to, width, height, clearance, spatial) {
+  const fromId = String(item.from);
+  const toId = String(item.to);
+  const obstacles = [];
+  if (spatial) {
+    const padPx = Math.max(160, Math.min(640, Math.round(Math.hypot(to.centerX - from.centerX, to.centerY - from.centerY) * 0.45 + clearance * 4)));
+    const minPxX = Math.min(from.centerX - from.halfWidth, to.centerX - to.halfWidth) - padPx;
+    const minPxY = Math.min(from.centerY - from.halfHeight, to.centerY - to.halfHeight) - padPx;
+    const maxPxX = Math.max(from.centerX + from.halfWidth, to.centerX + to.halfWidth) + padPx;
+    const maxPxY = Math.max(from.centerY + from.halfHeight, to.centerY + to.halfHeight) + padPx;
+    const candidates = spatial.query({
+      minX: minPxX / Math.max(1, width),
+      minY: minPxY / Math.max(1, height),
+      maxX: maxPxX / Math.max(1, width),
+      maxY: maxPxY / Math.max(1, height),
+    });
+    for (let i = 0; i < candidates.length; i++) {
+      const entry = candidates[i];
+      const id = String(entry.id);
+      if (id === fromId || id === toId) continue;
+      const candidate = items[id] || entry.item;
+      if (!isDrawableCanvasItem(candidate) || candidate.kind === 'connector' || candidate.kind === 'frame' || candidate.type === 'chat_room') continue;
+      obstacles.push({ id, ...objectRect(candidate, width, height) });
+    }
+    return obstacles;
+  }
+  let entries;
+  try {
+    entries = Object.entries(items);
+  } catch {
+    return obstacles;
+  }
+  for (let i = 0; i < entries.length; i++) {
+    const [rawId, candidate] = entries[i];
+    const id = String(rawId);
+    if (id === fromId || id === toId) continue;
+    if (!isDrawableCanvasItem(candidate) || candidate.kind === 'connector' || candidate.kind === 'frame' || candidate.type === 'chat_room') continue;
+    obstacles.push({ id, ...objectRect(candidate, width, height) });
+  }
+  return obstacles;
+}
+
+function defaultCorridorBounds(from, to, points, width, height, clearance) {
+  const fromB = rectCoreBounds(from, clearance);
+  const toB = rectCoreBounds(to, clearance);
+  let minX = Math.min(fromB.minX, toB.minX);
+  let minY = Math.min(fromB.minY, toB.minY);
+  let maxX = Math.max(fromB.maxX, toB.maxX);
+  let maxY = Math.max(fromB.maxY, toB.maxY);
+  if (Array.isArray(points)) {
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      minX = Math.min(minX, p.x - clearance);
+      minY = Math.min(minY, p.y - clearance);
+      maxX = Math.max(maxX, p.x + clearance);
+      maxY = Math.max(maxY, p.y + clearance);
+    }
+  }
+  const w = Math.max(1, width);
+  const h = Math.max(1, height);
+  return { minX: minX / w, minY: minY / h, maxX: maxX / w, maxY: maxY / h };
+}
+
+function calculateConnectorGeometry(item, items, width, height, spatialIndex = null) {
   const fromItem = items?.[item?.from];
   const toItem = items?.[item?.to];
   if (!isDrawableCanvasItem(fromItem) || !isDrawableCanvasItem(toItem)) return null;
 
   if (String(item.from) === String(item.to)) return null;
-  // Pin routing needs only its endpoints. It must not depend on unrelated
-  // background frames, labels, or enumeration of a structurally shared view.
+  const spatial = spatialIndex || lookupSpatialIndex(items);
+  const from = { id: String(item.from), ...objectRect(fromItem, width, height) };
+  const to = { id: String(item.to), ...objectRect(toItem, width, height) };
+  const strokeWidth = Number(item.strokeWidth) || 1.5;
+  const headSize = Number.isFinite(item.headSize) ? Math.max(2, Math.min(128, item.headSize)) : Math.max(8, Math.min(15, 6 + strokeWidth * 2.5));
+  const clearance = Math.max(12, Math.min(28, headSize * 0.5 + strokeWidth / 2 + 8));
+  const obstacles = collectNearbyObstacles(item, items, from, to, width, height, clearance, spatial);
+
   if (isLogicGate(fromItem.shapeType) || isLogicGate(toItem.shapeType)) {
-    return logicConnectorGeometry(item, fromItem, toItem, objectRect(fromItem, width, height), objectRect(toItem, width, height), { width, height }, distanceToEdge);
+    return logicConnectorGeometry(item, fromItem, toItem, from, to, { width, height }, distanceToEdge, obstacles);
   }
-  const from = {id:String(item.from),...objectRect(fromItem,width,height)};
-  const to = {id:String(item.to),...objectRect(toItem,width,height)};
+
   const dx = to.centerX - from.centerX;
   const dy = to.centerY - from.centerY;
   const length = Math.hypot(dx, dy);
@@ -140,12 +209,14 @@ function calculateConnectorGeometry(item, items, width, height) {
   const curveNormalY = normalX * Math.sin(curveRotation) + normalY * Math.cos(curveRotation);
   const sourceReach = distanceToEdge(from, directionX, directionY);
   const targetReach = distanceToEdge(to, -directionX, -directionY);
-  const strokeWidth = Number(item.strokeWidth) || 1.5;
-  const headSize = Number.isFinite(item.headSize) ? Math.max(2, Math.min(128, item.headSize)) : Math.max(8, Math.min(15, 6 + strokeWidth * 2.5));
   // Arrowheads extend backwards from their tips. Their size is obstacle
   // clearance, not a gap between the tip and the connected object's boundary.
   const availableGap = Math.max(0, (length - sourceReach - targetReach) / 3);
   const attachmentPadding = rect => Math.min(2 + strokeWidth / 2 + (rect.outlinePadding || 0), availableGap);
+  const anchorAt = (rect, dir) => {
+    const reach = distanceToEdge(rect, dir.x, dir.y) + attachmentPadding(rect);
+    return { x: rect.centerX + dir.x * reach, y: rect.centerY + dir.y * reach };
+  };
   const sourcePadding = attachmentPadding(from), targetPadding = attachmentPadding(to);
   const start = {
     x: from.centerX + directionX * (sourceReach + sourcePadding),
@@ -158,13 +229,35 @@ function calculateConnectorGeometry(item, items, width, height) {
   const gap = Math.max(1, (end.x - start.x) * directionX + (end.y - start.y) * directionY);
   const routingMode = parseRawStyleEnvelope(item)?.connector?.routing || 'curved';
   if (routingMode === 'straight') {
-    const arrowPath = arrowPathGeometry([start, end], {
+    const routedStraight = obstacles.length
+      ? routeConnectorAStar({
+          from,
+          to,
+          preferredPoints: [start, end],
+          obstacles,
+          clearance,
+          anchorFn: anchorAt,
+          keepOrthogonal: false,
+        })
+      : { points: [start, end], routed: false, corridor: null };
+    const finalPoints = routedStraight.points || [start, end];
+    const arrowPath = arrowPathGeometry(finalPoints, {
       startHead: item.startHead,
       endHead: item.endHead,
       headSize,
       strokeWidth,
     });
-    const midPoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+    const midPoint = routedStraight.routed && routedStraight.handles?.length
+      ? routedStraight.handles[0]
+      : { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+    const corridor = routedStraight.corridor
+      ? {
+          minX: routedStraight.corridor.minX / Math.max(1, width),
+          minY: routedStraight.corridor.minY / Math.max(1, height),
+          maxX: routedStraight.corridor.maxX / Math.max(1, width),
+          maxY: routedStraight.corridor.maxY / Math.max(1, height),
+        }
+      : defaultCorridorBounds(from, to, finalPoints, width, height, clearance);
     return {
       ...arrowPath,
       directionX,
@@ -173,11 +266,12 @@ function calculateConnectorGeometry(item, items, width, height) {
       normalY,
       gap,
       bend: 0,
-      bendStart: start,
-      bendEnd: end,
-      controlSourcePoints: [start, end],
+      bendStart: finalPoints[0],
+      bendEnd: finalPoints[finalPoints.length - 1],
+      controlSourcePoints: finalPoints,
       controlHandles: [midPoint],
-      routed: false,
+      routed: Boolean(routedStraight.routed),
+      corridor,
     };
   }
   if (routingMode === 'orthogonal') {
@@ -207,16 +301,38 @@ function calculateConnectorGeometry(item, items, width, height) {
         { x: to.centerX, y: ey },
       ];
     }
-    const arrowPath = arrowPathGeometry(orthoPoints, {
+    const routedOrtho = obstacles.length
+      ? routeConnectorAStar({
+          from,
+          to,
+          preferredPoints: orthoPoints,
+          obstacles,
+          clearance,
+          anchorFn: anchorAt,
+          keepOrthogonal: true,
+        })
+      : { points: orthoPoints, routed: false, corridor: null };
+    const finalPoints = routedOrtho.points || orthoPoints;
+    const arrowPath = arrowPathGeometry(finalPoints, {
       startHead: item.startHead,
       endHead: item.endHead,
       headSize,
       strokeWidth,
     });
-    const handlePoint = {
-      x: (orthoPoints[1].x + orthoPoints[2].x) / 2,
-      y: (orthoPoints[1].y + orthoPoints[2].y) / 2,
-    };
+    const handlePoint = routedOrtho.routed && routedOrtho.handles?.length
+      ? routedOrtho.handles[0]
+      : {
+          x: (orthoPoints[1].x + orthoPoints[2].x) / 2,
+          y: (orthoPoints[1].y + orthoPoints[2].y) / 2,
+        };
+    const corridor = routedOrtho.corridor
+      ? {
+          minX: routedOrtho.corridor.minX / Math.max(1, width),
+          minY: routedOrtho.corridor.minY / Math.max(1, height),
+          maxX: routedOrtho.corridor.maxX / Math.max(1, width),
+          maxY: routedOrtho.corridor.maxY / Math.max(1, height),
+        }
+      : defaultCorridorBounds(from, to, finalPoints, width, height, clearance);
     return {
       ...arrowPath,
       directionX,
@@ -225,11 +341,12 @@ function calculateConnectorGeometry(item, items, width, height) {
       normalY,
       gap,
       bend: Number(item.bend) || 0,
-      bendStart: orthoPoints[0],
-      bendEnd: orthoPoints[orthoPoints.length - 1],
-      controlSourcePoints: orthoPoints,
+      bendStart: finalPoints[0],
+      bendEnd: finalPoints[finalPoints.length - 1],
+      controlSourcePoints: finalPoints,
       controlHandles: [handlePoint],
-      routed: false,
+      routed: Boolean(routedOrtho.routed),
+      corridor,
     };
   }
   const hasCustomBend = Number.isFinite(Number(item.bend));
@@ -256,23 +373,60 @@ function calculateConnectorGeometry(item, items, width, height) {
     };
     curvePoints = sampleControlCurve([attached(from, controls[0], start), ...controls, attached(to, controls.at(-1), end)]);
   }
-  const arrowPath = arrowPathGeometry(curvePoints, {
+  const aStarResult = obstacles.length
+    ? routeConnectorAStar({
+        from,
+        to,
+        preferredPoints: curvePoints,
+        obstacles,
+        clearance,
+        anchorFn: anchorAt,
+        guides: hasControls ? controls : null,
+        keepOrthogonal: false,
+      })
+    : { points: curvePoints, routed: false, corridor: null };
+  const finalPoints = aStarResult.points || curvePoints;
+  const arrowPath = arrowPathGeometry(finalPoints, {
     startHead: item.startHead,
     endHead: item.endHead,
     headSize,
     strokeWidth: Number(item.strokeWidth) || 1.5,
   });
-  return { ...arrowPath, directionX, directionY, normalX, normalY, gap, bend, bendStart: start, bendEnd: end, controlSourcePoints: curvePoints, controlHandles: hasControls ? controls : [curvePoints[Math.floor((curvePoints.length - 1) / 2)]], routed: false };
+  const corridor = aStarResult.corridor
+    ? {
+        minX: aStarResult.corridor.minX / Math.max(1, width),
+        minY: aStarResult.corridor.minY / Math.max(1, height),
+        maxX: aStarResult.corridor.maxX / Math.max(1, width),
+        maxY: aStarResult.corridor.maxY / Math.max(1, height),
+      }
+    : defaultCorridorBounds(from, to, finalPoints, width, height, clearance);
+  return {
+    ...arrowPath,
+    directionX,
+    directionY,
+    normalX,
+    normalY,
+    gap,
+    bend,
+    bendStart: finalPoints[0] || start,
+    bendEnd: finalPoints[finalPoints.length - 1] || end,
+    controlSourcePoints: finalPoints,
+    controlHandles: hasControls ? controls : [finalPoints[Math.floor((finalPoints.length - 1) / 2)]],
+    routed: Boolean(aStarResult.routed),
+    corridor,
+  };
 }
 
 const geometryCache = new WeakMap();
-export function connectorGeometry(item, items, width = 1, height = 1) {
+export function connectorGeometry(item, items, width = 1, height = 1, spatialIndex = null) {
   if (!item || !items) return null;
-  const key = `${width}:${height}:${connectorMetricsRevision()}`;
+  const spatial = spatialIndex || lookupSpatialIndex(items);
+  const spatialRev = spatial?.stats?.updates || 0;
+  const key = `${width}:${height}:${connectorMetricsRevision()}:${spatialRev}`;
   let cache = geometryCache.get(items);
   if (!cache || cache.key !== key) { cache = { key, results: new WeakMap() }; geometryCache.set(items, cache); }
   if (cache.results.has(item)) return cache.results.get(item);
-  const geometry = calculateConnectorGeometry(item, items, width, height);
+  const geometry = calculateConnectorGeometry(item, items, width, height, spatial);
   cache.results.set(item, geometry);
   return geometry;
 }

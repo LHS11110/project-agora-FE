@@ -1,10 +1,12 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {connectorGeometry} from '../src/components/connectorGeometry.js';
+import {pathIntersectsBoxes,rectCoreBounds} from '../src/canvas/connectors/aStarRoute.js';
+import CanvasSpatialBTree from '../src/components/CanvasSpatialBTree.js';
 const world={width:1600,height:1000};
 const box=(x,y,width=.1,height=.1,extra={})=>({kind:'shape',shapeType:'rectangle',x,y,width,height,...extra});
 function geometry(headSize,extra={}){const items={a:box(0,0),b:box(.4,0),...extra};const link={kind:'connector',from:'a',to:'b',headSize,strokeWidth:2};return connectorGeometry(link,items,world.width,world.height);}
 test('large arrowheads do not pull attachment tips away from object boundaries',()=>{const small=geometry(8),large=geometry(128);assert(small&&large);assert.deepEqual(large.start,small.start);assert.deepEqual(large.end,small.end);assert(large.start.x-160<5);assert(640-large.end.x<5);});
-test('other objects do not change endpoint attachment',()=>{const route=geometry(24,{wall:box(.2,-.06,.08,.22)});assert(route);assert.equal(route.routed,false);for(const [point,x] of [[route.start,0],[route.end,640]]){const dx=Math.max(x-point.x,0,point.x-(x+160)),dy=Math.max(-point.y,0,point.y-100);assert(Math.hypot(dx,dy)<6,'Tip must remain near its actual object');}});
+test('other objects detour via A* without changing endpoint attachment',()=>{const route=geometry(24,{wall:box(.2,-.06,.08,.22)});assert(route);assert.equal(route.routed,true);const wallBox=rectCoreBounds({centerX:384,centerY:50,halfWidth:64,halfHeight:110},0);assert.equal(pathIntersectsBoxes(route.curvePoints,[wallBox]),false);for(const [point,x] of [[route.start,0],[route.end,640]]){const dx=Math.max(x-point.x,0,point.x-(x+160)),dy=Math.max(-point.y,0,point.y-100);assert(Math.hypot(dx,dy)<6,'Tip must remain near its actual object');}});
 test('thick object outlines are included in the attachment gap',()=>{const items={a:box(0,0,.1,.1,{strokeWidth:30}),b:box(.4,0)};const route=connectorGeometry({kind:'connector',from:'a',to:'b',strokeWidth:2},items,1600,1000);assert(route.start.x>=178&&route.start.x<180);});
 test('rotated endpoint attachment stays aligned with the rotated boundary',()=>{const a=box(0,0,.1,.1,{rotation:45}),b=box(.4,0);const route=connectorGeometry({kind:'connector',from:'a',to:'b',headSize:100,strokeWidth:2},{a,b},1600,1000);const dx=route.start.x-80,dy=route.start.y-50,c=Math.SQRT1_2;const local={x:dx*c+dy*c,y:-dx*c+dy*c};assert(Math.abs(Math.abs(local.y)-50)<5);});
 
@@ -43,15 +45,22 @@ test('diagonal code connections meet rounded visible corners rather than empty b
  const link={kind:'connector',from:'a',to:'b',strokeWidth:2};const rounded=connectorGeometry(link,{a,b},1600,1000),sharp=connectorGeometry(link,{a:{...a,cornerStyle:'sharp'},b},1600,1000);
  assert(rounded&&sharp);const expected=176+24/Math.sqrt(2)+3/Math.sqrt(2);assert(Math.abs(rounded.start.x-expected)<.01);assert(Math.abs(rounded.start.y-expected)<.01);assert(rounded.start.x<sharp.start.x-6);
 });
-test('frame links ignore contents at frame edges and external obstacles',()=>{
+test('frame links ignore contents at frame edges and route around external obstacles',()=>{
  const a={kind:'frame',x:0,y:0,width:.3,height:.4},b={kind:'frame',x:.65,y:0,width:.3,height:.4};
  const contents={left:box(.26,.1,.08,.2),right:box(.62,.1,.08,.2)};
  const link={kind:'connector',from:'a',to:'b',strokeWidth:2};
  const clear=connectorGeometry(link,{a,b,...contents},1600,1000);assert.ok(clear);assert.equal(clear.routed,false);
- const blocked=connectorGeometry(link,{a,b,...contents,wall:box(.45,.12,.06,.16)},1600,1000);assert.ok(blocked);assert.equal(blocked.routed,false);assert.deepEqual(blocked.points,clear.points);
+ const wall=box(.45,.12,.06,.16);
+ const blocked=connectorGeometry(link,{a,b,...contents,wall},1600,1000);assert.ok(blocked);assert.equal(blocked.routed,true);assert.notDeepEqual(blocked.points,clear.points);
+ const wallBox=rectCoreBounds({centerX:(.45+.03)*1600,centerY:(.12+.08)*1000,halfWidth:.03*1600,halfHeight:.08*1000},0);
+ assert.equal(pathIntersectsBoxes(blocked.curvePoints,[wallBox]),false);
 });
 
-test('connector generation reads only endpoints without scanning canvas objects',()=>{
- const a=box(0,0),b=box(.5,.2),items=new Proxy({a,b},{ownKeys(){throw Error('must not scan obstacles');}});
- assert.ok(connectorGeometry({kind:'connector',from:'a',to:'b',bend:100},items,1600,1000));
+test('connector generation uses spatial queries or endpoints without full ownKeys scans',()=>{
+ const a=box(0,0),b=box(.5,.2),wall=box(.25,.05,.08,.12),link={kind:'connector',from:'a',to:'b'};
+ const raw={a,b,wall,link};
+ const index=new CanvasSpatialBTree(raw,world);
+ const strictItems=new Proxy(raw,{ownKeys(){throw Error('must not scan obstacles via ownKeys');}});
+ const routed=connectorGeometry(link,strictItems,1600,1000,index);
+ assert.ok(routed);assert.equal(routed.routed,true);
 });

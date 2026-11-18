@@ -39,7 +39,7 @@ export class WgpuSceneBatcher {
     this.batchCounts = counts;
   }
 
-  sync(renderer, ordered, dragPreview = null) {
+  sync(renderer, ordered, dragPreview = null, cullBounds = null) {
     const length = ordered.length;
     this.ensureCapacity(length);
     const f32 = this.f32;
@@ -50,6 +50,17 @@ export class WgpuSceneBatcher {
     const dragIds = dragPreview?.ids;
     const dragDx = dragIds?.size ? (dragPreview.dx || 0) : 0;
     const dragDy = dragIds?.size ? (dragPreview.dy || 0) : 0;
+    const useCull = Boolean(
+      cullBounds &&
+      Number.isFinite(cullBounds.minX) &&
+      Number.isFinite(cullBounds.minY) &&
+      Number.isFinite(cullBounds.maxX) &&
+      Number.isFinite(cullBounds.maxY)
+    );
+    const cMinX = useCull ? cullBounds.minX : 0;
+    const cMinY = useCull ? cullBounds.minY : 0;
+    const cMaxX = useCull ? cullBounds.maxX : 0;
+    const cMaxY = useCull ? cullBounds.maxY : 0;
 
     let instanceCount = 0;
     let currentTexId = 0;
@@ -63,10 +74,19 @@ export class WgpuSceneBatcher {
       const raster = record.raster;
       if (!handle || !descriptor || !raster) continue;
 
+      const shifted = Boolean(dragIds && dragIds.has(record.id));
+      if (useCull && record.paintedBounds) {
+        const pb = record.paintedBounds;
+        const offX = shifted ? dragDx : 0;
+        const offY = shifted ? dragDy : 0;
+        if (pb.maxX + offX < cMinX || pb.minX + offX > cMaxX || pb.maxY + offY < cMinY || pb.minY + offY > cMaxY) {
+          continue;
+        }
+      }
+
       const base = instanceCount * WORDS_PER_INSTANCE;
       const centerX = descriptor.centerX;
       const centerY = descriptor.centerY;
-      const shifted = Boolean(dragIds && dragIds.has(record.id));
       f32[base] = descriptor.x + centerX + (shifted ? dragDx : 0);
       f32[base + 1] = descriptor.y + centerY + (shifted ? dragDy : 0);
       f32[base + 2] = raster.left - centerX;

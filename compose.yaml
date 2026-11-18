@@ -17,3 +17,4 @@ services:
 volumes:
   frontend-dist:
     name: agora-frontend-dist
+    external: true

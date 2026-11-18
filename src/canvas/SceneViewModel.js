@@ -30,7 +30,7 @@ function mergeTuples(existing,added){
 // Only affected entries change; edit controls are a separate small DOM list.
 export default class SceneViewModel {
   constructor(){this.entries=null;this.items=null;this.layers=new Map();this.byId=new Map();this.hitOrder=new Map();this.sorted=[];this.connectorIds=new Set();this.revision=0;this.representations=new Map();this.stats={resets:0,appends:0,updates:0,reasons:{}};}
-  update(entries,items,world,scale,domIds,selected,routingRevision=0,index=null,quality='low'){
+  update(entries,items,world,scale,domIds,selected,routingRevision=0,index=null,quality='high'){
     const qualityChanged=this.quality!==quality;this.quality=quality;
     const selectionKey=[...selected].join('|'),domKey=[...domIds].join('|');
     const sameDisplay=!qualityChanged&&this.width===world.width&&this.height===world.height&&this.scale===scale;
@@ -42,7 +42,7 @@ export default class SceneViewModel {
       this.stats.appends++;
       const patches=new Map();
       for(const entry of [...delta.updated,...delta.added]){
-        const tuple=this.entry(entry,items,world),[id,item]=tuple,depth=itemDepth(item);if(!isDrawableCanvasItem(item))continue;
+        const tuple=this.entry(entry,items,world,index),[id,item]=tuple,depth=itemDepth(item);if(!isDrawableCanvasItem(item))continue;
         if(!this.layers.has(depth))this.layers.set(depth,{depth,objects:[],domObjects:[],vectors:itemSnapshot({}),inkItems:itemSnapshot({})});
         const layer=this.layers.get(depth),old=this.byId.get(id),sortIndex=old?.sortIndex??this.sorted.length,objectIndex=old?.objectIndex??layer.objects.length;
         this.sorted[sortIndex]=tuple;layer.objects[objectIndex]=tuple;this.byId.set(id,{depth,tuple,sortIndex,objectIndex});this.hitOrder.set(id,sortIndex);this.spatial.set(id,entry);
@@ -64,7 +64,7 @@ export default class SceneViewModel {
         const retained=new Map(),added=[];
         for(const entry of entries){const item=items[entry.id]||entry.item;if(!isDrawableCanvasItem(item))continue;const old=oldById.get(entry.id)?.tuple;
           if(old&&old[1]===item&&old[2]===entry.bounds&&(item.kind!=='connector'||this.routingRevision===routingRevision)&&this.width===world.width&&this.height===world.height)retained.set(entry.id,old);
-          else added.push(this.entry(entry,items,world));
+          else added.push(this.entry(entry,items,world,index));
         }
         sorted=mergeTuples(oldSorted.filter(tuple=>retained.has(tuple[0])),added);
       }
@@ -88,7 +88,7 @@ export default class SceneViewModel {
         const old=this.byId.get(id);if(!old)continue;
         const item=items[id];if(!item || itemDepth(item)!==old.depth){this.entries=null;return this.update(entries,items,world,scale,domIds,selected,routingRevision,index);}
         const spatial=index?.entries.get(id) || this.spatial?.get(id);
-        const tuple=this.entry(spatial || {id,item,bounds:old.tuple[2]},items,world),layer=this.layers.get(old.depth),representation=this.representation(id,item,domIds,selected,world,scale);
+        const tuple=this.entry(spatial || {id,item,bounds:old.tuple[2]},items,world,index),layer=this.layers.get(old.depth),representation=this.representation(id,item,domIds,selected,world,scale);
         // Bounds can stay identical while a mutable R-tree entry's item changes.
         const position=old.objectIndex??layer.objects.indexOf(old.tuple);layer.objects[position]=tuple;
         const at=old.sortIndex??this.sorted.indexOf(old.tuple);this.sorted[at]=tuple;
@@ -105,7 +105,7 @@ export default class SceneViewModel {
     this.selected=selected;this.domIds=domIds;this.entries=entries;this.items=items;this.width=world.width;this.height=world.height;this.scale=scale;this.domKey=domKey;this.selectionKey=selectionKey;this.routingRevision=routingRevision;
     this.depthLayers=[...this.layers.values()].sort((a,b)=>a.depth-b.depth);return this;
   }
-  entry(entry,items,world){const item=items[entry.id]||entry.item;return [entry.id,item,entry.bounds,item.kind==='connector'?connectorGeometry(item,items,world.width,world.height):null];}
+  entry(entry,items,world,index=null){const item=items[entry.id]||entry.item;return [entry.id,item,entry.bounds,item.kind==='connector'?connectorGeometry(item,items,world.width,world.height,index):null];}
   representation(id,item,domIds,selected,world,scale){
     const proxyTier=overviewProxyTier(item,world,scale,this.quality),worldKey=world.width+':'+world.height,dom=domIds.has(String(id)),selection=selected.has(String(id)),old=this.representations.get(id);
     if(old&&old.item===item&&old.proxyTier===proxyTier&&old.worldKey===worldKey&&old.dom===dom&&old.selection===selection)return old.result;

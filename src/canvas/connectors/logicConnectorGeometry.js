@@ -1,8 +1,9 @@
 import { logicPortPosition, nearestLogicPort } from '../logicGates.js';
 import { arrowPathGeometry } from '../../components/arrowheadGeometry.js';
 import { connectorControlHandles, connectorPointCount, sampleControlCurve } from './controlPoints.js';
+import { routeConnectorAStar } from './aStarRoute.js';
 
-export function logicConnectorGeometry(item, fromItem, toItem, from, to, world, boundary) {
+export function logicConnectorGeometry(item, fromItem, toItem, from, to, world, boundary, obstacles = []) {
   const center = rect => ({ x: rect.centerX, y: rect.centerY });
   const output = item.fromPort ? logicPortPosition(fromItem,item.fromPort,world) : nearestLogicPort(fromItem,'output',center(to),world);
   const input = item.toPort ? logicPortPosition(toItem,item.toPort,world) : nearestLogicPort(toItem,'input',center(from),world);
@@ -23,7 +24,40 @@ export function logicConnectorGeometry(item, fromItem, toItem, from, to, world, 
   const controls=connectorControlHandles(item,start,end);
   const custom=connectorPointCount(item)>1 || Array.isArray(item.bendPoints) || Number(item.bend)>0;
   if(custom)points=sampleControlCurve([start,s,...controls,e,end]);
+  let routed = false;
+  let corridor = null;
+  if (obstacles.length && !custom) {
+    const strokeWidth = Number(item.strokeWidth) || 1.5;
+    const headSize = Number(item.headSize) || 12;
+    const clearance = Math.max(12, Math.min(28, headSize * 0.5 + strokeWidth / 2 + 8));
+    const detoured = routeConnectorAStar({
+      from: { ...from, id: String(item.from) },
+      to: { ...to, id: String(item.to) },
+      preferredPoints: points,
+      obstacles,
+      clearance,
+      anchorFn: (rect, dir) => {
+        if (output && rect.id === String(item.from)) return start;
+        if (input && rect.id === String(item.to)) return end;
+        const reach = boundary(rect, dir.x, dir.y) + 2 + strokeWidth / 2;
+        return { x: rect.centerX + dir.x * reach, y: rect.centerY + dir.y * reach };
+      },
+      keepOrthogonal: false,
+    });
+    if (detoured.routed) {
+      points = detoured.points;
+      routed = true;
+      corridor = detoured.corridor
+        ? {
+            minX: detoured.corridor.minX / Math.max(1, world.width),
+            minY: detoured.corridor.minY / Math.max(1, world.height),
+            maxX: detoured.corridor.maxX / Math.max(1, world.width),
+            maxY: detoured.corridor.maxY / Math.max(1, world.height),
+          }
+        : null;
+    }
+  }
   const arrow=arrowPathGeometry(points,{startHead:item.startHead,endHead:item.endHead,headSize:Number(item.headSize)||12,strokeWidth:Number(item.strokeWidth)||1.5});
   return {...arrow,directionX,directionY,normalX:-directionY,normalY:directionX,gap,bend:Math.max(0,Number(item.bend)||0)*gap,bendStart:start,bendEnd:end,controlSourcePoints:points,
-    controlHandles:custom?controls:[{x:(s.x+e.x)/2,y:(s.y+e.y)/2}],routed:false,fromPort:output?.id,toPort:input?.id};
+    controlHandles:custom?controls:[points[Math.floor((points.length-1)/2)]],routed,corridor,fromPort:output?.id,toPort:input?.id};
 }

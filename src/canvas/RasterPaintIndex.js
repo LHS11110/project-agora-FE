@@ -1,12 +1,12 @@
-import RBush from 'rbush';
+import CanvasGridIndex from './grid/CanvasGridIndex.js';
 
-// Index painted bounds (including shadows/rotation), not just object geometry.
+// Index painted bounds (including shadows/rotation) in 1px-aligned coarse grid tiles.
 // Keep painter order when repainting a small dirty region of a large scene.
 export default class RasterPaintIndex {
-  constructor() { this.tree = new RBush(); this.entries = new Map(); }
+  constructor() { this.grid = new CanvasGridIndex(1, 1); this.entries = new Map(); }
   remove(record) {
     const entry = this.entries.get(record);
-    if (entry) { this.tree.remove(entry); this.entries.delete(record); }
+    if (entry) { this.grid.remove(entry); this.entries.delete(record); }
   }
   update(record, order) {
     const bounds = record.paintedBounds;
@@ -17,13 +17,13 @@ export default class RasterPaintIndex {
     }
     this.remove(record);
     const entry = { ...bounds, record, order };
-    this.entries.set(record, entry); this.tree.insert(entry);
+    this.entries.set(record, entry); this.grid.insert(entry);
   }
   query(bounds, ordered) {
-    // Dense/full views are already in painter order; avoid sorting the scene.
-    const root = this.tree.data;
+    if (!this.entries.size) return [];
+    const root = this.grid.getRootBounds();
     if (bounds.minX <= root.minX && bounds.minY <= root.minY && bounds.maxX >= root.maxX && bounds.maxY >= root.maxY) return ordered;
-    const hits = this.tree.search(bounds);
+    const hits = this.grid.search(bounds);
     if (hits.length > ordered.length / 2) return ordered;
     return hits.sort((a,b) => a.order-b.order).map(entry => entry.record);
   }

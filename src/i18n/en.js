@@ -2876,4 +2876,12 @@ export default {
   "실제 출력 보기": "Show live output",
   "실제 출력 닫기": "Close live output",
   "정적 콘텐츠 요약": "Static content summary",
+
+  // Canvas Timer
+  "실행 중": "Running",
+  "대기": "Ready",
+  "시작": "Start",
+  "초기화": "Reset",
+  "빠른 시간 선택": "Quick duration presets",
+  "{v0}분": "{v0}m",
 };

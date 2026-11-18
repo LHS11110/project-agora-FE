@@ -19,7 +19,7 @@ export class ServerCanvasSession {
   }
   get viewOperations() { return this.movePreview ? [...this.pendingOperations,this.movePreview] : this.pendingOperations; }
   beginMove(ids,start={x:0,y:0}) { this.movePreview={action:'translate',ids:[...ids],dx:0,dy:0,start:{...start},end:{...start}}; }
-  previewMove(dx,dy) { if(!this.movePreview)return false;this.movePreview={...this.movePreview,dx,dy,end:{x:this.movePreview.start.x+dx,y:this.movePreview.start.y+dy}};this.publish(this.items,[],null);return true; }
+  previewMove(dx,dy,publish=true) { if(!this.movePreview)return false;this.movePreview={...this.movePreview,dx,dy,end:{x:this.movePreview.start.x+dx,y:this.movePreview.start.y+dy}};if(publish)this.publish(this.items,[],null);return true; }
   finishMove(cancel=false) { const operation=this.movePreview;this.movePreview=null;if(!operation)return true;const accepted=cancel||(!operation.dx&&!operation.dy)||this.submit([operation]);this.redraw();if(!cancel&&accepted)this.flushMoves();return accepted; }
   get editable() { return this.seeded && !this.blocked; }
   get pendingOperations() { return [...(this.flight?.operations || []), ...this.queue]; }

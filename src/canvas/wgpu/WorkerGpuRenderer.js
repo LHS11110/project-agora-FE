@@ -1,4 +1,4 @@
-const MARGIN=256;
+const MARGIN=96;
 /** Bounded GPU command worker. Main-thread presentation reprojects cached pixels
  * immediately, keeping editable DOM and the asynchronous GPU frame aligned. */
 export default class WorkerGpuRenderer {
@@ -91,7 +91,8 @@ export default class WorkerGpuRenderer {
         this.project();this.onFrame?.(frame);
       }catch(error){frame.bitmap.close();this.fail(error);return;}
     }else{this.telemetry.discarded++;frame.bitmap.close();}
-    this.telemetry.samples.push({roundTripMs:Math.max(0,receivedAt-(this.sentAt||receivedAt)),captureMs:this.captureMs||0,presentationMs:performance.now()-receivedAt,...frame.timings});
+    const sentAt = this.sentAt || receivedAt;
+    this.telemetry.samples.push({sentAt,receivedAt,roundTripMs:Math.max(0,receivedAt-sentAt),captureMs:this.captureMs||0,presentationMs:performance.now()-receivedAt,...frame.timings});
     if(this.telemetry.samples.length>240)this.telemetry.samples.shift();
     this.pump();
   }

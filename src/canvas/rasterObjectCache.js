@@ -73,8 +73,7 @@ export function rasterDescriptor(id, item, world, referenceItems, routeKey = '',
   local.rotation = item.kind === 'connector' ? item.rotation : 0;
   local.shadowEnabled = false;
   if(item.__selectionOutline)local.__selectionOutline=true;
-  const keepLowShadow = options?.lowQuality && (['note', 'table', 'link'].includes(item.__overviewKind) || Boolean(item.brush || item.format));
-  const shadow = (options?.lowQuality && !keepLowShadow) || item.shadowEnabled === false ? DISABLED_SHADOW : objectShadow(item);
+  const shadow = item.shadowEnabled === false ? DISABLED_SHADOW : objectShadow(item);
   // Standard shapes have no per-object randomness. Share their pixels regardless
   // of position/rotation; sketch strokes keep their object-specific seed.
   const seed = item.visualStyle === 'sketch' || item.kind === 'connector' ? id : '';
@@ -109,7 +108,7 @@ export function rasterizeObject(id, descriptor, world, referenceItems, preferred
   const raw = document.createElement('canvas');
   raw.width = Math.max(1,Math.ceil(width*ratio)); raw.height = Math.max(1,Math.ceil(height*ratio));
   const context = raw.getContext('2d');
-  context.imageSmoothingQuality=textAppearance.smoothingQuality||'low';
+  context.imageSmoothingQuality=textAppearance.smoothingQuality||'high';
   context.setTransform(ratio,0,0,ratio,-left*ratio,-top*ratio);
   if (descriptor.local.__overviewKind) drawRichOverview(context, descriptor.local, world, textAppearance, textAppearance.imagePreview);
   else if (descriptor.local.__imagePreview) drawImagePreview(context, descriptor.local, world, textAppearance.imagePreview);

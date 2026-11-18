@@ -10,7 +10,7 @@ import { isRasterContent as isRasterText } from './plainTextRaster.js';
 import { isOverviewProxy } from './sceneRepresentation.js';
 
 export const isVectorItem = item => !item?.runtimeRole && (['shape', 'stroke', 'connector'].includes(item?.kind) || isRasterText(item));
-export const needsVectorDom = (id, item, selected, editingId, connectionStartId, world = {width:1600,height:1000}, scale = 1, quality = 'low') =>
+export const needsVectorDom = (id, item, selected, editingId, connectionStartId, world = {width:1600,height:1000}, scale = 1, quality = 'high') =>
   hasRenderedAnimation(item) || (!isVectorItem(item) && !isOverviewProxy(item,world,scale,quality)) || selected.has(String(id)) || editingId === id || connectionStartId === id
   || (item.kind === 'connector' && Boolean(item.label));
 
@@ -46,7 +46,7 @@ export function hitTestVector(index, point, world, scale = 1, order = new Map(),
   const hits = candidates.filter(({id, item}) => {
     if (!isVectorItem(item) && !isOverviewProxy(item,world,representationScale)) return false;
     if (item.kind === 'connector') {
-      const geometry = connectorGeometry(item,index.items,world.width,world.height);
+      const geometry = connectorGeometry(item,index.items,world.width,world.height,index);
       return geometry?.points.some((p,i,points) => i && distance(pixel,points[i-1],p) <= pad)
         || [geometry?.start,geometry?.end].some(p=>p && Math.hypot(pixel.x-p.x,pixel.y-p.y)<=pad);
     }

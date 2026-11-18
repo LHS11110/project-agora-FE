@@ -60,8 +60,9 @@ test('zoom-out overviewProxy preserves non-box rich representation for every obj
   ];
 
   for (const item of richItems) {
-    assert.equal(isOverviewProxy(item, world, 0.08, 'high'), true, `${item.id} uses overview at 8%`);
-    const proxy = overviewProxy(item, world, 0.08);
+    assert.equal(isOverviewProxy(item, world, 0.25), false, `${item.id} keeps crisp full representation at readable size`);
+    assert.equal(isOverviewProxy(item, world, 0.03), true, `${item.id} only simplifies at sub-12px microscopic zoom`);
+    const proxy = overviewProxy(item, world, 0.03);
     assert.ok(proxy.__overviewKind, `${item.id} exposes __overviewKind instead of blank box`);
     assert.ok(proxy.__previewKey, `${item.id} exposes __previewKey`);
     assert.equal(flatRectangleTint(proxy, world), null, `${item.id} skips flat monochrome rectangle tinting`);
@@ -72,28 +73,28 @@ test('zoom-out overviewProxy preserves non-box rich representation for every obj
   }
 
   const textItem = { id: 'tx1', kind: 'text', x: 0.1, y: 0.1, width: 0.2, height: 0.1, text: '일반 텍스트', fontSize: 16 };
-  assert.equal(overviewProxy(textItem, world, 0.08).kind, 'text');
+  assert.equal(overviewProxy(textItem, world, 0.03).kind, 'text');
 
   const codeItem = { id: 'cd1', kind: 'code', x: 0.1, y: 0.1, width: 0.22, height: 0.14, code: 'const x = 1;' };
-  assert.equal(overviewProxy(codeItem, world, 0.08).kind, 'text');
+  assert.equal(overviewProxy(codeItem, world, 0.03).kind, 'text');
 
   const mathItem = { id: 'm1', kind: 'math', x: 0.1, y: 0.1, width: 0.2, height: 0.12, formula: 'E = mc^2' };
-  const mathProxy = overviewProxy(mathItem, world, 0.08);
+  const mathProxy = overviewProxy(mathItem, world, 0.03);
   assert.equal(mathProxy.kind, 'text');
   assert.equal(mathProxy.text, 'E = mc^2');
 
   const imageItem = { id: 'im1', kind: 'image', x: 0.1, y: 0.1, width: 0.2, height: 0.14, src: '/api/media/a.png' };
-  const imgProxy = overviewProxy(imageItem, world, 0.08);
+  const imgProxy = overviewProxy(imageItem, world, 0.03);
   assert.equal(imgProxy.__imagePreview, '/api/media/a.png');
-  assert.ok(overviewProxy(imageItem, world, 0.05).__imagePreview === '/api/media/a.png');
+  assert.ok(overviewProxy(imageItem, world, 0.03).__imagePreview === '/api/media/a.png');
 });
 
-test('graphicsRasterRatio lowers raster resolution progressively when zoomed out', () => {
-  assert.equal(graphicsRasterRatio('high', 1), 2);
-  assert.equal(graphicsRasterRatio('medium', 1), 1.5);
-  assert.equal(graphicsRasterRatio('low', 1), 1);
-  assert.ok(graphicsRasterRatio('high', 0.4) < 2);
-  assert.ok(graphicsRasterRatio('high', 0.2) >= 0.5 && graphicsRasterRatio('high', 0.2) < graphicsRasterRatio('high', 0.6));
+test('graphicsRasterRatio maintains full native DPR resolution across zoom levels', () => {
+  assert.equal(graphicsRasterRatio('high', 1, 1), 1);
+  assert.equal(graphicsRasterRatio('high', 1, 2), 2);
+  assert.equal(graphicsRasterRatio('high', 0.4, 2), 2);
+  assert.equal(graphicsRasterRatio('high', 0.2, 1), 1);
+  assert.equal(graphicsRasterRatio('high', 2, 1.5), 3);
 });
 
 test('rasterDescriptor preserves shadows consistently across rich overviews and styled shapes', () => {

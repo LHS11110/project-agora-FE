@@ -9,9 +9,14 @@ export function touchPair(points) {
 }
 
 export function pinchCamera(camera, previous, next, bounds) {
-  const zoomed = zoomCanvasCamera(camera, next.distance / previous.distance,
+  const ratio = next.distance / previous.distance;
+  const zoomed = zoomCanvasCamera(camera, ratio,
     { x: previous.x - bounds.left, y: previous.y - bounds.top }, bounds);
-  if (zoomed === camera && next.distance !== previous.distance) return camera;
+  if (zoomed === camera && next.distance !== previous.distance && Number.isFinite(ratio) && ratio > 0) {
+    // When clamped at min/max scale, retain two-finger pan without stalling.
+    const x = camera.x + next.x - previous.x, y = camera.y + next.y - previous.y;
+    return Number.isFinite(x) && Number.isFinite(y) ? { ...camera, x, y } : camera;
+  }
   const x = zoomed.x + next.x - previous.x, y = zoomed.y + next.y - previous.y;
   return Number.isFinite(x) && Number.isFinite(y) ? { ...zoomed, x, y } : camera;
 }

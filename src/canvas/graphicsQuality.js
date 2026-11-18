@@ -1,30 +1,46 @@
 export const GRAPHICS_QUALITY_KEY = 'agora_canvas_graphics_quality';
-export const GRAPHICS_PROFILES = Object.freeze({
-  low: Object.freeze({ label: '낮음', description: '속도 우선 · 그림자 생략 · 대량 객체에 권장', maxDpr: 1, rasterMultiplier: 1, maxRasterRatio: 1.5, imagePreviewSize:96,documentPixelBudget:1_000_000,scenePixelBudget: 8_000_000 }),
-  medium: Object.freeze({ label: '보통', description: '속도와 선명도의 균형', maxDpr: 1.5, rasterMultiplier: 1.5, maxRasterRatio: 2, imagePreviewSize:192,documentPixelBudget:2_000_000,scenePixelBudget: 16_000_000 }),
-  high: Object.freeze({ label: '높음', description: '선명도 우선 · GPU와 메모리 사용 증가', maxDpr: 2, rasterMultiplier: 2, maxRasterRatio: 3, imagePreviewSize:384,documentPixelBudget:4_000_000,scenePixelBudget: 32_000_000 }),
+export const UNIFIED_GRAPHICS_PROFILE = Object.freeze({
+  label: '고화질 통합',
+  description: '성능 구분 없이 항상 원본 해상도와 그림자 품질 유지',
+  maxDpr: 4,
+  rasterMultiplier: 1,
+  maxRasterRatio: 4,
+  imagePreviewSize: 1024,
+  documentPixelBudget: 16_000_000,
+  scenePixelBudget: 64_000_000,
 });
-export function normalizeGraphicsQuality(value) {
-  return Object.hasOwn(GRAPHICS_PROFILES, value) ? value : 'low';
-}
-export function graphicsResolution(quality, deviceRatio = 1) {
-  return Math.min(Math.max(1, Number(deviceRatio) || 1), GRAPHICS_PROFILES[normalizeGraphicsQuality(quality)].maxDpr);
-}
-export function graphicsRasterRatio(quality, scale, deviceRatio = 1) {
-  const profile = GRAPHICS_PROFILES[normalizeGraphicsQuality(quality)];
-  const zoomRatio = scale > 1.25 ? 1.5 : scale >= 0.75 ? 1 : Math.max(0.25, Math.min(0.85, scale));
-  return Math.min(profile.maxRasterRatio, zoomRatio * profile.rasterMultiplier * graphicsResolution(quality, deviceRatio));
+export const GRAPHICS_PROFILES = Object.freeze({
+  high: UNIFIED_GRAPHICS_PROFILE,
+});
+
+export function normalizeGraphicsQuality() {
+  return 'high';
 }
 
-export function graphicsDocumentRatio(quality,width,height,deviceRatio=1){
- const profile=GRAPHICS_PROFILES[normalizeGraphicsQuality(quality)];
- return Math.min(graphicsRasterRatio(quality,1,deviceRatio),4096/Math.max(1,width,height),Math.sqrt(profile.documentPixelBudget/Math.max(1,width*height)));
+export function graphicsResolution(_quality, deviceRatio = 1) {
+  return Math.min(Math.max(1, Number(deviceRatio) || 1), UNIFIED_GRAPHICS_PROFILE.maxDpr);
 }
-export function graphicsRasterItem(item,quality){return normalizeGraphicsQuality(quality)==='low'&&item.shadowEnabled!==false?{...item,shadowEnabled:false}:item;}
 
-// Bound rich-object detail as visible density grows; selected objects keep their
-// full renderer. This affects presentation only, never stored object data.
-export function graphicsLodScale(scale,visibleCount,quality){
- const budget={low:48,medium:96,high:192}[normalizeGraphicsQuality(quality)];
- return scale*Math.min(1,Math.sqrt(budget/Math.max(budget,visibleCount)));
+export function graphicsRasterRatio(_quality, scale = 1, deviceRatio = 1) {
+  const dpr = graphicsResolution('high', deviceRatio);
+  const numericScale = Number(scale);
+  const effectiveScale = Number.isFinite(numericScale) && numericScale > 1 ? Math.min(4, numericScale) : 1;
+  return Math.min(UNIFIED_GRAPHICS_PROFILE.maxRasterRatio, Math.max(dpr, dpr * effectiveScale));
+}
+
+export function graphicsDocumentRatio(_quality, width, height, deviceRatio = 1) {
+  const dpr = graphicsResolution('high', deviceRatio);
+  return Math.min(
+    Math.max(2, dpr),
+    4096 / Math.max(1, width, height),
+    Math.sqrt(UNIFIED_GRAPHICS_PROFILE.documentPixelBudget / Math.max(1, width * height))
+  );
+}
+
+export function graphicsRasterItem(item) {
+  return item;
+}
+
+export function graphicsLodScale(scale) {
+  return scale;
 }

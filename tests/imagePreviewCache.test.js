@@ -59,7 +59,7 @@ test('thumbnail loader authenticates API images without leaking credentials to e
   try {
     const resolve = path => new URL(path, 'https://api.example.test').href;
     const canvas = await loadImagePreview('/api/image.png', 'private-account-token', resolve);
-    assert.equal(canvas.width, 96); assert.equal(canvas.height, 48);
+    assert.equal(canvas.width, 400); assert.equal(canvas.height, 200);
     await loadImagePreview('https://external.example.test/image.png', 'private-account-token', resolve);
     await loadImagePreview('data:image/png;base64,AA==', 'private-account-token', () => { throw Error('Inline images must not resolve API URLs'); });
     assert.deepEqual(requests.map(([, headers]) => headers), [{ Authorization: 'Bearer private-account-token' }, {}]);
@@ -69,12 +69,13 @@ test('thumbnail loader authenticates API images without leaking credentials to e
   }
 });
 
-test('quantized previews remain selectable across representation thresholds', async () => {
+test('quantized previews remain selectable at sub-readable scale without degrading readable objects', async () => {
   const { default: CanvasSpatialBTree } = await import('../src/components/CanvasSpatialBTree.js');
   const { hitTestVector } = await import('../src/canvas/vectorHitTest.js');
-  const world = { width: 1600, height: 1000 }, scale = .105;
+  const world = { width: 1600, height: 1000 }, scale = .03;
   const image = { kind: 'image', x: .1, y: .1, width: .2, height: .24, shadowEnabled: false };
   const index = new CanvasSpatialBTree({ image }, world);
+  assert.equal(hitTestVector(index, { x: .15, y: .15 }, world, 1, new Map(), 1), null);
   assert.equal(hitTestVector(index, { x: .15, y: .15 }, world, scale, new Map(), overviewScale(scale))?.id, 'image');
 });
 

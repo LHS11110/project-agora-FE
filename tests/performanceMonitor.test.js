@@ -211,3 +211,28 @@ test('summarizeMonitorSamples and buildChartGeometry adapt FPS ceiling > 60 and 
   // 50% CPU -> middle (y = 50)
   assert.equal(geom.points[1].cpuY, 50);
 });
+
+test('computeMonitorWindow uses workerActiveMs to avoid partial-window idle dilution of workerFps', () => {
+  const diluted = computeMonitorWindow({
+    elapsedMs: 200,
+    frames: 12,
+    workerFrameDelta: 6,
+  });
+  assert.equal(diluted.workerFps, 30);
+
+  const partialGesture = computeMonitorWindow({
+    elapsedMs: 200,
+    frames: 12,
+    workerFrameDelta: 6,
+    workerActiveMs: 100,
+  });
+  assert.equal(partialGesture.workerFps, 60);
+
+  const unclampedFallback = computeMonitorWindow({
+    elapsedMs: 200,
+    frames: 12,
+    workerFrameDelta: 6,
+    workerActiveMs: 320,
+  });
+  assert.equal(unclampedFallback.workerFps, 30);
+});

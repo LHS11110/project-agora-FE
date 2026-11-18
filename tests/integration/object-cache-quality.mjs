@@ -33,15 +33,10 @@ const notebook=page.locator('[data-item-id="notebook"]');await notebook.locator(
 const hits=await page.evaluate(()=>document.querySelector('.canvas-scene').__agoraContentCacheStats.hits);await notebook.evaluate(e=>window.keptNotebook=e.querySelector('.notebook-content'));
 await page.evaluate(()=>{const d=window.frelogCanvas.read();d.items.notebook.x+=12;window.frelogCanvas.apply(window.frelogCanvas.plan(d));});await page.waitForTimeout(300);
 assert.ok(await page.evaluate(()=>document.querySelector('.canvas-scene').__agoraContentCacheStats.hits)>hits);assert.equal(await notebook.evaluate(e=>e.querySelector('.notebook-content')===window.keptNotebook),true);
-let lastPdf=0,lastRasters=before;
 await page.getByRole('button',{name:'환경 설정',exact:true}).click();
-for(const [quality,label] of [['low','낮음'],['medium','보통'],['high','높음']]){
- await page.getByRole('group',{name:'그래픽 품질 선택'}).getByRole('button',{name:label,exact:true}).click();
- await page.waitForFunction(q=>document.querySelector('.canvas-app-page').dataset.graphicsQuality===q,quality);
- await page.waitForFunction(()=>document.querySelector('.pdf-page-view')?.getAttribute('aria-busy')==='false');await page.waitForTimeout(350);
- const width=await page.locator('.pdf-page-view canvas').evaluate(e=>e.width);assert.ok(width>lastPdf,JSON.stringify({quality,width,lastPdf}));lastPdf=width;
- const current=await rasters();if(quality!=='low')assert.ok(current>lastRasters,'quality change refreshes cached raster resolution');lastRasters=current;
- if(quality==='low')assert.equal(await notebook.evaluate(e=>getComputedStyle(e).getPropertyValue('--object-shadow-box').trim()),'none');
-}
+assert.equal(await page.getByRole('group',{name:'그래픽 품질 선택'}).count(),0,'graphics quality tiers must be removed');
+await page.waitForFunction(()=>document.querySelector('.pdf-page-view')?.getAttribute('aria-busy')==='false');
+const width=await page.locator('.pdf-page-view canvas').evaluate(e=>e.width);assert.ok(width>300,JSON.stringify({width}));
+assert.notEqual(await notebook.evaluate(e=>getComputedStyle(e).getPropertyValue('--object-shadow-box').trim()),'none');
 const stable=await rasters();await page.waitForTimeout(500);assert.equal(await rasters(),stable,'idle scene reuses raster cache');
-assert.deepEqual(errors,[]);console.log('PASS unchanged code cache survives unrelated metrics, rich DOM cache hits on move, low/medium/high update PDF and raster resolution, idle cache stable');await context.close();}}finally{await browser.close();}
+assert.deepEqual(errors,[]);console.log('PASS unchanged code cache survives unrelated metrics, rich DOM cache hits on move, unified full-clarity PDF/raster without quality tiers, idle cache stable');await context.close();}}finally{await browser.close();}

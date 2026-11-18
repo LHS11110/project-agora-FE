@@ -1,37 +1,45 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { GRAPHICS_PROFILES, normalizeGraphicsQuality, graphicsResolution, graphicsRasterRatio } from '../src/canvas/graphicsQuality.js';
+import {
+  UNIFIED_GRAPHICS_PROFILE,
+  GRAPHICS_PROFILES,
+  normalizeGraphicsQuality,
+  graphicsResolution,
+  graphicsRasterRatio,
+  graphicsDocumentRatio,
+  graphicsRasterItem,
+  graphicsLodScale,
+} from '../src/canvas/graphicsQuality.js';
 
-test('graphics defaults to fastest profile and caps high-DPI surface allocation', () => {
-  assert.equal(normalizeGraphicsQuality(null), 'low');
-  assert.equal(normalizeGraphicsQuality('invalid'), 'low');
-  assert.equal(normalizeGraphicsQuality('toString'), 'low');
-  assert.equal(graphicsResolution('low', 3), 1);
-  assert.equal(graphicsResolution('medium', 3), 1.5);
-  assert.equal(graphicsResolution('high', 3), 2);
+test('graphics uses unified high-clarity profile without low/medium tier degradation', () => {
+  assert.deepEqual(Object.keys(GRAPHICS_PROFILES), ['high']);
+  assert.equal(normalizeGraphicsQuality(null), 'high');
+  assert.equal(normalizeGraphicsQuality('low'), 'high');
+  assert.equal(normalizeGraphicsQuality('medium'), 'high');
+  assert.equal(normalizeGraphicsQuality('toString'), 'high');
+  assert.equal(graphicsResolution('low', 2), 2);
+  assert.equal(graphicsResolution('high', 3), 3);
+  assert.equal(graphicsResolution('high', 6), UNIFIED_GRAPHICS_PROFILE.maxDpr);
 });
 
-test('higher graphics quality increases detail even on a standard-DPI screen while bounding work', () => {
-  assert.equal(graphicsRasterRatio('low', 1, 1), 1);
-  assert.equal(graphicsRasterRatio('medium', 1, 1), 1.5);
-  assert.equal(graphicsRasterRatio('high', 1, 1), 2);
-  for (const quality of Object.keys(GRAPHICS_PROFILES)) {
-    assert.ok(graphicsRasterRatio(quality, 100, 4) <= GRAPHICS_PROFILES[quality].maxRasterRatio);
-    assert.ok(graphicsRasterRatio(quality, .25, 1) < graphicsRasterRatio(quality, 1, 1));
-  }
-  assert.ok(GRAPHICS_PROFILES.low.scenePixelBudget < GRAPHICS_PROFILES.medium.scenePixelBudget);
-  assert.ok(GRAPHICS_PROFILES.medium.scenePixelBudget < GRAPHICS_PROFILES.high.scenePixelBudget);
+test('raster resolution never degrades below native DPR when zoomed out and scales cleanly on zoom-in', () => {
+  assert.equal(graphicsRasterRatio('high', 1, 1), 1);
+  assert.equal(graphicsRasterRatio('high', 1, 2), 2);
+  assert.equal(graphicsRasterRatio('low', 0.25, 2), 2);
+  assert.equal(graphicsRasterRatio('high', 0.1, 1), 1);
+  assert.equal(graphicsRasterRatio('high', 2, 1.5), 3);
+  assert.ok(graphicsRasterRatio('high', 100, 4) <= UNIFIED_GRAPHICS_PROFILE.maxRasterRatio);
+  assert.equal(graphicsLodScale(1.5, 5000, 'low'), 1.5);
 });
 
-import {graphicsDocumentRatio,graphicsRasterItem} from '../src/canvas/graphicsQuality.js';
-test('document canvases and image previews follow increasing but bounded quality budgets',()=>{
- let previous=0;
- for(const quality of ['low','medium','high']){
-  const ratio=graphicsDocumentRatio(quality,600,800,2);assert.ok(ratio>previous);previous=ratio;
-  const large=graphicsDocumentRatio(quality,10000,10000,4);assert.ok(10000*10000*large*large<=GRAPHICS_PROFILES[quality].documentPixelBudget+1);
- }
- assert.ok(GRAPHICS_PROFILES.low.imagePreviewSize<GRAPHICS_PROFILES.high.imagePreviewSize);
- const source={kind:'shape',shadowEnabled:true,shadowBlur:8};
- assert.equal(graphicsRasterItem(source,'low').shadowEnabled,false);assert.equal(source.shadowEnabled,true);
- assert.equal(graphicsRasterItem(source,'high'),source);
+test('document canvases and raster items preserve full resolution, image previews, and shadows', () => {
+  assert.equal(graphicsDocumentRatio('high', 152, 202, 1), 2);
+  const ratio = graphicsDocumentRatio('high', 600, 800, 2);
+  assert.equal(ratio, 2);
+  const large = graphicsDocumentRatio('high', 10000, 10000, 4);
+  assert.ok(10000 * 10000 * large * large <= UNIFIED_GRAPHICS_PROFILE.documentPixelBudget + 1);
+  assert.ok(UNIFIED_GRAPHICS_PROFILE.imagePreviewSize >= 1024);
+  const source = { kind: 'shape', shadowEnabled: true, shadowBlur: 8 };
+  assert.equal(graphicsRasterItem(source, 'low'), source);
+  assert.equal(source.shadowEnabled, true);
 });

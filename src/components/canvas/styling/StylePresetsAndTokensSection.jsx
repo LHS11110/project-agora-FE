@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { memo, useId, useMemo, useState } from 'react';
 import { ui } from '../../../i18n/locale.js';
 import { useUiLocale } from '../../../i18n/useUiLocale.js';
 import { STYLE_PRESETS, THEME_PALETTES, applyPresetToItem, applyThemePaletteToItem } from '../../../canvas/styling/stylePresets.js';
@@ -14,7 +14,7 @@ import {
   replaceSelectionColorPatch,
 } from '../../../canvas/styling/selectionIntersection.js';
 
-export default function StylePresetsAndTokensSection({
+function StylePresetsAndTokensSection({
   canvasId,
   items,
   selectedObjectIds,
@@ -30,9 +30,13 @@ export default function StylePresetsAndTokensSection({
   const [tokenName, setTokenName] = useState('');
   const [tokenCategory, setTokenCategory] = useState('complete');
 
+  const selectionColors = useMemo(
+    () => (selectedObjectIds.length ? extractSelectionColors(items, selectedObjectIds) : []),
+    [items, selectedObjectIds],
+  );
+
   if (!selectedObjectIds.length) return null;
   const primaryItem = items[selectedObjectIds[0]];
-  const selectionColors = extractSelectionColors(items, selectedObjectIds);
 
   const saveNewToken = () => {
     if (!primaryItem) return;
@@ -211,3 +215,5 @@ export default function StylePresetsAndTokensSection({
     </div>
   );
 }
+
+export default memo(StylePresetsAndTokensSection);

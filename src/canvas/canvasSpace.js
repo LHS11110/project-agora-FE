@@ -1,5 +1,13 @@
 /** Normalization units for persistent coordinates, never bounds on the unbounded world. */
 export const CANVAS_SPACE = Object.freeze({ width: 1600, height: 1000 });
+export const MIN_CANVAS_SCALE = 0.1;
+export const MAX_CANVAS_SCALE = 16;
+
+export function clampCanvasScale(scale) {
+  const value = Number(scale);
+  if (!Number.isFinite(value) || value <= 0) return 1;
+  return Math.max(MIN_CANVAS_SCALE, Math.min(MAX_CANVAS_SCALE, value));
+}
 
 export function canvasPointAtPointer(event, viewport, camera, space = CANVAS_SPACE) {
   return {
@@ -9,7 +17,7 @@ export function canvasPointAtPointer(event, viewport, camera, space = CANVAS_SPA
 }
 
 export function fitCanvasCamera(viewport, space = CANVAS_SPACE) {
-  const scale = Math.min(1, Math.max(1, viewport.width) / space.width, Math.max(1, viewport.height) / space.height);
+  const scale = clampCanvasScale(Math.min(1, Math.max(1, viewport.width) / space.width, Math.max(1, viewport.height) / space.height));
   return {
     scale,
     x: (viewport.width - space.width * scale) / 2,
@@ -17,10 +25,11 @@ export function fitCanvasCamera(viewport, space = CANVAS_SPACE) {
   };
 }
 
-/** No product zoom limits; reject only values that cannot form finite coordinates. */
+/** Bounded scale zoom anchored under the pointer for the 1px grid canvas. */
 export function zoomCanvasCamera(current, factor, anchor, viewport) {
-  const scale = current.scale * factor;
-  if (!(scale > 0) || !Number.isFinite(scale)) return current;
+  if (!(factor > 0) || !Number.isFinite(factor)) return current;
+  const scale = clampCanvasScale(current.scale * factor);
+  if (!(scale > 0) || !Number.isFinite(scale) || scale === current.scale) return current;
   const ratio = scale / current.scale;
   const x = anchor.x - (anchor.x - current.x) * ratio;
   const y = anchor.y - (anchor.y - current.y) * ratio;

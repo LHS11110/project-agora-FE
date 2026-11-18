@@ -83,9 +83,9 @@ export function useServerCanvas({ accessRef, itemsRef, wsRef, collaborativeDocsR
     try {const operation={action:'translate',ids,dx:0,dy:0};assertAccessOperations(working.current,[operation],accessRef?.current);assertObjectOperations(working.current,[operation]);validateTranslation(operation);moveBefore.current=working.current;const first=working.current[ids[0]],anchor=first?.kind==='stroke'?first.points[0]:first;sessionRef.current.beginMove(ids,{x:Number(anchor?.x)||0,y:Number(anchor?.y)||0});return true;}
     catch(error){callbacks.current.setToast(error.message);return false;}
   },[]);
-  const previewObjectMove=useCallback((dx,dy)=>{
+  const previewObjectMove=useCallback((dx,dy,publish=true)=>{
     const session=sessionRef.current,operation={...session.movePreview,dx,dy};
-    try{validateTranslation(operation);return session.previewMove(dx,dy);}
+    try{validateTranslation(operation);return session.previewMove(dx,dy,publish);}
     catch{return false;}
   },[]);
   const finishObjectMove=useCallback((cancel=false)=>{

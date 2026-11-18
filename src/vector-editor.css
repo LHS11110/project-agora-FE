@@ -162,7 +162,7 @@
 .tutorial-board-actions .tutorial-arrow-head-controls label{gap:3px;color:#758477;font-size:7px}
 .tutorial-board-actions .tutorial-arrow-head-controls select{height:25px;padding:0 4px;border-color:#dce5da;border-radius:5px;background:#fff;color:#536457;font:7px var(--display, sans-serif)}
 
-.canvas-minimap{position:absolute;z-index:24;right:12px;bottom:12px;box-sizing:border-box;width:min(196px,45vw);padding:8px;border:1px solid #dce4da;border-radius:9px;background:#fcfdfaee;box-shadow:0 5px 20px #243a2f26;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);user-select:none;-webkit-user-select:none}
+.canvas-minimap{position:absolute;z-index:24;right:12px;bottom:12px;box-sizing:border-box;width:min(196px,45vw);padding:8px;border:1px solid #dce4da;border-radius:9px;background:#fcfdfaf5;box-shadow:0 5px 20px #243a2f26;user-select:none;-webkit-user-select:none}
 .canvas-minimap-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 1px 6px;color:#506657;font-size:8px;line-height:1.2;cursor:move;touch-action:none}
 .canvas-minimap-heading span{color:#98a398;font-size:7px;white-space:nowrap}
 .canvas-minimap-map{position:relative;width:100%;aspect-ratio:1.6;overflow:hidden;border-radius:5px;background-color:#f6f8f4;background-image:radial-gradient(#d5ded4 1px,transparent 1px);background-size:9px 9px;box-shadow:inset 0 0 0 1px #dfe6dd;cursor:crosshair;touch-action:none}

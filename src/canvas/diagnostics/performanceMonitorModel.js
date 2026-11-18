@@ -81,6 +81,7 @@ export function computeMonitorWindow({
   totalObjects = 0,
   domObjects = 0,
   workerFrameDelta = 0,
+  workerActiveMs = null,
   rasterDelta = 0,
 } = {}) {
   const safeElapsedMs = Math.max(1, Number(elapsedMs) || MONITOR_SAMPLE_INTERVAL_MS);
@@ -100,7 +101,10 @@ export function computeMonitorWindow({
   const rafFps = Math.round(rawRafFps);
 
   const safeWorkerDelta = Math.max(0, Number(workerFrameDelta) || 0);
-  const workerFps = safeWorkerDelta >= 3 ? Math.round((safeWorkerDelta * 1000) / safeElapsedMs) : null;
+  const effectiveWorkerWindowMs = Number.isFinite(workerActiveMs) && workerActiveMs >= 16
+    ? Math.min(safeElapsedMs, Math.max(16, workerActiveMs))
+    : safeElapsedMs;
+  const workerFps = safeWorkerDelta >= 3 ? Math.round((safeWorkerDelta * 1000) / effectiveWorkerWindowMs) : null;
 
   const rawFps = rawRafFps;
   const fps = rafFps;

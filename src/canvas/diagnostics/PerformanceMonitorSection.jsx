@@ -15,19 +15,20 @@ import './performance-monitor.css';
 const CHART_WIDTH = 236;
 const CHART_HEIGHT = 92;
 
-function readVectorLayerInfo(prevLayerMap) {
+function readVectorLayerInfo(prevLayerMap, windowStart = 0, now = 0) {
   if (typeof document === 'undefined') {
-    return { renderer: 'dom', stats: null, domObjects: 0, workerFrameDelta: 0, totalRasterizations: 0 };
+    return { renderer: 'dom', stats: null, domObjects: 0, workerFrameDelta: 0, workerActiveMs: null, totalRasterizations: 0 };
   }
   const layers = [...document.querySelectorAll('.vector-layer')];
   const domObjects = document.querySelectorAll('.canvas-object').length;
   if (layers.length === 0) {
-    return { renderer: 'dom', stats: null, domObjects, workerFrameDelta: 0, totalRasterizations: 0 };
+    return { renderer: 'dom', stats: null, domObjects, workerFrameDelta: 0, workerActiveMs: null, totalRasterizations: 0 };
   }
 
   let primaryLayer = layers[0];
   let bestScore = -1;
   let maxWorkerDelta = 0;
+  let maxWorkerActiveMs = null;
   let totalVisible = 0;
   let totalTexturePages = 0;
   let totalRasterizations = 0;
@@ -42,7 +43,22 @@ function readVectorLayerInfo(prevLayerMap) {
       if (prevLayerMap.has(layer)) {
         const prev = prevLayerMap.get(layer);
         const delta = Math.max(0, gpuCount - prev.gpu) + Math.max(0, compCount - prev.comp);
-        if (delta > maxWorkerDelta) maxWorkerDelta = delta;
+        if (delta > maxWorkerDelta) {
+          maxWorkerDelta = delta;
+          const samples = layer.__agoraGpuRenderer?.telemetry?.samples;
+          let layerActiveMs = null;
+          if (Array.isArray(samples) && windowStart > 0 && now > windowStart) {
+            const inWin = samples.filter((entry) => entry.receivedAt > windowStart && entry.receivedAt <= now);
+            if (inWin.length >= 2) {
+              const first = inWin[0];
+              const last = inWin[inWin.length - 1];
+              const firstStart = Math.max(windowStart, Math.min(first.sentAt || first.receivedAt, first.receivedAt));
+              const avgStep = (last.receivedAt - first.receivedAt) / (inWin.length - 1);
+              layerActiveMs = Math.max(last.receivedAt - firstStart, avgStep * inWin.length, inWin.length * 8);
+            }
+          }
+          maxWorkerActiveMs = layerActiveMs;
+        }
       }
       prevLayerMap.set(layer, { gpu: gpuCount, comp: compCount });
     }
@@ -74,6 +90,7 @@ function readVectorLayerInfo(prevLayerMap) {
     stats: mergedStats,
     domObjects,
     workerFrameDelta: maxWorkerDelta,
+    workerActiveMs: maxWorkerActiveMs,
     totalRasterizations,
   };
 }
@@ -247,8 +264,8 @@ export default function PerformanceMonitorSection({ items, onClose }) {
       }
 
       const { usedHeapMb, heapLimitMb } = readMemoryInfo();
-      const { renderer, stats, domObjects, workerFrameDelta, totalRasterizations } =
-        readVectorLayerInfo(prevLayerFramesRef.current);
+      const { renderer, stats, domObjects, workerFrameDelta, workerActiveMs, totalRasterizations } =
+        readVectorLayerInfo(prevLayerFramesRef.current, windowStart, now);
 
       const rasterDelta = prevRasterizationsRef.current === null
         ? 0
@@ -278,6 +295,7 @@ export default function PerformanceMonitorSection({ items, onClose }) {
         totalObjects: itemsCountRef.current,
         domObjects,
         workerFrameDelta,
+        workerActiveMs,
         rasterDelta,
       });
 

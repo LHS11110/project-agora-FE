@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {connectorGeometry} from '../src/components/connectorGeometry.js';
+import {pathIntersectsBoxes,rectCoreBounds} from '../src/canvas/connectors/aStarRoute.js';
 import CanvasSpatialBTree from '../src/components/CanvasSpatialBTree.js';
 import {isDrawableCanvasItem} from '../src/canvas/drawableItems.js';
 const world={width:1600,height:1000};
@@ -11,8 +12,14 @@ test('chat/comment metadata at the origin never bends an otherwise clear connect
  assert.deepEqual(path(metadata),path(items));
  const updated={...metadata,general:{...metadata.general,data:[{text:'new message'}]}};assert.deepEqual(path(updated),path(items));
 });
-test('visible objects do not reroute or block a connection',()=>{
- const items=fixture();assert.deepEqual(path({...items,box:{kind:'shape',shapeType:'rectangle',x:0,y:0,width:.2,height:.12}}),path(items));
+test('visible objects trigger smooth A* detour around obstacle bounds',()=>{
+ const items=fixture();
+ const blockedItems={...items,box:{kind:'shape',shapeType:'rectangle',x:0,y:0,width:.2,height:.12}};
+ const routed=connectorGeometry(blockedItems.edge,blockedItems,world.width,world.height);
+ assert.ok(routed);assert.equal(routed.routed,true);
+ const boxRect=rectCoreBounds({centerX:160,centerY:60,halfWidth:160,halfHeight:60},0);
+ assert.equal(pathIntersectsBoxes(routed.curvePoints,[boxRect]),false);
+ assert.notDeepEqual(routed.points,path(items));
 });
 test('nonvisual records and tombstones are excluded from the spatial index and cannot be endpoints',()=>{
  const items={...fixture(),general:{type:'chat_room',kind:'shape'},unknown:{kind:'internal-metadata'},deleted:{kind:'host-tombstone'}};

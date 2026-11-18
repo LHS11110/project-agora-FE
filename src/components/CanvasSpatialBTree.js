@@ -3,13 +3,14 @@ import {isRasterCode,codePreviewHeight} from '../canvas/codePreviewMetrics.js';
 import { isDrawableCanvasItem } from '../canvas/drawableItems.js';
 import { shapeStrokeWidth } from '../canvas/shapeAppearance.js';
 import { changedItemIds } from '../canvas/itemSnapshots.js';
-import RBush from 'rbush';
+import CanvasGridIndex from '../canvas/grid/CanvasGridIndex.js';
 import { objectShadow } from '../canvas/objectShadow.js';
 import { connectorObjectSize } from '../canvas/connectors/objectMetrics.js';
 import { CANVAS_SPACE } from '../canvas/canvasSpace.js';
 import { strokePaintSize } from '../canvas/inkStroke.js';
 import { connectorGeometry, OBJECT_SIZES } from './connectorGeometry.js';
 import { shapeArrowGeometry } from './shapeArrowGeometry.js';
+import { registerSpatialIndex } from '../canvas/connectors/aStarRoute.js';
 
 function rotatedBounds(bounds, rotation, viewportWidth, viewportHeight) {
   const degrees = Number(rotation);
@@ -40,7 +41,7 @@ function rotatedBounds(bounds, rotation, viewportWidth, viewportHeight) {
   }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
 }
 
-function objectBounds(item, items, viewportWidth = 1, viewportHeight = 1) {
+function objectBounds(item, items, viewportWidth = 1, viewportHeight = 1, spatialIndex = null) {
   const width = Math.max(1, Number(viewportWidth) || 1);
   const height = Math.max(1, Number(viewportHeight) || 1);
   if (item?.kind === 'stroke' && Array.isArray(item.points) && item.points.length) {
@@ -78,7 +79,7 @@ function objectBounds(item, items, viewportWidth = 1, viewportHeight = 1) {
   }
 
   if (item?.kind === 'connector') {
-    const geometry = connectorGeometry(item, items, width, height);
+    const geometry = connectorGeometry(item, items, width, height, spatialIndex);
     if (geometry?.points.length) {
       const pad = Math.max(8, (Number(item.strokeWidth) || 1.5) / 2 + 6);
       const points = [...geometry.points, ...(geometry.heads || []).flatMap((head) => head.points || [])];
@@ -88,8 +89,10 @@ function objectBounds(item, items, viewportWidth = 1, viewportHeight = 1) {
         maxX: Math.max(current.maxX, point.x),
         maxY: Math.max(current.maxY, point.y),
       }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
-      return { minX: (bounds.minX - pad) / width, minY: (bounds.minY - pad) / height,
+      const result = { minX: (bounds.minX - pad) / width, minY: (bounds.minY - pad) / height,
         maxX: (bounds.maxX + pad) / width, maxY: (bounds.maxY + pad) / height };
+      if (geometry.corridor) result.corridor = geometry.corridor;
+      return result;
     }
   }
 
@@ -155,8 +158,9 @@ function paintedBounds(bounds,item,width,height) {
 }
 
 export default class CanvasSpatialBTree {
-  constructor(items = {}, viewSize = { width: 1, height: 1 }, fanout = 12) {
-    this.tree = new RBush(fanout);
+  constructor(items = {}, viewSize = { width: 1, height: 1 }) {
+    this.gridIndex = new CanvasGridIndex(viewSize?.width || 1600, viewSize?.height || 1000);
+    this.tree = this.gridIndex;
     this.entries = new Map();
     this.connectorIds = new Set();
     this.connectionIndex=new ConnectionIndex();
@@ -165,6 +169,8 @@ export default class CanvasSpatialBTree {
   }
   update(items,viewSize,revision = 0,changedIds = null) {
     const width = Math.max(1,viewSize.width || 1), height = Math.max(1,viewSize.height || 1);
+    this.gridIndex.setWorldSize(width, height);
+    registerSpatialIndex(items, this);
     if (items === this.items && width === this.width && height === this.height && revision === this.revision) return this;
     const resized = width !== this.width || height !== this.height;
     const remeasured = revision !== this.revision;
@@ -174,11 +180,23 @@ export default class CanvasSpatialBTree {
     const ids = incremental ? [...new Set(changedIds.map(String))] : Object.keys(items);
     this.connectionIndex.update(items,ids,!incremental);
     let obstaclesChanged = resized || remeasured;
+    const movedObstacleBoxes = [];
+    const movedObstaclePadX = 64 / width;
+    const movedObstaclePadY = 64 / height;
+    const pushMovedBox = (b) => {
+      if (!b) return;
+      movedObstacleBoxes.push({
+        minX: b.minX - movedObstaclePadX,
+        minY: b.minY - movedObstaclePadY,
+        maxX: b.maxX + movedObstaclePadX,
+        maxY: b.maxY + movedObstaclePadY,
+      });
+    };
     const removals = incremental ? ids.map(id=>[id,this.entries.get(id)]).filter(([,entry])=>entry) : this.entries;
     for (const [id,entry] of removals) if (!Object.hasOwn(items,id) || !isDrawableCanvasItem(items[id])) {
       this.tree.remove(entry); this.entries.delete(id); this.stats.removed++;
       this.connectorIds.delete(id);
-      if (entry.item.kind !== 'connector') obstaclesChanged = true;
+      if (entry.item.kind !== 'connector') { obstaclesChanged = true; pushMovedBox(entry.bounds); }
     }
     const pending = [];
     const affected=new Set(ids);
@@ -193,26 +211,59 @@ export default class CanvasSpatialBTree {
       const shadowKey = JSON.stringify(objectShadow(item));
       if (!geometryChanged && old.shadowKey === shadowKey) { old.item = item; return false; }
       try {
-        const bounds = geometryChanged ? objectBounds(item,items,width,height) : old.bounds;
+        const bounds = geometryChanged ? objectBounds(item,items,width,height,this) : old.bounds;
+        const corridor = bounds.corridor || old?.corridor || null;
+        if (bounds.corridor) delete bounds.corridor;
         if (geometryChanged) this.stats.boundsCalculated++;
         if (!Object.values(bounds).every(Number.isFinite) || bounds.maxX < bounds.minX || bounds.maxY < bounds.minY) throw Error('Invalid bounds');
         if (old) this.tree.remove(old);
-        const entry = { id,item,bounds,...paintedBounds(bounds,item,width,height),geometryKey:key,shadowKey,
+        const entry = { id,item,bounds,corridor,...paintedBounds(bounds,item,width,height),geometryKey:key,shadowKey,
           measuredWidth:measured?.width,measuredHeight:measured?.height };
         this.entries.set(id,entry); pending.push(entry); this.stats.inserted++;
-        return geometryChanged;
+        return { changed: geometryChanged, oldBounds: old?.bounds, newBounds: bounds };
       } catch { if (old) { this.tree.remove(old); this.entries.delete(id); } return !!old; }
     };
+    const changedSet = new Set(ids);
     for (const id of ids) {
       const item=items[id];
       if(isDrawableCanvasItem(item) && item.kind==='connector')this.connectorIds.add(id);else this.connectorIds.delete(id);
       if (!isDrawableCanvasItem(item) || item.kind === 'connector') continue;
-      if (updateEntry(id,item,resized||remeasured)) obstaclesChanged = true;
+      const updated = updateEntry(id,item,resized||remeasured);
+      if (updated && (updated === true || updated.changed)) {
+        obstaclesChanged = true;
+        if (updated.oldBounds) pushMovedBox(updated.oldBounds);
+        if (updated.newBounds) pushMovedBox(updated.newBounds);
+      }
     }
-    // Routing depends on obstacles, so invalidate connectors only on geometry changes.
-    for (const id of obstaclesChanged ? this.connectorIds : ids) if (isDrawableCanvasItem(items[id]) && items[id].kind === 'connector') updateEntry(id,items[id],obstaclesChanged);
-    if (initial || pending.length > this.entries.size / 4) this.tree.load(pending);
-    else for (const entry of pending) this.tree.insert(entry);
+    // Flush obstacle updates into RBush before calculating A* connector routes so corridor queries see current obstacles.
+    if (pending.length) {
+      if (initial || pending.length > this.entries.size / 4) this.tree.load(pending);
+      else for (const entry of pending) this.tree.insert(entry);
+      pending.length = 0;
+    }
+    const relatedConnectors = incremental ? this.connectionIndex.related(ids) : null;
+    const overlapsMovedObstacle = (corridor) => {
+      if (!corridor || !movedObstacleBoxes.length) return true;
+      for (let i = 0; i < movedObstacleBoxes.length; i++) {
+        const b = movedObstacleBoxes[i];
+        if (b.maxX >= corridor.minX && b.minX <= corridor.maxX && b.maxY >= corridor.minY && b.minY <= corridor.maxY) {
+          return true;
+        }
+      }
+      return false;
+    };
+    for (const id of obstaclesChanged ? this.connectorIds : ids) {
+      if (!isDrawableCanvasItem(items[id]) || items[id].kind !== 'connector') continue;
+      if (incremental && obstaclesChanged && !resized && !remeasured && !changedSet.has(id) && !relatedConnectors?.has(id)) {
+        const oldConnector = this.entries.get(id);
+        if (oldConnector?.corridor && !overlapsMovedObstacle(oldConnector.corridor)) continue;
+      }
+      updateEntry(id, items[id], obstaclesChanged);
+    }
+    if (pending.length) {
+      if (initial || pending.length > this.entries.size / 4) this.tree.load(pending);
+      else for (const entry of pending) this.tree.insert(entry);
+    }
     this.items = items; this.width = width; this.height = height; this.revision = revision;
     this.stats.updates++;this.changedIds=incremental?[...affected]:null;
     return this;

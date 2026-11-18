@@ -1,7 +1,6 @@
 import { isRasterCode, codePreviewHeight } from './codePreviewMetrics.js';
 import { isHtmlContent } from './content/contentPresentation.js';
 import { contentSource } from './content/contentPresentation.js';
-import { normalizeGraphicsQuality } from './graphicsQuality.js';
 import { objectFontSize } from './objectSize.js';
 import { richPreviewSignature } from './richPreviewRaster.js';
 const richKinds=new Set(['project','text','code','math','note','table','chart','value','question','image','link','pdf','user-group']);
@@ -11,22 +10,21 @@ function hasNotebookOutputs(item){
   if(item?.runtimeRole==='notebook')return Boolean(item?.notebookResults&&Object.values(item.notebookResults).some(result=>result?.error||result?.outputs?.length));
   return false;
 }
-// Small rich objects use overview rendering. Selecting or zooming restores
-// their full renderer; persisted objects are never replaced.
-export function isOverviewProxy(item,world,scale,quality='low'){
+// Keep full crisp DOM/native rendering across readable scales; only sub-12px distant items use overview tiles.
+export function isOverviewProxy(item,world,scale){
   if(isHtmlContent(item)||hasNotebookOutputs(item))return false;
   const heightValue=Number(item?.height)>0?item.height:isRasterCode(item)?codePreviewHeight(item,world.height)/world.height:0;
   if(!(richKinds.has(item?.kind)||item?.runtimeRole) || !(Number(item.width)>0 && heightValue>0))return false;
   const width=item.width*world.width*scale,height=heightValue*world.height*scale;
-  const threshold={low:48,medium:32,high:24}[normalizeGraphicsQuality(quality)];
+  const threshold=12;
   return Math.min(width,height)<threshold && width*height<threshold*threshold*2;
 }
 // Half-octave buckets prevent rebuilding every rich object on each wheel tick.
 export function overviewScale(scale) {
   return 2 ** (Math.round(Math.log2(Math.max(.0001, Number(scale) || 1)) * 2) / 2);
 }
-export function overviewProxyTier(item, world, scale, quality = 'low') {
-  if (!isOverviewProxy(item, world, scale, quality)) return 'full';
+export function overviewProxyTier(item, world, scale) {
+  if (!isOverviewProxy(item, world, scale)) return 'full';
   return item?.kind === 'image' ? 'img' : 'ov';
 }
 export function overviewProxy(item, world, scale){

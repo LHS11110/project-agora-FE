@@ -117,14 +117,20 @@ export function resizeItemAtPointer(item, resize, point, viewport) {
     else if (handle.includes('s')) bottom = top + baseHeight * contentScaleY / originalY;
   }
 
-  const nextWidth = (right - left) / boardWidth;
-  const nextHeight = (bottom - top) / boardHeight;
+  const rawWidthPx = Math.max(1, Math.round(right - left));
+  const rawHeightPx = Math.max(1, Math.round(bottom - top));
+  const nextWidth = scalable ? (right - left) / boardWidth : rawWidthPx / boardWidth;
+  const nextHeight = scalable ? (bottom - top) / boardHeight : rawHeightPx / boardHeight;
   const localCenterOffset = { x: (left + right) / 2, y: (top + bottom) / 2 };
   const nextCenter = rotateAround({ x: center.x + localCenterOffset.x, y: center.y + localCenterOffset.y }, center, rotation);
+  const rawX = nextCenter.x / boardWidth - nextWidth / 2;
+  const rawY = nextCenter.y / boardHeight - nextHeight / 2;
+  const snappedX = !rotation && !scalable ? Math.round(rawX * boardWidth) / boardWidth : rawX;
+  const snappedY = !rotation && !scalable ? Math.round(rawY * boardHeight) / boardHeight : rawY;
   return {
     ...item,
-    x: nextCenter.x / boardWidth - nextWidth / 2,
-    y: nextCenter.y / boardHeight - nextHeight / 2,
+    x: snappedX,
+    y: snappedY,
     width: nextWidth,
     height: nextHeight,
     ...(scalable ? { contentScaleX, contentScaleY } : {}),

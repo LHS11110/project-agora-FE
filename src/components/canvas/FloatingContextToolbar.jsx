@@ -87,6 +87,8 @@ function computeBarCoords(worldBounds, cam, viewport, layout) {
   return { centerX, topPx };
 }
 
+let cachedToolbarLayoutMetrics = { barWidth: 560, barHeight: 42, tools: null, inspector: null };
+
 export default function FloatingContextToolbar({
   selectedIds,
   items,
@@ -107,7 +109,7 @@ export default function FloatingContextToolbar({
   const fieldId = useId();
   const [showPresets, setShowPresets] = useState(false);
   const barRef = useRef(null);
-  const [layoutMetrics, setLayoutMetrics] = useState({ barWidth: 560, barHeight: 42, tools: null, inspector: null });
+  const [layoutMetrics, setLayoutMetrics] = useState(() => cachedToolbarLayoutMetrics);
   const layoutMetricsRef = useRef(layoutMetrics);
   layoutMetricsRef.current = layoutMetrics;
 
@@ -146,12 +148,16 @@ export default function FloatingContextToolbar({
       const prev = layoutMetricsRef.current;
       const sameRect = (a, b) => a === b || (a && b && a.top === b.top && a.bottom === b.bottom && a.left === b.left && a.right === b.right);
       if (Math.abs(barWidth - prev.barWidth) > 2 || Math.abs(barHeight - prev.barHeight) > 2 || !sameRect(tools, prev.tools) || !sameRect(inspector, prev.inspector)) {
-        setLayoutMetrics({ barWidth, barHeight, tools, inspector });
+        const nextMetrics = { barWidth, barHeight, tools, inspector };
+        cachedToolbarLayoutMetrics = nextMetrics;
+        setLayoutMetrics(nextMetrics);
       }
     };
 
-    measure();
-    if (typeof ResizeObserver !== 'function') return undefined;
+    if (typeof ResizeObserver !== 'function') {
+      measure();
+      return undefined;
+    }
     const ro = new ResizeObserver(measure);
     ro.observe(node);
     ro.observe(stageEl);

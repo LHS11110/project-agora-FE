@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import {snapPosition, snappedTranslation} from './gridPlacement.js';
+import { activeGridInterval, BASE_GRID_INTERVAL, snapPosition, snappedTranslation, strokeGridAnchor } from './gridPlacement.js';
 import { isObjectLocked, OBJECT_LOCK_MESSAGE } from './locks/objectLock.js';
 import { isLogicGate, nearestLogicPort } from './logicGates.js';
 import { connectorControlFromPointer, connectorPointCount } from './connectors/controlPoints.js';
@@ -16,7 +16,7 @@ import { inheritConnectorObjectSize } from './connectors/objectMetrics.js';
 
 export function useCanvasObjectInteractions(options) {
   const {
-    activeTool, frameMemberIds=()=>[], canWriteItem = () => true, snapToGrid=false, gridSpacing=20,
+    activeTool, frameMemberIds=()=>[], canWriteItem = () => true, snapToGrid=false, gridSpacing=BASE_GRID_INTERVAL,
     addItem,
     boardRef,
     boardSize,
@@ -303,12 +303,16 @@ export function useCanvasObjectInteractions(options) {
       for (const [itemId, next] of Object.entries(changes)) sendRealtimePeerItemGeometry(itemId, next);
       return;
     }
+    const moveGridSpacing = activeGridInterval(snapToGrid, gridSpacing);
+    const gridAnchorFor = (candidate) => (candidate?.kind === 'stroke'
+      ? (strokeGridAnchor(candidate) || candidate.points?.[0])
+      : candidate);
     if (mode === 'multi-move') {
       const { ids, initialItems, startPoint } = dragRef.current;
       const point = pointerPosition(event);
       const rawDx=point.x-startPoint.x,rawDy=point.y-startPoint.y;
-      const first=initialItems[ids[0]],anchor=first?.kind==='stroke'?first.points[0]:first;
-      const {dx,dy}=snapToGrid&&anchor?snappedTranslation(anchor,rawDx,rawDy,gridSpacing,boardSize):{dx:rawDx,dy:rawDy};
+      const first=initialItems[ids[0]],anchor=gridAnchorFor(first);
+      const {dx,dy}=anchor?snappedTranslation(anchor,rawDx,rawDy,moveGridSpacing,boardSize):{dx:rawDx,dy:rawDy};
       scheduleObjectMovePreview(dragRef.current, dx, dy);
       return;
     }
@@ -329,9 +333,9 @@ export function useCanvasObjectInteractions(options) {
     }
     const point = pointerPosition(event);
     if(mode==='move'){
-      const anchor=initial.kind==='stroke'?initial.points[0]:initial;
+      const anchor=gridAnchorFor(initial);
       const raw={dx:point.x-startX,dy:point.y-startY};
-      const delta=snapToGrid?snappedTranslation(anchor,raw.dx,raw.dy,gridSpacing,boardSize):raw;
+      const delta=anchor?snappedTranslation(anchor,raw.dx,raw.dy,moveGridSpacing,boardSize):raw;
       scheduleObjectMovePreview(dragRef.current, delta.dx, delta.dy);return;
     }
     let next = mode === 'resize'
@@ -339,9 +343,9 @@ export function useCanvasObjectInteractions(options) {
       : initial.kind === 'stroke'
         ? { ...initial, points: initial.points.map((part) => ({ ...part, x: part.x + point.x - startX, y: part.y + point.y - startY })) }
         : { ...initial, x: point.x - offsetX, y: point.y - offsetY };
-    if(snapToGrid&&mode!=='resize'){
-      if(initial.kind==='stroke'){const anchor=initial.points[0],delta=snappedTranslation(anchor,point.x-startX,point.y-startY,gridSpacing,boardSize);next={...initial,points:initial.points.map(p=>({...p,x:p.x+delta.dx,y:p.y+delta.dy}))};}
-      else next={...next,...snapPosition(next,gridSpacing,boardSize)};
+    if(mode!=='resize'){
+      if(initial.kind==='stroke'){const anchor=gridAnchorFor(initial),delta=anchor?snappedTranslation(anchor,point.x-startX,point.y-startY,moveGridSpacing,boardSize):{dx:point.x-startX,dy:point.y-startY};next={...initial,points:initial.points.map(p=>({...p,x:p.x+delta.dx,y:p.y+delta.dy}))};}
+      else next={...next,...snapPosition(next,moveGridSpacing,boardSize)};
     }
     commitGeometry({ ...itemsRef.current, [id]: next },[id]);
     sendRealtimePeerItemGeometry(id, next);
@@ -357,15 +361,19 @@ export function useCanvasObjectInteractions(options) {
     if(['move','multi-move'].includes(drag.mode)){
       clearFastDragPreview(drag);
       if (event?.type === 'pointerup' && drag.fastPreview && drag.lastMove) {
-        previewObjectMove(drag.lastMove.dx, drag.lastMove.dy);
+        previewObjectMove(drag.lastMove.dx, drag.lastMove.dy, false);
       }
       for(const element of drag.elements||[drag.element])element?.classList.remove('object-dragging','multi-object-dragging');
-      finishObjectMove(event?.type==='pointercancel');refreshSpatialIndex();return;
+      const movedIds = drag.ids?.length ? drag.ids : drag.id != null ? [String(drag.id)] : [];
+      finishObjectMove(event?.type==='pointercancel');
+      refreshSpatialIndex(movedIds.length ? movedIds : undefined);
+      return;
     }
     if (drag.mode === 'multi-move' || drag.mode === 'multi-rotate') {
       drag.elements.forEach((element) => element.classList.remove('object-dragging', 'multi-object-dragging', 'object-rotating'));
       boardRef.current?.classList.remove('rotating');
-      refreshSpatialIndex();
+      const dirtyGroupIds = drag.ids?.length ? drag.ids : undefined;
+      refreshSpatialIndex(dirtyGroupIds);
       for (const id of drag.ids) {
         const initial = drag.initialItems[id];
         const item = itemsRef.current[id];
@@ -383,7 +391,7 @@ export function useCanvasObjectInteractions(options) {
           setToast('연결이 복구되면 선택한 오브젝트를 다시 이동해주세요.');
         }
       }
-      refreshSpatialIndex();
+      refreshSpatialIndex(dirtyGroupIds);
       return;
     }
     const { id, initial, element } = drag;
@@ -392,7 +400,8 @@ export function useCanvasObjectInteractions(options) {
     const item = itemsRef.current[id];
     clearPeerItemGeometryBroadcast(id);
     if (!hasItemGeometryChanged(initial, item)) return;
-    refreshSpatialIndex();
+    const dirtyIdList = id != null ? [String(id)] : undefined;
+    refreshSpatialIndex(dirtyIdList);
     sendPeerItemGeometry(id, item);
     if (isCollaborativeItem(item)) {
       markItemDirty(id);
@@ -401,7 +410,7 @@ export function useCanvasObjectInteractions(options) {
       itemsRef.current = { ...itemsRef.current, [id]: initial };
       setItems((current) => ({ ...current, [id]: initial }));
       sendPeerItemGeometry(id, initial);
-      refreshSpatialIndex();
+      refreshSpatialIndex(dirtyIdList);
     }
   };
   const startGroupRotation = (event, ids, layout) => {
