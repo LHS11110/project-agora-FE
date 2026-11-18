@@ -1499,24 +1499,24 @@ function CanvasWorkspace() {
     return ids || EMPTY_ID_SET;
   }, [hiddenCandidates, previewHiddenEffective, revealNow]);
   const sceneDomIds = useMemo(() => {
-    if (!liveContentIds.length && !domSelection.size && !styledDomIds.size && !visibilityDomIds.size && editingId == null && connectionStartId == null) {
+    if (!liveContentIds.length && !domSelection.size && !styledDomIds.size && !visibilityDomIds.size && !pendingEntrance?.size && editingId == null && connectionStartId == null) {
       return EMPTY_ID_SET;
     }
-    return new Set([...liveContentIds, ...domSelection, ...styledDomIds, ...visibilityDomIds, editingId, connectionStartId].filter(Boolean));
-  }, [domSelection, styledDomIds, visibilityDomIds, editingId, connectionStartId, liveContentIds]);
+    return new Set([...liveContentIds, ...domSelection, ...styledDomIds, ...visibilityDomIds, ...(pendingEntrance || []), editingId, connectionStartId].filter(Boolean));
+  }, [domSelection, styledDomIds, visibilityDomIds, pendingEntrance, editingId, connectionStartId, liveContentIds]);
   const sceneModelRef = useRef(null); if (!sceneModelRef.current) sceneModelRef.current = new SceneViewModel();
   const sceneModel = sceneModelRef.current.update(portfolioEntries, items, boardSize, representationScale, sceneDomIds, selectedObjectIdSet, spatialIndex.stats.boundsCalculated, spatialIndex, graphicsQuality);
   if (sceneRef.current) { sceneRef.current.__agoraSceneStats = sceneModel.stats; sceneRef.current.__agoraContentCacheStats = objectContentCacheStats; sceneRef.current.__agoraSpatialStats = spatialIndex.stats; }
   const depthLayers = useMemo(() => {
     const raw = sceneModel.depthLayers;
-    if (!styledDomIds.size && !visibilityDomIds.size) return raw;
-    const domOverrideIds = new Set([...styledDomIds, ...visibilityDomIds]);
+    if (!styledDomIds.size && !visibilityDomIds.size && !pendingEntrance?.size) return raw;
+    const domOverrideIds = new Set([...styledDomIds, ...visibilityDomIds, ...(pendingEntrance || [])]);
     return raw.map((layer) => {
       let hasVec = false;
       let hasInk = false;
       for (const id of domOverrideIds) {
         if (layer.vectors?.[id]) hasVec = true;
-        if (visibilityDomIds.has(id) && layer.inkItems?.[id]) hasInk = true;
+        if ((visibilityDomIds.has(id) || pendingEntrance?.has(id)) && layer.inkItems?.[id]) hasInk = true;
         if (hasVec && hasInk) break;
       }
       if (!hasVec && !hasInk) return layer;
@@ -1524,11 +1524,11 @@ function CanvasWorkspace() {
       const nextInkItems = hasInk ? { ...layer.inkItems } : layer.inkItems;
       for (const id of domOverrideIds) {
         if (hasVec) delete nextVectors[id];
-        if (hasInk && visibilityDomIds.has(id)) delete nextInkItems[id];
+        if (hasInk && (visibilityDomIds.has(id) || pendingEntrance?.has(id))) delete nextInkItems[id];
       }
       return { ...layer, vectors: nextVectors, inkItems: nextInkItems };
     });
-  }, [sceneModel.depthLayers, styledDomIds, visibilityDomIds]);
+  }, [sceneModel.depthLayers, styledDomIds, visibilityDomIds, pendingEntrance]);
   const blurBudgetRef = useRef(null);
   const blurBudgetIds = useMemo(() => {
     if (!styledDomIds.size) { blurBudgetRef.current = null; return null; }

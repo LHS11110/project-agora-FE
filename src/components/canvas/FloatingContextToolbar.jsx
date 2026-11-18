@@ -15,10 +15,12 @@ function computeWorldSelectionBounds(selectedIds, items, boardSize) {
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
+  let hasFrame = false;
 
   for (const id of selectedIds) {
     const item = items[String(id)];
     if (!item || item.kind === 'connector' || item.kind === 'stroke') continue;
+    if (item.kind === 'frame') hasFrame = true;
     const def = OBJECT_SIZES[item.kind] || [0.2, 0.14];
     const wx = (Number(item.x) || 0) * boardSize.width;
     const wy = (Number(item.y) || 0) * boardSize.height;
@@ -57,7 +59,7 @@ function computeWorldSelectionBounds(selectedIds, items, boardSize) {
       }
     }
   }
-  return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null;
+  return Number.isFinite(minX) ? { minX, minY, maxX, maxY, hasFrame } : null;
 }
 
 function computeBarCoords(worldBounds, cam, viewport, layout) {
@@ -67,9 +69,13 @@ function computeBarCoords(worldBounds, cam, viewport, layout) {
   const maxY = worldBounds.maxY * cam.scale + cam.y;
   const vw = Math.max(1, viewport?.width || 1200);
   const vh = Math.max(1, viewport?.height || 800);
-  const placeBelow = minY < 68;
-  const topPx = placeBelow ? Math.min(vh - 60, maxY + 12) : Math.max(14, minY - 48);
-  const overlapsBarY = (r) => Boolean(r && (topPx + 44) > r.top && topPx < r.bottom);
+  const barHeight = layout.barHeight || 42;
+  // Selected frames expose their external caption drag handle above the top edge.
+  const captionOffset = worldBounds.hasFrame ? Math.max(24, Math.ceil(32 * (cam.scale || 1))) : 0;
+  const aboveTop = minY - captionOffset - barHeight - 6;
+  const placeBelow = aboveTop < 14;
+  const topPx = placeBelow ? Math.min(vh - (barHeight + 18), maxY + 12) : aboveTop;
+  const overlapsBarY = (r) => Boolean(r && (topPx + barHeight) > r.top && topPx < r.bottom);
   const safeMinX = overlapsBarY(layout.tools) ? Math.max(12, Math.round(layout.tools.right) + 12) : 12;
   const safeMaxX = overlapsBarY(layout.inspector) ? Math.min(vw - 12, Math.round(layout.inspector.left) - 12) : vw - 12;
   const usableWidth = Math.max(120, safeMaxX - safeMinX);
@@ -101,7 +107,7 @@ export default function FloatingContextToolbar({
   const fieldId = useId();
   const [showPresets, setShowPresets] = useState(false);
   const barRef = useRef(null);
-  const [layoutMetrics, setLayoutMetrics] = useState({ barWidth: 560, tools: null, inspector: null });
+  const [layoutMetrics, setLayoutMetrics] = useState({ barWidth: 560, barHeight: 42, tools: null, inspector: null });
   const layoutMetricsRef = useRef(layoutMetrics);
   layoutMetricsRef.current = layoutMetrics;
 
@@ -134,12 +140,13 @@ export default function FloatingContextToolbar({
         };
       };
       const barWidth = node.offsetWidth || 560;
+      const barHeight = node.offsetHeight || 42;
       const tools = relRect(toolsEl);
       const inspector = relRect(inspectorEl);
       const prev = layoutMetricsRef.current;
       const sameRect = (a, b) => a === b || (a && b && a.top === b.top && a.bottom === b.bottom && a.left === b.left && a.right === b.right);
-      if (Math.abs(barWidth - prev.barWidth) > 2 || !sameRect(tools, prev.tools) || !sameRect(inspector, prev.inspector)) {
-        setLayoutMetrics({ barWidth, tools, inspector });
+      if (Math.abs(barWidth - prev.barWidth) > 2 || Math.abs(barHeight - prev.barHeight) > 2 || !sameRect(tools, prev.tools) || !sameRect(inspector, prev.inspector)) {
+        setLayoutMetrics({ barWidth, barHeight, tools, inspector });
       }
     };
 

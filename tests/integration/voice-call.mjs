@@ -9,7 +9,7 @@ try{
  await page.evaluate(async()=>{
   const {default:Call}=await import('/src/canvas/voice/CanvasVoiceCall.js');const calls=new Map(),states=new Map();window.calls=calls;window.states=states;
   window.add=async id=>{
-   const call=new Call({iceServers:[],disconnectDelay:30,negotiationTimeout:3000,send:event=>{
+   const call=new Call({iceServers:[],iceTransportPolicy:'all',disconnectDelay:30,negotiationTimeout:3000,send:event=>{
     const sender=call.self||id;if(window.blockSignals&&event.type==='rtc_signal')return false;
     if(event.type==='voice_state'){
      states.set(sender,{peer_id:sender,nickname:id,tag_number:1,voice_active:event.active,voice_muted:event.muted});
