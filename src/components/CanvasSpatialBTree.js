@@ -141,7 +141,7 @@ function objectBounds(item, items, viewportWidth = 1, viewportHeight = 1, spatia
 }
 
 // Keep the public query API while RBush incrementally updates changed rectangles.
-const geometryFields = ['renderMode','kind','type','x','y','width','height','rotation','shapeType','vertexCount','cornerStyle','bend','bendPoints','startHead','endHead','headSize','strokeWidth','brush','simulatePressure','points','from','to','fromPort','toPort'];
+const geometryFields = ['renderMode','kind','type','x','y','width','height','rotation','shapeType','vertexCount','cornerStyle','bend','bendPoints','startHead','endHead','headSize','strokeWidth','brush','format','simulatePressure','points','from','to','fromPort','toPort'];
 function geometryKey(item) {
   return [...geometryFields.map(field=>item[field]),...(isRasterCode(item)&&!item.height?[item.text,item.code,item.fontSize,item.contentScale,item.contentScaleX,item.contentScaleY]:[])];
 }
@@ -164,6 +164,7 @@ export default class CanvasSpatialBTree {
     this.entries = new Map();
     this.connectorIds = new Set();
     this.connectionIndex=new ConnectionIndex();
+    this.obstacleRevision = 0;
     this.stats = { updates:0, boundsCalculated:0, inserted:0, removed:0, queries:0 };
     this.update(items,viewSize);
   }
@@ -175,14 +176,21 @@ export default class CanvasSpatialBTree {
     const resized = width !== this.width || height !== this.height;
     const remeasured = revision !== this.revision;
     const initial = !this.items;
-    if(changedIds==null && !remeasured && this.items)changedIds=changedItemIds(this.items,items);
+    if (this.items && this.items !== items) {
+      const diff = changedItemIds(this.items, items);
+      if (changedIds == null) {
+        if (!remeasured) changedIds = diff;
+      } else if (Array.isArray(diff) && diff.length) {
+        changedIds = [...changedIds, ...diff];
+      }
+    }
     const incremental = changedIds && !resized && !initial;
     const ids = incremental ? [...new Set(changedIds.map(String))] : Object.keys(items);
     this.connectionIndex.update(items,ids,!incremental);
     let obstaclesChanged = resized || remeasured;
     const movedObstacleBoxes = [];
-    const movedObstaclePadX = 64 / width;
-    const movedObstaclePadY = 64 / height;
+    const movedObstaclePadX = 96 / width;
+    const movedObstaclePadY = 96 / height;
     const pushMovedBox = (b) => {
       if (!b) return;
       movedObstacleBoxes.push({
@@ -235,11 +243,16 @@ export default class CanvasSpatialBTree {
         if (updated.newBounds) pushMovedBox(updated.newBounds);
       }
     }
-    // Flush obstacle updates into RBush before calculating A* connector routes so corridor queries see current obstacles.
+    // Flush obstacle updates into CanvasGridIndex before calculating A* connector routes so corridor queries see current obstacles.
     if (pending.length) {
       if (initial || pending.length > this.entries.size / 4) this.tree.load(pending);
       else for (const entry of pending) this.tree.insert(entry);
       pending.length = 0;
+    }
+    // Bump obstacleRevision BEFORE evaluating connectors so connectorGeometry cache never returns pre-move routes,
+    // and subsequent SceneViewModel / DepthVectorLayer reads hit the exact same cached geometry in O(1).
+    if (obstaclesChanged || initial || resized || remeasured) {
+      this.obstacleRevision++;
     }
     const relatedConnectors = incremental ? this.connectionIndex.related(ids) : null;
     const overlapsMovedObstacle = (corridor) => {
@@ -254,7 +267,7 @@ export default class CanvasSpatialBTree {
     };
     for (const id of obstaclesChanged ? this.connectorIds : ids) {
       if (!isDrawableCanvasItem(items[id]) || items[id].kind !== 'connector') continue;
-      if (incremental && obstaclesChanged && !resized && !remeasured && !changedSet.has(id) && !relatedConnectors?.has(id)) {
+      if (incremental && obstaclesChanged && !resized && !changedSet.has(id) && !relatedConnectors?.has(id)) {
         const oldConnector = this.entries.get(id);
         if (oldConnector?.corridor && !overlapsMovedObstacle(oldConnector.corridor)) continue;
       }

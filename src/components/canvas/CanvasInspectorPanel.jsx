@@ -162,14 +162,25 @@ const CanvasInspectorPanel = memo(function CanvasInspectorPanel({
     return patched || items;
   }, [items, selectedObjectIds]);
   const hasLockedSelection = hasSelection && selectedObjectIds.some(id => items[id]?.locked === true || !canWriteItem(items[id]));
-  const [selectionDetailsReady, setSelectionDetailsReady] = useState(hasSelection);
+  const [selectionDetailStage, setSelectionDetailStage] = useState(hasSelection ? 3 : 0);
   useEffect(() => {
     if (!hasSelection) {
-      setSelectionDetailsReady(false);
+      setSelectionDetailStage(0);
       return undefined;
     }
-    const raf = requestAnimationFrame(() => setSelectionDetailsReady(true));
-    return () => cancelAnimationFrame(raf);
+    let rafId = 0;
+    let stage = 0;
+    const step = () => {
+      stage += 1;
+      setSelectionDetailStage(stage);
+      if (stage < 3) {
+        rafId = requestAnimationFrame(step);
+      }
+    };
+    rafId = requestAnimationFrame(step);
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+    };
   }, [hasSelection]);
   const PropertyFieldsTag = hasLockedSelection ? 'fieldset' : 'div';
   const propertyFieldsProps = hasLockedSelection
@@ -202,7 +213,7 @@ const CanvasInspectorPanel = memo(function CanvasInspectorPanel({
         {showMonitoring && <PerformanceMonitorSection items={items} onClose={onCloseMonitoring} />}
         {hasSelection && <div className="inspector-object-editor">
           {(selectedObjectIds.length > 1 || selectionSummary.grouped) && <section className="inspector-section selection-actions-section"><div className="selection-actions-heading"><strong>{selectedObjectIds.length}{ui("개 오브젝트 선택됨")}</strong><button type="button" onClick={() => selectItems([])}>{ui("선택 해제")}</button></div><small className="inspector-hint">{ui("빈 공간을 드래그해 여러 개를 선택하고, Shift를 누른 채 개별 선택을 더할 수 있어요.")}</small>{selectionSummary.savedText && <small className="inspector-hint">{ui("텍스트와 코드는 Ctrl + S로 저장하며, 포스트잇은 변경 후 자동 저장합니다.")}</small>}<div className="selection-actions-buttons"><button type="button" className="button button-dark" disabled={!selectionIsSingleGroup && selectionSummary.groupable < 2} onClick={() => changeSelectionGroup(!selectionIsSingleGroup)}>{selectionIsSingleGroup ? ui("그룹 해제") : ui("그룹화")}</button></div></section>}
-          {selectionDetailsReady && <>
+          {selectionDetailStage >= 1 && <>
           <button type="button" className="inspector-secondary-action" onClick={() => onSaveAnchor(selectedObjectIds)}><Icon name="anchor" size={14} /><span>{ui('위치 저장')}</span></button>
           <ObjectLockControls ids={selectedObjectIds} items={items} disabled={selectedObjectIds.some(id => !canWriteItem(items[id]))} onChange={updateItemLocked} />
           <ObjectGroupControls ids={selectedObjectIds} items={items} settings={settings} capabilities={capabilities} disabled={hasLockedSelection} onChange={updateItemGroups} />
@@ -219,7 +230,8 @@ const CanvasInspectorPanel = memo(function CanvasInspectorPanel({
           {selectedObjectIds.length === 1 && selectedItem && <button type="button" className="inspector-secondary-action" disabled={!canWriteItem(selectedItem)} onClick={() => onOpenComments(primarySelectedItemId)}><Icon name="chat" size={14} /><span>{ui('객체 댓글')}</span></button>}
           {(['executor', 'output'].includes(selectedItem?.runtimeRole) || (isTextContent(selectedItem) && contentMode(selectedItem) === 'code')) && <section className="inspector-section"><strong className="inspector-label">{ui('블루프린트 실행')}</strong><p className="inspector-hint">{ui('실행 객체 → 코드 객체 → 결과 객체 순서로 연결하세요. 실행 객체의 코드 실행 버튼을 눌러 실행합니다.')}</p><p className="inspector-hint">{ui('연결 화살표의 방향을 따릅니다. 결과 객체끼리 연결하면 같은 출력을 여러 곳에서 볼 수 있습니다.')}</p></section>}
           <ObjectClipboardControls actions={objectClipboard} selectedCount={selectedObjectIds.length} blocked={clipboardBlocked} />
-          <PropertyFieldsTag {...propertyFieldsProps}>
+          </>}
+          {selectionDetailStage >= 2 && <PropertyFieldsTag {...propertyFieldsProps}>
             {selectedItem?.kind === 'chart' && <ChartControls key={primarySelectedItemId} item={selectedItem} onChange={patch => updateChartItem(primarySelectedItemId, patch)} />}
             {portfolioActions && <PortfolioControls items={items} selectedIds={selectedObjectIds} canWriteItem={canWriteItem} frames={portfolioFrames} actions={portfolioActions} viewing={portfolioViewing} activeTool={activeTool} />}
             {showBatchCornerControls && <ObjectCornerControls item={selectedItem || items[cornerState.targetIds[0]]} value={cornerState.value} count={cornerState.targetIds.length} onChange={value => updateObjectCornerStyle(cornerState.targetIds, value)} />}
@@ -256,7 +268,7 @@ const CanvasInspectorPanel = memo(function CanvasInspectorPanel({
             {selectedItem && <section className="inspector-section rotation-section"><div className="zoom-sensitivity-heading"><strong>{selectedConnector ? ui("곡선 방향") : ui("객체 회전")}</strong><span>{Math.round(Number(selectedItem.rotation) || 0)}°</span></div>{selectedConnector && <input id={`${fieldId}-connector-rotation`} name="connector-rotation" type="range" min="-180" max="180" step="1" value={Math.round(Number(selectedItem.rotation) || 0)} onChange={(event) => updateItemRotation(primarySelectedItemId, event.target.value)} aria-label={ui("선택한 화살표 곡선 방향")} />}{!selectedConnector && <small className="inspector-hint">{ui("선택 객체 위쪽 핸들을 드래그해 마우스 방향을 따라 회전하세요.")}</small>}<button type="button" className="inspector-secondary-action" onClick={() => updateItemRotation(primarySelectedItemId, 0)}><Icon name="reset" size={13} /><span>{selectedConnector ? ui("방향 초기화") : ui("회전 초기화")}</span></button></section>}
             {!selectedItem && selectedObjectIds.length > 1 && <section className="inspector-section rotation-section"><strong className="inspector-label">{ui("객체 회전")}</strong><button type="button" className="inspector-secondary-action" onClick={() => updateItemRotation(selectedObjectIds, 0)}><Icon name="reset" size={13} /><span>{ui("회전 초기화")}</span></button></section>}
             {selectedTable && <section className="inspector-section"><strong className="inspector-label">{ui("테이블 설정")}</strong><div className="table-config-grid"><label>{ui("행 수")}<input id={`${fieldId}-selected-table-rows`} name="selected-table-rows" type="number" min="1" max={MAX_TABLE_ROWS} value={selectedTable.rows?.length || 1} onChange={(event) => changeTableCount('rows', event)} /></label><label>{ui("열 수")}<input id={`${fieldId}-selected-table-cols`} name="selected-table-columns" type="number" min="1" max={MAX_TABLE_COLUMNS} value={selectedTable.columns?.length || 1} onChange={(event) => changeTableCount('columns', event)} /></label><label>{ui("너비 %")}<input id={`${fieldId}-selected-table-width`} name="selected-table-width" type="number" min="10" max="100" value={Math.round((selectedTable.width || 0.42) * 100)} onChange={(event) => changeTableSize('width', event)} /></label><label>{ui("높이 %")}<input id={`${fieldId}-selected-table-height`} name="selected-table-height" type="number" min="10" max="100" value={Math.round((selectedTable.height || 0.32) * 100)} onChange={(event) => changeTableSize('height', event)} /></label></div><small className="inspector-hint">{ui("셀이나 컬럼 이름을 두 번 클릭해 Markdown으로 편집하세요.")}</small></section>}
-            <AdvancedStylingInspector
+            {selectionDetailStage >= 3 && <AdvancedStylingInspector
               canvasId={canvasId}
               items={items}
               selectedObjectIds={selectedObjectIds}
@@ -267,9 +279,8 @@ const CanvasInspectorPanel = memo(function CanvasInspectorPanel({
               onPatchAllItems={onPatchAllItems}
               onFontSizeChange={(ids, value) => ids.forEach(id => updateObjectFontSize(id, value))}
               onApplyAutoLayout={onApplyAutoLayout}
-            />
-          </PropertyFieldsTag>
-          </>}
+            />}
+          </PropertyFieldsTag>}
         </div>}
         {activeTool === 'select' && (
           <HiddenObjectsManager

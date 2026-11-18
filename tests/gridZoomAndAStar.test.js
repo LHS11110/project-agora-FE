@@ -22,6 +22,7 @@ import {
 } from '../src/canvas/gridPlacement.js';
 import { resizeItemAtPointer, captureResize } from '../src/components/objectResize.js';
 import { itemSnapshot, changeItems } from '../src/canvas/itemSnapshots.js';
+import { writeObjectVisibilityPatch } from '../src/canvas/styling/objectStyleModel.js';
 import { connectorGeometry } from '../src/components/connectorGeometry.js';
 import { logicConnectorGeometry } from '../src/canvas/connectors/logicConnectorGeometry.js';
 import { routeConnectorAStar, pathIntersectsBoxes, rectCoreBounds } from '../src/canvas/connectors/aStarRoute.js';
@@ -228,4 +229,111 @@ test('CanvasSpatialBTree selectively invalidates only connectors whose corridor 
   assert.notEqual(index.entries.get('link1'), link1EntryBefore);
   assert.equal(index.entries.get('link2'), link2EntryBefore);
   assert.equal(index.stats.boundsCalculated - boundsBefore, 2);
+});
+
+test('connector collision avoidance handles adjacent obstacles, tight gaps, wide detour chains, fixed logic ports, and stale-cache moves', () => {
+  const box = (x, y, w = 0.08, h = 0.1, extra = {}) => ({
+    kind: 'shape',
+    shapeType: 'rectangle',
+    x,
+    y,
+    width: w,
+    height: h,
+    ...extra,
+  });
+
+  // 1) Adjacent obstacle 1px right of `from` must NOT be skipped as overlapping `from`
+  const adjItems = {
+    a: box(0.1, 0.4, 0.1, 0.1), // x: 160..320, y: 400..500
+    adj: box(321 / 1600, 0.36, 0.08, 0.18), // x: 321..449 (1px gap from `a`!)
+    b: box(0.5, 0.4, 0.1, 0.1), // x: 800..960
+    edge: { kind: 'connector', from: 'a', to: 'b' },
+  };
+  const adjGeo = connectorGeometry(adjItems.edge, adjItems, 1600, 1000);
+  assert.ok(adjGeo && adjGeo.routed, 'adjacent obstacle 1px away must trigger detour');
+  const adjCore = rectCoreBounds({ centerX: 321 + 64, centerY: 450, halfWidth: 64, halfHeight: 90 }, 0);
+  assert.equal(pathIntersectsBoxes(adjGeo.curvePoints, [adjCore]), false, 'connector must not cut through adjacent obstacle');
+
+  // 2) Tight corridor (< 2 * detourPad = 28px) between two obstacles around endpoint
+  const tightItems = {
+    a: box(0.1, 0.4, 0.08, 0.08), // x: 160..288, y: 400..480
+    b: box(0.45, 0.4, 0.08, 0.08),
+    topWall: box(0.22, 0.05, 0.08, 0.385), // y: 50..435
+    botWall: box(0.22, 0.445, 0.08, 0.42), // y: 445..865 (10px gap between 435 and 445!)
+    edge: { kind: 'connector', from: 'a', to: 'b' },
+  };
+  const tightGeo = connectorGeometry(tightItems.edge, tightItems, 1600, 1000);
+  assert.ok(tightGeo && tightGeo.routed, 'tight-gap obstacles must still route cleanly');
+  const topCore = rectCoreBounds({ centerX: 0.26 * 1600, centerY: 242.5, halfWidth: 64, halfHeight: 192.5 }, 0);
+  const botCore = rectCoreBounds({ centerX: 0.26 * 1600, centerY: 655, halfWidth: 64, halfHeight: 210 }, 0);
+  assert.equal(pathIntersectsBoxes(tightGeo.curvePoints, [topCore, botCore]), false, 'connector must avoid tight-gap walls');
+
+  // 3) Tall primary wall forcing detour into secondary obstacles outside initial padPx
+  const chainItems = itemSnapshot({
+    a: box(0.2, 0.45, 0.05, 0.05), // x: 320..400, y: 450..500
+    b: box(0.35, 0.45, 0.05, 0.05), // x: 560..640, y: 450..500 (close endpoints -> small initial pad)
+    tallWall: box(0.285, 0.12, 0.03, 0.7), // x: 456..504, y: 120..820
+    topCap: box(0.22, 0.02, 0.18, 0.08), // x: 352..640, y: 20..100 (sits right on upper detour!)
+    botCap: box(0.22, 0.84, 0.18, 0.08), // x: 352..640, y: 840..920 (sits right on lower detour!)
+    edge: { kind: 'connector', from: 'a', to: 'b' },
+  });
+  const chainIndex = new CanvasSpatialBTree(chainItems, world);
+  const chainGeo = connectorGeometry(chainItems.edge, chainItems, 1600, 1000, chainIndex);
+  assert.ok(chainGeo && chainGeo.routed, 'detour chain must route around wall and cap obstacles');
+  const chainCores = [
+    rectCoreBounds({ centerX: 480, centerY: 470, halfWidth: 24, halfHeight: 350 }, 0),
+    rectCoreBounds({ centerX: 496, centerY: 60, halfWidth: 144, halfHeight: 40 }, 0),
+    rectCoreBounds({ centerX: 496, centerY: 880, halfWidth: 144, halfHeight: 40 }, 0),
+  ];
+  assert.equal(pathIntersectsBoxes(chainGeo.curvePoints, chainCores), false, 'dynamic corridor expansion must avoid secondary detour obstacles');
+
+  // 4) Logic gate with obstacle right in front of fixed output port must not cut through gate body
+  const gateItems = {
+    g1: { kind: 'shape', shapeType: 'logic-and', x: 0.1, y: 0.4, width: 0.1, height: 0.1 },
+    g2: { kind: 'shape', shapeType: 'logic-or', x: 0.5, y: 0.4, width: 0.1, height: 0.1 },
+    blocker: box(0.21, 0.36, 0.08, 0.18), // 16px right of g1 output port
+    wire: { kind: 'connector', from: 'g1', to: 'g2' },
+  };
+  const gateGeo = connectorGeometry(gateItems.wire, gateItems, 1600, 1000);
+  assert.ok(gateGeo && gateGeo.routed);
+  const g1Core = rectCoreBounds({ centerX: 240, centerY: 450, halfWidth: 78, halfHeight: 48 }, 0);
+  const blockerCore = rectCoreBounds({ centerX: 0.25 * 1600, centerY: 450, halfWidth: 64, halfHeight: 90 }, 0);
+  assert.equal(pathIntersectsBoxes(gateGeo.curvePoints, [blockerCore]), false, 'logic wire must avoid blocker');
+  assert.equal(pathIntersectsBoxes(gateGeo.curvePoints.slice(1, -1), [g1Core]), false, 'logic wire must not cut back through source gate');
+
+  // 5) Moving an obstacle after connectorGeometry was cached must immediately re-route with no stale hit
+  const moveStart = itemSnapshot({
+    a: box(0.05, 0.4, 0.08, 0.08),
+    b: box(0.45, 0.4, 0.08, 0.08),
+    mover: box(0.7, 0.1, 0.08, 0.16),
+    link: { kind: 'connector', from: 'a', to: 'b' },
+  });
+  const moveIndex = new CanvasSpatialBTree(moveStart, world);
+  const beforeMove = connectorGeometry(moveStart.link, moveStart, 1600, 1000, moveIndex);
+  assert.equal(beforeMove.routed, false);
+  const movedIntoPath = changeItems(moveStart, { mover: box(0.25, 0.35, 0.08, 0.18) });
+  // Simulate a pre-update read before spatial index updates
+  connectorGeometry(movedIntoPath.link, movedIntoPath, 1600, 1000, moveIndex);
+  moveIndex.update(movedIntoPath, world, 1, ['mover']);
+  const afterMove = connectorGeometry(movedIntoPath.link, movedIntoPath, 1600, 1000, moveIndex);
+  assert.equal(afterMove.routed, true, 'moving obstacle into path must invalidate cached straight route');
+  const moverCore = rectCoreBounds({ centerX: 0.29 * 1600, centerY: 0.44 * 1000, halfWidth: 64, halfHeight: 90 }, 0);
+  assert.equal(pathIntersectsBoxes(afterMove.curvePoints, [moverCore]), false);
+
+  // 6) Hidden obstacle is ignored while hidden, and re-routed immediately when revealed
+  const baseWall = box(0.25, 0.35, 0.08, 0.18);
+  const hiddenBlocker = { ...baseWall, ...writeObjectVisibilityPatch(baseWall, { hidden: true }) };
+  const hiddenItems = itemSnapshot({
+    a: box(0.05, 0.4, 0.08, 0.08),
+    b: box(0.45, 0.4, 0.08, 0.08),
+    wall: hiddenBlocker,
+    link: { kind: 'connector', from: 'a', to: 'b' },
+  });
+  const visIndex = new CanvasSpatialBTree(hiddenItems, world);
+  assert.equal(connectorGeometry(hiddenItems.link, hiddenItems, 1600, 1000, visIndex).routed, false);
+  const revealed = changeItems(hiddenItems, { wall: box(0.25, 0.35, 0.08, 0.18) });
+  visIndex.update(revealed, world);
+  const revealedGeo = connectorGeometry(revealed.link, revealed, 1600, 1000, visIndex);
+  assert.equal(revealedGeo.routed, true, 'revealing a hidden obstacle must immediately detour the connector');
+  assert.equal(pathIntersectsBoxes(revealedGeo.curvePoints, [moverCore]), false);
 });

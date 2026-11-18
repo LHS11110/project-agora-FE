@@ -10,7 +10,7 @@ import { CANVAS_SPACE } from '../canvas/canvasSpace.js';
 import { arrowPathGeometry } from './arrowheadGeometry.js';
 import { objectCornerRadius, supportsObjectCorners } from '../canvas/objectCorners.js';
 import { shapeOutlinePaths } from '../canvas/shapeGeometry.js';
-import { parseRawStyleEnvelope } from '../canvas/styling/objectStyleModel.js';
+import { parseRawStyleEnvelope, readObjectVisibility } from '../canvas/styling/objectStyleModel.js';
 import { lookupSpatialIndex, routeConnectorAStar, rectCoreBounds } from '../canvas/connectors/aStarRoute.js';
 
 export const OBJECT_SIZES = {
@@ -114,46 +114,110 @@ function bezierPoint(points, t) {
   }), { x: 0, y: 0 });
 }
 
+function isObstacleCandidate(candidate) {
+  if (!isDrawableCanvasItem(candidate) || candidate.kind === 'connector' || candidate.kind === 'frame' || candidate.type === 'chat_room') {
+    return false;
+  }
+  return !readObjectVisibility(candidate).hidden;
+}
+
+function querySpatialObstacles(fromId, toId, items, minPxX, minPxY, maxPxX, maxPxY, width, height, spatial, obstacleMap) {
+  const candidates = spatial.query({
+    minX: minPxX / Math.max(1, width),
+    minY: minPxY / Math.max(1, height),
+    maxX: maxPxX / Math.max(1, width),
+    maxY: maxPxY / Math.max(1, height),
+  });
+  let added = 0;
+  for (let i = 0; i < candidates.length; i++) {
+    const entry = candidates[i];
+    const id = String(entry.id);
+    if (id === fromId || id === toId || obstacleMap.has(id)) continue;
+    const candidate = items[id] || entry.item;
+    if (!isObstacleCandidate(candidate)) continue;
+    obstacleMap.set(id, { id, ...objectRect(candidate, width, height) });
+    added++;
+  }
+  return added;
+}
+
 function collectNearbyObstacles(item, items, from, to, width, height, clearance, spatial) {
   const fromId = String(item.from);
   const toId = String(item.to);
-  const obstacles = [];
+  const obstacleMap = new Map();
   if (spatial) {
-    const padPx = Math.max(160, Math.min(640, Math.round(Math.hypot(to.centerX - from.centerX, to.centerY - from.centerY) * 0.45 + clearance * 4)));
-    const minPxX = Math.min(from.centerX - from.halfWidth, to.centerX - to.halfWidth) - padPx;
-    const minPxY = Math.min(from.centerY - from.halfHeight, to.centerY - to.halfHeight) - padPx;
-    const maxPxX = Math.max(from.centerX + from.halfWidth, to.centerX + to.halfWidth) + padPx;
-    const maxPxY = Math.max(from.centerY + from.halfHeight, to.centerY + to.halfHeight) + padPx;
-    const candidates = spatial.query({
-      minX: minPxX / Math.max(1, width),
-      minY: minPxY / Math.max(1, height),
-      maxX: maxPxX / Math.max(1, width),
-      maxY: maxPxY / Math.max(1, height),
-    });
-    for (let i = 0; i < candidates.length; i++) {
-      const entry = candidates[i];
-      const id = String(entry.id);
-      if (id === fromId || id === toId) continue;
-      const candidate = items[id] || entry.item;
-      if (!isDrawableCanvasItem(candidate) || candidate.kind === 'connector' || candidate.kind === 'frame' || candidate.type === 'chat_room') continue;
-      obstacles.push({ id, ...objectRect(candidate, width, height) });
+    const padPx = Math.max(240, Math.min(960, Math.round(Math.hypot(to.centerX - from.centerX, to.centerY - from.centerY) * 0.6 + clearance * 6)));
+    let minPxX = Math.min(from.centerX - from.halfWidth, to.centerX - to.halfWidth) - padPx;
+    let minPxY = Math.min(from.centerY - from.halfHeight, to.centerY - to.halfHeight) - padPx;
+    let maxPxX = Math.max(from.centerX + from.halfWidth, to.centerX + to.halfWidth) + padPx;
+    let maxPxY = Math.max(from.centerY + from.halfHeight, to.centerY + to.halfHeight) + padPx;
+    querySpatialObstacles(fromId, toId, items, minPxX, minPxY, maxPxX, maxPxY, width, height, spatial, obstacleMap);
+
+    // If a collected tall/wide wall extends outside the initial window, pull in obstacles near its outer tips too.
+    let expMinX = minPxX;
+    let expMinY = minPxY;
+    let expMaxX = maxPxX;
+    let expMaxY = maxPxY;
+    for (const obs of obstacleMap.values()) {
+      const b = rectCoreBounds(obs, clearance * 2);
+      if (b.minX < expMinX) expMinX = b.minX;
+      if (b.minY < expMinY) expMinY = b.minY;
+      if (b.maxX > expMaxX) expMaxX = b.maxX;
+      if (b.maxY > expMaxY) expMaxY = b.maxY;
     }
-    return obstacles;
+    if (expMinX < minPxX || expMinY < minPxY || expMaxX > maxPxX || expMaxY > maxPxY) {
+      querySpatialObstacles(fromId, toId, items, expMinX - 120, expMinY - 120, expMaxX + 120, expMaxY + 120, width, height, spatial, obstacleMap);
+    }
+    return obstacleMap;
   }
   let entries;
   try {
     entries = Object.entries(items);
   } catch {
-    return obstacles;
+    return obstacleMap;
   }
   for (let i = 0; i < entries.length; i++) {
     const [rawId, candidate] = entries[i];
     const id = String(rawId);
     if (id === fromId || id === toId) continue;
-    if (!isDrawableCanvasItem(candidate) || candidate.kind === 'connector' || candidate.kind === 'frame' || candidate.type === 'chat_room') continue;
-    obstacles.push({ id, ...objectRect(candidate, width, height) });
+    if (!isObstacleCandidate(candidate)) continue;
+    obstacleMap.set(id, { id, ...objectRect(candidate, width, height) });
   }
-  return obstacles;
+  return obstacleMap;
+}
+
+function createDynamicRouter(item, items, width, height, clearance, spatial, obstacleMap) {
+  const fromId = String(item.from);
+  const toId = String(item.to);
+  return (routeArgs) => {
+    let obstacles = [...obstacleMap.values()];
+    if (!obstacles.length) {
+      return { points: routeArgs.preferredPoints, routed: false, corridor: null };
+    }
+    let result = routeConnectorAStar({ ...routeArgs, obstacles });
+    if (!spatial || !result.routed || !result.corridor) return result;
+    const expandPad = Math.max(48, Math.round(clearance * 3));
+    for (let pass = 0; pass < 2; pass++) {
+      const added = querySpatialObstacles(
+        fromId,
+        toId,
+        items,
+        result.corridor.minX - expandPad,
+        result.corridor.minY - expandPad,
+        result.corridor.maxX + expandPad,
+        result.corridor.maxY + expandPad,
+        width,
+        height,
+        spatial,
+        obstacleMap
+      );
+      if (!added) break;
+      obstacles = [...obstacleMap.values()];
+      result = routeConnectorAStar({ ...routeArgs, obstacles });
+      if (!result.routed || !result.corridor) break;
+    }
+    return result;
+  };
 }
 
 function defaultCorridorBounds(from, to, points, width, height, clearance) {
@@ -189,10 +253,11 @@ function calculateConnectorGeometry(item, items, width, height, spatialIndex = n
   const strokeWidth = Number(item.strokeWidth) || 1.5;
   const headSize = Number.isFinite(item.headSize) ? Math.max(2, Math.min(128, item.headSize)) : Math.max(8, Math.min(15, 6 + strokeWidth * 2.5));
   const clearance = Math.max(12, Math.min(28, headSize * 0.5 + strokeWidth / 2 + 8));
-  const obstacles = collectNearbyObstacles(item, items, from, to, width, height, clearance, spatial);
+  const obstacleMap = collectNearbyObstacles(item, items, from, to, width, height, clearance, spatial);
+  const routeWithObstacles = createDynamicRouter(item, items, width, height, clearance, spatial, obstacleMap);
 
   if (isLogicGate(fromItem.shapeType) || isLogicGate(toItem.shapeType)) {
-    return logicConnectorGeometry(item, fromItem, toItem, from, to, { width, height }, distanceToEdge, obstacles);
+    return logicConnectorGeometry(item, fromItem, toItem, from, to, { width, height }, distanceToEdge, [...obstacleMap.values()], routeWithObstacles);
   }
 
   const dx = to.centerX - from.centerX;
@@ -229,12 +294,11 @@ function calculateConnectorGeometry(item, items, width, height, spatialIndex = n
   const gap = Math.max(1, (end.x - start.x) * directionX + (end.y - start.y) * directionY);
   const routingMode = parseRawStyleEnvelope(item)?.connector?.routing || 'curved';
   if (routingMode === 'straight') {
-    const routedStraight = obstacles.length
-      ? routeConnectorAStar({
+    const routedStraight = obstacleMap.size
+      ? routeWithObstacles({
           from,
           to,
           preferredPoints: [start, end],
-          obstacles,
           clearance,
           anchorFn: anchorAt,
           keepOrthogonal: false,
@@ -301,12 +365,11 @@ function calculateConnectorGeometry(item, items, width, height, spatialIndex = n
         { x: to.centerX, y: ey },
       ];
     }
-    const routedOrtho = obstacles.length
-      ? routeConnectorAStar({
+    const routedOrtho = obstacleMap.size
+      ? routeWithObstacles({
           from,
           to,
           preferredPoints: orthoPoints,
-          obstacles,
           clearance,
           anchorFn: anchorAt,
           keepOrthogonal: true,
@@ -373,12 +436,11 @@ function calculateConnectorGeometry(item, items, width, height, spatialIndex = n
     };
     curvePoints = sampleControlCurve([attached(from, controls[0], start), ...controls, attached(to, controls.at(-1), end)]);
   }
-  const aStarResult = obstacles.length
-    ? routeConnectorAStar({
+  const aStarResult = obstacleMap.size
+    ? routeWithObstacles({
         from,
         to,
         preferredPoints: curvePoints,
-        obstacles,
         clearance,
         anchorFn: anchorAt,
         guides: hasControls ? controls : null,
@@ -421,7 +483,7 @@ const geometryCache = new WeakMap();
 export function connectorGeometry(item, items, width = 1, height = 1, spatialIndex = null) {
   if (!item || !items) return null;
   const spatial = spatialIndex || lookupSpatialIndex(items);
-  const spatialRev = spatial?.stats?.updates || 0;
+  const spatialRev = spatial?.obstacleRevision ?? spatial?.stats?.updates ?? 0;
   const key = `${width}:${height}:${connectorMetricsRevision()}:${spatialRev}`;
   let cache = geometryCache.get(items);
   if (!cache || cache.key !== key) { cache = { key, results: new WeakMap() }; geometryCache.set(items, cache); }

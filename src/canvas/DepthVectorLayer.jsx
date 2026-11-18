@@ -207,7 +207,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       };
       const rawDesiredRatio = graphicsRasterRatio('high', camera.scale, window.devicePixelRatio);
       const quantizedDesiredRatio = Math.min(profile.maxRasterRatio, Math.max(ratio, Math.ceil(rawDesiredRatio * 2) / 2));
-      if (!cameraActive || settledDesiredRatio === null || quantizedDesiredRatio > settledDesiredRatio) {
+      if (!cameraActive || settledDesiredRatio === null) {
         settledDesiredRatio = quantizedDesiredRatio;
       }
       const desiredRatio = settledDesiredRatio;

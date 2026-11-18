@@ -297,6 +297,16 @@ body .app-shell.is-canvas-shell .app-sidebar>.brand-lockup>.frelog-wordmark{disp
   contain: layout style paint;
 }
 
+.canvas-app-page .canvas-inspector .inspector-object-editor {
+  contain: layout style;
+}
+
+.canvas-app-page .canvas-inspector .object-property-fields > .inspector-section {
+  contain: content;
+  content-visibility: auto;
+  contain-intrinsic-size: 240px 84px;
+}
+
 .canvas-app-page .canvas-inspector .inspector-advanced-styling > :is(.inspector-section, .inspector-style-library) {
   contain: content;
   content-visibility: auto;

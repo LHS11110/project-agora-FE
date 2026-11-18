@@ -16,8 +16,8 @@ export function rectCoreBounds(rect, padding = 0) {
   const angle = Number(rect.rotation) || 0;
   const c = Math.abs(Math.cos(angle));
   const s = Math.abs(Math.sin(angle));
-  const rx = c * (rect.halfWidth || 0) + s * (rect.halfHeight || 0) + padding;
-  const ry = s * (rect.halfWidth || 0) + c * (rect.halfHeight || 0) + padding;
+  const rx = Math.max(0, c * (rect.halfWidth || 0) + s * (rect.halfHeight || 0) + padding);
+  const ry = Math.max(0, s * (rect.halfWidth || 0) + c * (rect.halfHeight || 0) + padding);
   return {
     id: rect.id,
     minX: Math.floor(rect.centerX - rx),
@@ -29,6 +29,16 @@ export function rectCoreBounds(rect, padding = 0) {
 
 export function boxesOverlap(a, b, margin = 0) {
   return !(a.maxX + margin < b.minX || b.maxX + margin < a.minX || a.maxY + margin < b.minY || b.maxY + margin < a.minY);
+}
+
+/** True only when the two boxes genuinely overlap in interior area (by > inset px), never when merely adjacent/touching. */
+export function boxesStrictlyOverlap(a, b, inset = 2) {
+  return (
+    a.minX + inset < b.maxX &&
+    b.minX + inset < a.maxX &&
+    a.minY + inset < b.maxY &&
+    b.minY + inset < a.maxY
+  );
 }
 
 function pointInsideBox(point, box, eps = 1e-6) {
@@ -77,7 +87,7 @@ export function pathIntersectsBoxes(points, boxes) {
   return false;
 }
 
-function dedupeCoords(values, minGap = 2, importantSet = null) {
+function dedupeCoords(values, minGap = 1, importantSet = null) {
   const sorted = [...values].map((v) => Math.round(v)).sort((a, b) => a - b);
   const result = [];
   for (let i = 0; i < sorted.length; i++) {
@@ -109,56 +119,130 @@ function addSubdivisions(coords, minVal, maxVal, maxCells) {
   return [...out].sort((a, b) => a - b);
 }
 
-function buildStubs(rect, other, requiredBoxes, detourBoxes, anchorFn, stubDist) {
+function addGapMidpoints(boxes, axis, rawSet, importantSet) {
+  if (boxes.length < 2) return;
+  const intervals = boxes
+    .map((b) => (axis === 'x' ? [b.minX, b.maxX] : [b.minY, b.maxY]))
+    .sort((a, b) => a[0] - b[0]);
+  let maxEnd = intervals[0][1];
+  for (let i = 1; i < intervals.length; i++) {
+    const [start, end] = intervals[i];
+    const gap = start - maxEnd;
+    if (gap >= 0 && gap <= 40) {
+      const mid = Math.round((maxEnd + start) / 2);
+      rawSet.add(mid);
+      importantSet.add(mid);
+    }
+    if (end > maxEnd) maxEnd = end;
+  }
+}
+
+function buildStubs(rect, other, coreObsBoxes, padObsBoxes, anchorFn, stubDist, fixedPort = null) {
+  const core = rectCoreBounds(rect, 0);
+  const innerCore = rectCoreBounds(rect, -1);
+  const stubs = [];
+  const seen = new Set();
+
+  const tryCandidate = (tip, stub, primary, dir, shortPenalty = 0) => {
+    const key = `${Math.round(tip.x)}:${Math.round(tip.y)}->${stub.x}:${stub.y}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    if (pointInsideBox(stub, core)) return false;
+    if (padObsBoxes.some((b) => pointInsideBox(stub, b))) return false;
+    if (coreObsBoxes.some((b) => pointInsideBox(tip, b, -0.25) || segmentIntersectsBox(tip, stub, b))) return false;
+    if (segmentIntersectsBox(tip, stub, innerCore)) return false;
+    stubs.push({ tip, stub, primary, dir, penalty: (primary ? 0 : 8) + shortPenalty });
+    return true;
+  };
+
+  if (fixedPort && Number.isFinite(fixedPort.x) && Number.isFinite(fixedPort.y)) {
+    const nx = Number(fixedPort.nx) || 0;
+    const ny = Number(fixedPort.ny) || 0;
+    const nLen = Math.hypot(nx, ny) || 1;
+    const ux = nx / nLen;
+    const uy = ny / nLen;
+    const tip = { x: fixedPort.x, y: fixedPort.y };
+    const dists = [stubDist, Math.max(4, Math.round(stubDist * 0.5)), 2, Math.round(stubDist * 1.6)];
+    for (let i = 0; i < dists.length; i++) {
+      const d = dists[i];
+      const sx = Math.round(tip.x + ux * d);
+      const sy = Math.round(tip.y + uy * d);
+      tryCandidate(tip, { x: sx, y: sy }, i === 0, { x: ux, y: uy }, i * 4);
+      // Tangential escape offsets outside the fixed port face if straight ahead is blocked
+      const tx = -uy;
+      const ty = ux;
+      for (const side of [-1, 1]) {
+        const ox = Math.round(tip.x + ux * Math.max(3, Math.round(d * 0.6)) + tx * side * d);
+        const oy = Math.round(tip.y + uy * Math.max(3, Math.round(d * 0.6)) + ty * side * d);
+        tryCandidate(tip, { x: ox, y: oy }, false, { x: ux, y: uy }, 6 + i * 4);
+      }
+    }
+    return stubs;
+  }
+
   const dx = other.centerX - rect.centerX;
   const dy = other.centerY - rect.centerY;
   const len = Math.hypot(dx, dy) || 1;
   const baseAngle = Number(rect.rotation) || 0;
+
   const dirs = [
-    { x: dx / len, y: dy / len, primary: true },
-    { x: 1, y: 0, primary: false },
-    { x: 0, y: 1, primary: false },
-    { x: -1, y: 0, primary: false },
-    { x: 0, y: -1, primary: false },
+    { x: dx / len, y: dy / len, primary: true, offset: false },
+    { x: 1, y: 0, primary: false, offset: false },
+    { x: 0, y: 1, primary: false, offset: false },
+    { x: -1, y: 0, primary: false, offset: false },
+    { x: 0, y: -1, primary: false, offset: false },
   ];
+
+  // Add face quarter-offset rays so an obstacle blocking just the face center still allows clean exit
+  const hw = Math.max(4, rect.halfWidth || 0);
+  const hh = Math.max(4, rect.halfHeight || 0);
+  const offsetTargets = [
+    [hw, hh * 0.55], [hw, -hh * 0.55],
+    [-hw, hh * 0.55], [-hw, -hh * 0.55],
+    [hw * 0.55, hh], [-hw * 0.55, hh],
+    [hw * 0.55, -hh], [-hw * 0.55, -hh],
+  ];
+  const cosA = Math.cos(baseAngle);
+  const sinA = Math.sin(baseAngle);
+  for (const [lx, ly] of offsetTargets) {
+    const rx = lx * cosA - ly * sinA;
+    const ry = lx * sinA + ly * cosA;
+    const rLen = Math.hypot(rx, ry) || 1;
+    dirs.push({ x: rx / rLen, y: ry / rLen, primary: false, offset: true });
+  }
+
   if (Math.abs(baseAngle) > 1e-4) {
     for (let s = 0; s < 4; s++) {
       const a = baseAngle + (s * Math.PI) / 2;
-      dirs.push({ x: Math.cos(a), y: Math.sin(a), primary: false });
+      dirs.push({ x: Math.cos(a), y: Math.sin(a), primary: false, offset: false });
     }
   }
-  const core = rectCoreBounds(rect, 0);
-  const stubs = [];
-  const seen = new Set();
-  for (const dir of dirs) {
-    const tip = anchorFn(rect, dir);
-    // Project stub outside inflated endpoint box on a clean 1px-snapped grid axis
-    const sxRaw = Math.abs(dir.x) >= Math.abs(dir.y)
-      ? (dir.x >= 0 ? core.maxX + stubDist : core.minX - stubDist)
-      : Math.round(tip.x + dir.x * stubDist);
-    const syRaw = Math.abs(dir.y) > Math.abs(dir.x)
-      ? (dir.y >= 0 ? core.maxY + stubDist : core.minY - stubDist)
-      : Math.round(tip.y + dir.y * stubDist);
-    const stub = { x: Math.round(sxRaw), y: Math.round(syRaw) };
-    const key = `${stub.x}:${stub.y}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const blockedInside = detourBoxes.some((b) => pointInsideBox(stub, b)) || pointInsideBox(stub, core);
-    const crossesObs = requiredBoxes.some((b) => segmentIntersectsBox(tip, stub, b));
-    if (!blockedInside && !crossesObs) {
-      stubs.push({ tip, stub, primary: dir.primary, dir });
+
+  const tryDistances = stubDist > 4 ? [stubDist, Math.max(3, Math.round(stubDist * 0.5)), 2] : [stubDist, 2];
+
+  for (let dIdx = 0; dIdx < tryDistances.length; dIdx++) {
+    const d = tryDistances[dIdx];
+    const penalty = dIdx * 6;
+    for (const dir of dirs) {
+      const tip = anchorFn(rect, dir);
+      // Determine which side of the object the tip actually lies on, normalized by aspect ratio
+      const relX = (tip.x - rect.centerX) / Math.max(1, hw);
+      const relY = (tip.y - rect.centerY) / Math.max(1, hh);
+      const horizontalDominant = Math.abs(relX) >= Math.abs(relY);
+      const stub = horizontalDominant
+        ? {
+            x: Math.round((relX >= 0 ? Math.max(core.maxX + d, tip.x + d) : Math.min(core.minX - d, tip.x - d))),
+            y: Math.round(tip.y),
+          }
+        : {
+            x: Math.round(tip.x),
+            y: Math.round((relY >= 0 ? Math.max(core.maxY + d, tip.y + d) : Math.min(core.minY - d, tip.y - d))),
+          };
+      tryCandidate(tip, stub, dir.primary && dIdx === 0, dir, penalty + (dir.offset ? 4 : 0));
     }
+    if (stubs.length >= 2) break;
   }
-  if (!stubs.length) {
-    // Emergency radial clearance port outside core box
-    const dir = { x: dx / len, y: dy / len };
-    const tip = anchorFn(rect, dir);
-    const stub = {
-      x: Math.round(rect.centerX + dir.x * (Math.hypot(rect.halfWidth, rect.halfHeight) + stubDist)),
-      y: Math.round(rect.centerY + dir.y * (Math.hypot(rect.halfWidth, rect.halfHeight) + stubDist)),
-    };
-    stubs.push({ tip, stub, primary: true, dir });
-  }
+
   return stubs;
 }
 
@@ -185,10 +269,11 @@ function removeCollinear(points) {
   return out;
 }
 
-function smoothCornerPolyline(waypoints, checkBoxes, maxCornerRadius = 30) {
+function smoothCornerPolyline(waypoints, interiorGuardBoxes, terminalGuardBoxes, maxCornerRadius = 30) {
   if (waypoints.length <= 2) return waypoints;
   const result = [waypoints[0]];
-  for (let i = 1; i < waypoints.length - 1; i++) {
+  const lastIdx = waypoints.length - 1;
+  for (let i = 1; i < lastIdx; i++) {
     const prev = waypoints[i - 1];
     const corner = waypoints[i];
     const next = waypoints[i + 1];
@@ -198,7 +283,6 @@ function smoothCornerPolyline(waypoints, checkBoxes, maxCornerRadius = 30) {
       result.push(corner);
       continue;
     }
-    // Check dot product so nearly straight bends pass cleanly
     const ux1 = (corner.x - prev.x) / lenIn;
     const uy1 = (corner.y - prev.y) / lenIn;
     const ux2 = (next.x - corner.x) / lenOut;
@@ -208,9 +292,11 @@ function smoothCornerPolyline(waypoints, checkBoxes, maxCornerRadius = 30) {
       continue;
     }
 
+    const isTerminal = i === 1 || i === lastIdx - 1;
+    const checkBoxes = isTerminal ? terminalGuardBoxes : interiorGuardBoxes;
     let r = Math.min(maxCornerRadius, lenIn * 0.42, lenOut * 0.42);
     let chosenArc = null;
-    for (let attempt = 0; attempt < 4 && r >= 2; attempt++) {
+    for (let attempt = 0; attempt < 5 && r >= 2; attempt++) {
       const q0 = { x: corner.x - ux1 * r, y: corner.y - uy1 * r };
       const q2 = { x: corner.x + ux2 * r, y: corner.y + uy2 * r };
       const arc = [q0];
@@ -235,7 +321,7 @@ function smoothCornerPolyline(waypoints, checkBoxes, maxCornerRadius = 30) {
       result.push(corner);
     }
   }
-  result.push(waypoints[waypoints.length - 1]);
+  result.push(waypoints[lastIdx]);
   return result;
 }
 
@@ -249,7 +335,6 @@ function shortcutClearSegments(points, guardBoxes) {
   dist[0] = 0;
 
   for (let j = 1; j < n; j++) {
-    // Immediate grid step is guaranteed obstacle-free; seed it first so triangle inequality prunes most checks.
     const stepLen = Math.hypot(points[j].x - points[j - 1].x, points[j].y - points[j - 1].y);
     dist[j] = dist[j - 1] + stepLen;
     prev[j] = j - 1;
@@ -297,11 +382,13 @@ function runGridAStar(starts, ends, xs, ys, blockedBoxes, cornerBoxes) {
   const goalCells = new Map();
   for (const e of validEnds) {
     const cell = yIndex.get(e.stub.y) * cols + xIndex.get(e.stub.x);
-    goalCells.set(cell, e);
+    const existing = goalCells.get(cell);
+    if (!existing || (e.penalty || 0) < (existing.penalty || 0)) {
+      goalCells.set(cell, e);
+    }
   }
   const startCells = new Set(validStarts.map((s) => yIndex.get(s.stub.y) * cols + xIndex.get(s.stub.x)));
 
-  // Precompute horizontal & vertical edge walkability once
   const hOpen = new Uint8Array(rows * Math.max(0, cols - 1));
   const vOpen = new Uint8Array(Math.max(0, rows - 1) * cols);
 
@@ -332,7 +419,6 @@ function runGridAStar(starts, ends, xs, ys, blockedBoxes, cornerBoxes) {
     }
   }
 
-  // States encoded as (cell * 5 + dir) where dir 0..3 = E,S,W,N, 4 = initial
   const totalStates = rows * cols * 5;
   const gScore = new Float64Array(totalStates);
   gScore.fill(Infinity);
@@ -356,7 +442,7 @@ function runGridAStar(starts, ends, xs, ys, blockedBoxes, cornerBoxes) {
   for (const s of validStarts) {
     const cell = yIndex.get(s.stub.y) * cols + xIndex.get(s.stub.x);
     const state = cell * 5 + 4;
-    const initCost = Math.hypot(s.stub.x - s.tip.x, s.stub.y - s.tip.y) + (s.primary ? 0 : 8);
+    const initCost = Math.hypot(s.stub.x - s.tip.x, s.stub.y - s.tip.y) + (s.penalty || 0);
     if (initCost < gScore[state]) {
       gScore[state] = initCost;
       startSource.set(cell, s);
@@ -382,7 +468,7 @@ function runGridAStar(starts, ends, xs, ys, blockedBoxes, cornerBoxes) {
 
     const endMatch = goalCells.get(cell);
     if (endMatch) {
-      const totalCost = gScore[s] + Math.hypot(endMatch.stub.x - endMatch.tip.x, endMatch.stub.y - endMatch.tip.y) + (endMatch.primary ? 0 : 8);
+      const totalCost = gScore[s] + Math.hypot(endMatch.stub.x - endMatch.tip.x, endMatch.stub.y - endMatch.tip.y) + (endMatch.penalty || 0);
       if (totalCost < bestFinishCost) {
         bestFinishCost = totalCost;
         reachedState = s;
@@ -395,7 +481,6 @@ function runGridAStar(starts, ends, xs, ys, blockedBoxes, cornerBoxes) {
     const py = ys[yIdx];
     const gBase = gScore[s];
 
-    // E (0), S (1), W (2), N (3)
     const neighbors = [
       xIdx + 1 < cols && hOpen[yIdx * (cols - 1) + xIdx] ? [yIdx * cols + xIdx + 1, xs[xIdx + 1] - px, 0] : null,
       yIdx + 1 < rows && vOpen[yIdx * cols + xIdx] ? [(yIdx + 1) * cols + xIdx, ys[yIdx + 1] - py, 1] : null,
@@ -414,7 +499,6 @@ function runGridAStar(starts, ends, xs, ys, blockedBoxes, cornerBoxes) {
       const nXIdx = nCell - nYIdx * cols;
       const nx = xs[nXIdx];
       const ny = ys[nYIdx];
-      // Slight nudge off dead-center obstacle edges if already tight
       if (!startCells.has(nCell) && !goalCells.has(nCell) && cornerBoxes.some((b) => pointInsideBox({ x: nx, y: ny }, b))) {
         cornerBias = 12;
       }
@@ -448,7 +532,7 @@ function runGridAStar(starts, ends, xs, ys, blockedBoxes, cornerBoxes) {
 }
 
 /**
- * Grid-based A* connector router with obstacle avoidance and smooth Bezier corner curves.
+ * Grid-based A* connector router with progressive clearance fallback and obstacle-safe Bezier curves.
  */
 export function routeConnectorAStar({
   from,
@@ -459,26 +543,39 @@ export function routeConnectorAStar({
   anchorFn,
   guides = null,
   keepOrthogonal = false,
+  fromPort = null,
+  toPort = null,
 }) {
   const fromCore = rectCoreBounds(from, 0);
   const toCore = rectCoreBounds(to, 0);
 
-  // Exclude obstacles that overlap endpoints (e.g., nested children inside a connected frame).
+  // Exclude only obstacles whose interiors genuinely overlap an endpoint (e.g. children inside a connected frame).
+  // Adjacent/touching obstacles (0..2px away) are preserved so connectors never cut through them.
   const activeObstacles = [];
   for (let i = 0; i < obstacles.length; i++) {
     const obs = obstacles[i];
     if (!obs || obs.id === from.id || obs.id === to.id) continue;
     const obsCore = rectCoreBounds(obs, 0);
-    if (boxesOverlap(obsCore, fromCore, 2) || boxesOverlap(obsCore, toCore, 2)) continue;
+    if (boxesStrictlyOverlap(obsCore, fromCore, 2) || boxesStrictlyOverlap(obsCore, toCore, 2)) continue;
     activeObstacles.push(obs);
+  }
+
+  if (!activeObstacles.length) {
+    return { points: preferredPoints, routed: false, corridor: null };
   }
 
   const reqPad = Math.max(6, Math.round(clearance * 0.6));
   const requiredBoxes = activeObstacles.map((obs) => rectCoreBounds(obs, reqPad));
+  const coreObsBoxes = activeObstacles.map((obs) => rectCoreBounds(obs, 1));
+  const exactObsBoxes = activeObstacles.map((obs) => rectCoreBounds(obs, 0));
   const endpointCores = [rectCoreBounds(from, 2), rectCoreBounds(to, 2)];
-  const allGuardBoxes = [...requiredBoxes, ...endpointCores];
 
-  if (!pathIntersectsBoxes(preferredPoints, requiredBoxes) && (preferredPoints.length < 3 || !pathIntersectsBoxes(preferredPoints.slice(1, -1), endpointCores))) {
+  const preferredBlocked =
+    pathIntersectsBoxes(preferredPoints, requiredBoxes) ||
+    pathIntersectsBoxes(preferredPoints, exactObsBoxes) ||
+    (preferredPoints.length >= 3 && pathIntersectsBoxes(preferredPoints.slice(1, -1), endpointCores));
+
+  if (!preferredBlocked) {
     return {
       points: preferredPoints,
       routed: false,
@@ -486,61 +583,108 @@ export function routeConnectorAStar({
     };
   }
 
-  const stubDist = Math.max(12, Math.round(clearance));
-  const detourPad = Math.max(10, Math.round(clearance));
-  const detourBoxes = activeObstacles.map((obs) => rectCoreBounds(obs, detourPad));
+  // Progressive clearance ladder: try ideal smooth clearance first, then tighten for narrow gaps so A*
+  // never falls back to a colliding straight line whenever any valid detour or gap exists.
+  const passes = [
+    { pad: Math.max(10, Math.round(clearance)), stubLen: Math.max(12, Math.round(clearance)), endpointPad: 2, hardCores: coreObsBoxes },
+    { pad: Math.max(4, Math.round(clearance * 0.4)), stubLen: Math.max(6, Math.round(clearance * 0.5)), endpointPad: 1, hardCores: coreObsBoxes },
+    { pad: 1, stubLen: 3, endpointPad: 1, hardCores: coreObsBoxes },
+    { pad: 0, stubLen: 2, endpointPad: 0, hardCores: exactObsBoxes },
+  ];
 
-  const starts = buildStubs(from, to, requiredBoxes, detourBoxes, anchorFn, stubDist);
-  const ends = buildStubs(to, from, requiredBoxes, detourBoxes, anchorFn, stubDist);
+  let chosen = null;
+  let chosenPass = null;
+  let chosenBounds = null;
 
-  // Compute grid corridor enclosing endpoints, nearby obstacles, and outer escape margin
-  let minX = Math.min(fromCore.minX, toCore.minX);
-  let minY = Math.min(fromCore.minY, toCore.minY);
-  let maxX = Math.max(fromCore.maxX, toCore.maxX);
-  let maxY = Math.max(fromCore.maxY, toCore.maxY);
-  for (const s of starts) {
-    minX = Math.min(minX, s.stub.x); maxX = Math.max(maxX, s.stub.x);
-    minY = Math.min(minY, s.stub.y); maxY = Math.max(maxY, s.stub.y);
-  }
-  for (const e of ends) {
-    minX = Math.min(minX, e.stub.x); maxX = Math.max(maxX, e.stub.x);
-    minY = Math.min(minY, e.stub.y); maxY = Math.max(maxY, e.stub.y);
-  }
-  for (const b of detourBoxes) {
-    minX = Math.min(minX, b.minX); maxX = Math.max(maxX, b.maxX);
-    minY = Math.min(minY, b.minY); maxY = Math.max(maxY, b.maxY);
-  }
-  if (Array.isArray(guides)) {
-    for (const g of guides) {
-      if (Number.isFinite(g?.x) && Number.isFinite(g?.y)) {
-        minX = Math.min(minX, Math.round(g.x)); maxX = Math.max(maxX, Math.round(g.x));
-        minY = Math.min(minY, Math.round(g.y)); maxY = Math.max(maxY, Math.round(g.y));
+  for (let pIdx = 0; pIdx < passes.length; pIdx++) {
+    const pass = passes[pIdx];
+    const passObsBoxes = pass.pad > 0
+      ? activeObstacles.map((obs) => rectCoreBounds(obs, pass.pad))
+      : exactObsBoxes;
+    const starts = buildStubs(from, to, pass.hardCores, passObsBoxes, anchorFn, pass.stubLen, fromPort);
+    const ends = buildStubs(to, from, pass.hardCores, passObsBoxes, anchorFn, pass.stubLen, toPort);
+    if (!starts.length || !ends.length) continue;
+
+    let minX = Math.min(fromCore.minX, toCore.minX);
+    let minY = Math.min(fromCore.minY, toCore.minY);
+    let maxX = Math.max(fromCore.maxX, toCore.maxX);
+    let maxY = Math.max(fromCore.maxY, toCore.maxY);
+    for (const s of starts) {
+      minX = Math.min(minX, s.stub.x); maxX = Math.max(maxX, s.stub.x);
+      minY = Math.min(minY, s.stub.y); maxY = Math.max(maxY, s.stub.y);
+    }
+    for (const e of ends) {
+      minX = Math.min(minX, e.stub.x); maxX = Math.max(maxX, e.stub.x);
+      minY = Math.min(minY, e.stub.y); maxY = Math.max(maxY, e.stub.y);
+    }
+    for (const b of passObsBoxes) {
+      minX = Math.min(minX, b.minX); maxX = Math.max(maxX, b.maxX);
+      minY = Math.min(minY, b.minY); maxY = Math.max(maxY, b.maxY);
+    }
+    if (Array.isArray(guides)) {
+      for (const g of guides) {
+        if (Number.isFinite(g?.x) && Number.isFinite(g?.y)) {
+          minX = Math.min(minX, Math.round(g.x)); maxX = Math.max(maxX, Math.round(g.x));
+          minY = Math.min(minY, Math.round(g.y)); maxY = Math.max(maxY, Math.round(g.y));
+        }
       }
     }
+
+    const outerPad = Math.max(24, Math.round(clearance * 2));
+    minX = Math.floor(minX - outerPad);
+    minY = Math.floor(minY - outerPad);
+    maxX = Math.ceil(maxX + outerPad);
+    maxY = Math.ceil(maxY + outerPad);
+
+    const importantX = new Set([minX, maxX, ...starts.map((s) => s.stub.x), ...ends.map((e) => e.stub.x)]);
+    const importantY = new Set([minY, maxY, ...starts.map((s) => s.stub.y), ...ends.map((e) => e.stub.y)]);
+    const rawX = new Set([
+      ...importantX,
+      fromCore.minX - pass.stubLen,
+      fromCore.maxX + pass.stubLen,
+      toCore.minX - pass.stubLen,
+      toCore.maxX + pass.stubLen,
+    ]);
+    const rawY = new Set([
+      ...importantY,
+      fromCore.minY - pass.stubLen,
+      fromCore.maxY + pass.stubLen,
+      toCore.minY - pass.stubLen,
+      toCore.maxY + pass.stubLen,
+    ]);
+
+    for (const b of passObsBoxes) {
+      const lx = b.minX - 1;
+      const rx = b.maxX + 1;
+      const ty = b.minY - 1;
+      const by = b.maxY + 1;
+      rawX.add(lx); rawX.add(rx);
+      rawY.add(ty); rawY.add(by);
+      importantX.add(lx); importantX.add(rx);
+      importantY.add(ty); importantY.add(by);
+    }
+    addGapMidpoints(passObsBoxes, 'x', rawX, importantX);
+    addGapMidpoints(passObsBoxes, 'y', rawY, importantY);
+
+    const xs = addSubdivisions(dedupeCoords(rawX, 1, importantX), minX, maxX, 64);
+    const ys = addSubdivisions(dedupeCoords(rawY, 1, importantY), minY, maxY, 64);
+
+    const blockedBoxes = [
+      ...passObsBoxes,
+      rectCoreBounds(from, pass.endpointPad),
+      rectCoreBounds(to, pass.endpointPad),
+    ];
+
+    const aStar = runGridAStar(starts, ends, xs, ys, blockedBoxes, requiredBoxes);
+    if (aStar) {
+      chosen = aStar;
+      chosenPass = pass;
+      chosenBounds = { minX, minY, maxX, maxY };
+      break;
+    }
   }
-  const outerPad = Math.max(24, Math.round(clearance * 2));
-  minX = Math.floor(minX - outerPad);
-  minY = Math.floor(minY - outerPad);
-  maxX = Math.ceil(maxX + outerPad);
-  maxY = Math.ceil(maxY + outerPad);
 
-  const importantX = new Set([...starts.map((s) => s.stub.x), ...ends.map((e) => e.stub.x)]);
-  const importantY = new Set([...starts.map((s) => s.stub.y), ...ends.map((e) => e.stub.y)]);
-  const rawX = new Set([minX, maxX, fromCore.minX - stubDist, fromCore.maxX + stubDist, toCore.minX - stubDist, toCore.maxX + stubDist, ...importantX]);
-  const rawY = new Set([minY, maxY, fromCore.minY - stubDist, fromCore.maxY + stubDist, toCore.minY - stubDist, toCore.maxY + stubDist, ...importantY]);
-
-  for (const b of detourBoxes) {
-    rawX.add(b.minX - 1); rawX.add(b.maxX + 1);
-    rawY.add(b.minY - 1); rawY.add(b.maxY + 1);
-  }
-  const xs = addSubdivisions(dedupeCoords(rawX, 3, importantX), minX, maxX, 56);
-  const ys = addSubdivisions(dedupeCoords(rawY, 3, importantY), minY, maxY, 56);
-
-  // Obstacles + core interiors (except endpoint stubs) form the blocked regions for Hanan edges
-  const blockedBoxes = [...detourBoxes, rectCoreBounds(from, 2), rectCoreBounds(to, 2)];
-
-  const aStar = runGridAStar(starts, ends, xs, ys, blockedBoxes, requiredBoxes);
-  if (!aStar) {
+  if (!chosen || !chosenPass) {
     return {
       points: preferredPoints,
       routed: false,
@@ -548,17 +692,40 @@ export function routeConnectorAStar({
     };
   }
 
+  const shortcutObsGuard = chosenPass.pad >= reqPad
+    ? requiredBoxes
+    : chosenPass.pad > 0
+      ? activeObstacles.map((obs) => rectCoreBounds(obs, chosenPass.pad))
+      : exactObsBoxes;
+  const passEndpointCores = [
+    rectCoreBounds(from, chosenPass.endpointPad),
+    rectCoreBounds(to, chosenPass.endpointPad),
+  ];
+  const interiorGuard = [...shortcutObsGuard, ...chosenPass.hardCores, ...passEndpointCores];
+  const terminalGuard = [...shortcutObsGuard, ...chosenPass.hardCores, rectCoreBounds(from, -1), rectCoreBounds(to, -1)];
+
   const rawMid = keepOrthogonal
-    ? removeCollinear(aStar.gridWaypoints)
-    : removeCollinear(shortcutClearSegments(aStar.gridWaypoints, allGuardBoxes));
+    ? removeCollinear(chosen.gridWaypoints)
+    : removeCollinear(shortcutClearSegments(chosen.gridWaypoints, interiorGuard));
   const cleanedMid = removeCollinear(rawMid);
 
-  let middle = keepOrthogonal
-    ? smoothCornerPolyline(cleanedMid, allGuardBoxes, 10)
-    : smoothCornerPolyline(cleanedMid, allGuardBoxes, 48);
+  const unsmoothedFull = removeCollinear([chosen.startMatch.tip, ...cleanedMid, chosen.endMatch.tip]);
+  let fullPath = smoothCornerPolyline(
+    unsmoothedFull,
+    interiorGuard,
+    terminalGuard,
+    keepOrthogonal ? 10 : 48
+  );
+  fullPath = removeCollinear(fullPath);
 
-  let fullPath = removeCollinear([aStar.startMatch.tip, ...middle, aStar.endMatch.tip]);
-  if (fullPath.length < 2) fullPath = [aStar.startMatch.tip, aStar.endMatch.tip];
+  // Hard collision safety verification: never allow smoothing or shortcutting to graze obstacle cores.
+  if (pathIntersectsBoxes(fullPath, chosenPass.hardCores)) {
+    fullPath = unsmoothedFull;
+  }
+  if (pathIntersectsBoxes(fullPath, exactObsBoxes)) {
+    fullPath = removeCollinear([chosen.startMatch.tip, ...chosen.gridWaypoints, chosen.endMatch.tip]);
+  }
+  if (fullPath.length < 2) fullPath = [chosen.startMatch.tip, chosen.endMatch.tip];
 
   let pMinX = Infinity, pMinY = Infinity, pMaxX = -Infinity, pMaxY = -Infinity;
   for (let i = 0; i < fullPath.length; i++) {
@@ -571,10 +738,10 @@ export function routeConnectorAStar({
     routed: true,
     handles: [fullPath[Math.floor((fullPath.length - 1) / 2)]],
     corridor: {
-      minX: Math.min(minX, pMinX),
-      minY: Math.min(minY, pMinY),
-      maxX: Math.max(maxX, pMaxX),
-      maxY: Math.max(maxY, pMaxY),
+      minX: Math.min(chosenBounds.minX, pMinX),
+      minY: Math.min(chosenBounds.minY, pMinY),
+      maxX: Math.max(chosenBounds.maxX, pMaxX),
+      maxY: Math.max(chosenBounds.maxY, pMaxY),
     },
   };
 }
