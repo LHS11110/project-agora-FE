@@ -14,7 +14,7 @@ export default function PortfolioControls({items,selectedIds=[],canWriteItem,act
  const revealEnabled=chosen.length>0&&chosen.every(id=>readObjectVisibility(items[id]).revealAfterAnimation);
  const anyChosenHidden=chosen.some(id=>{const p=getObjectRevealPhase(items[id]).phase;return p==='hidden'||p==='delayed';});
  const act=fn=>{try{setError('');if(fn()===false)throw Error('변경을 저장하지 못했습니다. 연결과 권한을 확인해주세요.');}catch(e){setError(ui(e.message));}};
- const showFrameSection = activeTool === 'frame' || Boolean(selectedFrame) || (activeTool === 'select' && frames.length > 0);
+ const showFrameSection = activeTool === 'frame' || Boolean(selectedFrame) || chosen.length > 0 || (activeTool === 'select' && frames.length > 0);
  const showAnimationSection = chosen.length > 0;
  if (!showFrameSection && !showAnimationSection) return null;
  return <section className="inspector-section portfolio-controls">
