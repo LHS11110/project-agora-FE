@@ -13,17 +13,47 @@ const strokeItemsCache = new WeakMap();
 const MAX_SAVED_SURFACE_PX = 6144;
 const MAX_PAN_MARGIN_CSS = 128;
 
+// Each erase/draw/drag commit yields a new ink snapshot. Derive its stroke list
+// from the previous one using the snapshot's change ids instead of walking every
+// key through the snapshot proxy again.
+// Depth layers render alternately, so remember a few recent snapshots per lineage.
+const recentStrokeItems = [];
 function cachedStrokeEntries(items) {
   if (!items || typeof items !== 'object') return [];
   let cached = strokeItemsCache.get(items);
-  if (!cached) {
+  if (cached) return cached;
+  let previous = null, changed = null;
+  for (let i = recentStrokeItems.length - 1; i >= 0 && !changed; i--) {
+    const candidate = recentStrokeItems[i].deref();
+    if (!candidate || !strokeItemsCache.has(candidate)) continue;
+    changed = changedItemIds(candidate, items);
+    if (changed) previous = candidate;
+  }
+  if (changed && changed.length <= 512) {
+    const set = new Set(changed), base = strokeItemsCache.get(previous), seen = new Set();
+    cached = [];
+    for (const entry of base) {
+      const id = entry[0];
+      if (!set.has(id)) { cached.push(entry); continue; }
+      seen.add(id);
+      const stroke = items[id];
+      if (stroke?.kind === 'stroke') cached.push([id, stroke]);
+    }
+    for (const id of changed) {
+      if (seen.has(id)) continue;
+      const stroke = items[id];
+      if (stroke?.kind === 'stroke') cached.push([id, stroke]);
+    }
+  } else {
     cached = [];
     for (const id of Object.keys(items)) {
       const stroke = items[id];
       if (stroke?.kind === 'stroke') cached.push([id, stroke]);
     }
-    strokeItemsCache.set(items, cached);
   }
+  strokeItemsCache.set(items, cached);
+  recentStrokeItems.push(new WeakRef(items));
+  if (recentStrokeItems.length > 8) recentStrokeItems.shift();
   return cached;
 }
 
@@ -239,29 +269,38 @@ export function drawStroke(context, stroke, width, height) {
 }
 
 /** Viewport-sized vector surfaces render strokes crisply at any object size and zoom without huge textures. */
-export function createInkStrokeRenderer(host, vectorCanvas) {
+export function createInkStrokeRenderer(host, vectorCanvas, { requestRender = () => {} } = {}) {
   const saved = document.createElement('canvas');
   const live = document.createElement('canvas');
-  saved.className = 'ink-saved-surface'; live.className = 'ink-live-surface';
+  const drag = document.createElement('canvas');
+  saved.className = 'ink-saved-surface'; live.className = 'ink-live-surface'; drag.className = 'ink-drag-surface';
   // Empty transparent canvases still become compositor layers. Show each
   // surface only while it actually contributes saved or in-progress ink, and
   // allocate no backing store until it does.
-  saved.style.display = live.style.display = 'none';
-  saved.width = saved.height = live.width = live.height = 1;
+  saved.style.display = live.style.display = drag.style.display = 'none';
+  saved.width = saved.height = live.width = live.height = drag.width = drag.height = 1;
   saved.style.right = saved.style.bottom = 'auto';
   live.style.right = live.style.bottom = 'auto';
+  drag.style.right = drag.style.bottom = 'auto';
   // Mount completed & live ink above shapes/connectors in the same depth layer
   // while cross-depth ordering remains isolated per .canvas-depth-layer.
   if (vectorCanvas?.nextSibling) {
     host.insertBefore(saved, vectorCanvas.nextSibling);
-    host.insertBefore(live, saved.nextSibling);
+    host.insertBefore(drag, saved.nextSibling);
+    host.insertBefore(live, drag.nextSibling);
   } else {
     host.appendChild(saved);
+    host.appendChild(drag);
     host.appendChild(live);
   }
   const savedContext = saved.getContext('2d', { alpha: true, desynchronized: true });
   const liveContext = live.getContext('2d', { alpha: true, desynchronized: true });
+  const dragContext = drag.getContext('2d', { alpha: true });
   let state, savedPainted = false, livePainted = false, savedBuffer = null, liveDirty = null, liveReleaseTimer = null;
+  // Dragged strokes are painted once into a bounded overlay and moved by CSS.
+  // `settling` keeps them there after release until the moved items arrive.
+  let dragPaint = null, settling = null;
+  const DRAG_OVERSCAN_CSS = 256, SETTLE_MS = 300;
 
   const setStyle = (canvas, key, value) => { if (canvas.style[key] !== value) canvas.style[key] = value; };
   // A hidden canvas keeps its full backing store (GPU memory) until resized.
@@ -359,6 +398,60 @@ export function createInkStrokeRenderer(host, vectorCanvas) {
     return damaged;
   }
 
+  function hideDrag() {
+    if (drag.style.display !== 'none') drag.style.display = 'none';
+    dragPaint = null;
+    releaseBacking(drag);
+  }
+
+  /** Paint (or just reposition) the dragged strokes. Painting happens when the
+   * drag starts, the zoom changes, or a clipped edge would come into view. */
+  function renderDragOverlay(preview, dragEntries) {
+    if (!dragEntries.length) { hideDrag(); return; }
+    const ratio = state.pixelRatio || Math.min(window.devicePixelRatio || 1, 2);
+    const { camera, viewportWidth: W, viewportHeight: H } = state;
+    const scale = camera.scale;
+    const dx = (preview.dx || 0) * state.width, dy = (preview.dy || 0) * state.height;
+    if (dragPaint) {
+      const shiftX = camera.x - dragPaint.cx + (dx - dragPaint.dx) * scale;
+      const shiftY = camera.y - dragPaint.cy + (dy - dragPaint.dy) * scale;
+      const exposed = (dragPaint.clipL && dragPaint.left + shiftX > 0) || (dragPaint.clipR && dragPaint.right + shiftX < W)
+        || (dragPaint.clipT && dragPaint.top + shiftY > 0) || (dragPaint.clipB && dragPaint.bottom + shiftY < H);
+      const same = dragPaint.items === state.items && dragPaint.ids === preview.ids && dragPaint.ratio === ratio
+        && dragPaint.scale === scale && dragPaint.width === state.width && dragPaint.height === state.height;
+      if (same && !exposed) {
+        setStyle(drag, 'transform', `translate3d(${dragPaint.left + shiftX}px,${dragPaint.top + shiftY}px,0)`);
+        return;
+      }
+    }
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const [, stroke] of dragEntries) {
+      const b = quickStrokeWorldBounds(stroke, state.width, state.height);
+      if (!b) continue;
+      if (b.minX < minX) minX = b.minX; if (b.minY < minY) minY = b.minY;
+      if (b.maxX > maxX) maxX = b.maxX; if (b.maxY > maxY) maxY = b.maxY;
+    }
+    if (!Number.isFinite(minX)) { hideDrag(); return; }
+    const sx0 = (minX + dx) * scale + camera.x, sx1 = (maxX + dx) * scale + camera.x;
+    const sy0 = (minY + dy) * scale + camera.y, sy1 = (maxY + dy) * scale + camera.y;
+    const M = DRAG_OVERSCAN_CSS;
+    const left = Math.floor(Math.max(sx0, -M)), right = Math.ceil(Math.min(sx1, W + M));
+    const top = Math.floor(Math.max(sy0, -M)), bottom = Math.ceil(Math.min(sy1, H + M));
+    if (right <= left || bottom <= top) { hideDrag(); return; }
+    const pixelWidth = Math.max(1, Math.round((right - left) * ratio)), pixelHeight = Math.max(1, Math.round((bottom - top) * ratio));
+    if (drag.width !== pixelWidth || drag.height !== pixelHeight) { drag.width = pixelWidth; drag.height = pixelHeight; }
+    else { dragContext.setTransform(1, 0, 0, 1, 0, 0); dragContext.clearRect(0, 0, drag.width, drag.height); }
+    setStyle(drag, 'width', `${pixelWidth / ratio}px`);
+    setStyle(drag, 'height', `${pixelHeight / ratio}px`);
+    dragContext.setTransform(ratio * scale, 0, 0, ratio * scale, (dx * scale + camera.x - left) * ratio, (dy * scale + camera.y - top) * ratio);
+    for (const [, stroke] of dragEntries) drawStroke(dragContext, stroke, state.width, state.height);
+    dragPaint = { items: state.items, ids: preview.ids, ratio, scale, width: state.width, height: state.height,
+      cx: camera.x, cy: camera.y, dx, dy, left, right, top, bottom,
+      clipL: sx0 < -M, clipR: sx1 > W + M, clipT: sy0 < -M, clipB: sy1 > H + M };
+    setStyle(drag, 'transform', `translate3d(${left}px,${top}px,0)`);
+    setStyle(drag, 'display', '');
+  }
+
   return {
     render(next) {
       state = next;
@@ -371,7 +464,24 @@ export function createInkStrokeRenderer(host, vectorCanvas) {
         const did = String(state.draft.id);
         if (state.items?.[did]) hidden.add(did);
       }
+      // A live drag, or a released drag whose moved items have not arrived yet.
+      const liveDrag = state.dragPreview?.ids?.size ? state.dragPreview : null;
+      if (liveDrag) {
+        if (settling) { clearTimeout(settling.timer); settling = null; }
+      } else if (dragPaint?.preview && !settling) {
+        settling = { preview: dragPaint.preview, items: state.items, timer: setTimeout(() => { if (settling) { settling.expired = true; requestRender(); } }, SETTLE_MS) };
+        settling.timer?.unref?.();
+      }
+      if (settling && !liveDrag && (settling.expired || settling.items !== state.items)) { clearTimeout(settling.timer); settling = null; }
+      const activeDrag = liveDrag || settling?.preview || null;
+      const dragIds = activeDrag?.ids;
       const strokeEntries = cachedStrokeEntries(state.items);
+      const dragEntries = dragIds ? strokeEntries.filter(([id]) => dragIds.has(String(id)) && !hidden.has(id) && (!state.visibleItemIds || state.visibleItemIds.has(id))) : [];
+      // Dragged strokes leave the retained surface once (a clipped repaint) and
+      // are drawn on the overlay, instead of repainting every stroke per frame.
+      for (const [id] of dragEntries) hidden.add(id);
+      if (dragEntries.length) { renderDragOverlay(activeDrag, dragEntries); if (dragPaint) dragPaint.preview = activeDrag; }
+      else hideDrag();
       const entries = (hidden.size || state.visibleItemIds)
         ? strokeEntries.filter(([id]) => !hidden.has(id) && (!state.visibleItemIds || state.visibleItemIds.has(id)))
         : strokeEntries;
@@ -387,15 +497,12 @@ export function createInkStrokeRenderer(host, vectorCanvas) {
         saved.style.transform = '';
         releaseBacking(saved);
         renderDraft(state.draft);
-        return 0;
+        return dragEntries.length;
       }
 
       const ratio = state.pixelRatio || Math.min(window.devicePixelRatio || 1, 2);
-      const dragIds = state.dragPreview?.ids;
-      const dragMatches = Boolean(dragIds?.size && entries.some(([id]) => dragIds.has(String(id))));
       const sameView = Boolean(
-        !dragMatches
-        && savedBuffer
+        savedBuffer
         && savedBuffer.width === state.width
         && savedBuffer.height === state.height
         && savedBuffer.viewportWidth === state.viewportWidth
@@ -407,7 +514,7 @@ export function createInkStrokeRenderer(host, vectorCanvas) {
         && Math.abs(state.camera.y - savedBuffer.y) <= savedBuffer.margin
       );
       // In-progress strokes saved at 30 Hz only change hidden ids, and a finished
-      // stroke or erase touches a small region: repaint just that damage.
+      // stroke, erase or drag start/end touches a small region: repaint just that.
       let damage = sameView ? savedDamage(savedBuffer, state.items, hidden, state.visibleItemIds) : null;
       let damageRect = null;
       if (damage?.length) {
@@ -453,9 +560,7 @@ export function createInkStrokeRenderer(host, vectorCanvas) {
         setStyle(saved, 'transform', `translate3d(${tx}px,${ty}px,0)`);
       } else {
         const maxDim = Math.max(state.viewportWidth, state.viewportHeight);
-        const margin = dragMatches
-          ? 0
-          : Math.max(0, Math.min(MAX_PAN_MARGIN_CSS, Math.floor((MAX_SAVED_SURFACE_PX / ratio - maxDim) / 2)));
+        const margin = Math.max(0, Math.min(MAX_PAN_MARGIN_CSS, Math.floor((MAX_SAVED_SURFACE_PX / ratio - maxDim) / 2)));
         prepareSurface(saved, savedContext, margin);
         saved.style.transform = margin ? `translate3d(${-margin}px,${-margin}px,0)` : '';
         const invScale = 1 / Math.max(1e-4, state.camera.scale || 1);
@@ -463,29 +568,13 @@ export function createInkStrokeRenderer(host, vectorCanvas) {
         const viewMinY = (-state.camera.y - margin) * invScale;
         const viewMaxX = (state.viewportWidth - state.camera.x + margin) * invScale;
         const viewMaxY = (state.viewportHeight - state.camera.y + margin) * invScale;
-        const dragDx = dragMatches ? (state.dragPreview.dx || 0) * state.width : 0;
-        const dragDy = dragMatches ? (state.dragPreview.dy || 0) * state.height : 0;
         for (let i = 0; i < entries.length; i++) {
-          const [id, stroke] = entries[i];
-          const dragged = dragMatches && dragIds.has(String(id));
+          const stroke = entries[i][1];
           const b = quickStrokeWorldBounds(stroke, state.width, state.height);
-          if (b) {
-            const ox = dragged ? dragDx : 0;
-            const oy = dragged ? dragDy : 0;
-            if (b.maxX + ox < viewMinX || b.minX + ox > viewMaxX || b.maxY + oy < viewMinY || b.minY + oy > viewMaxY) {
-              continue;
-            }
-          }
-          if (dragged) {
-            savedContext.save();
-            savedContext.translate(dragDx, dragDy);
-            drawStroke(savedContext, stroke, state.width, state.height);
-            savedContext.restore();
-          } else {
-            drawStroke(savedContext, stroke, state.width, state.height);
-          }
+          if (b && (b.maxX < viewMinX || b.minX > viewMaxX || b.maxY < viewMinY || b.minY > viewMaxY)) continue;
+          drawStroke(savedContext, stroke, state.width, state.height);
         }
-        savedBuffer = dragMatches ? null : {
+        savedBuffer = {
           items: state.items,
           hidden,
           visibleItemIds: state.visibleItemIds,
@@ -501,7 +590,7 @@ export function createInkStrokeRenderer(host, vectorCanvas) {
         };
       }
       renderDraft(state.draft);
-      return entries.length;
+      return entries.length + dragEntries.length;
     },
     renderDraft,
     /** Paint only the live draft in the caller's input task. Returns false when no
@@ -511,6 +600,6 @@ export function createInkStrokeRenderer(host, vectorCanvas) {
       renderDraft(draft);
       return true;
     },
-    destroy() { clearTimeout(liveReleaseTimer); releaseBacking(saved); releaseBacking(live); saved.remove(); live.remove(); state = null; savedBuffer = null; },
+    destroy() { clearTimeout(liveReleaseTimer); clearTimeout(settling?.timer); settling = null; hideDrag(); releaseBacking(saved); releaseBacking(live); saved.remove(); live.remove(); drag.remove(); state = null; savedBuffer = null; },
   };
 }

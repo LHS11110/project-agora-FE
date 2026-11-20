@@ -10,6 +10,9 @@ const CanvasQuickDock = memo(function CanvasQuickDock({anchors=[],setAnchors=()=
  useUiLocale();const fieldId=useId(),imageInput=useRef(null),latest=useRef(null),[page,setPage]=useState(0),[open,setOpen]=useState(false),[name,setName]=useState(''),[type,setType]=useState('point'),[x,setX]=useState('0'),[y,setY]=useState('0'),[error,setError]=useState(''),[targetIds,setTargetIds]=useState(null);
  latest.current={canWrite,onSelectTool,shortcutGuard,anchors,onNavigateAnchor,allowPageKeys,navigationGuard,open};
  useEffect(()=>{const openAnchors=e=>{const d=e.detail||{};setError('');setTargetIds(Array.isArray(d.objectIds)?d.objectIds.map(String):null);if(d.point){setType('point');setX(String(Math.round(d.point.x*100)/100));setY(String(Math.round(d.point.y*100)/100));}else if(d.objectIds?.length)setType('object');setOpen(true);setPage(pages.length);};window.addEventListener('canvas-open-anchors',openAnchors);return()=>window.removeEventListener('canvas-open-anchors',openAnchors);},[]);
+ // A tool chosen by shortcut or the tool panel must be visible as active in the
+ // dock; show its page unless the anchor page is open.
+ useEffect(()=>{setPage(p=>{if(p>=pages.length||pages[p].includes(activeTool))return p;const target=pages.findIndex(tools=>tools.includes(activeTool));return target>=0?target:p;});},[activeTool]);
  useEffect(()=>{const keydown=e=>{const c=latest.current;if(isQuickDockEditingTarget(e.target)||c.open||e.isComposing||e.defaultPrevented)return;
   const id=quickDockShortcutTool(e);if(id){if(c.shortcutGuard?.()===false)return;e.preventDefault();e.stopPropagation();if(e.repeat||(!c.canWrite&&!['select','hand','laser','anchor'].includes(id)))return;if(tools[id].upload)imageInput.current?.click();else c.onSelectTool(id);return;}
   if(e.target?.closest?.('button,[role=slider],[role=spinbutton]')||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey||e.repeat)return;

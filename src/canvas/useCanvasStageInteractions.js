@@ -41,7 +41,7 @@ export function useCanvasStageInteractions(options) {
     return()=>{stage.removeEventListener('pointerrawupdate',receive);rawInk.current.clear();rawSession.current=null;};
   },[boardRef,boardRef.current,drawingRef,drawingSessionRef]);
 
-  const { enqueue: enqueueStrokeChange, flush: flushStrokeChanges } = useCanvasStrokeSaveBatch({
+  const { enqueue: enqueueStrokeChange, discard: discardStrokeChange, flush: flushStrokeChanges } = useCanvasStrokeSaveBatch({
     sendBatch: sendStrokeFrameChanges, pendingItemChangesRef, flushRef: strokeSaveFlushRef,
   });
   const cameraMotionRef = useRef({ frame: 0 });
@@ -101,26 +101,32 @@ export function useCanvasStageInteractions(options) {
     const entries = spatialIndexRef?.current
       ? spatialIndexRef.current.query(region).filter(entry => entry.item?.kind === 'stroke').map(entry => [entry.id, itemsRef.current[entry.id]])
       : Object.entries(itemsRef.current).filter(([, item]) => item?.kind === 'stroke');
+    // One eraser sample is one change set: a single patch, history record and
+    // redraw instead of one per stroke the eraser touched.
+    const changes = {}, removed = [], previous = {};
     for (const [id, item] of entries) {
       if (itemsRef.current[id]?.kind !== 'stroke' || itemsRef.current[id]?.locked === true || !canWriteItem(itemsRef.current[id])) continue;
       const remainingPaths = eraseStrokeWithEraser(item, from, to, boardSize, camera.scale, eraserWidth / 2, eraserMode);
       if (remainingPaths === null) continue;
-      const changes = {}, removed = [];
-      if (remainingPaths.length === 0) {
-        enqueueStrokeChange(id, null, item);
-        removed.push(id);
-      } else {
-        const updatedItem = { ...item, points: remainingPaths[0] };
-        enqueueStrokeChange(id, updatedItem, item);
-        changes[id] = updatedItem;
+      previous[id] = item;
+      if (remainingPaths.length === 0) removed.push(id);
+      else {
+        changes[id] = { ...item, points: remainingPaths[0] };
         for (const points of remainingPaths.slice(1)) {
           const fragmentId = createId();
-          const fragment = { ...item, points };
-          enqueueStrokeChange(fragmentId, fragment, null);
-          changes[fragmentId] = fragment;
+          changes[fragmentId] = { ...item, points };
+          previous[fragmentId] = null;
         }
       }
-      patchItems(changes, removed);
+    }
+    if (!removed.length && !Object.keys(changes).length) return;
+    if (patchItems(changes, removed) !== false) {
+      // Applied: drop any older queued state so the 30 Hz batch cannot resend it.
+      for (const id of [...removed, ...Object.keys(changes)]) discardStrokeChange(id);
+    } else {
+      // Not applied now (e.g. reconnecting): keep it queued for the save batch.
+      for (const id of removed) enqueueStrokeChange(id, null, previous[id]);
+      for (const [id, item] of Object.entries(changes)) enqueueStrokeChange(id, item, previous[id]);
     }
   };
   const centeredItemPosition = (width, height) => {
@@ -730,8 +736,11 @@ export function useCanvasStageInteractions(options) {
       permission: session?.permission || permission,
     };
     if (session) sendStrokePreviewPoints(peerMeshRef.current, session, session.pendingPoints.splice(0));
-    enqueueStrokeChange(id, item, itemsRef.current[id] || null);
-    patchItems({ [id]: item });
+    // The finished stroke supersedes any queued partial state. When it is applied
+    // directly, do not resend a copy through the batch.
+    const previousStroke = itemsRef.current[id] || null;
+    if (patchItems({ [id]: item }) !== false) discardStrokeChange(id);
+    else enqueueStrokeChange(id, item, previousStroke);
     flushStrokeChanges({ force: true });
     const added = true;
     if (session) {

@@ -16,6 +16,9 @@ export function useCanvasStrokeSaveBatch({ sendBatch, pendingItemChangesRef, flu
     }
     changesRef.current.set(key, { id: key, item, previous: basePrevious });
   }, []);
+  // A change already applied through patchItems must not be re-sent as a copy:
+  // that repeats a full point comparison, history record and redraw per stroke.
+  const discard = useCallback((id) => { changesRef.current.delete(String(id)); }, []);
   const flush = useCallback(({ force = false } = {}) => {
     const { sendBatch, pendingItemChangesRef } = latestRef.current;
     const inFlight = new Set(pendingItemChangesRef.current.map(change => change.id));
@@ -56,5 +59,5 @@ export function useCanvasStrokeSaveBatch({ sendBatch, pendingItemChangesRef, flu
       if (flushRef.current === flush) flushRef.current = null;
     };
   }, [flush, flushRef]);
-  return { enqueue, flush };
+  return { enqueue, discard, flush };
 }

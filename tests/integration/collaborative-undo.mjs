@@ -63,7 +63,8 @@ try{
  await a.keyboard.press('End');await a.keyboard.insertText('c');await waitValue(b,'c','bc');
  await b.bringToFront();await b.locator('.monaco-editor textarea').focus();await b.keyboard.press('Home');await b.keyboard.insertText('d');await waitValue(a,'c','dbc');
  await a.bringToFront();await a.waitForFunction(()=>document.querySelector('.monaco-editor .view-lines')?.textContent.includes('dbc'));await a.locator('.monaco-editor textarea').focus();await a.locator('.monaco-editor .view-lines').click({button:'right',position:{x:15,y:8}});
- await a.getByRole('menuitem',{name:/^(Undo|실행 취소)/}).click();await waitValue(a,'c','db');await waitValue(b,'c','db');
+ // Monaco ignores menu clicks for 100ms after opening (accidental-click guard).
+ const undoItem=a.getByRole('menuitem',{name:/^(Undo|실행 취소)/});await undoItem.waitFor();await a.waitForTimeout(150);await undoItem.click();await waitValue(a,'c','db');await waitValue(b,'c','db');
  assert.deepEqual(errors,[]);console.log('PASS two browser clients: inline text and real Monaco undo a from ba to b, broker CRDT merge and peer convergence');
  await context.close();
 }finally{await browser.close();}

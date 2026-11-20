@@ -45,7 +45,8 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
     buffer.className='vector-composite-surface';element.insertBefore(buffer,canvas);
     let compositor=null,bufferVersion=0,surfaceChanged=false,worldPaintBounds=null,bufferCamera=null,previousPaintCamera=null,previousPaintRatio=0,sceneInputs=null,lastCamera=null,cameraIdleTimer=null,budgetIdleTimer=null,refreshCamera=false,cameraActive=false,viewportMetrics=null,textAppearanceCache=null,inkHasContent=false,inkVisibleCount=0,settledDesiredRatio=null,dragPreview=null,previousDragPreview=null,lastGpuCullKey='';
     const activeDragPainted=new Map();
-    const ink = createInkStrokeRenderer(element, canvas);
+    // The ink renderer asks for a pass when a released drag overlay times out.
+    const ink = createInkStrokeRenderer(element, canvas, { requestRender: () => { inkKey = ''; schedule(); } });
     const records = new Map();
     const paintIndex = new RasterPaintIndex();
     const preparationQueue = new ScenePreparationQueue();

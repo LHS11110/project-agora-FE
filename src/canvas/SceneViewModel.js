@@ -35,12 +35,15 @@ export default class SceneViewModel {
     const selectionKey=[...selected].join('|'),domKey=[...domIds].join('|');
     const sameDisplay=!qualityChanged&&this.width===world.width&&this.height===world.height&&this.scale===scale;
     const appearanceDirty=new Set();for(const [before,after] of [[this.selected||new Set(),selected],[this.domIds||new Set(),domIds]]){for(const id of before)if(!after.has(id))appearanceDirty.add(id);for(const id of after)if(!before.has(id))appearanceDirty.add(id);}
-    const delta=entries.sceneDelta,append=this.entries!==entries&&delta&&delta.previous.deref()===this.entries&&sameDisplay&&!delta.removed.length&&delta.updated.every(entry=>this.byId.has(entry.id)&&itemDepth(items[entry.id]||entry.item)===this.byId.get(entry.id).depth)&&appearanceDirty.size===0;
+    const delta=entries.sceneDelta,append=this.entries!==entries&&delta&&delta.previous.deref()===this.entries&&sameDisplay&&delta.updated.every(entry=>this.byId.has(entry.id)&&itemDepth(items[entry.id]||entry.item)===this.byId.get(entry.id).depth)&&appearanceDirty.size===0;
     const reset=this.entries!==entries || !sameDisplay;
     const changed=reset?null:changedItemIds(this.items,items);
     if(append){
       this.stats.appends++;
       const patches=new Map();
+      // Removals (e.g. erased strokes) are spliced out here. Rebuilding every layer
+      // and re-diffing its snapshots per eraser sample made erasing O(scene).
+      if(delta.removed.length)this.removeEntries(delta.removed,patches);
       for(const entry of [...delta.updated,...delta.added]){
         const tuple=this.entry(entry,items,world,index),[id,item]=tuple,depth=itemDepth(item);if(!isDrawableCanvasItem(item))continue;
         if(!this.layers.has(depth))this.layers.set(depth,{depth,objects:[],domObjects:[],vectors:itemSnapshot({}),inkItems:itemSnapshot({})});
@@ -54,6 +57,8 @@ export default class SceneViewModel {
         if(domAt>=0||needs){layer.domObjects=layer.domObjects.slice();if(domAt>=0){if(needs)layer.domObjects[domAt]=tuple;else layer.domObjects.splice(domAt,1);}else layer.domObjects.push(tuple);}
       }
       for(const [depth,changes] of patches){const layer=this.layers.get(depth);layer.vectors=changeItems(layer.vectors,changes.vectors);layer.inkItems=changeItems(layer.inkItems,changes.inkItems);}
+      // Match a rebuild: depth 0 always exists, other emptied depths disappear.
+      for(const [depth,layer] of this.layers)if(depth!==0&&!layer.objects.length)this.layers.delete(depth);
       this.revision++;
     }else if(reset || changed===null){
       this.stats.resets++;const reason=[this.entries===entries?'same':'entries',sameDisplay?'display':'lod',delta?'delta':'no-delta',delta?.previous.deref()===this.entries?'parent':'no-parent',delta?.updated.length||0,appearanceDirty.size,changed===null?'all':'diff'].join(':');this.stats.reasons[reason]=(this.stats.reasons[reason]||0)+1;
@@ -106,6 +111,26 @@ export default class SceneViewModel {
     this.depthLayers=[...this.layers.values()].sort((a,b)=>a.depth-b.depth);return this;
   }
   entry(entry,items,world,index=null){const item=items[entry.id]||entry.item;return [entry.id,item,entry.bounds,item.kind==='connector'?connectorGeometry(item,items,world.width,world.height,index):null];}
+  removeEntries(ids,patches){
+    const sortedFrom=[],layerFrom=new Map();
+    for(const rawId of ids){
+      const id=String(rawId),old=this.byId.get(id);if(!old)continue;
+      const layer=this.layers.get(old.depth);
+      if(layer){
+        const at=layer.objects[old.objectIndex]===old.tuple?old.objectIndex:layer.objects.indexOf(old.tuple);
+        if(at>=0){layer.objects.splice(at,1);layerFrom.set(old.depth,Math.min(layerFrom.get(old.depth)??at,at));}
+        const domAt=layer.domObjects.indexOf(old.tuple);if(domAt>=0){layer.domObjects=layer.domObjects.slice();layer.domObjects.splice(domAt,1);}
+        if(!patches.has(old.depth))patches.set(old.depth,{vectors:{},inkItems:{}});
+        const patch=patches.get(old.depth);patch.vectors[id]=null;patch.inkItems[id]=null;
+      }
+      const sortAt=this.sorted[old.sortIndex]===old.tuple?old.sortIndex:this.sorted.indexOf(old.tuple);
+      if(sortAt>=0){this.sorted.splice(sortAt,1);sortedFrom.push(sortAt);}
+      this.byId.delete(id);this.hitOrder.delete(id);this.spatial?.delete(id);this.connectorIds.delete(id);this.representations.delete(id);
+    }
+    // Re-number only the entries after the first removed position.
+    for(const [depth,from] of layerFrom){const objects=this.layers.get(depth).objects;for(let i=from;i<objects.length;i++){const entry=this.byId.get(objects[i][0]);if(entry)entry.objectIndex=i;}}
+    if(sortedFrom.length){const from=Math.min(...sortedFrom);for(let i=from;i<this.sorted.length;i++){const id=this.sorted[i][0],entry=this.byId.get(id);if(entry)entry.sortIndex=i;this.hitOrder.set(id,i);}}
+  }
   representation(id,item,domIds,selected,world,scale){
     const proxyTier=overviewProxyTier(item,world,scale,this.quality),worldKey=world.width+':'+world.height,dom=domIds.has(String(id)),selection=selected.has(String(id)),old=this.representations.get(id);
     if(old&&old.item===item&&old.proxyTier===proxyTier&&old.worldKey===worldKey&&old.dom===dom&&old.selection===selection)return old.result;

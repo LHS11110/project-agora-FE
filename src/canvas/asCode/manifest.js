@@ -25,6 +25,43 @@ export const CANVAS_ITEM_FIELDS = new Set([...FIELDS].filter(field => field !== 
 const unsafeId = id => !id || ['__proto__', 'constructor', 'prototype'].includes(id);
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const fail = message => { throw new Error(message); };
+// Structural walk with exactly stable()'s equality. Growing stroke point arrays
+// differ in length, so each 30 Hz save compares in O(1) instead of serialising the
+// whole stroke several times. Rare shapes stable() treats specially (undefined,
+// functions, mixed types, [] vs [undefined]) fall back to string comparison.
+const UNSURE = 2;
+function structuralSame(a, b) {
+  if (a === b) return 1;
+  const ta = typeof a, tb = typeof b;
+  if (ta !== tb) return UNSURE;
+  if (ta === 'number') return Number.isFinite(a) || Number.isFinite(b) ? 0 : 1;
+  if (ta === 'string' || ta === 'boolean') return 0;
+  if (ta !== 'object' || a === null || b === null) return UNSURE;
+  const arrayA = Array.isArray(a), arrayB = Array.isArray(b);
+  if (arrayA !== arrayB) return UNSURE;
+  if (arrayA) {
+    if (a.length !== b.length) return Math.min(a.length, b.length) === 0 && Math.max(a.length, b.length) === 1 ? UNSURE : 0;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] === undefined || b[i] === undefined) return UNSURE;
+      const result = structuralSame(a[i], b[i]);
+      if (result !== 1) return result;
+    }
+    return 1;
+  }
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return 0;
+  for (const key of keys) {
+    if (!Object.prototype.propertyIsEnumerable.call(b, key)) return 0;
+    const result = structuralSame(a[key], b[key]);
+    if (result !== 1) return result;
+  }
+  return 1;
+}
+export function sameStable(a, b) {
+  const result = structuralSame(a, b);
+  return result === UNSURE ? stable(a) === stable(b) : result === 1;
+}
+
 export function stable(value) {
   if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
   if (plain(value)) return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stable(value[key])}`).join(',')}}`;

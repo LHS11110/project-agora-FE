@@ -130,3 +130,45 @@ test('texture atlas returns emptied pages beyond the first to the GPU and the ca
     assert.equal(atlas.pages.length, 1, 'one empty page stays warm');
   } finally { globalThis.document = old; }
 });
+
+test('incrementally derived stroke lists match the snapshot after erasing, splitting and adding', () => withCanvasMocks(() => {
+  const renderer = createInkStrokeRenderer({ insertBefore() {}, appendChild() {} }, {});
+  const line = (x) => ({ kind: 'stroke', points: [{ x, y: .05 }, { x: x + .01, y: .06 }], strokeWidth: 2, shadowEnabled: false });
+  const initial = {}; for (let i = 0; i < 40; i++) initial['s' + i] = line(i / 50);
+  let items = itemSnapshot(initial);
+  assert.equal(renderer.render({ ...base, items, draft: null }), 40);
+  for (let step = 0; step < 30; step++) {
+    const removed = [`s${step}`], changes = { [`f${step}`]: line(.5 + step / 100) };
+    if (step % 3 === 0) changes[`s${39 - step}`] = { ...line(.9), shadowEnabled: false };
+    if (step % 4 === 0) changes[`note${step}`] = { kind: 'text', text: 'not ink' };
+    items = changeItems(items, changes, removed);
+    const expected = Object.keys(items).filter(id => items[id]?.kind === 'stroke').length;
+    assert.equal(renderer.render({ ...base, items, draft: null }), expected, `step ${step}`);
+  }
+  renderer.destroy();
+}));
+
+test('dragging strokes paints them once on an overlay and keeps the retained surface size', () => withCanvasMocks(canvases => {
+  let requested = 0;
+  const renderer = createInkStrokeRenderer({ insertBefore() {}, appendChild() {} }, {}, { requestRender: () => requested++ });
+  const [saved, , drag] = canvases;
+  const line = (x) => ({ kind: 'stroke', points: [{ x, y: .05 }, { x: x + .01, y: .06 }], strokeWidth: 2, shadowEnabled: false });
+  const initial = {}; for (let i = 0; i < 30; i++) initial['s' + i] = line(i / 40);
+  const items = itemSnapshot(initial);
+  renderer.render({ ...base, items, draft: null });
+  const size = [saved.width, saved.height], strokesBefore = saved.context.strokes.length;
+  const ids = new Set(['s1', 's2']);
+  for (let i = 1; i <= 20; i++) renderer.render({ ...base, items, draft: null, dragPreview: { ids, dx: i * .001, dy: 0 } });
+  assert.deepEqual([saved.width, saved.height], size, 'retained surface is not reallocated for a drag');
+  assert.ok(saved.context.strokes.length - strokesBefore < 30, 'the drag start removes the dragged strokes with a clipped repaint only');
+  assert.equal(drag.context.strokes.length, 2, 'dragged strokes are painted once, then moved by transform');
+  assert.match(drag.style.transform, /translate3d/);
+  // Release: the overlay stays until the moved items arrive, so nothing flashes back.
+  renderer.render({ ...base, items, draft: null, dragPreview: null });
+  assert.equal(drag.style.display, '');
+  const moved = changeItems(items, { s1: line(.5), s2: line(.6) });
+  renderer.render({ ...base, items: moved, draft: null, dragPreview: null });
+  assert.equal(drag.style.display, 'none');
+  assert.equal(drag.width, 1, 'overlay backing store released');
+  renderer.destroy();
+}));

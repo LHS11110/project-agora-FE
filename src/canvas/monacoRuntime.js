@@ -1,5 +1,8 @@
 import 'monaco-editor/editor/contrib/suggest/browser/suggestController.js';
 import 'monaco-editor/editor/contrib/snippet/browser/snippetController2.js';
+// The editor's right-click menu (with the collaborative Undo action) is a
+// separate contribution that editor.api.js does not include.
+import 'monaco-editor/editor/contrib/contextmenu/browser/contextmenu.js';
 export { codeModelUri, registerModelCompletions } from './completions/registerModelCompletions.js';
 import * as monaco from 'monaco-editor/editor/editor.api.js';
 import { registerCodeTheme } from './codeTheme.js';

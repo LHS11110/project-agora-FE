@@ -5,7 +5,16 @@ import { operationIds, translateItem } from '../host/hostOperations.js';
 import { createId } from '../canvasIds.js';
 
 const textEncoder = new TextEncoder();
-const opWireBytes = (operation, deltaEdits) => textEncoder.encode(JSON.stringify(operationForWire(operation, deltaEdits))).length;
+// Queue accounting re-measures the tail operation on every merge; a long stroke
+// would otherwise be serialised once more per 30 Hz save just to recount it.
+const wireSizes = new WeakMap();
+const opWireBytes = (operation, deltaEdits) => {
+  const cached = wireSizes.get(operation);
+  if (cached && cached.deltaEdits === deltaEdits) return cached.bytes;
+  const bytes = textEncoder.encode(JSON.stringify(operationForWire(operation, deltaEdits))).length;
+  wireSizes.set(operation, { deltaEdits, bytes });
+  return bytes;
+};
 
 // One ordered, retryable mutation in flight. The durable server receipt and
 // snapshot counter distinguish a lost acknowledgement from an unsaved edit.
@@ -59,32 +68,43 @@ export class ServerCanvasSession {
       this.reject('저장 대기 중인 변경이 많습니다. 서버 연결을 확인해주세요.'); return false;
     }
     const bytes = operation => opWireBytes(operation, this.deltaEdits);
-    const sizes = operations.map(bytes);
-    if (sizes.some(size => size > 8 * 1024 * 1024)) {
-      this.reject('객체 데이터가 서버 전송 한도(8MiB)를 초과했습니다.'); return false;
-    }
-    const incoming = sizes.reduce((total, size) => total + size, 0);
-    if (this.queuedBytes + incoming > 16 * 1024 * 1024) {
-      this.reject('저장 대기 데이터가 많습니다. 서버 저장이 끝난 뒤 다시 시도해주세요.'); return false;
-    }
+    // Plan merges first and measure only the resulting queue entries. A merged
+    // entry contains the incoming change, so a repeated stroke save is
+    // serialised once instead of once as incoming and again as the merged tail.
+    const queue = this.queue, removed = new Set(), added = [];
+    let tail = queue.at(-1), tailIndex = queue.length - 1, tailIsNew = false;
     for (const operation of operations) {
-      const last = this.queue.at(-1);
+      const last = tail;
+      let merged = null;
       if (operation.action === 'translate' && last?.action === 'translate' && !operation.start && !last.start
         && operation.ids.length === last.ids.length && operation.ids.every((id, i) => id === last.ids[i])) {
-        this.queuedBytes -= bytes(last);
-        last.dx += operation.dx; last.dy += operation.dy;
-        this.queuedBytes += bytes(last);
+        merged = { ...last, dx: last.dx + operation.dx, dy: last.dy + operation.dy };
       } else if (operation.action === 'patch' && last?.action === 'patch' && operation.id === last.id
         && !Object.hasOwn(last.patch || {}, 'locked') && !Object.hasOwn(operation.patch || {}, 'locked')) {
         const patch = { ...last.patch, ...operation.patch };
         const unset = new Set([...(last.unset || []), ...(operation.unset || [])]);
         for (const key of operation.unset || []) delete patch[key];
         for (const key of Object.keys(operation.patch)) unset.delete(key);
-        this.queuedBytes -= bytes(last);
-        this.queue[this.queue.length - 1] = { ...last, ...operation, ...(last.notebookBase?{notebookBase:last.notebookBase}:{}),...(last.notebookResultBase?{notebookResultBase:last.notebookResultBase}:{}),textBase:{...operation.textBase,...last.textBase},knownChanges:last.knownChanges,snapshotKnown:last.snapshotKnown, patch, unset: [...unset] };
-        this.queuedBytes += bytes(this.queue.at(-1));
-      } else { this.queue.push(operation); this.queuedBytes += bytes(operation); }
+        merged = { ...last, ...operation, ...(last.notebookBase?{notebookBase:last.notebookBase}:{}),...(last.notebookResultBase?{notebookResultBase:last.notebookResultBase}:{}),textBase:{...operation.textBase,...last.textBase},knownChanges:last.knownChanges,snapshotKnown:last.snapshotKnown, patch, unset: [...unset] };
+      }
+      if (merged) {
+        if (tailIsNew) added[added.length - 1] = merged; else removed.add(tailIndex), added.push(merged), tailIsNew = true;
+        tail = merged;
+      } else { added.push(operation); tail = operation; tailIsNew = true; }
     }
+    const sizes = added.map(bytes);
+    if (sizes.some(size => size > 8 * 1024 * 1024)) {
+      this.reject('객체 데이터가 서버 전송 한도(8MiB)를 초과했습니다.'); return false;
+    }
+    let nextBytes = this.queuedBytes;
+    for (const index of removed) nextBytes -= bytes(queue[index]);
+    for (const size of sizes) nextBytes += size;
+    if (nextBytes > 16 * 1024 * 1024) {
+      this.reject('저장 대기 데이터가 많습니다. 서버 저장이 끝난 뒤 다시 시도해주세요.'); return false;
+    }
+    if (removed.size) queue.length = tailIndex;
+    queue.push(...added);
+    this.queuedBytes = nextBytes;
     this.notify(); return true;
   }
   pause() { this.ready = false; this.syncAt = 0; this.notify(); }

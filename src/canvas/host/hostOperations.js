@@ -1,7 +1,7 @@
 import { assertObjectOperations } from '../locks/objectLock.js';
 import { encodeDocument,loadEncodedDocument,cachedItemDocument,rememberItemDocument } from './documentCache.js';
 import * as Automerge from '@automerge/automerge/slim';
-import { CANVAS_ITEM_FIELDS, exportManifest, planManifest, stable } from '../asCode/manifest.js';
+import { CANVAS_ITEM_FIELDS, exportManifest, planManifest, sameStable, stable } from '../asCode/manifest.js';
 import { canPeerAccessItem, collaborativeField, createActorId, decodeBase64, encodeBase64, isCollaborativeItem } from '../collaborativeSync.js';
 
 export const HOST_PROTOCOL = 1;
@@ -56,7 +56,7 @@ export function itemOperations(previous, next, docs, changedIds = null) {
     const patch = {}, unset = [];
     for (const field of CANVAS_ITEM_FIELDS) {
       if (before?.[field] === after[field]) continue;
-      if (stable(before?.[field]) === stable(after[field])) continue;
+      if (sameStable(before?.[field], after[field])) continue;
       if (after[field] === undefined) unset.push(field);
       else patch[field] = after[field];
     }
