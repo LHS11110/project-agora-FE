@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,rmSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 const {chromium}=await import(process.env.AGORA_E2E_PLAYWRIGHT_MODULE||'playwright-core');
 const origin=process.env.AGORA_E2E_ORIGIN||'https://127.0.0.1:5192';
+// Calls are relay-only: the app refuses to join without broker-issued TURN/TLS
+// credentials. Pass short-lived test credentials as for voice-audibility.mjs.
+if(!process.env.AGORA_RELAY_TEST_CONFIG)throw new Error('AGORA_RELAY_TEST_CONFIG (short-lived turns: credentials JSON) is required; calls never fall back to direct P2P.');
+const relayConfig=JSON.parse(readFileSync(process.env.AGORA_RELAY_TEST_CONFIG,'utf8'));
+const mediaRelay={ice_transport_policy:'relay',ice_servers:relayConfig.iceServers,expires_at:Math.floor(Date.now()/1000)+1800};
 const directory=mkdtempSync(join(tmpdir(),'agora-canvas-voice-')),tone=join(directory,'tone.wav');
 const samples=48000*8,pcm=Buffer.alloc(44+samples*2);pcm.write('RIFF');pcm.writeUInt32LE(pcm.length-8,4);pcm.write('WAVEfmt ',8);pcm.writeUInt32LE(16,16);pcm.writeUInt16LE(1,20);pcm.writeUInt16LE(1,22);pcm.writeUInt32LE(48000,24);pcm.writeUInt32LE(96000,28);pcm.writeUInt16LE(2,32);pcm.writeUInt16LE(16,34);pcm.write('data',36);pcm.writeUInt32LE(samples*2,40);
 for(let i=0;i<samples;i++)pcm.writeInt16LE(Math.round(10000*Math.sin(2*Math.PI*440*i/48000)),44+2*i);writeFileSync(tone,pcm);
@@ -42,9 +47,10 @@ try{
     if(event.type==='mentions_get')socket.send(JSON.stringify({type:'mentions_snapshot',request_id:event.request_id,notifications:[]}));
     if(event.type==='rtc_join'){
      assert.equal(event.canvas_connection_id,id);assert.equal(event.canvas_connection_hash,`proof-${id}`);client.joined=true;
-     socket.send(JSON.stringify({type:'rtc_peers',self_peer_id:id,peers:[...clients].filter(([other,c])=>other!==id&&c.joined).map(([other])=>identity(other))}));
+     socket.send(JSON.stringify({type:'rtc_peers',self_peer_id:id,media_relay:mediaRelay,peers:[...clients].filter(([other,c])=>other!==id&&c.joined).map(([other])=>identity(other))}));
      for(const [other,c]of clients)if(other!==id&&c.joined)c.rtc.send(JSON.stringify({type:'rtc_peer_joined',peer:identity(id)}));
     }
+    if(event.type==='rtc_media_config')socket.send(JSON.stringify({type:'rtc_media_config',media_relay:mediaRelay}));
     if(event.type==='voice_state'){
      client.active=event.active;client.muted=event.muted;
      for(const c of clients.values())if(c.joined)c.rtc.send(JSON.stringify({...event,peer_id:id}));

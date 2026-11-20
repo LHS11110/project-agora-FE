@@ -6,6 +6,19 @@ let revision = 0, frame = null;
 let dirtyIds=new Set(),unknown=false;
 export const CONNECTOR_METRICS_EVENT = 'frelog:connector-metrics';
 export const connectorMetricsRevision = () => revision;
+// Which objects were remeasured after a revision, so a connector reroutes only
+// when an endpoint or obstacle changed size. null: unknown (reroute).
+const changeLog = []; let changeLogStart = 0;
+export function connectorMetricsChangedIds(sinceRevision) {
+  if (sinceRevision === revision) return [];
+  if (sinceRevision < changeLogStart) return null;
+  const ids = new Set();
+  for (let i = changeLog.length - 1; i >= 0 && changeLog[i].revision > sinceRevision; i--) {
+    if (changeLog[i].id == null) return null;
+    ids.add(changeLog[i].id);
+  }
+  return [...ids];
+}
 export const connectorObjectSize = item => item && metrics.get(item);
 export function inheritConnectorObjectSize(previous,next){
   const measured=previous && metrics.get(previous);
@@ -25,6 +38,8 @@ export function measureConnectorObject(item, element, resizeEntry = null) {
   // Avoid invalidating the entire routing/index pipeline on every drag frame.
   if(measured?.width===width && measured?.height===height && Number(item.width)>0 && Number(item.height)>0)return;
   elementMetrics.set(element,{width,height});revision++;
+  changeLog.push({ revision, id: element.dataset?.itemId ?? null });
+  if (changeLog.length > 8192) { changeLog.splice(0, 4096); changeLogStart = changeLog[0].revision - 1; }
   if(element.dataset?.itemId)dirtyIds.add(element.dataset.itemId);else unknown=true;
   if (frame === null) frame = requestAnimationFrame(() => {
     frame=null;const event=new Event(CONNECTOR_METRICS_EVENT);event.changedItemIds=unknown?null:[...dirtyIds];

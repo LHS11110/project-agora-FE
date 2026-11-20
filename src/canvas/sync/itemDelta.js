@@ -25,10 +25,24 @@ export function notebookEdits(before,after){
  if(!Array.isArray(before)||!Array.isArray(after)||before.length!==after.length||before.some((c,i)=>c.id!==after[i].id))return null;
  return after.flatMap((cell,i)=>{const patch={};for(const field of ['source','cellType'])if(before[i][field]!==cell[field])patch[field]=cell[field];return Object.keys(patch).length?[{id:cell.id,patch}]:[];});
 }
-export function operationForWire(operation,deltaSupported=true){
- const {doc,base,notebookBase,notebookResultBase,textBase,knownChanges,snapshotKnown,...wire}=operation;
+const samePoint=(a,b)=>a===b||(a&&b&&a.x===b.x&&a.y===b.y&&a.pressure===b.pressure&&('pressure' in a)===('pressure' in b));
+/** Points after an unchanged prefix of `base`, or null when the stroke was not
+ * only extended (erased, moved, rebuilt). An in-progress stroke saved 30 times a
+ * second then sends its new samples instead of every point again. */
+export function pointsAppend(base,points){
+ if(!Array.isArray(base)||!Array.isArray(points)||!base.length||points.length<base.length)return null;
+ for(let i=base.length-1;i>=0;i--)if(!samePoint(base[i],points[i]))return null;
+ const tail=base[base.length-1],last={x:tail.x,y:tail.y};if('pressure' in tail)last.pressure=tail.pressure;
+ return {from:base.length,last,points:points.slice(base.length)};
+}
+export function operationForWire(operation,deltaSupported=true,pointsSupported=false){
+ const {doc,base,notebookBase,notebookResultBase,textBase,knownChanges,snapshotKnown,pointsBase,...wire}=operation;
  if(!deltaSupported)return wire;
  wire.patch={...wire.patch};
+ if(pointsSupported&&operation.action==='patch'&&Array.isArray(wire.patch.points)){
+  const append=pointsAppend(pointsBase,wire.patch.points);
+  if(append){wire.points_append=append;delete wire.patch.points;}
+ }
  if(snapshotKnown)delete wire.patch.automerge_snapshot;
  if(knownChanges&&wire.patch.automerge_changes){const seen=new Set(knownChanges.map(c=>c.change));wire.patch.automerge_changes=wire.patch.automerge_changes.filter(c=>!seen.has(c.change));}
  if(textBase&&Object.keys(textBase).length){wire.text_edits={};for(const [field,before] of Object.entries(textBase)){if(typeof wire.patch[field]==='string'){wire.text_edits[field]=textDelta(before,wire.patch[field]);delete wire.patch[field];}}}

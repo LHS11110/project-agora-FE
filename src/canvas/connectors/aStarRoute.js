@@ -325,9 +325,67 @@ function smoothCornerPolyline(waypoints, interiorGuardBoxes, terminalGuardBoxes,
   return result;
 }
 
-function shortcutClearSegments(points, guardBoxes) {
+// Uniform buckets over obstacle boxes. A segment can only hit a box whose AABB
+// overlaps its own (segmentIntersectsBox's early exit), so testing the boxes in
+// the buckets under the segment's AABB gives exactly the same answer as testing
+// every box, without O(segments x obstacles) work on dense canvases.
+export class BoxBuckets {
+  constructor(boxes, cell = 64) {
+    this.boxes = boxes; this.cell = cell; this.stamp = new Uint32Array(boxes.length); this.query = 0;
+    this.buckets = new Map(); this.always = [];
+    for (let i = 0; i < boxes.length; i++) {
+      const b = boxes[i];
+      if (![b.minX, b.minY, b.maxX, b.maxY].every(Number.isFinite)) { this.always.push(i); continue; }
+      const x0 = Math.floor(b.minX / cell), x1 = Math.floor(b.maxX / cell), y0 = Math.floor(b.minY / cell), y1 = Math.floor(b.maxY / cell);
+      if ((x1 - x0 + 1) * (y1 - y0 + 1) > 4096) { this.always.push(i); continue; }
+      for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+        const key = cx * 1048576 + cy; let list = this.buckets.get(key);
+        if (!list) this.buckets.set(key, list = []);
+        list.push(i);
+      }
+    }
+  }
+  segmentHits(a, b) {
+    const boxes = this.boxes, stamp = this.stamp, mark = ++this.query;
+    for (const i of this.always) if (segmentIntersectsBox(a, b, boxes[i])) return true;
+    const cell = this.cell;
+    const x0 = Math.floor(Math.min(a.x, b.x) / cell), x1 = Math.floor(Math.max(a.x, b.x) / cell);
+    const y0 = Math.floor(Math.min(a.y, b.y) / cell), y1 = Math.floor(Math.max(a.y, b.y) / cell);
+    if (!Number.isFinite(x0 + x1 + y0 + y1) || (x1 - x0 + 1) * (y1 - y0 + 1) > 4096) {
+      for (let i = 0; i < boxes.length; i++) if (segmentIntersectsBox(a, b, boxes[i])) return true;
+      return false;
+    }
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+      const list = this.buckets.get(cx * 1048576 + cy);
+      if (!list) continue;
+      for (const i of list) {
+        if (stamp[i] === mark) continue;
+        stamp[i] = mark;
+        if (segmentIntersectsBox(a, b, boxes[i])) return true;
+      }
+    }
+    return false;
+  }
+}
+
+// Keep turns, ends and points every `spacing` px along straight runs: shortcut
+// candidates stay spread along the path while dense grid crossings are dropped.
+function thinStraightRuns(points, spacing) {
+  const out = [points[0]];
+  let last = points[0];
+  for (let i = 1; i < points.length - 1; i++) {
+    const a = points[i - 1], p = points[i], b = points[i + 1];
+    const turn = Math.abs((p.x - a.x) * (b.y - p.y) - (p.y - a.y) * (b.x - p.x)) > 1e-9;
+    if (turn || Math.hypot(p.x - last.x, p.y - last.y) >= spacing) { out.push(p); last = p; }
+  }
+  out.push(points[points.length - 1]);
+  return out;
+}
+
+function* shortcutClearSegmentsSteps(points, guardBoxes) {
   const n = points.length;
   if (n <= 2) return points;
+  const guard = new BoxBuckets(guardBoxes);
   const dist = new Float64Array(n);
   const prev = new Int32Array(n);
   dist.fill(Infinity);
@@ -335,6 +393,7 @@ function shortcutClearSegments(points, guardBoxes) {
   dist[0] = 0;
 
   for (let j = 1; j < n; j++) {
+    if ((j & 31) === 0) yield;
     const stepLen = Math.hypot(points[j].x - points[j - 1].x, points[j].y - points[j - 1].y);
     dist[j] = dist[j - 1] + stepLen;
     prev[j] = j - 1;
@@ -342,14 +401,7 @@ function shortcutClearSegments(points, guardBoxes) {
     for (let i = 0; i < j - 1; i++) {
       const candidateDist = dist[i] + Math.hypot(points[j].x - points[i].x, points[j].y - points[i].y);
       if (candidateDist + 1e-3 >= dist[j]) continue;
-      let blocked = false;
-      for (let b = 0; b < guardBoxes.length; b++) {
-        if (segmentIntersectsBox(points[i], points[j], guardBoxes[b])) {
-          blocked = true;
-          break;
-        }
-      }
-      if (!blocked) {
+      if (!guard.segmentHits(points[i], points[j])) {
         dist[j] = candidateDist;
         prev[j] = i;
       }
@@ -365,7 +417,23 @@ function shortcutClearSegments(points, guardBoxes) {
   return out;
 }
 
-function runGridAStar(starts, ends, xs, ys, blockedBoxes, cornerBoxes) {
+// Index of the first sorted value strictly greater than v (length if none).
+function firstIndexAbove(values, v) {
+  let lo = 0, hi = values.length;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (values[mid] > v) hi = mid; else lo = mid + 1; }
+  return lo;
+}
+// Index of the last sorted value strictly less than v (-1 if none).
+function lastIndexBelow(values, v) {
+  let lo = 0, hi = values.length;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (values[mid] < v) lo = mid + 1; else hi = mid; }
+  return lo - 1;
+}
+
+const MAX_EXPANSIONS = 150000;
+// Shared by every clearance pass and region of one route.
+const ROUTE_EXPANSION_BUDGET = 400000;
+function* runGridAStarSteps(starts, ends, xs, ys, blockedBoxes, cornerBoxes, budget = { left: Infinity }) {
   const cols = xs.length;
   const rows = ys.length;
   if (!cols || !rows) return null;
@@ -389,34 +457,52 @@ function runGridAStar(starts, ends, xs, ys, blockedBoxes, cornerBoxes) {
   }
   const startCells = new Set(validStarts.map((s) => yIndex.get(s.stub.y) * cols + xIndex.get(s.stub.x)));
 
-  const hOpen = new Uint8Array(rows * Math.max(0, cols - 1));
-  const vOpen = new Uint8Array(Math.max(0, rows - 1) * cols);
-
-  for (let yIdx = 0; yIdx < rows; yIdx++) {
-    const y = ys[yIdx];
-    for (let xIdx = 0; xIdx < cols - 1; xIdx++) {
-      const a = { x: xs[xIdx], y };
-      const b = { x: xs[xIdx + 1], y };
-      let blocked = false;
-      for (let k = 0; k < blockedBoxes.length; k++) {
-        if (segmentIntersectsBox(a, b, blockedBoxes[k])) { blocked = true; break; }
+  // Testing every grid edge against every obstacle made routing O(cells x
+  // obstacles) and froze the page on dense canvases. An axis-aligned edge can
+  // only hit a box that strictly spans its fixed coordinate and overlaps its
+  // span (segmentIntersectsBox's own early exit), so visit just those edges and
+  // keep the exact test for them.
+  const hBlocked = new Uint8Array(rows * Math.max(0, cols - 1));
+  const vBlocked = new Uint8Array(Math.max(0, rows - 1) * cols);
+  const a = { x: 0, y: 0 }, b = { x: 0, y: 0 };
+  let marked = 0;
+  for (const box of blockedBoxes) {
+    if ((++marked & 31) === 0) yield;
+    // Horizontal edges: rows with minY < y < maxY, edges with x1 > minX and x0 < maxX.
+    const rowFrom = firstIndexAbove(ys, box.minY), rowTo = lastIndexBelow(ys, box.maxY);
+    const segFrom = Math.max(0, firstIndexAbove(xs, box.minX) - 1), segTo = Math.min(cols - 2, lastIndexBelow(xs, box.maxX));
+    for (let yIdx = rowFrom; yIdx <= rowTo; yIdx++) {
+      a.y = b.y = ys[yIdx];
+      for (let xIdx = segFrom; xIdx <= segTo; xIdx++) {
+        const edge = yIdx * (cols - 1) + xIdx;
+        if (hBlocked[edge]) continue;
+        a.x = xs[xIdx]; b.x = xs[xIdx + 1];
+        // An edge wholly within the box clips to t in [0, 1]: always blocked.
+        if ((a.x >= box.minX && b.x <= box.maxX) || segmentIntersectsBox(a, b, box)) hBlocked[edge] = 1;
       }
-      if (!blocked) hOpen[yIdx * (cols - 1) + xIdx] = 1;
+    }
+    // Vertical edges: columns with minX < x < maxX, edges with y1 > minY and y0 < maxY.
+    const colFrom = firstIndexAbove(xs, box.minX), colTo = lastIndexBelow(xs, box.maxX);
+    const vSegFrom = Math.max(0, firstIndexAbove(ys, box.minY) - 1), vSegTo = Math.min(rows - 2, lastIndexBelow(ys, box.maxY));
+    for (let xIdx = colFrom; xIdx <= colTo; xIdx++) {
+      a.x = b.x = xs[xIdx];
+      for (let yIdx = vSegFrom; yIdx <= vSegTo; yIdx++) {
+        const edge = yIdx * cols + xIdx;
+        if (vBlocked[edge]) continue;
+        a.y = ys[yIdx]; b.y = ys[yIdx + 1];
+        if ((a.y >= box.minY && b.y <= box.maxY) || segmentIntersectsBox(a, b, box)) vBlocked[edge] = 1;
+      }
     }
   }
-  for (let yIdx = 0; yIdx < rows - 1; yIdx++) {
-    const y0 = ys[yIdx];
-    const y1 = ys[yIdx + 1];
-    for (let xIdx = 0; xIdx < cols; xIdx++) {
-      const x = xs[xIdx];
-      const a = { x, y: y0 };
-      const b = { x, y: y1 };
-      let blocked = false;
-      for (let k = 0; k < blockedBoxes.length; k++) {
-        if (segmentIntersectsBox(a, b, blockedBoxes[k])) { blocked = true; break; }
-      }
-      if (!blocked) vOpen[yIdx * cols + xIdx] = 1;
-    }
+  const hOpen = hBlocked.map(blocked => blocked ? 0 : 1);
+  const vOpen = vBlocked.map(blocked => blocked ? 0 : 1);
+  // Cells strictly inside a clearance box (pointInsideBox), precomputed once
+  // instead of scanning every box for each expanded neighbour.
+  const cornerCell = new Uint8Array(rows * cols);
+  for (const box of cornerBoxes) {
+    const x0 = firstIndexAbove(xs, box.minX + 1e-6), x1 = lastIndexBelow(xs, box.maxX - 1e-6);
+    const y0 = firstIndexAbove(ys, box.minY + 1e-6), y1 = lastIndexBelow(ys, box.maxY - 1e-6);
+    for (let yIdx = y0; yIdx <= y1; yIdx++) cornerCell.fill(1, yIdx * cols + x0, yIdx * cols + Math.max(x0, x1 + 1));
   }
 
   const totalStates = rows * cols * 5;
@@ -455,7 +541,12 @@ function runGridAStar(starts, ends, xs, ys, blockedBoxes, cornerBoxes) {
   let reachedEnd = null;
   let bestFinishCost = Infinity;
 
+  let expanded = 0;
   while (heap.length > 0) {
+    if ((++expanded & 2047) === 0) yield;
+    // A search this large is a maze or an unreachable target; treating it as
+    // no path keeps one connector from costing hundreds of milliseconds.
+    if (expanded > MAX_EXPANSIONS || --budget.left < 0) return null;
     const current = heap.pop();
     const s = current.state;
     if (closed[s]) continue;
@@ -481,17 +572,15 @@ function runGridAStar(starts, ends, xs, ys, blockedBoxes, cornerBoxes) {
     const py = ys[yIdx];
     const gBase = gScore[s];
 
-    const neighbors = [
-      xIdx + 1 < cols && hOpen[yIdx * (cols - 1) + xIdx] ? [yIdx * cols + xIdx + 1, xs[xIdx + 1] - px, 0] : null,
-      yIdx + 1 < rows && vOpen[yIdx * cols + xIdx] ? [(yIdx + 1) * cols + xIdx, ys[yIdx + 1] - py, 1] : null,
-      xIdx - 1 >= 0 && hOpen[yIdx * (cols - 1) + xIdx - 1] ? [yIdx * cols + xIdx - 1, px - xs[xIdx - 1], 2] : null,
-      yIdx - 1 >= 0 && vOpen[(yIdx - 1) * cols + xIdx] ? [(yIdx - 1) * cols + xIdx, py - ys[yIdx - 1], 3] : null,
-    ];
-
+    // Same neighbour order as before (right, down, left, up) so heap ties
+    // resolve identically; no per-expansion arrays.
     for (let k = 0; k < 4; k++) {
-      const nb = neighbors[k];
-      if (!nb) continue;
-      const [nCell, stepLen, nDir] = nb;
+      let nCell, stepLen;
+      if (k === 0) { if (!(xIdx + 1 < cols && hOpen[yIdx * (cols - 1) + xIdx])) continue; nCell = yIdx * cols + xIdx + 1; stepLen = xs[xIdx + 1] - px; }
+      else if (k === 1) { if (!(yIdx + 1 < rows && vOpen[yIdx * cols + xIdx])) continue; nCell = (yIdx + 1) * cols + xIdx; stepLen = ys[yIdx + 1] - py; }
+      else if (k === 2) { if (!(xIdx - 1 >= 0 && hOpen[yIdx * (cols - 1) + xIdx - 1])) continue; nCell = yIdx * cols + xIdx - 1; stepLen = px - xs[xIdx - 1]; }
+      else { if (!(yIdx - 1 >= 0 && vOpen[(yIdx - 1) * cols + xIdx])) continue; nCell = (yIdx - 1) * cols + xIdx; stepLen = py - ys[yIdx - 1]; }
+      const nDir = k;
       const nState = nCell * 5 + nDir;
       if (closed[nState]) continue;
       let cornerBias = 0;
@@ -499,7 +588,7 @@ function runGridAStar(starts, ends, xs, ys, blockedBoxes, cornerBoxes) {
       const nXIdx = nCell - nYIdx * cols;
       const nx = xs[nXIdx];
       const ny = ys[nYIdx];
-      if (!startCells.has(nCell) && !goalCells.has(nCell) && cornerBoxes.some((b) => pointInsideBox({ x: nx, y: ny }, b))) {
+      if (cornerCell[nCell] && !startCells.has(nCell) && !goalCells.has(nCell)) {
         cornerBias = 12;
       }
       const turnCost = dir !== 4 && dir !== nDir ? TURN_PENALTY : 0;
@@ -534,7 +623,7 @@ function runGridAStar(starts, ends, xs, ys, blockedBoxes, cornerBoxes) {
 /**
  * Grid-based A* connector router with progressive clearance fallback and obstacle-safe Bezier curves.
  */
-export function routeConnectorAStar({
+export function* routeConnectorAStarSteps({
   from,
   to,
   preferredPoints,
@@ -595,6 +684,7 @@ export function routeConnectorAStar({
   let chosen = null;
   let chosenPass = null;
   let chosenBounds = null;
+  const searchBudget = { left: ROUTE_EXPANSION_BUDGET };
 
   for (let pIdx = 0; pIdx < passes.length; pIdx++) {
     const pass = passes[pIdx];
@@ -605,83 +695,81 @@ export function routeConnectorAStar({
     const ends = buildStubs(to, from, pass.hardCores, passObsBoxes, anchorFn, pass.stubLen, toPort);
     if (!starts.length || !ends.length) continue;
 
-    let minX = Math.min(fromCore.minX, toCore.minX);
-    let minY = Math.min(fromCore.minY, toCore.minY);
-    let maxX = Math.max(fromCore.maxX, toCore.maxX);
-    let maxY = Math.max(fromCore.maxY, toCore.maxY);
-    for (const s of starts) {
-      minX = Math.min(minX, s.stub.x); maxX = Math.max(maxX, s.stub.x);
-      minY = Math.min(minY, s.stub.y); maxY = Math.max(maxY, s.stub.y);
-    }
-    for (const e of ends) {
-      minX = Math.min(minX, e.stub.x); maxX = Math.max(maxX, e.stub.x);
-      minY = Math.min(minY, e.stub.y); maxY = Math.max(maxY, e.stub.y);
-    }
-    for (const b of passObsBoxes) {
-      minX = Math.min(minX, b.minX); maxX = Math.max(maxX, b.maxX);
-      minY = Math.min(minY, b.minY); maxY = Math.max(maxY, b.maxY);
+    let baseMinX = Math.min(fromCore.minX, toCore.minX);
+    let baseMinY = Math.min(fromCore.minY, toCore.minY);
+    let baseMaxX = Math.max(fromCore.maxX, toCore.maxX);
+    let baseMaxY = Math.max(fromCore.maxY, toCore.maxY);
+    for (const s of [...starts, ...ends]) {
+      baseMinX = Math.min(baseMinX, s.stub.x); baseMaxX = Math.max(baseMaxX, s.stub.x);
+      baseMinY = Math.min(baseMinY, s.stub.y); baseMaxY = Math.max(baseMaxY, s.stub.y);
     }
     if (Array.isArray(guides)) {
       for (const g of guides) {
         if (Number.isFinite(g?.x) && Number.isFinite(g?.y)) {
-          minX = Math.min(minX, Math.round(g.x)); maxX = Math.max(maxX, Math.round(g.x));
-          minY = Math.min(minY, Math.round(g.y)); maxY = Math.max(maxY, Math.round(g.y));
+          baseMinX = Math.min(baseMinX, Math.round(g.x)); baseMaxX = Math.max(baseMaxX, Math.round(g.x));
+          baseMinY = Math.min(baseMinY, Math.round(g.y)); baseMaxY = Math.max(baseMaxY, Math.round(g.y));
         }
       }
     }
-
     const outerPad = Math.max(24, Math.round(clearance * 2));
-    minX = Math.floor(minX - outerPad);
-    minY = Math.floor(minY - outerPad);
-    maxX = Math.ceil(maxX + outerPad);
-    maxY = Math.ceil(maxY + outerPad);
+    // The grid used to span every collected obstacle, i.e. most of a dense
+    // canvas (~800x700 cells, hundreds of boxes) for every connector, which
+    // froze the page for seconds. Search a region around the endpoints first
+    // and widen it once; detours further away are not worth that cost.
+    const span = Math.max(baseMaxX - baseMinX, baseMaxY - baseMinY);
+    const near = Math.max(outerPad, 160, Math.round(span * 0.35));
+    for (const margin of [near, Math.max(near * 3, 480)]) {
+      const minX = Math.floor(baseMinX - margin), minY = Math.floor(baseMinY - margin);
+      const maxX = Math.ceil(baseMaxX + margin), maxY = Math.ceil(baseMaxY + margin);
+      const inRegion = (b) => b.maxX >= minX - 1 && b.minX <= maxX + 1 && b.maxY >= minY - 1 && b.minY <= maxY + 1;
+      const regionBoxes = passObsBoxes.filter(inRegion);
+      const inside = (v, lo, hi) => v >= lo && v <= hi;
 
-    const importantX = new Set([minX, maxX, ...starts.map((s) => s.stub.x), ...ends.map((e) => e.stub.x)]);
-    const importantY = new Set([minY, maxY, ...starts.map((s) => s.stub.y), ...ends.map((e) => e.stub.y)]);
-    const rawX = new Set([
-      ...importantX,
-      fromCore.minX - pass.stubLen,
-      fromCore.maxX + pass.stubLen,
-      toCore.minX - pass.stubLen,
-      toCore.maxX + pass.stubLen,
-    ]);
-    const rawY = new Set([
-      ...importantY,
-      fromCore.minY - pass.stubLen,
-      fromCore.maxY + pass.stubLen,
-      toCore.minY - pass.stubLen,
-      toCore.maxY + pass.stubLen,
-    ]);
+      const importantX = new Set([minX, maxX, ...starts.map((s) => s.stub.x), ...ends.map((e) => e.stub.x)]);
+      const importantY = new Set([minY, maxY, ...starts.map((s) => s.stub.y), ...ends.map((e) => e.stub.y)]);
+      const rawX = new Set([
+        ...importantX,
+        fromCore.minX - pass.stubLen,
+        fromCore.maxX + pass.stubLen,
+        toCore.minX - pass.stubLen,
+        toCore.maxX + pass.stubLen,
+      ].filter((v) => inside(v, minX, maxX)));
+      const rawY = new Set([
+        ...importantY,
+        fromCore.minY - pass.stubLen,
+        fromCore.maxY + pass.stubLen,
+        toCore.minY - pass.stubLen,
+        toCore.maxY + pass.stubLen,
+      ].filter((v) => inside(v, minY, maxY)));
 
-    for (const b of passObsBoxes) {
-      const lx = b.minX - 1;
-      const rx = b.maxX + 1;
-      const ty = b.minY - 1;
-      const by = b.maxY + 1;
-      rawX.add(lx); rawX.add(rx);
-      rawY.add(ty); rawY.add(by);
-      importantX.add(lx); importantX.add(rx);
-      importantY.add(ty); importantY.add(by);
+      for (const b of regionBoxes) {
+        for (const x of [b.minX - 1, b.maxX + 1]) if (inside(x, minX, maxX)) { rawX.add(x); importantX.add(x); }
+        for (const y of [b.minY - 1, b.maxY + 1]) if (inside(y, minY, maxY)) { rawY.add(y); importantY.add(y); }
+      }
+      const gapX = new Set(), gapY = new Set();
+      addGapMidpoints(regionBoxes, 'x', gapX, importantX);
+      addGapMidpoints(regionBoxes, 'y', gapY, importantY);
+      for (const x of gapX) if (inside(x, minX, maxX)) rawX.add(x);
+      for (const y of gapY) if (inside(y, minY, maxY)) rawY.add(y);
+
+      const xs = addSubdivisions(dedupeCoords(rawX, 1, importantX), minX, maxX, 64);
+      const ys = addSubdivisions(dedupeCoords(rawY, 1, importantY), minY, maxY, 64);
+
+      const blockedBoxes = [
+        ...regionBoxes,
+        rectCoreBounds(from, pass.endpointPad),
+        rectCoreBounds(to, pass.endpointPad),
+      ];
+
+      const aStar = yield* runGridAStarSteps(starts, ends, xs, ys, blockedBoxes, requiredBoxes.filter(inRegion), searchBudget);
+      if (aStar) {
+        chosen = aStar;
+        chosenPass = pass;
+        chosenBounds = { minX, minY, maxX, maxY };
+        break;
+      }
     }
-    addGapMidpoints(passObsBoxes, 'x', rawX, importantX);
-    addGapMidpoints(passObsBoxes, 'y', rawY, importantY);
-
-    const xs = addSubdivisions(dedupeCoords(rawX, 1, importantX), minX, maxX, 64);
-    const ys = addSubdivisions(dedupeCoords(rawY, 1, importantY), minY, maxY, 64);
-
-    const blockedBoxes = [
-      ...passObsBoxes,
-      rectCoreBounds(from, pass.endpointPad),
-      rectCoreBounds(to, pass.endpointPad),
-    ];
-
-    const aStar = runGridAStar(starts, ends, xs, ys, blockedBoxes, requiredBoxes);
-    if (aStar) {
-      chosen = aStar;
-      chosenPass = pass;
-      chosenBounds = { minX, minY, maxX, maxY };
-      break;
-    }
+    if (chosen) break;
   }
 
   if (!chosen || !chosenPass) {
@@ -706,7 +794,9 @@ export function routeConnectorAStar({
 
   const rawMid = keepOrthogonal
     ? removeCollinear(chosen.gridWaypoints)
-    : removeCollinear(shortcutClearSegments(chosen.gridWaypoints, interiorGuard));
+    // Grid paths list every grid line they cross (hundreds of points); the
+    // shortcut pass is quadratic, so keep only the turns on long paths.
+    : removeCollinear(yield* shortcutClearSegmentsSteps(chosen.gridWaypoints.length > 48 ? thinStraightRuns(chosen.gridWaypoints, 24) : chosen.gridWaypoints, interiorGuard));
   const cleanedMid = removeCollinear(rawMid);
 
   const unsmoothedFull = removeCollinear([chosen.startMatch.tip, ...cleanedMid, chosen.endMatch.tip]);
@@ -744,4 +834,20 @@ export function routeConnectorAStar({
       maxY: Math.max(chosenBounds.maxY, pMaxY),
     },
   };
+}
+
+/** Run a routing generator to completion. */
+export function runSteps(steps) {
+  let step;
+  do step = steps.next(); while (!step.done);
+  return step.value;
+}
+
+/**
+ * Grid-based A* connector router. The work is a generator that yields every
+ * few thousand expansions, so the canvas can spread a heavy route over several
+ * tasks; this synchronous form runs it to completion.
+ */
+export function routeConnectorAStar(args) {
+  return runSteps(routeConnectorAStarSteps(args));
 }

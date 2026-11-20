@@ -282,6 +282,8 @@ export function createInkStrokeRenderer(host, vectorCanvas, { requestRender = ()
   saved.style.right = saved.style.bottom = 'auto';
   live.style.right = live.style.bottom = 'auto';
   drag.style.right = drag.style.bottom = 'auto';
+  // Zoom reuse scales the retained surface; keep transforms anchored top-left.
+  saved.style.transformOrigin = '0 0';
   // Mount completed & live ink above shapes/connectors in the same depth layer
   // while cross-depth ordering remains isolated per .canvas-depth-layer.
   if (vectorCanvas?.nextSibling) {
@@ -513,6 +515,25 @@ export function createInkStrokeRenderer(host, vectorCanvas, { requestRender = ()
         && Math.abs(state.camera.x - savedBuffer.x) <= savedBuffer.margin
         && Math.abs(state.camera.y - savedBuffer.y) <= savedBuffer.margin
       );
+      // While the camera is zooming, scale the retained pixels instead of
+      // repainting every visible stroke each frame (GPU raster bound). The
+      // surface is repainted crisply once the camera settles (interactive off).
+      if (!sameView && state.interactive && savedBuffer && saved.width > 1
+        && savedBuffer.width === state.width && savedBuffer.height === state.height
+        && savedBuffer.viewportWidth === state.viewportWidth && savedBuffer.viewportHeight === state.viewportHeight
+        && savedBuffer.ratio === ratio) {
+        const k = state.camera.scale / savedBuffer.scale;
+        const tx = state.camera.x - k * (savedBuffer.margin + savedBuffer.x), ty = state.camera.y - k * (savedBuffer.margin + savedBuffer.y);
+        const coverW = (state.viewportWidth + savedBuffer.margin * 2) * k, coverH = (state.viewportHeight + savedBuffer.margin * 2) * k;
+        const covers = tx <= 0 && ty <= 0 && tx + coverW >= state.viewportWidth && ty + coverH >= state.viewportHeight;
+        const unchanged = savedDamage(savedBuffer, state.items, hidden, state.visibleItemIds)?.length === 0;
+        if (k >= .5 && k <= 2 && covers && unchanged) {
+          setStyle(saved, 'transform', `translate3d(${tx}px,${ty}px,0) scale(${k})`);
+          saved.style.display = '';
+          renderDraft(state.draft);
+          return entries.length + dragEntries.length;
+        }
+      }
       // In-progress strokes saved at 30 Hz only change hidden ids, and a finished
       // stroke, erase or drag start/end touches a small region: repaint just that.
       let damage = sameView ? savedDamage(savedBuffer, state.items, hidden, state.visibleItemIds) : null;

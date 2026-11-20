@@ -101,9 +101,14 @@ export function rasterizeObject(id, descriptor, world, referenceItems, preferred
   const { shadow } = descriptor;
   const borderPad = descriptor.local.kind === 'shape' && descriptor.local.strokeEnabled !== false ? Math.ceil(shapeStrokeWidth(descriptor.local) / 2) + 2 : 2;
   const pad = Math.max(descriptor.local.__selectionOutline ? 4 : 2, borderPad + (shadow.enabled ? Math.ceil(shadow.blur * 3 + Math.max(Math.abs(shadow.x), Math.abs(shadow.y))) : 0));
-  const left = bounds.minX * world.width - pad, top = bounds.minY * world.height - pad;
-  const width = Math.max(1, (bounds.maxX-bounds.minX)*world.width+pad*2);
-  const height = Math.max(1, (bounds.maxY-bounds.minY)*world.height+pad*2);
+  let left = bounds.minX * world.width - pad, top = bounds.minY * world.height - pad;
+  let right = bounds.maxX * world.width + pad, bottom = bounds.maxY * world.height + pad;
+  // A long connector is rasterized only around the viewport (world px clip) so a
+  // thin line spanning the canvas keeps full sampling instead of a tiny ratio.
+  const clip = textAppearance.clip;
+  if (clip) { left = Math.max(left, clip.minX); top = Math.max(top, clip.minY); right = Math.max(left, Math.min(right, clip.maxX)); bottom = Math.max(top, Math.min(bottom, clip.maxY)); }
+  const width = Math.max(1, right-left);
+  const height = Math.max(1, bottom-top);
   const ratio = Math.min(preferredRatio, 4096 / Math.max(width,height), Math.sqrt(pixelBudget / (width*height)));
   const raw = document.createElement('canvas');
   raw.width = Math.max(1,Math.ceil(width*ratio)); raw.height = Math.max(1,Math.ceil(height*ratio));
@@ -140,4 +145,10 @@ export function acquireGpuSlot() {
   gpuUsers++;
   let released = false;
   return () => { if (!released) { released = true; gpuUsers--; } };
+}
+
+/** World-pixel area of an object's full raster bounds. */
+export function rasterWorldArea(descriptor, referenceItems, world) {
+  const b = objectBounds(descriptor.local, referenceItems, world.width, world.height);
+  return Math.max(0, (b.maxX-b.minX)*world.width) * Math.max(0, (b.maxY-b.minY)*world.height);
 }

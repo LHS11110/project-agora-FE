@@ -11,9 +11,68 @@ const clean=item=>{const result={...item};delete result[colors];return result;};
 const fieldsToCheck=[...CANVAS_ITEM_FIELDS].filter(k=>!ignored.has(k));
 const same = (a, b) => a === b ? true : (a == null || b == null || (typeof a !== 'object' && typeof b !== 'object' && !Number.isNaN(a) && !Number.isNaN(b))) ? false : sameStable(a, b);
 
+// History has no count limit, so stroke versions that are no longer on the canvas
+// (before a move, erase or redraw) would keep every point object alive. Older
+// entries store those points as exact Float64 triples and rebuild them on undo.
+const PACKED = '__undoPackedPoints', KEEP_RECENT = 8, PACK_MIN_POINTS = 16;
+const packedCache = new WeakMap(), unpackedCache = new WeakMap();
+export function packStrokeSnapshot(item) {
+  if (item?.kind !== 'stroke' || !Array.isArray(item.points) || item.points.length < PACK_MIN_POINTS) return item;
+  const cached = packedCache.get(item); if (cached) return cached;
+  const points = item.points, data = new Float64Array(points.length * 3);
+  for (let i = 0; i < points.length; i++) {
+    const point = points[i];
+    if (!point || typeof point !== 'object' || Object.getPrototypeOf(point) !== Object.prototype) return item;
+    let keys = 0;
+    for (const key in point) { keys++; if (key !== 'x' && key !== 'y' && key !== 'pressure') return item; }
+    const hasPressure = Object.hasOwn(point, 'pressure');
+    if (keys !== (hasPressure ? 3 : 2) || typeof point.x !== 'number' || typeof point.y !== 'number' || (hasPressure && (typeof point.pressure !== 'number' || Number.isNaN(point.pressure)))) return item;
+    data[i * 3] = point.x; data[i * 3 + 1] = point.y; data[i * 3 + 2] = hasPressure ? point.pressure : NaN;
+  }
+  const packed = { ...item, [PACKED]: data }; delete packed.points;
+  packedCache.set(item, packed);
+  return packed;
+}
+export function unpackStrokeSnapshot(item) {
+  if (!item || !item[PACKED]) return item;
+  const cached = unpackedCache.get(item); if (cached) return cached;
+  const { [PACKED]: data, ...rest } = item;
+  if (!Array.isArray(rest.points)) {
+    const points = new Array(data.length / 3);
+    for (let i = 0; i < points.length; i++) {
+      const pressure = data[i * 3 + 2];
+      points[i] = Number.isNaN(pressure) ? { x: data[i * 3], y: data[i * 3 + 1] } : { x: data[i * 3], y: data[i * 3 + 1], pressure };
+    }
+    rest.points = points;
+  }
+  unpackedCache.set(item, rest);
+  return rest;
+}
+
 // Sparse local history: retain touched objects, never entire canvas snapshots.
 export class CanvasUndoHistory {
-  constructor() { this.entries=[]; this.group=null; this.gesture=false; this.aliases=new Map(); }
+  constructor() { this.entries=[]; this.group=null; this.gesture=false; this.aliases=new Map(); this.compacted=0; this.byId=new Map(); }
+  packChange(entry, id, live) {
+    const change = entry.changes.get(id);
+    const before = change.before && change.before !== live ? packStrokeSnapshot(change.before) : change.before;
+    const after = change.after && change.after !== live ? packStrokeSnapshot(change.after) : change.after;
+    if (before !== change.before || after !== change.after) entry.changes.set(id, { ...change, before, after });
+  }
+  // Pack stroke versions in entries older than the most recent few. `current` is
+  // the whole working snapshot; versions still shown on the canvas stay shared.
+  // When an object changes again, its older (already packed) entries may hold
+  // the version that just left the canvas, so revisit those for `touched` ids.
+  compact(current, touched = []) {
+    while (this.compacted < this.entries.length - KEEP_RECENT) {
+      const entry = this.entries[this.compacted];
+      if (entry === this.group) break;
+      for (const id of entry.changes.keys()) this.packChange(entry, id, current?.[id]);
+      entry.packed = true; this.compacted++;
+    }
+    for (const id of touched) for (const entry of this.byId.get(id) || []) if (entry.packed && entry.changes.has(id)) this.packChange(entry, id, current?.[id]);
+  }
+  index(entry, id) { let set = this.byId.get(id); if (!set) this.byId.set(id, set = new Set()); set.add(entry); }
+  unindex(entry) { for (const id of entry.changes.keys()) { const set = this.byId.get(id); set?.delete(entry); if (set && !set.size) this.byId.delete(id); } }
   begin() { this.group=null;this.gesture=true; }
   seal() { this.group=null;this.gesture=false; }
   record(before, after, ids, now=Date.now()) {
@@ -36,7 +95,7 @@ export class CanvasUndoHistory {
     entry.time=now;
     for(const c of changes) {
       const old=entry.changes.get(c.id);
-      if(!old){entry.changes.set(c.id,c);continue;}
+      if(!old){entry.changes.set(c.id,c);this.index(entry,c.id);continue;}
       let before=old.before;
       if(before&&c.before){
         before={...before};
@@ -48,13 +107,15 @@ export class CanvasUndoHistory {
       }
       entry.changes.set(c.id,{...c,before,fields:[...new Set([...old.fields,...c.fields])],textActions:[...old.textActions,...c.textActions]});
     }
+    this.compact(after,changes.map(c=>c.id));
   }
   restore(current,{itemId=null,textOnly=false}={}) {
     let index=this.entries.length-1;
     if(itemId!==null)while(index>=0){const c=this.entries[index].changes.get(String(itemId));if(c&&(!textOnly||(c.before&&c.after&&c.textActions.length)))break;index--;}
     const entry=this.entries[index];if(!entry)return null;
     const changes=new Map(),textColors=new Map(),documents=new Map(),aliases=new Map(this.aliases);
-    for(const {id,before,after,fields,textActions} of entry.changes.values()) {
+    for(const {id,before:packedBefore,after:packedAfter,fields,textActions} of entry.changes.values()) {
+      const before=unpackStrokeSnapshot(packedBefore),after=unpackStrokeSnapshot(packedAfter);
       const item=snapshot(current[id]);
       if(!before) {
         if(item && [...fieldsToCheck,colors].some(k=>!same(item[k],after?.[k])))throw new Error('다른 사용자가 변경한 객체는 실행 취소할 수 없습니다.');
@@ -77,6 +138,6 @@ export class CanvasUndoHistory {
     }
     return {items:changeItems(current,changes),ids:[...changes.keys()],textColors,documents,aliases,index};
   }
-  pop(result=null) { this.entries.splice(result?.index??this.entries.length-1,1);if(result?.aliases)this.aliases=result.aliases;this.seal(); }
-  clear() { this.entries=[];this.aliases.clear();this.seal(); }
+  pop(result=null) { const index=result?.index??this.entries.length-1;const [removed]=this.entries.splice(index,1);if(removed)this.unindex(removed);if(index<this.compacted)this.compacted--;if(result?.aliases)this.aliases=result.aliases;this.seal(); }
+  clear() { this.entries=[];this.compacted=0;this.byId.clear();this.aliases.clear();this.seal(); }
 }

@@ -36,3 +36,33 @@ test('a field first touched after a remote edit retains that remote baseline',()
  h.record(a,moved,['a'],0);h.record(remote,local,['a'],100);
  const result=h.restore(local).items.a;assert.equal(result.x,0);assert.equal(result.fill,'#ff0000');
 });
+
+test('old stroke versions are stored packed, restore exactly, and still undo after many later actions', async () => {
+  const { CanvasUndoHistory, packStrokeSnapshot, unpackStrokeSnapshot } = await import('../src/canvas/sync/CanvasUndoHistory.js');
+  const { itemSnapshot, changeItems } = await import('../src/canvas/itemSnapshots.js');
+  const stroke = (dx, withPressure) => ({ kind: 'stroke', brush: 'pen', strokeWidth: 3, color: '#123', points: Array.from({ length: 40 }, (_, i) => withPressure
+    ? { x: i / 100 + dx, y: -0 + i * 1e-17, pressure: i % 2 ? .25 : 1 } : { x: i / 100 + dx, y: i / 7 }) });
+  for (const withPressure of [true, false]) {
+    const original = stroke(.1, withPressure), packed = packStrokeSnapshot(original);
+    assert.equal(packed.points, undefined);
+    assert.equal(packStrokeSnapshot(original), packed, 'shared snapshots share one packed copy');
+    assert.deepEqual(unpackStrokeSnapshot(packed), original);
+    assert.ok(Object.is(unpackStrokeSnapshot(packed).points[0].y, original.points[0].y));
+  }
+  const odd = { ...stroke(0, true) }; odd.points = odd.points.map((p, i) => i === 3 ? { ...p, extra: 1 } : p);
+  assert.equal(packStrokeSnapshot(odd), odd, 'unexpected point shapes are kept as-is');
+
+  const history = new CanvasUndoHistory();
+  let items = itemSnapshot({ s: stroke(0, true) });
+  // Move the stroke, then make many unrelated changes so the move entry is old.
+  let next = changeItems(items, { s: stroke(.2, true) }); history.record(items, next, ['s'], 0); history.seal(); items = next;
+  for (let i = 0; i < 20; i++) { next = changeItems(items, { ['n' + i]: { kind: 'shape', x: i, y: 0 } }); history.record(items, next, ['n' + i], (i + 1) * 1000); history.seal(); items = next; }
+  const moveEntry = history.entries[0].changes.get('s');
+  assert.equal(moveEntry.before.points, undefined, 'pre-move version is packed');
+  assert.equal(moveEntry.after, items.s, 'version still on the canvas stays shared, not copied');
+  for (let i = 19; i >= 0; i--) { const restored = history.restore(items); items = restored.items; history.pop(restored); }
+  const restored = history.restore(items);
+  assert.deepEqual(restored.items.s, stroke(0, true), 'undo of the old move restores exact points');
+  history.pop(restored);
+  assert.equal(history.entries.length, 0);
+});

@@ -20,7 +20,7 @@ import { memo, useLayoutEffect, useRef } from 'react';
 import { createWgpuRenderer, WgpuSceneBatcher } from './wgpu/wgpuEngine.js';
 import { createInkStrokeRenderer, hasStrokeItems } from './inkStrokeRenderer.js';
 import { CONNECTOR_METRICS_EVENT } from './connectors/objectMetrics.js';
-import { acquireGpuSlot, rasterDescriptor, rasterizeObject, sameRasterInput } from './rasterObjectCache.js';
+import { acquireGpuSlot, rasterDescriptor, rasterizeObject, rasterWorldArea, sameRasterInput } from './rasterObjectCache.js';
 import { RasterTextureAtlas } from './textureAtlas.js';
 import SharedRasterCache from './SharedRasterCache.js';
 import { isRasterContent as isRasterText } from './plainTextRaster.js';
@@ -43,11 +43,12 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
     let scrollBuffer = null, scrollBufferContext = null;
     const margin=256;
     buffer.className='vector-composite-surface';element.insertBefore(buffer,canvas);
-    let compositor=null,bufferVersion=0,surfaceChanged=false,worldPaintBounds=null,bufferCamera=null,previousPaintCamera=null,previousPaintRatio=0,sceneInputs=null,lastCamera=null,cameraIdleTimer=null,budgetIdleTimer=null,refreshCamera=false,cameraActive=false,viewportMetrics=null,textAppearanceCache=null,inkHasContent=false,inkVisibleCount=0,settledDesiredRatio=null,dragPreview=null,previousDragPreview=null,lastGpuCullKey='';
+    let compositor=null,bufferVersion=0,surfaceChanged=false,worldPaintBounds=null,bufferCamera=null,previousPaintCamera=null,previousPaintRatio=0,sceneInputs=null,lastCamera=null,cameraIdleTimer=null,budgetIdleTimer=null,refreshCamera=false,cameraActive=false,cameraIdlePending=false,viewportMetrics=null,textAppearanceCache=null,inkHasContent=false,inkVisibleCount=0,settledDesiredRatio=null,dragPreview=null,previousDragPreview=null,lastGpuCullKey='';
     const activeDragPainted=new Map();
     // The ink renderer asks for a pass when a released drag overlay times out.
     const ink = createInkStrokeRenderer(element, canvas, { requestRender: () => { inkKey = ''; schedule(); } });
     const records = new Map();
+    const clippedConnectors = new Set();
     const paintIndex = new RasterPaintIndex();
     const preparationQueue = new ScenePreparationQueue();
     let preparation = null;
@@ -174,7 +175,11 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         sceneInputs = null; previousPaintKey = ''; bufferCamera = null;
       }
       const moved=lastCamera && (lastCamera.x!==camera.x || lastCamera.y!==camera.y || lastCamera.scale!==camera.scale);
-      if(moved){cameraActive=true;cameraIdleTimer ||= new CameraIdleTask(()=>{cameraActive=false;refreshCamera=true;releaseScrollBuffer();schedule();},160);cameraIdleTimer.touch();}
+      // The quiet period only ends in a frame that saw no camera change. A GPU-stalled
+      // frame delays queued wheel/pointer input past 160ms; ending the gesture on the
+      // timer alone would start a full-quality re-raster mid-gesture and stall more.
+      if(moved){cameraActive=true;cameraIdlePending=false;cameraIdleTimer ||= new CameraIdleTask(()=>{cameraIdlePending=true;schedule();},160);cameraIdleTimer.touch();}
+      else if(cameraIdlePending){cameraIdlePending=false;cameraActive=false;refreshCamera=true;releaseScrollBuffer();}
       lastCamera={...camera};
       const settling=refreshCamera;refreshCamera=false;
       const quality='high';
@@ -305,9 +310,9 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       const prevMatchesInk = Boolean(previousDragPreview?.ids && inkHasContent && [...previousDragPreview.ids].some(id => inkItems?.[id]));
       const dragInkChanged = dragPreview !== previousDragPreview && (dragMatchesInk || prevMatchesInk);
       if(hasAnyInk || inkHasContent){
-        const nextInkKey=`${quality}:${ratio}:${width}:${height}:${world.width}:${world.height}:${camera.x}:${camera.y}:${camera.scale}`;
+        const nextInkKey=`${quality}:${ratio}:${width}:${height}:${world.width}:${world.height}:${camera.x}:${camera.y}:${camera.scale}:${cameraActive?1:0}`;
         if(nextInkKey!==inkKey || previousPreviews!==previewStrokes || previousDraft!==draft || previousInkItems!==inkItems || dragInkChanged){
-          inkVisibleCount = ink.render({items:inkItems,previews:previewStrokes,draft,dragPreview:activeDrag,width:world.width,height:world.height,viewportWidth:width,viewportHeight:height,camera,pixelRatio:ratio}) || 0;
+          inkVisibleCount = ink.render({items:inkItems,previews:previewStrokes,draft,dragPreview:activeDrag,width:world.width,height:world.height,viewportWidth:width,viewportHeight:height,camera,pixelRatio:ratio,interactive:cameraActive}) || 0;
           inkKey=nextInkKey;previousPreviews=previewStrokes;previousDraft=draft;previousInkItems=inkItems;
           inkHasContent=hasAnyInk;
           stats.inkFrames=(stats.inkFrames||0)+1;
@@ -328,6 +333,16 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       const unchanged=sceneInputs && inputs.every((value,i)=>value===sceneInputs[i]);
       if(sceneInputs && !unchanged){const names=['items','references','worldWidth','worldHeight','routing','metrics','previews','draft','ratio','width','height','font','color','gpu','graphicsQuality','fonts'];for(let i=0;i<inputs.length;i++)if(inputs[i]!==sceneInputs[i]){stats.refreshReasons ||= {};stats.refreshReasons[names[i]]=(stats.refreshReasons[names[i]]||0)+1;}}
       const qualityRefresh = sceneInputs && desiredRatio > sceneInputs.quality * 1.15;
+      if (clippedConnectors.size) {
+        const vx0=-camera.x/safeScale,vy0=-camera.y/safeScale,vx1=(width-camera.x)/safeScale,vy1=(height-camera.y)/safeScale;
+        const stale=[];
+        for (const id of clippedConnectors) {
+          const record=records.get(id),clip=record?.clip;
+          if (!clip) { clippedConnectors.delete(id); continue; }
+          if (!record.clipStale && (vx0<clip.minX||vy0<clip.minY||vx1>clip.maxX||vy1>clip.maxY)) { record.clipStale=true; stale.push(id); }
+        }
+        if (stale.length) preparationQueue.invalidate(stale);
+      }
       const pending = preparationQueue.pending;
       const imagesChanged = readyImageIds.size > 0;
       const zoomRatio=bufferCamera && camera.scale>0 && bufferCamera.scale>0 ? camera.scale/bufferCamera.scale : 0;
@@ -499,15 +514,25 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         const paintChanged = !record || (changed && (record.key!==key || record.tint!==tint || record.descriptor.x!==descriptor.x || record.descriptor.y!==descriptor.y || record.descriptor.rotation!==descriptor.rotation || record.descriptor.centerX!==descriptor.centerX || record.descriptor.centerY!==descriptor.centerY));
         const qualityNeeded=record && targetRatio>record.quality*qualityRatioThreshold;
         const deferPreview = item.__imagePreview && preview?.state !== 'ready' && sameImage && record?.previewVersion;
-        const rebuild = !deferPreview && (!record || record.key !== key || qualityNeeded
+        const rebuild = !deferPreview && (!record || record.key !== key || qualityNeeded || record.clipStale
           || (record.pixelBudget > pixelBudget*1.1 && record.raster.pixelWidth*record.raster.pixelHeight > pixelBudget*1.1));
         if (rebuild) {
           if (record) {paintIndex.remove(record);damage.push(record.paintedBounds);destroyRecord(record);}
-          const resourceKey=key+':'+targetRatio+':'+Math.round(pixelBudget);
+          let clip=null,objectBudget=pixelBudget;
+          // Clip only connectors that the shared budget would sample below 60% of the
+          // target; the clipped raster is budgeted by its visible area, capped at 4M px.
+          const area=item.kind==='connector'?rasterWorldArea(descriptor,referenceItems,world):0;
+          if (area && area*targetRatio*targetRatio*.36>pixelBudget) {
+            const vw=width/safeScale,vh=height/safeScale,mx=vw*.15,my=vh*.15;
+            clip={minX:Math.floor(-camera.x/safeScale-mx),minY:Math.floor(-camera.y/safeScale-my),maxX:Math.ceil((width-camera.x)/safeScale+mx),maxY:Math.ceil((height-camera.y)/safeScale+my)};
+            objectBudget=Math.max(pixelBudget,Math.min(4_000_000,area,(vw+2*mx)*(vh+2*my))*targetRatio*targetRatio);
+            objectBudget=Math.max(pixelBudget,Math.min(4_000_000,objectBudget));
+          }
+          const resourceKey=key+':'+targetRatio+':'+Math.round(objectBudget)+(clip?`:${clip.minX},${clip.minY},${clip.maxX},${clip.maxY}`:'');
           const resource=resources.acquire(resourceKey,()=>{
             stats.rasterizations++;
             frameRasterizations++;
-            const raster=rasterizeObject(id,descriptor,world,referenceItems,targetRatio,pixelBudget,{...textAppearance,smoothingQuality:'high',imagePreview:preview?.canvas});
+            const raster=rasterizeObject(id,descriptor,world,referenceItems,targetRatio,objectBudget,{...textAppearance,smoothingQuality:'high',imagePreview:preview?.canvas,clip});
             raster.pixelWidth=raster.canvas.width;raster.pixelHeight=raster.canvas.height;
             return raster;
           });
@@ -518,7 +543,8 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
               resource.raster.canvas=null;
             }
           }
-          record = { id, slotIndex: index, key, quality:targetRatio, pixelBudget, raster:resource.raster, resource };
+          record = { id, slotIndex: index, key, quality:targetRatio, pixelBudget, raster:resource.raster, resource, clip };
+          if (clip) clippedConnectors.add(id); else clippedConnectors.delete(id);
           records.set(id,record);
           structuralGpuChange = true;
         } else stats.cacheHits++;

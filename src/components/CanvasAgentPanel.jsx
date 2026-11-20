@@ -10,12 +10,22 @@ import {loadAgentKey,saveAgentKey,normalizeAgentKey} from './agentCredentials.js
 import {ui} from '../i18n/locale.js';
 import {useUiLocale} from '../i18n/useUiLocale.js';
 import './canvas-agent.css';
+import MarkdownText from './MarkdownText.jsx';
 
+// Provider headers (x-{second,minute,day}-rate-limit*) describe the moment of the last
+// response. A second/minute window has fully refilled once that much time passed;
+// the daily reset time is not reported, so its remaining count stays as observed.
+const WINDOW_SECONDS={second:1,minute:60};
+function windowRemaining(entry,key,observed,now){
+ if(!entry)return null;
+ if(observed&&WINDOW_SECONDS[key]&&now-observed>=WINDOW_SECONDS[key]&&entry.limit!=null)return entry.limit;
+ return entry.remaining;
+}
 function LimitCard({telemetry,now,onRefresh,refreshing,personal}){
  useUiLocale();
  const data=telemetry?.limits||{},observed=telemetry?.limits_observed_at;
  const retry=Math.max(0,Math.ceil((telemetry?.retry_at||0)-now));
- return <section className="canvas-agent-limits" aria-label={ui('API 호출 한도')}><div className="canvas-agent-section-title"><strong>{ui('API 호출 한도')}</strong><button type="button" className="canvas-agent-quota-refresh" aria-label={ui('호출 한도 새로고침')} title={ui('모델 호출 없이 서버에 보관된 최근 응답을 확인합니다')} disabled={refreshing} onClick={onRefresh}>↻</button><span>{observed?ui('{time} 응답 기준',{time:new Date(observed*1000).toLocaleTimeString('ko-KR')}):ui('첫 응답 후 표시')}</span></div><div className="canvas-agent-limit-grid">{[['second','초당'],['minute','분당'],['day','일일']].map(([key,label])=><div key={key}><span>{ui(label)}</span><strong>{data[key]?.remaining??'—'}<small> / {data[key]?.limit??'—'}</small></strong><span>{ui('잔여 / 한도')}</span></div>)}</div><p>{personal?ui('현재 개인 API 키의 한도입니다.'):ui('서버 기본 API 키를 사용하는 모든 캔버스의 공유 한도입니다.')}{retry>0&&<b role="status">{` ${ui('약 {seconds}초 후 다시 시도할 수 있습니다.',{seconds:retry})}`}</b>}</p></section>;
+ return <section className="canvas-agent-limits" aria-label={ui('API 호출 한도')}><div className="canvas-agent-section-title"><strong>{ui('API 호출 한도')}</strong><button type="button" className="canvas-agent-quota-refresh" aria-label={ui('호출 한도 새로고침')} title={ui('모델 호출 없이 서버에 보관된 최근 응답을 확인합니다')} disabled={refreshing} onClick={onRefresh}>↻</button><span>{observed?ui('{time} 응답 기준',{time:new Date(observed*1000).toLocaleTimeString('ko-KR')}):ui('첫 응답 후 표시')}</span></div><div className="canvas-agent-limit-grid">{[['second','초당'],['minute','분당'],['day','일일']].map(([key,label])=><div key={key}><span>{ui(label)}</span><strong>{windowRemaining(data[key],key,observed,now)??'—'}<small> / {data[key]?.limit??'—'}</small></strong><span>{ui('잔여 / 한도')}</span></div>)}</div><p>{personal?ui('현재 개인 API 키의 한도입니다.'):ui('서버 기본 API 키를 사용하는 모든 캔버스의 공유 한도입니다.')}{retry>0&&<b role="status">{` ${ui('약 {seconds}초 후 다시 시도할 수 있습니다.',{seconds:retry})}`}</b>}</p></section>;
 }
 export default function CanvasAgentPanel({open,onClose,request,selectedIds,anchor,canvasId,onBusyChange,theme='light'}) {
  useUiLocale();
@@ -85,8 +95,8 @@ export default function CanvasAgentPanel({open,onClose,request,selectedIds,ancho
    <div className="canvas-agent-conversation" aria-live="polite">
     {!messages.length&&<div className="canvas-agent-empty"><span className="canvas-agent-empty-badge">YOUR CANVAS COPILOT</span><strong>{ui('어떤 아이디어를 펼쳐볼까요?')}</strong><p>{ui('선택한 객체를 다듬거나, 새로운 코드를 작성해보세요.')}</p><div className="canvas-agent-suggestions">{['파이썬 정렬 함수 객체를 만들어줘','선택한 코드를 읽고 개선해줘'].map(text=><button key={text} type="button" onClick={()=>editPrompt(ui(text))}>{ui(text)}<span aria-hidden="true">↗</span></button>)}</div><small>{ui('요청과 도구로 읽은 객체 내용은 모델 제공 서비스에 전달됩니다. 변경은 현재 사용자의 권한으로 저장되고 공유됩니다.')}</small></div>}
     {conversation.detail?.has_more&&<button type="button" className="canvas-agent-older" disabled={conversation.loading} onClick={conversation.older}>{ui('이전 메시지 불러오기')}</button>}
-    {messages.map((message,index)=><article key={message.id||index} className={`canvas-agent-message ${message.role}${message.kind==='error'?' is-error':''}`}><div className="canvas-agent-message-heading"><small>{message.role==='user'?(message.nickname||session?.nickname||ui('나')):ui('에이전트')}{message.status==='running'?ui(' · 요청 중'):message.status==='failed'?ui(' · 실패'):message.status==='interrupted'?ui(' · 연결 종료'):''}</small>{message.role==='user'&&<button type="button" aria-label={ui('이 프롬프트 다시 사용')} disabled={busy||!conversation.draft} onClick={()=>reusePrompt(message.content)}>{ui('다시 사용')}</button>}</div><div className="canvas-agent-message-content">{message.content}</div><div className="canvas-agent-message-meta"><AgentTime value={message.created_at} clock/>{message.role==='user'&&message.options?.reasoning_effort&&<span>{ui(({low:'낮은 추론',high:'높은 추론',max:'최대 추론'})[message.options.reasoning_effort])}</span>}</div></article>)}
-    {working&&(runningRef.current===conversation.activeId||!busy)&&<p className="canvas-agent-progress" role="status"><i aria-hidden="true"/>{progress||ui('에이전트가 작업을 처리하고 있습니다.')}<span className="canvas-agent-elapsed">{ui('{seconds}초',{seconds:elapsed})}</span></p>}
+    {messages.map((message,index)=><article key={message.id||index} className={`canvas-agent-message ${message.role}${message.kind==='error'?' is-error':''}`}><div className="canvas-agent-message-heading"><small>{message.role==='user'?(message.nickname||session?.nickname||ui('나')):ui('에이전트')}{message.status==='running'?ui(' · 요청 중'):message.status==='failed'?ui(' · 실패'):message.status==='interrupted'?ui(' · 연결 종료'):''}</small>{message.role==='user'&&<button type="button" aria-label={ui('이 프롬프트 다시 사용')} disabled={busy||!conversation.draft} onClick={()=>reusePrompt(message.content)}>{ui('다시 사용')}</button>}</div><div className="canvas-agent-message-content"><MarkdownText source={message.content||''}/></div><div className="canvas-agent-message-meta"><AgentTime value={message.created_at} clock/>{message.role==='user'&&message.options?.reasoning_effort&&<span>{ui(({low:'낮은 추론',high:'높은 추론',max:'최대 추론'})[message.options.reasoning_effort])}</span>}</div></article>)}
+    {working&&(runningRef.current===conversation.activeId||!busy)&&<p className="canvas-agent-progress" role="status"><span className="canvas-agent-wave" aria-hidden="true"><i/><i/><i/></span><span className="canvas-agent-progress-text" key={progress||'idle'}>{progress||ui('에이전트가 작업을 처리하고 있습니다.')}</span><span className="canvas-agent-elapsed">{ui('{seconds}초',{seconds:elapsed})}</span></p>}
     {error&&!messages.some(message=>message.kind==='error'&&error.includes(message.content))&&<p className="canvas-agent-error" role="alert">{error}</p>}
     {conversation.error&&<p className="canvas-agent-error" role="alert">{conversation.error}</p>}
     {session?.status==='interrupted'&&<p className="canvas-agent-error">{ui('이전 작업의 연결이 종료되었습니다. 이미 반영된 변경을 확인한 뒤 다시 요청해주세요.')}</p>}

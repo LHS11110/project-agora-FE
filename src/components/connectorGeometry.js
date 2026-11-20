@@ -1,17 +1,19 @@
+import { changedItemIds } from '../canvas/itemSnapshots.js';
+import { sameStable } from '../canvas/asCode/manifest.js';
 import { isDrawableCanvasItem } from '../canvas/drawableItems.js';
 import {researchSymbolUsesFrameAnchors} from '../canvas/researchSymbols.js';
 import { isLogicGate } from '../canvas/logicGates.js';
 import { logicConnectorGeometry } from '../canvas/connectors/logicConnectorGeometry.js';
 import { connectorControlHandles, connectorPointCount, sampleControlCurve } from '../canvas/connectors/controlPoints.js';
 import { strokePaintSize } from '../canvas/inkStroke.js';
-import { connectorObjectSize, connectorMetricsRevision } from '../canvas/connectors/objectMetrics.js';
+import { connectorObjectSize, connectorMetricsRevision, connectorMetricsChangedIds, CONNECTOR_METRICS_EVENT } from '../canvas/connectors/objectMetrics.js';
 import { isRasterCode, codePreviewHeight } from '../canvas/codePreviewMetrics.js';
 import { CANVAS_SPACE } from '../canvas/canvasSpace.js';
 import { arrowPathGeometry } from './arrowheadGeometry.js';
 import { objectCornerRadius, supportsObjectCorners } from '../canvas/objectCorners.js';
 import { shapeOutlinePaths } from '../canvas/shapeGeometry.js';
 import { parseRawStyleEnvelope, readObjectVisibility } from '../canvas/styling/objectStyleModel.js';
-import { lookupSpatialIndex, routeConnectorAStar, rectCoreBounds } from '../canvas/connectors/aStarRoute.js';
+import { lookupSpatialIndex, routeConnectorAStarSteps, runSteps, rectCoreBounds } from '../canvas/connectors/aStarRoute.js';
 
 export const OBJECT_SIZES = {
   value: [0.28,0.21],
@@ -115,19 +117,25 @@ function bezierPoint(points, t) {
 }
 
 function isObstacleCandidate(candidate) {
-  if (!isDrawableCanvasItem(candidate) || candidate.kind === 'connector' || candidate.kind === 'frame' || candidate.type === 'chat_room') {
+  // Freehand ink is annotation: scribbles and circles drawn around groups would
+  // enclose endpoints and multiply the routing grid. Connectors avoid objects.
+  if (!isDrawableCanvasItem(candidate) || candidate.kind === 'connector' || candidate.kind === 'stroke' || candidate.kind === 'frame' || candidate.type === 'chat_room') {
     return false;
   }
   return !readObjectVisibility(candidate).hidden;
 }
 
 function querySpatialObstacles(fromId, toId, items, minPxX, minPxY, maxPxX, maxPxY, width, height, spatial, obstacleMap) {
-  const candidates = spatial.query({
+  const window = {
     minX: minPxX / Math.max(1, width),
     minY: minPxY / Math.max(1, height),
     maxX: maxPxX / Math.max(1, width),
     maxY: maxPxY / Math.max(1, height),
-  });
+  };
+  // Remember every area searched: an object entering it may change the route.
+  const searched = obstacleMap.searched;
+  obstacleMap.searched = searched ? { minX: Math.min(searched.minX, window.minX), minY: Math.min(searched.minY, window.minY), maxX: Math.max(searched.maxX, window.maxX), maxY: Math.max(searched.maxY, window.maxY) } : window;
+  const candidates = spatial.query(window);
   let added = 0;
   for (let i = 0; i < candidates.length; i++) {
     const entry = candidates[i];
@@ -141,10 +149,13 @@ function querySpatialObstacles(fromId, toId, items, minPxX, minPxY, maxPxX, maxP
   return added;
 }
 
+let lastObstacleMap = null;
 function collectNearbyObstacles(item, items, from, to, width, height, clearance, spatial) {
   const fromId = String(item.from);
   const toId = String(item.to);
   const obstacleMap = new Map();
+  lastObstacleMap = obstacleMap;
+  obstacleMap.spatial = Boolean(spatial);
   if (spatial) {
     const padPx = Math.max(240, Math.min(960, Math.round(Math.hypot(to.centerX - from.centerX, to.centerY - from.centerY) * 0.6 + clearance * 6)));
     let minPxX = Math.min(from.centerX - from.halfWidth, to.centerX - to.halfWidth) - padPx;
@@ -186,15 +197,19 @@ function collectNearbyObstacles(item, items, from, to, width, height, clearance,
   return obstacleMap;
 }
 
+// Route mode for one calculateConnectorGeometry pass: `capture` collects the
+// obstacle routes it needs (as resumable generators) and answers with the
+// direct curve; `inject` answers those calls with finished routes, in order.
+let routeMode = null;
 function createDynamicRouter(item, items, width, height, clearance, spatial, obstacleMap) {
   const fromId = String(item.from);
   const toId = String(item.to);
-  return (routeArgs) => {
+  function* steps(routeArgs) {
     let obstacles = [...obstacleMap.values()];
     if (!obstacles.length) {
       return { points: routeArgs.preferredPoints, routed: false, corridor: null };
     }
-    let result = routeConnectorAStar({ ...routeArgs, obstacles });
+    let result = yield* routeConnectorAStarSteps({ ...routeArgs, obstacles });
     if (!spatial || !result.routed || !result.corridor) return result;
     const expandPad = Math.max(48, Math.round(clearance * 3));
     for (let pass = 0; pass < 2; pass++) {
@@ -213,10 +228,18 @@ function createDynamicRouter(item, items, width, height, clearance, spatial, obs
       );
       if (!added) break;
       obstacles = [...obstacleMap.values()];
-      result = routeConnectorAStar({ ...routeArgs, obstacles });
+      result = yield* routeConnectorAStarSteps({ ...routeArgs, obstacles });
       if (!result.routed || !result.corridor) break;
     }
     return result;
+  }
+  return (routeArgs) => {
+    if (routeMode?.capture) {
+      routeMode.capture.push(steps(routeArgs));
+      return { points: routeArgs.preferredPoints, routed: false, corridor: null };
+    }
+    if (routeMode?.inject?.length) return routeMode.inject.shift();
+    return runSteps(steps(routeArgs));
   };
 }
 
@@ -480,6 +503,197 @@ function calculateConnectorGeometry(item, items, width, height, spatialIndex = n
 }
 
 const geometryCache = new WeakMap();
+// Per connector: the route and what it depended on. A new items snapshot reuses
+// the route unless a changed object is an endpoint, was an obstacle, or now lies
+// in an area searched for obstacles. Rerouting every connector (A*) on every
+// unrelated edit dropped frames on canvases with connectors.
+const routeCache = new WeakMap();
+function routeStillValid(entry, item, items, width, height, spatial) {
+  if (items[item.from] !== entry.fromItem || items[item.to] !== entry.toItem) return false;
+  const edited = entry.items === items ? [] : changedItemIds(entry.items, items);
+  const remeasured = connectorMetricsChangedIds(entry.metricsRevision);
+  if (!edited || !remeasured) return false;
+  const changed = remeasured.length ? [...edited, ...remeasured] : edited;
+  const searched = entry.searched;
+  for (const id of changed) {
+    if (entry.obstacles.has(id) || id === String(item.from) || id === String(item.to)) return false;
+    const candidate = items[id];
+    if (!candidate || !isObstacleCandidate(candidate)) continue;
+    // Without a spatial index every candidate is an obstacle.
+    if (!entry.spatial || !searched) return false;
+    const rect = objectRect(candidate, width, height), indexed = spatial?.entries?.get?.(id);
+    // The obstacle query matches index bounds, which may exceed the object rect.
+    let minX = (rect.centerX - rect.halfWidth) / Math.max(1, width), maxX = (rect.centerX + rect.halfWidth) / Math.max(1, width);
+    let minY = (rect.centerY - rect.halfHeight) / Math.max(1, height), maxY = (rect.centerY + rect.halfHeight) / Math.max(1, height);
+    if (indexed && Number.isFinite(indexed.minX)) { minX = Math.min(minX, indexed.minX); minY = Math.min(minY, indexed.minY); maxX = Math.max(maxX, indexed.maxX); maxY = Math.max(maxY, indexed.maxY); }
+    if (!(maxX < searched.minX || minX > searched.maxX || maxY < searched.minY || minY > searched.maxY)) return false;
+  }
+  return true;
+}
+// Obstacle routing is A* over a grid. On the browser main thread a route may run
+// only for the rest of a small per-task budget; an unfinished route shows the
+// direct curve and continues in later slices, without restarting.
+// CONNECTOR_METRICS_EVENT then refreshes just those connectors.
+const ROUTE_BUDGET_MS = typeof window === 'object' && typeof document === 'object' ? 4 : Infinity;
+const REFINE_SLICE_MS = 8;
+let budgetSpent = 0, budgetResetScheduled = false;
+const pendingJobs = new Map();
+let refineTimer = null;
+function taskBudgetLeft() {
+  if (ROUTE_BUDGET_MS === Infinity) return Infinity;
+  if (!budgetResetScheduled) { budgetResetScheduled = true; setTimeout(() => { budgetSpent = 0; budgetResetScheduled = false; }, 0); }
+  return ROUTE_BUDGET_MS - budgetSpent;
+}
+// Copies made for rasterisation and selection share a route with the original.
+const SIGNATURE_LIMIT = 4096;
+const routeBySignature = new Map();
+// Fields a connector's route never reads: rendering copies differ only here.
+const ROUTE_IRRELEVANT = new Set(['__selectionOutline', 'shadowEnabled', 'shadowBlur', 'shadowOpacity', 'shadowOffsetX', 'shadowOffsetY', 'depth', 'locked', 'permission', 'x', 'y']);
+function routeSignature(item) {
+  try {
+    const rest = {};
+    for (const key of Object.keys(item).sort()) if (!ROUTE_IRRELEVANT.has(key)) rest[key] = item[key];
+    return JSON.stringify(rest);
+  } catch { return null; }
+}
+// What a route reads from an object: its content and its measured rectangle.
+// Items are immutable snapshots: the key is cached per object and world size, so
+// validating routes on every scene change never re-measures unchanged outlines.
+const rectKeys = new WeakMap();
+function rectKey(item, width, height) {
+  const size = `${width}:${height}:${connectorMetricsRevision()}`;
+  const cached = rectKeys.get(item);
+  if (cached?.size === size) return cached.key;
+  const r = objectRect(item, width, height);
+  const key = `${r.centerX},${r.centerY},${r.halfWidth},${r.halfHeight},${r.rotation},${r.outlinePadding},${r.cornerRadius}`;
+  rectKeys.set(item, { size, key });
+  return key;
+}
+function sameRouteInput(before, after, width, height) {
+  return before === after || Boolean(before && after && sameStable(before, after) && rectKey(before, width, height) === rectKey(after, width, height));
+}
+function obstacleIdsIn(window, item, items, spatial) {
+  const fromId = String(item.from), toId = String(item.to), ids = new Set();
+  for (const entry of spatial.query(window)) {
+    const id = String(entry.id);
+    if (id === fromId || id === toId) continue;
+    if (isObstacleCandidate(items[id] || entry.item)) ids.add(id);
+  }
+  return ids;
+}
+// Exact dependency check against the current index, independent of snapshot
+// lineage, so a full resync with identical content keeps every route.
+function routeInputsUnchanged(entry, item, items, width, height, spatial) {
+  if (!sameRouteInput(entry.fromItem, items[item.from], width, height) || !sameRouteInput(entry.toItem, items[item.to], width, height)) return false;
+  if (!entry.spatial || !spatial || !entry.searched || !entry.windowIds) return routeStillValid(entry, item, items, width, height, spatial);
+  const current = obstacleIdsIn(entry.searched, item, items, spatial);
+  if (current.size !== entry.windowIds.size) return false;
+  for (const id of current) if (!entry.windowIds.has(id)) return false;
+  for (const id of current) if (!sameRouteInput(entry.items[id], items[id], width, height)) return false;
+  return true;
+}
+// Snapshot lineage names exactly what changed since the route was validated. When
+// none of it can be an endpoint or obstacle (strokes being drawn or erased, other
+// connectors), the route is still valid without re-querying its search window.
+function lineageUnchanged(entry, item, items) {
+  if (!entry.items || entry.provisional) return false;
+  const changed = changedItemIds(entry.items, items);
+  if (!changed) return false;
+  const fromId = String(item.from), toId = String(item.to);
+  for (const id of changed) {
+    if (String(id) === fromId || String(id) === toId) return false;
+    const before = entry.items[id], after = items[id];
+    if ((before && isObstacleCandidate(before)) || (after && isObstacleCandidate(after))) return false;
+  }
+  return true;
+}
+function rememberRoute(item, entry) {
+  routeCache.set(item, entry);
+  const signature = routeSignature(item);
+  if (signature === null) return;
+  routeBySignature.delete(signature); routeBySignature.set(signature, entry);
+  if (routeBySignature.size > SIGNATURE_LIMIT) routeBySignature.delete(routeBySignature.keys().next().value);
+}
+function startJob(item, items, width, height, spatial, routeKey) {
+  const metricsRevision = connectorMetricsRevision();
+  const capture = [];
+  const outer = routeMode;
+  lastObstacleMap = null; routeMode = { capture };
+  let provisional;
+  try { provisional = calculateConnectorGeometry(item, items, width, height, spatial); }
+  finally { routeMode = outer; }
+  return { item, items, width, height, spatial, routeKey, metricsRevision, provisional, obstacleMap: lastObstacleMap, steps: capture, results: [], step: null };
+}
+function advanceJob(job, deadline) {
+  while (job.results.length < job.steps.length) {
+    const steps = job.steps[job.results.length];
+    let next;
+    do next = steps.next(); while (!next.done && performance.now() < deadline);
+    if (!next.done) return false;
+    job.results.push(next.value);
+  }
+  return true;
+}
+function finishJob(job) {
+  let geometry = job.provisional;
+  if (job.steps.length) {
+    const outer = routeMode;
+    routeMode = { inject: [...job.results] };
+    try { geometry = calculateConnectorGeometry(job.item, job.items, job.width, job.height, job.spatial); }
+    finally { routeMode = outer; }
+  }
+  storeRoute(job, geometry, false);
+  return geometry;
+}
+function storeRoute(job, geometry, provisional) {
+  const { item, items, obstacleMap: used } = job;
+  if (used) rememberRoute(item, { key: job.routeKey, items, metricsRevision: job.metricsRevision, geometry, provisional, job: provisional ? job : null, fromItem: items[item.from], toItem: items[item.to], obstacles: new Set(used.keys()), searched: used.searched || null, spatial: used.spatial,
+    windowIds: used.spatial && used.searched && job.spatial ? obstacleIdsIn(used.searched, item, items, job.spatial) : null });
+  else routeCache.delete(item);
+  const cache = geometryCache.get(items);
+  if (cache) cache.results.set(item, geometry);
+}
+function scheduleRefinement() {
+  if (refineTimer !== null || !pendingJobs.size) return;
+  refineTimer = setTimeout(() => {
+    refineTimer = null;
+    const deadline = performance.now() + REFINE_SLICE_MS, done = [];
+    for (const [key, job] of pendingJobs) {
+      if (routeCache.get(job.item)?.job !== job) { pendingJobs.delete(key); continue; }
+      if (!advanceJob(job, deadline)) break;
+      pendingJobs.delete(key);
+      finishJob(job);
+      done.push(job);
+      if (performance.now() >= deadline) break;
+    }
+    if (done.length && typeof window === 'object') {
+      const wanted = new Set(done.map(job => job.item)), ids = [];
+      const items = done[0].items;
+      for (const id of Object.keys(items)) if (wanted.has(items[id])) ids.push(id);
+      const event = new Event(CONNECTOR_METRICS_EVENT);
+      event.changedItemIds = ids.length === wanted.size ? ids : null;
+      window.dispatchEvent(event);
+    }
+    scheduleRefinement();
+  }, 0);
+}
+function computeRoute(item, items, width, height, spatial, routeKey) {
+  const started = performance.now(), left = taskBudgetLeft();
+  try {
+    const job = startJob(item, items, width, height, spatial, routeKey);
+    if (advanceJob(job, left === Infinity ? Infinity : started + Math.max(0, left))) return finishJob(job);
+    storeRoute(job, job.provisional, true);
+    // One pending job per connector: a newer request (new snapshot, a copy made
+    // for rasterising) supersedes the older one instead of queueing beside it.
+    const key = routeSignature(item) ?? item;
+    pendingJobs.delete(key);
+    pendingJobs.set(key, job);
+    scheduleRefinement();
+    return job.provisional;
+  } finally {
+    budgetSpent += performance.now() - started;
+  }
+}
 export function connectorGeometry(item, items, width = 1, height = 1, spatialIndex = null) {
   if (!item || !items) return null;
   const spatial = spatialIndex || lookupSpatialIndex(items);
@@ -488,9 +702,23 @@ export function connectorGeometry(item, items, width = 1, height = 1, spatialInd
   let cache = geometryCache.get(items);
   if (!cache || cache.key !== key) { cache = { key, results: new WeakMap() }; geometryCache.set(items, cache); }
   if (cache.results.has(item)) return cache.results.get(item);
-  const geometry = calculateConnectorGeometry(item, items, width, height, spatial);
-  cache.results.set(item, geometry);
-  return geometry;
+  const routeKey = `${width}:${height}`;
+  let entry = routeCache.get(item);
+  // A provisional entry is superseded once its background job finishes; copies of
+  // the connector (snapshots, rasterisation copies) must follow to the final route
+  // instead of keeping the straight provisional line forever.
+  if (!entry || entry.provisional) {
+    const shared = routeBySignature.get(routeSignature(item));
+    if (shared && (!entry || !shared.provisional)) entry = shared;
+  }
+  if (entry && entry.key === routeKey && (lineageUnchanged(entry, item, items) || routeInputsUnchanged(entry, item, items, width, height, spatial))) {
+    // A provisional route keeps refining in the background; reuse it meanwhile.
+    if (!entry.provisional) { entry.items = items; entry.metricsRevision = connectorMetricsRevision(); }
+    if (routeCache.get(item) !== entry) routeCache.set(item, entry);
+    cache.results.set(item, entry.geometry);
+    return entry.geometry;
+  }
+  return computeRoute(item, items, width, height, spatial, routeKey);
 }
 
 export function connectorBendFromPointer(geometry, pointer, viewSize) {

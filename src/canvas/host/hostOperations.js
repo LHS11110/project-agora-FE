@@ -70,6 +70,9 @@ export function itemOperations(previous, next, docs, changedIds = null) {
       if(before){
         operation.textBase={};for(const field of ['text','code'])if(typeof before[field]==='string'&&typeof patch[field]==='string')operation.textBase[field]=before[field];
         operation.knownChanges=before.automerge_changes||[];operation.snapshotKnown=Boolean(before.automerge_snapshot);
+        // The points the server holds before this patch; lets a growing stroke
+        // be sent as an append (see operationForWire).
+        if(Array.isArray(before.points)&&Array.isArray(patch.points))operation.pointsBase=before.points;
       }
       if(before&&patch.notebookResults)operation.notebookResultBase=before.notebookResults||{};
       if(before&&patch.notebookCells)operation.notebookBase=before.notebookCells;

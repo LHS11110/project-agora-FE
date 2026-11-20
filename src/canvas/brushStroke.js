@@ -54,6 +54,11 @@ export function paintBrush(context, body, bristles, stroke, opacity) {
   // Clip to this stroke only: dry-brush tracks never paint outside its outline.
   context.globalAlpha = opacity * .94;
   context.fill(body, 'nonzero');
+  // Tracks add opacity*.05 of the body's own color over a body that already covers
+  // opacity*.94. Below one 8-bit level the result is pixel-identical, and each
+  // translucent round-joined track stroke costs a GPU coverage mask: a few hundred
+  // ink strokes made every camera redraw take ~0.8s.
+  if (opacity * .05 * (1 - opacity * .94) < 1 / 255) return;
   context.save();
   context.clip(body, 'nonzero');
   context.globalAlpha = opacity * .05;

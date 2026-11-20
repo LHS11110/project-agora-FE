@@ -5,14 +5,21 @@ import { operationIds, translateItem } from '../host/hostOperations.js';
 import { createId } from '../canvasIds.js';
 
 const textEncoder = new TextEncoder();
+// The point base is an immutable snapshot of committed points; cloning it for
+// every in-flight request would copy the whole stroke again.
+const cloneForFlight = operation => {
+  if (!operation.pointsBase) return structuredClone(operation);
+  const { pointsBase, ...rest } = operation;
+  return { ...structuredClone(rest), pointsBase };
+};
 // Queue accounting re-measures the tail operation on every merge; a long stroke
 // would otherwise be serialised once more per 30 Hz save just to recount it.
 const wireSizes = new WeakMap();
-const opWireBytes = (operation, deltaEdits) => {
+const opWireBytes = (operation, deltaEdits, pointDeltas = false) => {
   const cached = wireSizes.get(operation);
-  if (cached && cached.deltaEdits === deltaEdits) return cached.bytes;
-  const bytes = textEncoder.encode(JSON.stringify(operationForWire(operation, deltaEdits))).length;
-  wireSizes.set(operation, { deltaEdits, bytes });
+  if (cached && cached.deltaEdits === deltaEdits && cached.pointDeltas === pointDeltas) return cached.bytes;
+  const bytes = textEncoder.encode(JSON.stringify(operationForWire(operation, deltaEdits, pointDeltas))).length;
+  wireSizes.set(operation, { deltaEdits, pointDeltas, bytes });
   return bytes;
 };
 
@@ -48,7 +55,7 @@ export class ServerCanvasSession {
       this.ready = false; this.needsSync = true; this.notify(); return;
     }
     if (this.seeded && (revision < this.revision || accepted < this.count)) return;
-    this.userId = data.sync_user_id;this.deltaEdits=data.edit_protocol===2;
+    this.userId = data.sync_user_id;this.deltaEdits=data.edit_protocol===2;this.pointDeltas=this.deltaEdits&&data.points_protocol===1;
     if (this.flight && accepted >= this.flight.request_count) this.accept();
     this.count = accepted;
     if(this.rebaseFlight&&this.flight&&this.rebaseOperations){
@@ -67,7 +74,7 @@ export class ServerCanvasSession {
     if ((this.flight?.operations.length || 0) + this.queue.length + operations.length > 200000) {
       this.reject('저장 대기 중인 변경이 많습니다. 서버 연결을 확인해주세요.'); return false;
     }
-    const bytes = operation => opWireBytes(operation, this.deltaEdits);
+    const bytes = operation => opWireBytes(operation, this.deltaEdits, this.pointDeltas);
     // Plan merges first and measure only the resulting queue entries. A merged
     // entry contains the incoming change, so a repeated stroke save is
     // serialised once instead of once as incoming and again as the merged tail.
@@ -86,6 +93,9 @@ export class ServerCanvasSession {
         for (const key of operation.unset || []) delete patch[key];
         for (const key of Object.keys(operation.patch)) unset.delete(key);
         merged = { ...last, ...operation, ...(last.notebookBase?{notebookBase:last.notebookBase}:{}),...(last.notebookResultBase?{notebookResultBase:last.notebookResultBase}:{}),textBase:{...operation.textBase,...last.textBase},knownChanges:last.knownChanges,snapshotKnown:last.snapshotKnown, patch, unset: [...unset] };
+        // The server only holds the points from before `last`; keep that base.
+        if (Object.hasOwn(last, 'pointsBase')) merged.pointsBase = last.pointsBase;
+        else if (Object.hasOwn(last.patch || {}, 'points') || (last.unset || []).includes('points')) delete merged.pointsBase;
       }
       if (merged) {
         if (tailIsNew) added[added.length - 1] = merged; else removed.add(tailIndex), added.push(merged), tailIsNew = true;
@@ -174,7 +184,7 @@ export class ServerCanvasSession {
       const operations = []; let bytes = 0; let take = 0;
       while (take < this.queue.length && operations.length < 512) {
         const operation = this.queue[take];
-        const size = opWireBytes(operation, this.deltaEdits);
+        const size = opWireBytes(operation, this.deltaEdits, this.pointDeltas);
         if (bytes && bytes + size > 1024 * 1024) break;
         operations.push(operation); bytes += size; take++;
       }
@@ -182,7 +192,7 @@ export class ServerCanvasSession {
         this.queue = this.queue.slice(take);
         this.queuedBytes = this.queue.length ? Math.max(0, this.queuedBytes - bytes) : 0;
       }
-      this.flight = { wireBytes: bytes, type: 'canvas_ops', client_id: this.clientId, request_count: this.count + 1, request_id: createId(), operations: structuredClone(operations) };
+      this.flight = { wireBytes: bytes, type: 'canvas_ops', client_id: this.clientId, request_count: this.count + 1, request_id: createId(), operations: operations.map(cloneForFlight) };
       this.sentAt = 0; this.nextAt = now + (operations.every(o => o.action === 'translate') ? 100 : 33);
     }
     if (this.flight && now - this.sentAt >= 1000 && this.send(this.flight)) this.sentAt = now;
