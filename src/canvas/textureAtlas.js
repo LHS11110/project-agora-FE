@@ -1,18 +1,26 @@
 // Shelf packing with recycled slots keeps texture count independent of object count.
 export class AtlasPageSlots {
-  constructor(size = 1024) { this.size = size; this.x = 0; this.y = 0; this.rowHeight = 0; this.free = []; }
+  constructor(size = 1024) { this.size = size; this.x = 0; this.y = 0; this.rowHeight = 0; this.free = []; this.used = 0; }
   allocate(width, height) {
     if (width > this.size || height > this.size) return null;
-    const index = this.free.findIndex(slot => slot.width >= width && slot.height >= height);
-    if (index >= 0) return this.free.splice(index, 1)[0];
+    // Best fit keeps large recycled slots available for large rasters.
+    let index = -1, waste = Infinity;
+    for (let i = 0; i < this.free.length; i++) {
+      const slot = this.free[i];
+      if (slot.width < width || slot.height < height) continue;
+      const area = slot.width * slot.height - width * height;
+      if (area < waste) { waste = area; index = i; if (!area) break; }
+    }
+    if (index >= 0) { this.used++; return this.free.splice(index, 1)[0]; }
     if (this.x + width > this.size) { this.x = 0; this.y += this.rowHeight; this.rowHeight = 0; }
     if (this.y + height > this.size) return null;
     const slot = { x: this.x, y: this.y, width, height };
     this.x += width;
     this.rowHeight = Math.max(this.rowHeight, height);
+    this.used++;
     return slot;
   }
-  release(slot) { this.free.push(slot); }
+  release(slot) { this.free.push(slot); this.used = Math.max(0, this.used - 1); }
 }
 
 let nextTextureId = 1;
@@ -80,7 +88,16 @@ export class RasterTextureAtlas {
   release(handle) {
     if (!handle) return;
     if (handle.page) {
-      handle.page.slots.release(handle.slot);
+      const page = handle.page;
+      page.slots.release(handle.slot);
+      // An empty page is a whole 2D canvas plus a GPU texture. Keep one page warm
+      // and return the rest, so memory follows the live scene rather than its peak.
+      if (!page.slots.used && this.pages.length > 1) {
+        this.pages = this.pages.filter(candidate => candidate !== page);
+        if (this.uploadedTexIds.delete(page.texId)) this.removedTexIds.push(page.texId);
+        page.canvas.width = page.canvas.height = 1;
+        page.context = null;
+      }
     } else {
       this.standalone.delete(handle);
       this.uploadedTexIds.delete(handle.texId);

@@ -48,13 +48,16 @@ export default function PdfDocumentContent({ item, token, interactive, canChange
       const buffer = document.createElement('canvas');
       buffer.width = Math.max(1, Math.ceil(viewport.width * ratio)); buffer.height = Math.max(1, Math.ceil(viewport.height * ratio));
       renderTask = page.render({ canvas: buffer, viewport, transform: [ratio, 0, 0, ratio, 0, 0] });
+      // The staging canvas is a full-resolution duplicate; free its backing store
+      // as soon as it is copied or abandoned instead of waiting for GC.
+      const releaseBuffer = () => { buffer.width = buffer.height = 1; };
       return renderTask.promise.then(() => {
         if (!active) return;
         const target = canvas.current;
         target.width = buffer.width; target.height = buffer.height;
         target.style.width = `${viewport.width}px`; target.style.height = `${viewport.height}px`;
         target.getContext('2d').drawImage(buffer, 0, 0); setRendering(false);
-      });
+      }).finally(releaseBuffer);
     }).catch(failure => { if (active && failure.name !== 'RenderingCancelledException') { setError('이 페이지를 표시하지 못했습니다.'); setRendering(false); } });
     return () => { active = false; renderTask?.cancel(); };
   }, [pdf, pageNumber, size, graphicsQuality]);

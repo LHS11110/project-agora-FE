@@ -98,6 +98,8 @@ export default class WorkerGpuRenderer {
   }
   lose_context(){this.worker?.postMessage({type:'lose-context'});}
   fail(error){if(this.disposed)return;this.destroy();this.onError?.(String(error));}
-  destroy(){if(this.disposed)return;this.disposed=true;clearTimeout(this.timeout);this.worker?.terminate();this.worker=null;this.uploads.clear();this.removed.clear();this.scene=null;this.presented=null;}
+  destroy(){if(this.disposed)return;this.disposed=true;clearTimeout(this.timeout);this.worker?.terminate();this.worker=null;
+    // Drop the presented frame bitmap now; a removed canvas otherwise holds it until GC.
+    try{this.context?.transferFromImageBitmap(null);}catch{}this.uploads.clear();this.removed.clear();this.scene=null;this.presented=null;}
   free(){}
 }

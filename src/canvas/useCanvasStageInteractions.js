@@ -3,7 +3,7 @@ import { ui } from '../i18n/locale.js';
 import { cursorDeadline, cursorIsDue, CURSOR_INTERVAL_MS } from './cursorSchedule.js';
 import { useEffect, useRef } from 'react';
 import { INK_BRUSH, inkPointAtPointer } from './inkStroke.js';
-import { appendInkInput } from './inkInput.js';
+import { appendInkInput, predictInkTip, recordInkMotion } from './inkInput.js';
 import { canvasPointAtPointer, zoomCanvasCamera } from './canvasSpace.js';
 import { useCanvasStrokeSaveBatch } from './useCanvasStrokeSaveBatch.js';
 import { editorCanScroll } from './editorWheel.js';
@@ -498,6 +498,17 @@ export function useCanvasStageInteractions(options) {
       queueDrawingStroke();
     }
   };
+  // The draft is painted synchronously in the input task. A short settle timer
+  // removes a predicted tip once the pointer stops sending samples.
+  const paintDraft = (session, predicted = []) => {
+    clearTimeout(session.settleTimer);
+    vectorDraftRef.current?.({ id: session.id, brush: session.brush, opacity: session.opacity, simulatePressure: session.simulatePressure, complete: false, points: draftRef.current, predicted: predicted.length ? predicted : undefined, color: session.color, strokeWidth: session.strokeWidth });
+    if (predicted.length) session.settleTimer = setTimeout(() => {
+      if (drawingSessionRef.current !== session) return;
+      session.predicted = false;
+      paintDraft(session);
+    }, 32);
+  };
   const moveDrawing = (event) => {
     if(event.type!=='pointerrawupdate'&&drawingRef.current&&rawSession.current===drawingSessionRef.current)return;
     if (drawingRef.current && drawingSessionRef.current?.pointerId !== event.pointerId) return;
@@ -547,18 +558,25 @@ export function useCanvasStageInteractions(options) {
     if (!session || session.pointerId !== event.pointerId) return;
     const bounds = getStageBounds();
     if(!bounds)return;
+    const toPoint = sample => canvasPointAtPointer(sample, bounds, camera, boardSize);
+    recordInkMotion(session.motion ||= [], event);
     const added = appendInkInput(event, draftRef.current, {
-      toPoint: sample => canvasPointAtPointer(sample, bounds, camera, boardSize),
-      size: boardSize, scale: camera.scale, brush: session.brush, maxPoints: MAX_REALTIME_STROKE_POINTS,
+      toPoint, size: boardSize, scale: camera.scale, brush: session.brush, maxPoints: MAX_REALTIME_STROKE_POINTS,
     });
-    if (!added.length) return;
-    if (session.pendingTouchStart) {
-      session.pendingTouchStart = false;
-      sendStrokePreviewStart(peerMeshRef.current, session, draftRef.current[0]);
+    // Paint the tip where the pointer is heading even when the sample is below the
+    // storage threshold; predictions are display-only and never saved or sent.
+    const predicted = predictInkTip(event, session.motion).map(sample => ({ ...toPoint(sample), ...(Number.isFinite(draftRef.current.at(-1)?.pressure) ? { pressure: draftRef.current.at(-1).pressure } : {}) }));
+    if (!added.length && !predicted.length && !session.predicted) return;
+    if (added.length) {
+      if (session.pendingTouchStart) {
+        session.pendingTouchStart = false;
+        sendStrokePreviewStart(peerMeshRef.current, session, draftRef.current[0]);
+      }
+      session.pendingPoints.push(...added);
+      queueDrawingStroke();
     }
-    session.pendingPoints.push(...added);
-    queueDrawingStroke();
-    vectorDraftRef.current?.({ id: session.id, brush: session.brush, opacity: session.opacity, simulatePressure: session.simulatePressure, complete: false, points: draftRef.current, color: session.color, strokeWidth: session.strokeWidth });
+    session.predicted = predicted.length > 0;
+    paintDraft(session, predicted);
     const now = performance.now();
     if (now - session.lastSentAt >= REALTIME_STROKE_INTERVAL_MS || session.pendingPoints.length >= REALTIME_STROKE_BATCH_SIZE) {
       sendStrokePreviewPoints(peerMeshRef.current, session, session.pendingPoints.splice(0));
@@ -694,6 +712,7 @@ export function useCanvasStageInteractions(options) {
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     const points = draftRef.current;
     const session = drawingSessionRef.current;
+    if (session) clearTimeout(session.settleTimer);
     drawingSessionRef.current = null;
     draftRef.current = [];
     vectorDraftRef.current?.(null);

@@ -3,11 +3,11 @@ import { inkStrokeSize } from './inkStroke.js';
 import { freehandOptions } from './freehandOptions.js';
 
 /** Bristle tracks follow the same smoothed centerline and pressure as the brush. */
-export function brushBristlePaths(points, stroke) {
+export function brushBristlePaths(points, stroke, createPath = () => new Path2D()) {
   const size = inkStrokeSize(stroke.strokeWidth);
   const samples = getStrokePoints(points, freehandOptions(stroke, size));
   const offsets = [-.45, 0, .45];
-  const paths = offsets.map(() => new Path2D());
+  const tracks = offsets.map(() => []);
   let pressure = Math.max(.05, Math.min(1, samples[0]?.pressure ?? .5));
   let normal = { x: 0, y: 1 };
   samples.forEach((sample, index) => {
@@ -26,13 +26,28 @@ export function brushBristlePaths(points, stroke) {
       : .75 - Math.min(1, sample.distance / Math.max(1, size)) * .65;
     pressure += (target - pressure) * .25;
     const radius = size / 2 * (.4 + .6 * pressure);
-    paths.forEach((path, bristle) => {
+    tracks.forEach((track, bristle) => {
       const offset = offsets[bristle] * radius;
-      const px = x + normal.x * offset, py = y + normal.y * offset;
-      if (index) path.lineTo(px, py); else path.moveTo(px, py);
+      track.push([x + normal.x * offset, y + normal.y * offset]);
     });
   });
-  return paths;
+  return tracks.map((track) => {
+    const path = createPath();
+    if (!track.length) return path;
+    path.moveTo(track[0][0], track[0][1]);
+    if (track.length === 2) {
+      path.lineTo(track[1][0], track[1][1]);
+    } else if (track.length > 2) {
+      for (let i = 1; i < track.length - 1; i++) {
+        const mx = (track[i][0] + track[i + 1][0]) / 2;
+        const my = (track[i][1] + track[i + 1][1]) / 2;
+        path.quadraticCurveTo(track[i][0], track[i][1], mx, my);
+      }
+      const last = track[track.length - 1];
+      path.lineTo(last[0], last[1]);
+    }
+    return path;
+  });
 }
 
 export function paintBrush(context, body, bristles, stroke, opacity) {

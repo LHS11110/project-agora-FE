@@ -43,7 +43,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
     let scrollBuffer = null, scrollBufferContext = null;
     const margin=256;
     buffer.className='vector-composite-surface';element.insertBefore(buffer,canvas);
-    let compositor=null,bufferVersion=0,surfaceChanged=false,worldPaintBounds=null,bufferCamera=null,previousPaintCamera=null,previousPaintRatio=0,sceneInputs=null,lastCamera=null,cameraIdleTimer=null,budgetIdleTimer=null,refreshCamera=false,cameraActive=false,viewportMetrics=null,textAppearanceCache=null,inkHasContent=false,settledDesiredRatio=null,dragPreview=null,previousDragPreview=null,lastGpuCullKey='';
+    let compositor=null,bufferVersion=0,surfaceChanged=false,worldPaintBounds=null,bufferCamera=null,previousPaintCamera=null,previousPaintRatio=0,sceneInputs=null,lastCamera=null,cameraIdleTimer=null,budgetIdleTimer=null,refreshCamera=false,cameraActive=false,viewportMetrics=null,textAppearanceCache=null,inkHasContent=false,inkVisibleCount=0,settledDesiredRatio=null,dragPreview=null,previousDragPreview=null,lastGpuCullKey='';
     const activeDragPainted=new Map();
     const ink = createInkStrokeRenderer(element, canvas);
     const records = new Map();
@@ -75,6 +75,15 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       resources.release(record.resource);
     };
     const ensureWorker=()=>{if(!compositor)compositor=new WorkerFrameCompositor(element,canvas,()=>{surfaceChanged=true;schedule();},stats);};
+    // Hidden canvases keep their whole backing store in GPU memory until resized.
+    // The pan scroll copy only helps during motion; the composite buffer and its
+    // viewport copy are unused once the GPU path presents or the layer is empty.
+    const releaseScrollBuffer=()=>{if(scrollBuffer){scrollBuffer.width=scrollBuffer.height=1;scrollBuffer=null;scrollBufferContext=null;}};
+    const releaseCanvasSurfaces=()=>{
+      releaseScrollBuffer();
+      if(buffer.width!==1||buffer.height!==1){buffer.width=buffer.height=1;bufferCamera=null;previousPaintKey='';}
+      if(canvas.width!==1||canvas.height!==1)canvas.width=canvas.height=1;
+    };
     const fallBackToCanvas = () => {
       if (disposed || gpuFailed) return;
       gpuFailed = true; gpuSceneDirty = false; preparedSinceGpuSync = 0;
@@ -105,12 +114,27 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       if(candidate.threaded){
         surface.style.display='none';let first=true;
         candidate.onError=error=>{stats.gpuError=error;fallBackToCanvas();};
-        candidate.onFrame=()=>{stats.gpuWorkerFrames=(stats.gpuWorkerFrames||0)+1;if(first){first=false;element.dataset.renderer=candidate.backend_kind();surface.style.display=preparation?.count?'':'none';compositor?.destroy();compositor=null;canvas.style.display='none';buffer.style.display='none';schedule();}else if(gpuSceneDirty)schedule();};
-      }else{canvas.style.display = 'none'; buffer.style.display = 'none';}
+        candidate.onFrame=()=>{stats.gpuWorkerFrames=(stats.gpuWorkerFrames||0)+1;if(first){first=false;element.dataset.renderer=candidate.backend_kind();surface.style.display=preparation?.count?'':'none';compositor?.destroy();compositor=null;canvas.style.display='none';buffer.style.display='none';releaseCanvasSurfaces();schedule();}else if(gpuSceneDirty)schedule();};
+      }else{canvas.style.display = 'none'; buffer.style.display = 'none'; releaseCanvasSurfaces();}
       element.dataset.renderer = candidate.backend_kind();
       atlas.resetGpuState(); gpuSceneDirty = true;
       stopGpuEvents = observeGpuContextLoss(surface, () => disposed, fallBackToCanvas);
       schedule();
+    };
+    // A depth layer that only holds ink/DOM objects should not pin a GPU worker,
+    // its surfaces and textures. Release after a grace period; ensureGpu
+    // recreates it once vector records return.
+    let gpuReleaseTimer=null;
+    const releaseIdleGpu=()=>{
+      gpuReleaseTimer=null;
+      if(disposed||!app||records.size||pendingApp)return;
+      stopGpuEvents();stopGpuEvents=()=>{};
+      app.onFrame=null;app.onError=null;app.destroy();app.free?.();
+      gpuCanvas?.remove();gpuCanvas=null;app=null;delete element.__agoraGpuRenderer;
+      releaseGpu?.();releaseGpu=null;
+      atlas.resetGpuState();gpuSceneDirty=false;preparedSinceGpuSync=0;lastGpuCullKey='';
+      element.dataset.renderer='canvas2d';stats.engine='canvas2d';stats.gpuReleases=(stats.gpuReleases||0)+1;
+      sceneInputs=null;previousPaintKey='';bufferCamera=null;schedule();
     };
     const ensureGpu = () => {
       if (!app && deferredCandidate && !cameraActive) {
@@ -149,7 +173,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         sceneInputs = null; previousPaintKey = ''; bufferCamera = null;
       }
       const moved=lastCamera && (lastCamera.x!==camera.x || lastCamera.y!==camera.y || lastCamera.scale!==camera.scale);
-      if(moved){cameraActive=true;cameraIdleTimer ||= new CameraIdleTask(()=>{cameraActive=false;refreshCamera=true;schedule();},160);cameraIdleTimer.touch();}
+      if(moved){cameraActive=true;cameraIdleTimer ||= new CameraIdleTask(()=>{cameraActive=false;refreshCamera=true;releaseScrollBuffer();schedule();},160);cameraIdleTimer.touch();}
       lastCamera={...camera};
       const settling=refreshCamera;refreshCamera=false;
       const quality='high';
@@ -282,13 +306,18 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       if(hasAnyInk || inkHasContent){
         const nextInkKey=`${quality}:${ratio}:${width}:${height}:${world.width}:${world.height}:${camera.x}:${camera.y}:${camera.scale}`;
         if(nextInkKey!==inkKey || previousPreviews!==previewStrokes || previousDraft!==draft || previousInkItems!==inkItems || dragInkChanged){
-          ink.render({items:inkItems,previews:previewStrokes,draft,dragPreview:activeDrag,width:world.width,height:world.height,viewportWidth:width,viewportHeight:height,camera,pixelRatio:ratio});
+          inkVisibleCount = ink.render({items:inkItems,previews:previewStrokes,draft,dragPreview:activeDrag,width:world.width,height:world.height,viewportWidth:width,viewportHeight:height,camera,pixelRatio:ratio}) || 0;
           inkKey=nextInkKey;previousPreviews=previewStrokes;previousDraft=draft;previousInkItems=inkItems;
           inkHasContent=hasAnyInk;
           stats.inkFrames=(stats.inkFrames||0)+1;
+          stats.inkObjects=inkVisibleCount;
+          stats.visibleObjects=(preparation?.count||0)+inkVisibleCount;
+          if(!(preparation?.count>0))stats.presentedCamera={x:camera.x,y:camera.y,scale:camera.scale};
         }
       }else if(previousPreviews!==previewStrokes || previousDraft!==draft || previousInkItems!==inkItems){
         previousPreviews=previewStrokes;previousDraft=draft;previousInkItems=inkItems;
+        inkVisibleCount=0;
+        stats.inkObjects=0;
       }
       const dragMatchesVector = Boolean(activeDrag && [...activeDrag.ids].some(id => records.has(id)));
       const prevMatchesVector = Boolean(previousDragPreview?.ids && [...previousDragPreview.ids].some(id => records.has(id)));
@@ -545,7 +574,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
           }
         } catch (error) { stats.gpuError = String(error); fallBackToCanvas(); return; }
         previousPaintKey = '';
-      } else if (preparation.count > 0 || ordered.length > 0) {
+      } else if (preparation.count > 0) {
         if (!paintIndexValid) {
           worldPaintBounds = null;
           for (let i = 0; i < ordered.length; i++) {
@@ -695,6 +724,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         previousPaintKey = '';
         buffer.style.display = 'none';
         canvas.style.display = 'none';
+        releaseCanvasSurfaces();
         if (compositor?.active && compositor.canvas) {
           compositor.canvas.style.display = 'none';
           compositor.active = false;
@@ -705,12 +735,14 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         try{atlas.flush(app);gpuBatcher.sync(app,ordered,dragPx,preparation.count > 256 ? gpuCullBounds : null);lastGpuCullKey=gpuCullKey;gpuSceneDirty=false;preparedSinceGpuSync=0;presentGpu();}catch(error){stats.gpuError=String(error);fallBackToCanvas();}
       }
       previousDragPreview = dragPreview;
-      stats.drawnObjects += drawn; stats.lastDrawnObjects = drawn; stats.visibleObjects = preparation.count;
+      stats.drawnObjects += drawn; stats.lastDrawnObjects = drawn; stats.visibleObjects = preparation.count + inkVisibleCount;
       stats.imagePreviews={scope:previewEpoch,active:imagePreviews.active,queued:imagePreviews.queued,entries:imagePreviews.entries.size,pixels:imagePreviews.pixels};
       stats.sharedRasters=resources.live.size;stats.retainedRasters=resources.idle.size;
       stats.texturePages=atlas.pages.length;
       stats.frames++;
       stats.preparing=deferredQuality;stats.deferredFrames=(stats.deferredFrames||0)+Number(deferredQuality);
+      if(app&&!records.size){if(!gpuReleaseTimer)gpuReleaseTimer=setTimeout(releaseIdleGpu,5000);}
+      else if(gpuReleaseTimer){clearTimeout(gpuReleaseTimer);gpuReleaseTimer=null;}
       ensureGpu();
       if (deferredQuality) schedule();
     };
@@ -735,7 +767,20 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
     const metricsChanged=()=>{if(!types.connectors)return;metricsRevision++;schedule();};
     const appearanceChanged=()=>{fontRevision++;metricsRevision++;textAppearanceCache=null;schedule();};
     renderer.current = schedule;
-    latest.current.onReady?.(value => { draft = value; schedule(); });
+    // A continuing draft is painted in the input task itself (no scheduling hop),
+    // onto a desynchronized surface. Start/end still take the full render pass so
+    // the saved stroke and the cleared draft appear in the same frame.
+    latest.current.onReady?.(value => {
+      const continuing = Boolean(draft && value && draft.id === value.id);
+      draft = value;
+      if (disposed) return;
+      if (continuing && inkHasContent && ink.paintDraft(value)) {
+        previousDraft = value;
+        stats.inkFrames=(stats.inkFrames||0)+1;stats.immediateInkFrames=(stats.immediateInkFrames||0)+1;
+        return;
+      }
+      schedule();
+    });
     latest.current.onDragReady?.(next => {
       if (disposed) return;
       const had = Boolean(dragPreview?.ids?.size);
@@ -757,7 +802,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
     document.fonts?.addEventListener('loadingdone',appearanceChanged);
     element.dataset.renderer = 'canvas2d';schedule();
     return () => {
-      disposed = true;delete element.__agoraGpuRenderer;cameraIdleTimer?.cancel();clearTimeout(budgetIdleTimer); cancelScheduledRender(); scheduleChannel?.port1?.close?.(); scheduleChannel?.port2?.close?.();
+      disposed = true;delete element.__agoraGpuRenderer;cameraIdleTimer?.cancel();clearTimeout(budgetIdleTimer);clearTimeout(gpuReleaseTimer); cancelScheduledRender(); scheduleChannel?.port1?.close?.(); scheduleChannel?.port2?.close?.();
       observer.disconnect();themeObserver.disconnect();stage?.removeEventListener('agora-camera',cameraChanged); window.removeEventListener(CONNECTOR_METRICS_EVENT,metricsChanged);
       document.fonts?.removeEventListener('loadingdone',appearanceChanged);
       latest.current.onReady?.(null); latest.current.onDragReady?.(null); renderer.current = null;
@@ -768,7 +813,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       records.clear(); resources.destroy(); atlas.destroy(); app?.destroy(); app?.free(); gpuCanvas?.remove();
       // A pending init releases its slot after completion.
       if (!pendingApp) releaseGpu?.();
-      compositor?.destroy();if(scrollBuffer){scrollBuffer.width=scrollBuffer.height=1;scrollBuffer=null;scrollBufferContext=null;}buffer.width=buffer.height=1;buffer.remove();ink.destroy(); canvas.remove();
+      compositor?.destroy();releaseCanvasSurfaces();buffer.remove();ink.destroy(); canvas.remove();
     };
   }, []);
   useLayoutEffect(() => { renderer.current?.(); });

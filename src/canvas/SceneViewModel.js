@@ -49,7 +49,7 @@ export default class SceneViewModel {
         if(item.kind==='connector')this.connectorIds.add(id);
         const representation=this.representation(id,item,domIds,selected,world,scale);
         if(!patches.has(depth))patches.set(depth,{vectors:{},inkItems:{}});
-        patches.get(depth).vectors[id]=representation.vector||null;patches.get(depth).inkItems[id]=representation.ink?item:null;
+        patches.get(depth).vectors[id]=representation.vector||null;patches.get(depth).inkItems[id]=representation.ink?(representation.ink===true?item:representation.ink):null;
         const domAt=old?layer.domObjects.indexOf(old.tuple):-1,needs=needsVectorDom(id,item,domIds,null,null,world,scale,this.quality);
         if(domAt>=0||needs){layer.domObjects=layer.domObjects.slice();if(domAt>=0){if(needs)layer.domObjects[domAt]=tuple;else layer.domObjects.splice(domAt,1);}else layer.domObjects.push(tuple);}
       }
@@ -75,7 +75,7 @@ export default class SceneViewModel {
       for(const [sortIndex,tuple] of this.sorted.entries()){const [id,item]=tuple,depth=itemDepth(item);if(!this.layers.has(depth))this.layers.set(depth,{depth,objects:[],domObjects:[]});
         if(!maps.has(depth))maps.set(depth,{vectors:{},inkItems:{}});const layer=this.layers.get(depth),objectIndex=layer.objects.length;layer.objects.push(tuple);this.byId.set(id,{depth,tuple,sortIndex,objectIndex});if(item.kind==='connector')this.connectorIds.add(id);
         const representation=this.representation(id,item,domIds,selected,world,scale);
-        if(representation.ink)maps.get(depth).inkItems[id]=item;else if(representation.vector)maps.get(depth).vectors[id]=representation.vector;
+        if(representation.ink)maps.get(depth).inkItems[id]=representation.ink===true?item:representation.ink;else if(representation.vector)maps.get(depth).vectors[id]=representation.vector;
         if(needsVectorDom(id,item,domIds,null,null,world,scale,this.quality))layer.domObjects.push(tuple);
       }
       for(const [depth,layer] of this.layers){const prevLayer=oldLayers.get(depth);layer.vectors=retainSnapshot(prevLayer?.vectors,maps.get(depth)?.vectors||{});layer.inkItems=retainSnapshot(prevLayer?.inkItems,maps.get(depth)?.inkItems||{});if(prevLayer&&sameTuples(prevLayer.domObjects,layer.domObjects))layer.domObjects=prevLayer.domObjects;}
@@ -93,7 +93,7 @@ export default class SceneViewModel {
         const position=old.objectIndex??layer.objects.indexOf(old.tuple);layer.objects[position]=tuple;
         const at=old.sortIndex??this.sorted.indexOf(old.tuple);this.sorted[at]=tuple;
         if(!layerChanges.has(old.depth))layerChanges.set(old.depth,{vectors:{},inkItems:{}});
-        layerChanges.get(old.depth).vectors[id]=representation.vector||null;layerChanges.get(old.depth).inkItems[id]=representation.ink?item:null;
+        layerChanges.get(old.depth).vectors[id]=representation.vector||null;layerChanges.get(old.depth).inkItems[id]=representation.ink?(representation.ink===true?item:representation.ink):null;
         const was=layer.domObjects.indexOf(old.tuple),needs=needsVectorDom(id,item,domIds,null,null,world,scale,this.quality);
         if(was>=0 || needs){layer.domObjects=layer.domObjects.slice();if(was>=0){if(needs)layer.domObjects[was]=tuple;else layer.domObjects.splice(was,1);}else layer.domObjects.push(tuple);}
         this.byId.set(id,{...old,tuple});
@@ -109,9 +109,13 @@ export default class SceneViewModel {
   representation(id,item,domIds,selected,world,scale){
     const proxyTier=overviewProxyTier(item,world,scale,this.quality),worldKey=world.width+':'+world.height,dom=domIds.has(String(id)),selection=selected.has(String(id)),old=this.representations.get(id);
     if(old&&old.item===item&&old.proxyTier===proxyTier&&old.worldKey===worldKey&&old.dom===dom&&old.selection===selection)return old.result;
-    if(item.kind==='stroke' && item.complete===false)return {ink:true};
-    if(hasRenderedAnimation(item))return {vector:null};
-    let vector=!item.runtimeRole && ['stroke','shape','connector'].includes(item.kind) || (isRasterText(item)&&!dom)?item:null;
+    if(hasRenderedAnimation(item)){const result={vector:null};this.representations.set(id,{item,proxyTier,worldKey,dom,selection,result});return result;}
+    if(item.kind==='stroke'){
+      const result={ink:selection && !dom ? {...item,__selectionOutline:true} : item};
+      this.representations.set(id,{item,proxyTier,worldKey,dom,selection,result});
+      return result;
+    }
+    let vector=!item.runtimeRole && ['shape','connector'].includes(item.kind) || (isRasterText(item)&&!dom)?item:null;
     if(!dom && proxyTier!=='full')vector=overviewProxy(item,world,scale);
     if(vector && selection && !dom)vector={...vector,__selectionOutline:true};
     const result={vector};this.representations.set(id,{item,proxyTier,worldKey,dom,selection,result});return result;

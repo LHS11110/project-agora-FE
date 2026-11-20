@@ -40,6 +40,7 @@ export default function CanvasMinimapObjects({ minimap, colors, selected }) {
       }
       if(cursor<minimap.items.length){frame=requestAnimationFrame(chunk);return;}
       ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,-pad*ratio,-pad*ratio);
+      if(cache.current?.canvas&&cache.current.canvas!==bitmap)cache.current.canvas.width=cache.current.canvas.height=1;
       cache.current={canvas:bitmap,bounds:overview,items:minimap.items,selected,complete};
       };chunk();
     };

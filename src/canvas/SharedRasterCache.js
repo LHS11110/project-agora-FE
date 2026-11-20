@@ -1,7 +1,9 @@
 // Retain bounded, unreferenced bitmaps so a quick pan back doesn't rasterize again.
 // Live resources are owned by records; eviction never invalidates a visible sprite.
 export default class SharedRasterCache {
-  constructor(dispose, maxIdlePixels = 24_000_000, maxIdleEntries = 2048) {
+  // Idle bitmaps occupy atlas slots and GPU textures in every depth layer, so
+  // retain only a modest pan-back reserve.
+  constructor(dispose, maxIdlePixels = 8_000_000, maxIdleEntries = 1024) {
     this.dispose=dispose;this.maxIdlePixels=maxIdlePixels;this.maxIdleEntries=maxIdleEntries;
     this.live=new Map();this.idle=new Map();this.idlePixels=0;
   }

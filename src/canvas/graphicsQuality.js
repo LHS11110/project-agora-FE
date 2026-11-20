@@ -6,8 +6,10 @@ export const UNIFIED_GRAPHICS_PROFILE = Object.freeze({
   rasterMultiplier: 1,
   maxRasterRatio: 4,
   imagePreviewSize: 1024,
-  documentPixelBudget: 16_000_000,
-  scenePixelBudget: 64_000_000,
+  // Per-object rasters still reach native DPR × zoom (maxRasterRatio); these caps
+  // bound the total so dense scenes do not exhaust GPU memory.
+  documentPixelBudget: 8_000_000,
+  scenePixelBudget: 32_000_000,
 });
 export const GRAPHICS_PROFILES = Object.freeze({
   high: UNIFIED_GRAPHICS_PROFILE,

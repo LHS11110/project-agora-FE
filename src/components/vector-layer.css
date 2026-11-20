@@ -2,7 +2,8 @@
 .vector-layer canvas{position:absolute;inset:0}
 
 .vector-layer .vector-composite-surface,
-.vector-layer .vector-worker-surface{will-change:transform;contain:strict}
+.vector-layer .vector-worker-surface,
+.vector-layer .ink-saved-surface{will-change:transform;contain:strict}
 
 .canvas-stage>.canvas-scene{will-change:auto}
 .canvas-stage .canvas-world-layer{pointer-events:none}
