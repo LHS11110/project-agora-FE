@@ -721,7 +721,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
               if(!rotated && activeAlpha!==1){bufferContext.globalAlpha=1;activeAlpha=1;}
               const dx=rotated?raster.left-descriptor.centerX:drawX+raster.left;
               const dy=rotated?raster.top-descriptor.centerY:drawY+raster.top;
-              if(handle?.page)bufferContext.drawImage(handle.page.canvas,handle.slot.x+2,handle.slot.y+2,raster.pixelWidth,raster.pixelHeight,dx,dy,raster.width,raster.height);
+              if(handle?.page?.canvas)bufferContext.drawImage(handle.page.canvas,handle.slot.x+2,handle.slot.y+2,raster.pixelWidth,raster.pixelHeight,dx,dy,raster.width,raster.height);
               else bufferContext.drawImage(raster.canvas,dx,dy,raster.width,raster.height);
             }
             if(rotated)bufferContext.restore(); drawn++;
