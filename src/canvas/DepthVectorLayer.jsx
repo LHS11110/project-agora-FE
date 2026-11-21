@@ -85,6 +85,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       records.clear(); resources.destroy(); atlas.destroy(); clippedConnectors.clear();
       sceneInputs = null; previousPaintKey = ''; bufferCamera = null; gpuSceneDirty = true; paintIndexValid = false;
     };
+    let gpuOnlyRasterSkipped = false;
     const atlasHoldsOnlyGpuPixels = () => atlas.pages.some(page => !page.canvas) || [...atlas.standalone].some(handle => !handle.canvas);
     const ensureWorker=()=>{if(!compositor)compositor=new WorkerFrameCompositor(element,canvas,()=>{surfaceChanged=true;schedule();},stats);};
     // Hidden canvases keep their whole backing store in GPU memory until resized.
@@ -722,7 +723,10 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
               const dx=rotated?raster.left-descriptor.centerX:drawX+raster.left;
               const dy=rotated?raster.top-descriptor.centerY:drawY+raster.top;
               if(handle?.page?.canvas)bufferContext.drawImage(handle.page.canvas,handle.slot.x+2,handle.slot.y+2,raster.pixelWidth,raster.pixelHeight,dx,dy,raster.width,raster.height);
-              else bufferContext.drawImage(raster.canvas,dx,dy,raster.width,raster.height);
+              else if(raster.canvas)bufferContext.drawImage(raster.canvas,dx,dy,raster.width,raster.height);
+              // Direct uploads leave pixels only in the GPU worker. The 2D buffer
+              // skips them; without a GPU renderer they must be rasterized again.
+              else gpuOnlyRasterSkipped=true;
             }
             if(rotated)bufferContext.restore(); drawn++;
           }
@@ -763,6 +767,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
           bufferVersion++;
         }
         previousPaintKey = bufferKey; previousPaintCamera = { ...bufferCamera }; previousPaintRatio = ratio; element.dataset.renderer = 'canvas2d';blitBuffer();
+        if(gpuOnlyRasterSkipped){gpuOnlyRasterSkipped=false;if(!app){atlas.direct=false;resetRasters();schedule();}}
       } else {
         paintIndexValid = false;
         previousPaintKey = '';
