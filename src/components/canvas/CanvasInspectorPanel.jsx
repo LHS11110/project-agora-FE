@@ -11,7 +11,7 @@ import { selectionCornerState } from '../../canvas/objectCorners.js';
 import ObjectNumericControls from '../../canvas/ObjectNumericControls.jsx';
 import { SizeInput } from '../../canvas/ObjectSizeControls.jsx';
 import ObjectShadowControls from '../../canvas/ObjectShadowControls.jsx';
-import { memo, useEffect, useId, useMemo, useState } from 'react';
+import { memo, useEffect, useId, useMemo, useRef, useState } from 'react';
 import ObjectDepthControls from '../../canvas/ObjectDepthControls.jsx';
 import CanvasBackgroundControls from '../../canvas/background/CanvasBackgroundControls.jsx';
 import ObjectRecoveryControls from '../../canvas/diagnostics/ObjectRecoveryControls.jsx';
@@ -51,7 +51,7 @@ const KIND_EDIT_LABELS = {
   value: '값 편집', pdf: 'PDF 편집', link: '링크 편집', 'user-group': '그룹 편집', stroke: '드로잉 편집',
 };
 
-const CanvasInspectorPanel = memo(function CanvasInspectorPanel({
+const InspectorBody = memo(function CanvasInspectorPanel({
   activeTool,
   canvasId,
   updateContentSetting,
@@ -323,5 +323,29 @@ const CanvasInspectorPanel = memo(function CanvasInspectorPanel({
       </aside>
   );
 });
+
+// Pressing an object selects it and usually starts a drag in the same event. The
+// inspector rebuilds its editors for the new selection (text shaping and layout of
+// a large panel, ~70ms), which landed on the drag's first frame. While a pointer is
+// held on the canvas the panel keeps its previous props; it updates on release.
+function useCanvasPointerHeld() {
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    const down = event => { if (event.target?.closest?.('.canvas-stage')) setHeld(true); };
+    const up = () => setHeld(false);
+    window.addEventListener('pointerdown', down, true);
+    window.addEventListener('pointerup', up, true);
+    window.addEventListener('pointercancel', up, true);
+    window.addEventListener('blur', up);
+    return () => { window.removeEventListener('pointerdown', down, true); window.removeEventListener('pointerup', up, true); window.removeEventListener('pointercancel', up, true); window.removeEventListener('blur', up); };
+  }, []);
+  return held;
+}
+function CanvasInspectorPanel(props) {
+  const held = useCanvasPointerHeld();
+  const latest = useRef(props);
+  if (!held) latest.current = props;
+  return <InspectorBody {...latest.current} />;
+}
 
 export default CanvasInspectorPanel;

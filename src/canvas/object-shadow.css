@@ -7,3 +7,8 @@
 .canvas-stage.select-mode .stroke-selection-path :is(polyline,circle){pointer-events:stroke;cursor:default}
 .canvas-stage.select-mode .canvas-object-stroke.selected .stroke-selection-path :is(polyline,circle){cursor:grab}
 .canvas-stage.select-mode .canvas-object-stroke :is(.object-resize-handle,.object-move-handle){pointer-events:auto}
+/* Sticky notes draw one merged shadow (paper + object shadow, see noteShadowFilter)
+   on the outer note. Nested filters cost an extra GPU render pass per note on
+   every zoom frame, and toggling them per gesture re-rasterised every note. */
+.canvas-stage .canvas-object.sticky-note-object:not(.has-styled-filter){filter:var(--note-shadow-filter,drop-shadow(0 8px 12px #3b443326))}
+.canvas-stage .canvas-object.sticky-note-object:not(.has-styled-filter) .sticky-note-object.scalable-object-content,.canvas-stage .canvas-object.sticky-note-object.scalable-object-content:not(.has-styled-filter){filter:none}

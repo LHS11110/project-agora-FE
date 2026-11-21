@@ -20,7 +20,7 @@ import { useUiLocale } from '../i18n/useUiLocale.js';
 import { canvasObjectPropsEqual } from './canvasRenderEquality.js';
 import { objectFontStyle } from './objectSize.js';
 import './object-typography.css';
-import { objectShadowStyle } from './objectShadow.js';
+import { objectShadowStyle, noteShadowFilter } from './objectShadow.js';
 import { strokeSelectionGeometry } from './strokeSelection.js';
 import './object-shadow.css';
 import RawPdfDocumentContent from './pdf/PdfDocumentContent.jsx';
@@ -187,6 +187,7 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
   };
   if (item.kind === 'connector' && domSurfaceStyle.opacity != null) style.opacity = domSurfaceStyle.opacity;
   if (item.height) style.height = `${height * 100}%`;
+  if (item.kind === 'note') { const filter = noteShadowFilter(item); if (filter) style['--note-shadow-filter'] = filter; }
   const movable = activeTool === 'select' && selected && !item.locked && !readOnly;
   const { previewHidden } = useVisibilityPreview();
   const [, setRevealClockTick] = useState(0);

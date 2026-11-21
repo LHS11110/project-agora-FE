@@ -46,7 +46,9 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
     let compositor=null,bufferVersion=0,surfaceChanged=false,worldPaintBounds=null,bufferCamera=null,previousPaintCamera=null,previousPaintRatio=0,sceneInputs=null,lastCamera=null,cameraIdleTimer=null,budgetIdleTimer=null,refreshCamera=false,cameraActive=false,cameraIdlePending=false,viewportMetrics=null,textAppearanceCache=null,inkHasContent=false,inkVisibleCount=0,settledDesiredRatio=null,dragPreview=null,previousDragPreview=null,lastGpuCullKey='';
     const activeDragPainted=new Map();
     // The ink renderer asks for a pass when a released drag overlay times out.
-    const ink = createInkStrokeRenderer(element, canvas, { requestRender: () => { inkKey = ''; schedule(); } });
+    // A request made during ink.render() must survive the key update that follows it.
+    let inkRerender = false;
+    const ink = createInkStrokeRenderer(element, canvas, { requestRender: () => { inkRerender = true; schedule(); } });
     const records = new Map();
     const clippedConnectors = new Set();
     const paintIndex = new RasterPaintIndex();
@@ -232,6 +234,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
           stats.presentedCamera = { x: camera.x, y: camera.y, scale: camera.scale };
           return;
         }
+        if (app.threaded) app.interactive = cameraActive;
         if (!app.render_frame(camera.x,camera.y,camera.scale,width,height)) throw new Error("GPU surface unavailable");
         stats.presentedCamera={x:camera.x,y:camera.y,scale:camera.scale};
       };
@@ -311,7 +314,8 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       const dragInkChanged = dragPreview !== previousDragPreview && (dragMatchesInk || prevMatchesInk);
       if(hasAnyInk || inkHasContent){
         const nextInkKey=`${quality}:${ratio}:${width}:${height}:${world.width}:${world.height}:${camera.x}:${camera.y}:${camera.scale}:${cameraActive?1:0}`;
-        if(nextInkKey!==inkKey || previousPreviews!==previewStrokes || previousDraft!==draft || previousInkItems!==inkItems || dragInkChanged){
+        if(inkRerender || nextInkKey!==inkKey || previousPreviews!==previewStrokes || previousDraft!==draft || previousInkItems!==inkItems || dragInkChanged){
+          inkRerender=false;
           inkVisibleCount = ink.render({items:inkItems,previews:previewStrokes,draft,dragPreview:activeDrag,width:world.width,height:world.height,viewportWidth:width,viewportHeight:height,camera,pixelRatio:ratio,interactive:cameraActive}) || 0;
           inkKey=nextInkKey;previousPreviews=previewStrokes;previousDraft=draft;previousInkItems=inkItems;
           inkHasContent=hasAnyInk;
@@ -512,7 +516,9 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         if(!descriptor)return;
         const key=descriptor.key;
         const paintChanged = !record || (changed && (record.key!==key || record.tint!==tint || record.descriptor.x!==descriptor.x || record.descriptor.y!==descriptor.y || record.descriptor.rotation!==descriptor.rotation || record.descriptor.centerX!==descriptor.centerX || record.descriptor.centerY!==descriptor.centerY));
-        const qualityNeeded=record && targetRatio>record.quality*qualityRatioThreshold;
+        // Sharper re-rasters wait for a still camera: their texture uploads would compete
+        // with the zoom frames they are meant to improve.
+        const qualityNeeded=!cameraActive && record && targetRatio>record.quality*qualityRatioThreshold;
         const deferPreview = item.__imagePreview && preview?.state !== 'ready' && sameImage && record?.previewVersion;
         const rebuild = !deferPreview && (!record || record.key !== key || qualityNeeded || record.clipStale
           || (record.pixelBudget > pixelBudget*1.1 && record.raster.pixelWidth*record.raster.pixelHeight > pixelBudget*1.1));
@@ -793,6 +799,33 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
     };
     const metricsChanged=()=>{if(!types.connectors)return;metricsRevision++;schedule();};
     const appearanceChanged=()=>{fontRevision++;metricsRevision++;textAppearanceCache=null;schedule();};
+    // Only faces used by canvas text invalidate its rasters. UI panels loading their
+    // own fonts (e.g. on the first selection) used to re-rasterize every text object.
+    // Subset faces (unicode-range) matter only if canvas text uses one of their characters.
+    let usedCodepoints=null;
+    const canvasCodepoints=()=>{
+      const items=latest.current.items;
+      if(usedCodepoints?.items===items)return usedCodepoints.set;
+      const set=new Set();
+      for(const item of Object.values(items||{})){if(!item||(!isRasterText(item)&&!isRasterCode(item)))continue;const text=String(item.text??item.code??'');for(const ch of text)set.add(ch.codePointAt(0));}
+      usedCodepoints={items,set};return set;
+    };
+    const faceUsed=face=>{
+      const range=String(face.unicodeRange||'').trim();
+      if(!range||/^U\+0-10FFFF$/i.test(range))return true;
+      const used=canvasCodepoints();
+      for(const part of range.split(',')){
+        const match=part.trim().match(/^U\+([0-9A-F?]+)(?:-([0-9A-F]+))?$/i);if(!match)return true;
+        const low=parseInt(match[1].replace(/\?/g,'0'),16),high=match[2]?parseInt(match[2],16):match[1].includes('?')?parseInt(match[1].replace(/\?/g,'F'),16):low;
+        if(high-low>4096){for(const code of used)if(code>=low&&code<=high)return true;}
+        else for(let code=low;code<=high;code++)if(used.has(code))return true;
+      }
+      return false;
+    };
+    const fontsLoaded=event=>{
+      const faces=[...(event?.fontfaces||[])],used=textAppearanceCache?`${textAppearanceCache.font},${textAppearanceCache.codeFont}`.toLowerCase():null;
+      if(!faces.length||used===null||faces.some(face=>used.includes(String(face.family||'').replace(/["']/g,'').trim().toLowerCase())&&faceUsed(face)))appearanceChanged();
+    };
     renderer.current = schedule;
     // A continuing draft is painted in the input task itself (no scheduling hop),
     // onto a desynchronized surface. Start/end still take the full render pass so
@@ -826,12 +859,12 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
     const cameraChanged=()=>{if(disposed)return;cancelScheduledRender();render();};
     stage?.addEventListener('agora-camera',cameraChanged);
     window.addEventListener(CONNECTOR_METRICS_EVENT,metricsChanged);
-    document.fonts?.addEventListener('loadingdone',appearanceChanged);
+    document.fonts?.addEventListener('loadingdone',fontsLoaded);
     element.dataset.renderer = 'canvas2d';schedule();
     return () => {
       disposed = true;delete element.__agoraGpuRenderer;cameraIdleTimer?.cancel();clearTimeout(budgetIdleTimer);clearTimeout(gpuReleaseTimer); cancelScheduledRender(); scheduleChannel?.port1?.close?.(); scheduleChannel?.port2?.close?.();
       observer.disconnect();themeObserver.disconnect();stage?.removeEventListener('agora-camera',cameraChanged); window.removeEventListener(CONNECTOR_METRICS_EVENT,metricsChanged);
-      document.fonts?.removeEventListener('loadingdone',appearanceChanged);
+      document.fonts?.removeEventListener('loadingdone',fontsLoaded);
       latest.current.onReady?.(null); latest.current.onDragReady?.(null); renderer.current = null;
       stopGpuEvents();
       for (const record of records.values()) destroyRecord(record);

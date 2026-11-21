@@ -16,3 +16,14 @@ export function objectShadowStyle(item) {
   return { '--object-shadow-filter': shadowFilter(item), '--object-shadow-box': shadow.enabled
     ? `${shadow.x}px ${shadow.y}px ${shadow.blur * 2}px rgba(24,34,43,${shadow.opacity})` : 'none' };
 }
+
+/** One drop-shadow standing in for a sticky note's paper shadow (0 8px 12px, 15%)
+ * combined with its object shadow: opacities compose, offsets and blur take the
+ * larger of the two so the note keeps one GPU filter pass. */
+export function noteShadowFilter(item) {
+  const shadow = objectShadow(item);
+  if (!shadow.enabled || shadow.opacity <= 0) return undefined;
+  const opacity = 1 - (1 - .15) * (1 - shadow.opacity);
+  const y = Math.abs(shadow.y) > 8 ? shadow.y : 8, blur = Math.max(12, shadow.blur + 6);
+  return `drop-shadow(${shadow.x}px ${y}px ${blur}px rgba(48,56,44,${+opacity.toFixed(3)}))`;
+}

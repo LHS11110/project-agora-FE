@@ -273,6 +273,13 @@ export function createInkStrokeRenderer(host, vectorCanvas, { requestRender = ()
   const saved = document.createElement('canvas');
   const live = document.createElement('canvas');
   const drag = document.createElement('canvas');
+  // Low-resolution copy of every stroke in this layer, painted while idle. A camera
+  // gesture never repaints ink: the retained surface is scaled and this overview
+  // fills what zooming out exposes, until the settled frame repaints crisply.
+  const overview = document.createElement('canvas');
+  overview.className = 'ink-saved-surface ink-overview-surface';
+  overview.style.display = 'none'; overview.width = overview.height = 1;
+  overview.style.right = overview.style.bottom = 'auto'; overview.style.transformOrigin = '0 0';
   saved.className = 'ink-saved-surface'; live.className = 'ink-live-surface'; drag.className = 'ink-drag-surface';
   // Empty transparent canvases still become compositor layers. Show each
   // surface only while it actually contributes saved or in-progress ink, and
@@ -287,10 +294,12 @@ export function createInkStrokeRenderer(host, vectorCanvas, { requestRender = ()
   // Mount completed & live ink above shapes/connectors in the same depth layer
   // while cross-depth ordering remains isolated per .canvas-depth-layer.
   if (vectorCanvas?.nextSibling) {
-    host.insertBefore(saved, vectorCanvas.nextSibling);
+    host.insertBefore(overview, vectorCanvas.nextSibling);
+    host.insertBefore(saved, overview.nextSibling);
     host.insertBefore(drag, saved.nextSibling);
     host.insertBefore(live, drag.nextSibling);
   } else {
+    host.appendChild(overview);
     host.appendChild(saved);
     host.appendChild(drag);
     host.appendChild(live);
@@ -298,6 +307,126 @@ export function createInkStrokeRenderer(host, vectorCanvas, { requestRender = ()
   const savedContext = saved.getContext('2d', { alpha: true, desynchronized: true });
   const liveContext = live.getContext('2d', { alpha: true, desynchronized: true });
   const dragContext = drag.getContext('2d', { alpha: true });
+  const overviewContext = overview.getContext('2d', { alpha: true });
+  const OVERVIEW_MAX_PX = 1536, OVERVIEW_IDLE_MS = 250;
+  let overviewView = null, overviewTimer = null;
+  const overviewFresh = (hidden) => Boolean(overviewView && overviewView.items === state.items && overviewView.visible === state.visibleItemIds
+    && overviewView.width === state.width && overviewView.height === state.height && overviewView.hiddenKey === [...hidden].join('|'));
+  function paintOverview(entries, hidden) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const [, stroke] of entries) {
+      const b = quickStrokeWorldBounds(stroke, state.width, state.height);
+      if (!b) continue;
+      minX = Math.min(minX, b.minX); minY = Math.min(minY, b.minY); maxX = Math.max(maxX, b.maxX); maxY = Math.max(maxY, b.maxY);
+    }
+    if (!(maxX > minX && maxY > minY)) { overviewView = null; releaseBacking(overview); return; }
+    const scale = Math.min(1, OVERVIEW_MAX_PX / Math.max(maxX - minX, maxY - minY));
+    const width = Math.max(1, Math.ceil((maxX - minX) * scale)), height = Math.max(1, Math.ceil((maxY - minY) * scale));
+    if (overview.width !== width || overview.height !== height) { overview.width = width; overview.height = height; }
+    overviewContext.setTransform(1, 0, 0, 1, 0, 0);
+    overviewContext.clearRect(0, 0, width, height);
+    overviewContext.setTransform(scale, 0, 0, scale, -minX * scale, -minY * scale);
+    overview.style.width = `${width}px`; overview.style.height = `${height}px`;
+    // Painted in slices across idle tasks; it only becomes usable once complete.
+    const job = { items: state.items, visible: state.visibleItemIds, width: state.width, height: state.height, hiddenKey: [...hidden].join('|'), minX, minY, scale, index: 0 };
+    overviewView = null;
+    const step = () => {
+      overviewTimer = null;
+      if (!state || state.items !== job.items || state.interactive) return;
+      const start = performance.now();
+      let points = 0;
+      while (job.index < entries.length && !sliceDone(start, points)) { const stroke = entries[job.index++][1]; points += stroke.points?.length || 1; drawStroke(overviewContext, stroke, job.width, job.height); }
+      flushCanvas(overview);
+      if (job.index < entries.length) { overviewTimer = setTimeout(step, 16); return; }
+      overviewView = job;
+    };
+    step();
+  }
+  // Retained surface (and the overview under any area it no longer covers) shown
+  // at the current camera without repainting. False when it cannot stand in.
+  function showRetained(hidden, ratio) {
+    if (!savedBuffer || saved.width <= 1 || savedBuffer.width !== state.width || savedBuffer.height !== state.height
+      || savedBuffer.viewportWidth !== state.viewportWidth || savedBuffer.viewportHeight !== state.viewportHeight || savedBuffer.ratio > ratio) return false;
+    const k = state.camera.scale / savedBuffer.scale;
+    const tx = state.camera.x - k * (savedBuffer.margin + savedBuffer.x), ty = state.camera.y - k * (savedBuffer.margin + savedBuffer.y);
+    const covers = tx <= 0 && ty <= 0 && tx + (state.viewportWidth + savedBuffer.margin * 2) * k >= state.viewportWidth
+      && ty + (state.viewportHeight + savedBuffer.margin * 2) * k >= state.viewportHeight;
+    const fresh = overviewFresh(hidden);
+    if (!covers && !fresh) return false;
+    if (fresh) {
+      const view = overviewView;
+      setStyle(overview, 'transform', `translate3d(${state.camera.x + view.minX * state.camera.scale}px,${state.camera.y + view.minY * state.camera.scale}px,0) scale(${state.camera.scale / view.scale})`);
+    }
+    setStyle(overview, 'display', covers ? 'none' : '');
+    setStyle(saved, 'transform', `translate3d(${tx}px,${ty}px,0) scale(${k})`);
+    saved.style.display = '';
+    return true;
+  }
+  // The settled repaint after a gesture is painted into a back buffer a few ms per
+  // frame while the retained surface stays on screen, then swapped in at once:
+  // a single full-resolution repaint of every stroke stalled the GPU for ~100ms.
+  let settleJob = null, settleCanvas = null, flushContext = null;
+  // Canvas 2D records draw calls and rasterizes them when the canvas is next used.
+  // Sampling one pixel into a 1x1 canvas makes each slice rasterize in its own
+  // frame instead of the whole hidden repaint landing in a single GPU flush.
+  function flushCanvas(canvas) {
+    if (!flushContext) { const sink = document.createElement('canvas'); sink.width = sink.height = 1; flushContext = sink.getContext('2d'); }
+    flushContext.drawImage(canvas, 0, 0, 1, 1, 0, 0, 1, 1);
+  }
+  // Recording draw calls is cheap; the GPU raster is what a slice must bound, so a
+  // slice is limited by the stroke points it submits as well as by main-thread time.
+  const SETTLE_SLICE_MS = 4, SETTLE_SLICE_POINTS = 1500;
+  const sliceDone = (start, points) => performance.now() - start >= SETTLE_SLICE_MS || points >= SETTLE_SLICE_POINTS;
+  function progressiveSettle(entries, hidden, ratio, margin) {
+    const camera = state.camera, hiddenKey = [...hidden].join('|');
+    const key = `${camera.x}:${camera.y}:${camera.scale}:${ratio}:${state.viewportWidth}:${state.viewportHeight}:${margin}`;
+    if (settleJob && (settleJob.key !== key || settleJob.items !== state.items || settleJob.hiddenKey !== hiddenKey || settleJob.visible !== state.visibleItemIds)) settleJob = null;
+    if (!settleJob) {
+      if (!showRetained(hidden, ratio)) return false;
+      if (!settleCanvas) settleCanvas = document.createElement('canvas');
+      const width = Math.max(1, Math.round((state.viewportWidth + margin * 2) * ratio)), height = Math.max(1, Math.round((state.viewportHeight + margin * 2) * ratio));
+      if (settleCanvas.width !== width || settleCanvas.height !== height) { settleCanvas.width = width; settleCanvas.height = height; }
+      const context = settleCanvas.getContext('2d', { alpha: true });
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.clearRect(0, 0, width, height);
+      context.setTransform(ratio * camera.scale, 0, 0, ratio * camera.scale, ratio * (camera.x + margin), ratio * (camera.y + margin));
+      const inv = 1 / Math.max(1e-4, camera.scale || 1);
+      const minX = (-camera.x - margin) * inv, minY = (-camera.y - margin) * inv;
+      const maxX = (state.viewportWidth - camera.x + margin) * inv, maxY = (state.viewportHeight - camera.y + margin) * inv;
+      const list = entries.filter(([, stroke]) => { const b = quickStrokeWorldBounds(stroke, state.width, state.height); return !b || !(b.maxX < minX || b.minX > maxX || b.maxY < minY || b.minY > maxY); });
+      settleJob = { key, items: state.items, hiddenKey, visible: state.visibleItemIds, context, list, index: 0, margin, ratio, hidden };
+    } else if (!showRetained(hidden, ratio)) { settleJob = null; return false; }
+    const job = settleJob;
+    if (job.frame) return true;
+    const start = performance.now();
+    let points = 0;
+    while (job.index < job.list.length && !sliceDone(start, points)) { const stroke = job.list[job.index++][1]; points += stroke.points?.length || 1; drawStroke(job.context, stroke, state.width, state.height); }
+    flushCanvas(settleCanvas);
+    if (job.index < job.list.length) {
+      // One slice per displayed frame: render scheduling is a message-channel hop,
+      // which would run every slice inside the same frame.
+      if (!job.frame) job.frame = (typeof requestAnimationFrame === 'function' ? requestAnimationFrame : setTimeout)(() => { job.frame = 0; requestRender(); });
+      return true;
+    }
+    settleJob = null;
+    if (saved.width !== settleCanvas.width || saved.height !== settleCanvas.height) { saved.width = settleCanvas.width; saved.height = settleCanvas.height; }
+    setStyle(saved, 'width', `${saved.width / job.ratio}px`);
+    setStyle(saved, 'height', `${saved.height / job.ratio}px`);
+    savedContext.setTransform(1, 0, 0, 1, 0, 0);
+    savedContext.clearRect(0, 0, saved.width, saved.height);
+    savedContext.drawImage(settleCanvas, 0, 0);
+    setStyle(saved, 'transform', job.margin ? `translate3d(${-job.margin}px,${-job.margin}px,0)` : '');
+    setStyle(overview, 'display', 'none');
+    savedPainted = true;
+    savedBuffer = { items: state.items, hidden: job.hidden, visibleItemIds: state.visibleItemIds, width: state.width, height: state.height,
+      viewportWidth: state.viewportWidth, viewportHeight: state.viewportHeight, ratio: job.ratio, scale: camera.scale, x: camera.x, y: camera.y, margin: job.margin };
+    return true;
+  }
+  function scheduleOverview(entries, hidden) {
+    clearTimeout(overviewTimer);
+    overviewTimer = setTimeout(() => { overviewTimer = null; if (state && !state.interactive && !overviewFresh(hidden)) paintOverview(entries, hidden); }, OVERVIEW_IDLE_MS);
+    overviewTimer?.unref?.();
+  }
   let state, savedPainted = false, livePainted = false, savedBuffer = null, liveDirty = null, liveReleaseTimer = null;
   // Dragged strokes are painted once into a bounded overlay and moved by CSS.
   // `settling` keeps them there after release until the moved items arrive.
@@ -308,8 +437,11 @@ export function createInkStrokeRenderer(host, vectorCanvas, { requestRender = ()
   // A hidden canvas keeps its full backing store (GPU memory) until resized.
   const releaseBacking = canvas => { if (canvas.width !== 1 || canvas.height !== 1) { canvas.width = 1; canvas.height = 1; } };
 
+  // A camera gesture repaints the saved surface at half resolution (a quarter of
+  // the raster work); the settled frame repaints it at full resolution.
+  let surfaceRatioScale = 1, gestureScratch = null;
   function sizeSurface(canvas, margin) {
-    const ratio = state.pixelRatio || Math.min(window.devicePixelRatio || 1, 2);
+    const ratio = (state.pixelRatio || Math.min(window.devicePixelRatio || 1, 2)) * surfaceRatioScale;
     const pixelWidth = Math.max(1, Math.round((state.viewportWidth + margin * 2) * ratio));
     const pixelHeight = Math.max(1, Math.round((state.viewportHeight + margin * 2) * ratio));
     const resized = canvas.width !== pixelWidth || canvas.height !== pixelHeight;
@@ -489,6 +621,7 @@ export function createInkStrokeRenderer(host, vectorCanvas, { requestRender = ()
         : strokeEntries;
 
       if (!entries.length) {
+        setStyle(overview, 'display', 'none');
         if (savedPainted) {
           savedContext.setTransform(1, 0, 0, 1, 0, 0);
           savedContext.clearRect(0, 0, saved.width, saved.height);
@@ -521,12 +654,21 @@ export function createInkStrokeRenderer(host, vectorCanvas, { requestRender = ()
       if (!sameView && state.interactive && savedBuffer && saved.width > 1
         && savedBuffer.width === state.width && savedBuffer.height === state.height
         && savedBuffer.viewportWidth === state.viewportWidth && savedBuffer.viewportHeight === state.viewportHeight
-        && savedBuffer.ratio === ratio) {
+        && savedBuffer.ratio <= ratio) {
         const k = state.camera.scale / savedBuffer.scale;
         const tx = state.camera.x - k * (savedBuffer.margin + savedBuffer.x), ty = state.camera.y - k * (savedBuffer.margin + savedBuffer.y);
         const coverW = (state.viewportWidth + savedBuffer.margin * 2) * k, coverH = (state.viewportHeight + savedBuffer.margin * 2) * k;
         const covers = tx <= 0 && ty <= 0 && tx + coverW >= state.viewportWidth && ty + coverH >= state.viewportHeight;
         const unchanged = savedDamage(savedBuffer, state.items, hidden, state.visibleItemIds)?.length === 0;
+        if (unchanged && overviewFresh(hidden)) {
+          const view = overviewView, zoom = state.camera.scale / view.scale;
+          setStyle(overview, 'transform', `translate3d(${state.camera.x + view.minX * state.camera.scale}px,${state.camera.y + view.minY * state.camera.scale}px,0) scale(${zoom})`);
+          setStyle(overview, 'display', covers ? 'none' : '');
+          setStyle(saved, 'transform', `translate3d(${tx}px,${ty}px,0) scale(${k})`);
+          saved.style.display = '';
+          renderDraft(state.draft);
+          return entries.length + dragEntries.length;
+        }
         if (k >= .5 && k <= 2 && covers && unchanged) {
           setStyle(saved, 'transform', `translate3d(${tx}px,${ty}px,0) scale(${k})`);
           saved.style.display = '';
@@ -534,6 +676,13 @@ export function createInkStrokeRenderer(host, vectorCanvas, { requestRender = ()
           return entries.length + dragEntries.length;
         }
       }
+      if (!sameView && !state.interactive && savedBuffer && savedDamage(savedBuffer, state.items, hidden, state.visibleItemIds)?.length === 0) {
+        const maxDim = Math.max(state.viewportWidth, state.viewportHeight);
+        const margin = Math.max(0, Math.min(MAX_PAN_MARGIN_CSS, Math.floor((MAX_SAVED_SURFACE_PX / ratio - maxDim) / 2)));
+        if (progressiveSettle(entries, hidden, ratio, margin)) { renderDraft(state.draft); return entries.length + dragEntries.length; }
+      } else settleJob = null;
+      setStyle(overview, 'display', 'none');
+      if (!state.interactive && !overviewFresh(hidden)) scheduleOverview(entries, hidden);
       // In-progress strokes saved at 30 Hz only change hidden ids, and a finished
       // stroke, erase or drag start/end touches a small region: repaint just that.
       let damage = sameView ? savedDamage(savedBuffer, state.items, hidden, state.visibleItemIds) : null;
@@ -582,19 +731,50 @@ export function createInkStrokeRenderer(host, vectorCanvas, { requestRender = ()
       } else {
         const maxDim = Math.max(state.viewportWidth, state.viewportHeight);
         const margin = Math.max(0, Math.min(MAX_PAN_MARGIN_CSS, Math.floor((MAX_SAVED_SURFACE_PX / ratio - maxDim) / 2)));
-        prepareSurface(saved, savedContext, margin);
+        // During a camera gesture the previous surface is still correct for every
+        // stroke it covered: copy it once at the new scale (one textured draw) and
+        // rasterize only strokes reaching the newly exposed area. Path fills are
+        // the GPU-process cost; the settled frame repaints everything crisply.
+        const previous = state.interactive && savedBuffer && saved.width > 1
+          && savedBuffer.width === state.width && savedBuffer.height === state.height
+          && savedDamage(savedBuffer, state.items, hidden, state.visibleItemIds)?.length === 0 ? savedBuffer : null;
+        if (previous) {
+          if (!gestureScratch) gestureScratch = document.createElement('canvas');
+          if (gestureScratch.width !== saved.width || gestureScratch.height !== saved.height) { gestureScratch.width = saved.width; gestureScratch.height = saved.height; }
+          const scratchContext = gestureScratch.getContext('2d');
+          scratchContext.clearRect(0, 0, gestureScratch.width, gestureScratch.height);
+          scratchContext.drawImage(saved, 0, 0);
+        } else if (!state.interactive && gestureScratch) { releaseBacking(gestureScratch); gestureScratch = null; }
+        surfaceRatioScale = state.interactive ? .5 : 1;
+        try { prepareSurface(saved, savedContext, margin); } finally { surfaceRatioScale = 1; }
+        const paintedRatio = ratio * (state.interactive ? .5 : 1);
         saved.style.transform = margin ? `translate3d(${-margin}px,${-margin}px,0)` : '';
         const invScale = 1 / Math.max(1e-4, state.camera.scale || 1);
         const viewMinX = (-state.camera.x - margin) * invScale;
         const viewMinY = (-state.camera.y - margin) * invScale;
         const viewMaxX = (state.viewportWidth - state.camera.x + margin) * invScale;
         const viewMaxY = (state.viewportHeight - state.camera.y + margin) * invScale;
+        let kept = null;
+        if (previous) {
+          const s = previous.scale;
+          kept = { minX: (-previous.x - previous.margin) / s, minY: (-previous.y - previous.margin) / s };
+          kept.maxX = kept.minX + gestureScratch.width / previous.ratio / s;
+          kept.maxY = kept.minY + gestureScratch.height / previous.ratio / s;
+          savedContext.drawImage(gestureScratch, kept.minX, kept.minY, kept.maxX - kept.minX, kept.maxY - kept.minY);
+          savedContext.save();
+          const exposed = new Path2D();
+          exposed.rect(viewMinX, viewMinY, viewMaxX - viewMinX, viewMaxY - viewMinY);
+          exposed.rect(kept.minX, kept.minY, kept.maxX - kept.minX, kept.maxY - kept.minY);
+          savedContext.clip(exposed, 'evenodd');
+        }
         for (let i = 0; i < entries.length; i++) {
           const stroke = entries[i][1];
           const b = quickStrokeWorldBounds(stroke, state.width, state.height);
           if (b && (b.maxX < viewMinX || b.minX > viewMaxX || b.maxY < viewMinY || b.minY > viewMaxY)) continue;
+          if (kept && b && b.minX >= kept.minX && b.minY >= kept.minY && b.maxX <= kept.maxX && b.maxY <= kept.maxY) continue;
           drawStroke(savedContext, stroke, state.width, state.height);
         }
+        if (previous) savedContext.restore();
         savedBuffer = {
           items: state.items,
           hidden,
@@ -603,7 +783,7 @@ export function createInkStrokeRenderer(host, vectorCanvas, { requestRender = ()
           height: state.height,
           viewportWidth: state.viewportWidth,
           viewportHeight: state.viewportHeight,
-          ratio,
+          ratio: paintedRatio,
           scale: state.camera.scale,
           x: state.camera.x,
           y: state.camera.y,
@@ -621,6 +801,6 @@ export function createInkStrokeRenderer(host, vectorCanvas, { requestRender = ()
       renderDraft(draft);
       return true;
     },
-    destroy() { clearTimeout(liveReleaseTimer); clearTimeout(settling?.timer); settling = null; hideDrag(); releaseBacking(saved); releaseBacking(live); saved.remove(); live.remove(); drag.remove(); state = null; savedBuffer = null; },
+    destroy() { flushContext = null; settleJob = null; if (settleCanvas) releaseBacking(settleCanvas); settleCanvas = null; clearTimeout(overviewTimer); releaseBacking(overview); overview.remove(); overviewView = null; clearTimeout(liveReleaseTimer); clearTimeout(settling?.timer); settling = null; hideDrag(); if (gestureScratch) releaseBacking(gestureScratch); gestureScratch = null; releaseBacking(saved); releaseBacking(live); saved.remove(); live.remove(); drag.remove(); state = null; savedBuffer = null; },
   };
 }

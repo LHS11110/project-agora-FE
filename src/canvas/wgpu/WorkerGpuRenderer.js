@@ -1,4 +1,4 @@
-const MARGIN=96;
+const MARGIN=96,INTERACTIVE_FRAME_MS=120;
 /** Bounded GPU command worker. Main-thread presentation reprojects cached pixels
  * immediately, keeping editable DOM and the asynchronous GPU frame aligned. */
 export default class WorkerGpuRenderer {
@@ -46,6 +46,13 @@ export default class WorkerGpuRenderer {
     this.target={camera:{x,y,scale},viewportWidth,viewportHeight};
     this.project();this.needsFrame=true;this.pump();return true;
   }
+  reprojectionCovers(){
+    const presented=this.presented,target=this.target;
+    if(!presented||!target)return false;
+    const k=target.camera.scale/presented.camera.scale;
+    const x=target.camera.x-(presented.camera.x+presented.margin)*k,y=target.camera.y-(presented.camera.y+presented.margin)*k;
+    return x<=0&&y<=0&&x+(presented.viewportWidth+presented.margin*2)*k>=target.viewportWidth&&y+(presented.viewportHeight+presented.margin*2)*k>=target.viewportHeight;
+  }
   project(){
     if(!this.hasFrame||!this.target)return;
     const current=this.target.camera,previous=this.presented.camera,scale=current.scale/previous.scale;
@@ -55,6 +62,15 @@ export default class WorkerGpuRenderer {
   }
   async pump(){
     if(this.disposed||this.inFlight||this.preparing||!this.needsFrame||!this.target)return;
+    // A camera gesture is presented by reprojecting the last frame (project()). While
+    // that still covers the viewport no new worker frame is rendered: each one is a
+    // full-surface GPU render and bitmap transfer competing with the compositor.
+    // Frames resume (paced) once zooming out exposes an edge, and on settle.
+    if(this.interactive&&this.hasFrame&&!this.scene&&!this.uploads.size&&!this.removed.size){
+      if(this.reprojectionCovers()){return;}
+      const wait=INTERACTIVE_FRAME_MS-(performance.now()-(this.sentAt||0));
+      if(wait>0){if(!this.paceTimer)this.paceTimer=setTimeout(()=>{this.paceTimer=null;this.pump();},wait);return;}
+    }
     this.preparing=true;this.needsFrame=false;this.timeout=setTimeout(()=>this.fail('GPU worker frame timed out'),12000);const uploads=[...this.uploads.values()];this.uploads.clear();
     const scene=this.scene;this.scene=null;const version=this.version,removed=[...this.removed];this.removed.clear();
     let textures=[];const captureStart=performance.now();
@@ -98,7 +114,7 @@ export default class WorkerGpuRenderer {
   }
   lose_context(){this.worker?.postMessage({type:'lose-context'});}
   fail(error){if(this.disposed)return;this.destroy();this.onError?.(String(error));}
-  destroy(){if(this.disposed)return;this.disposed=true;clearTimeout(this.timeout);this.worker?.terminate();this.worker=null;
+  destroy(){clearTimeout(this.paceTimer);this.paceTimer=null;if(this.disposed)return;this.disposed=true;clearTimeout(this.timeout);this.worker?.terminate();this.worker=null;
     // Drop the presented frame bitmap now; a removed canvas otherwise holds it until GC.
     try{this.context?.transferFromImageBitmap(null);}catch{}this.uploads.clear();this.removed.clear();this.scene=null;this.presented=null;}
   free(){}
