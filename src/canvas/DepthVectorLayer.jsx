@@ -41,7 +41,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
     const viewportContext=canvas.getContext('2d',{alpha:true,desynchronized:true});
     const buffer=document.createElement('canvas'),bufferContext=buffer.getContext('2d',{alpha:true,desynchronized:true});
     let scrollBuffer = null, scrollBufferContext = null;
-    const margin=256;
+    const margin=128;
     buffer.className='vector-composite-surface';element.insertBefore(buffer,canvas);
     let compositor=null,bufferVersion=0,surfaceChanged=false,worldPaintBounds=null,bufferCamera=null,previousPaintCamera=null,previousPaintRatio=0,sceneInputs=null,lastCamera=null,cameraIdleTimer=null,budgetIdleTimer=null,refreshCamera=false,cameraActive=false,cameraIdlePending=false,viewportMetrics=null,textAppearanceCache=null,inkHasContent=false,inkVisibleCount=0,settledDesiredRatio=null,dragPreview=null,previousDragPreview=null,lastGpuCullKey='';
     const activeDragPainted=new Map();
@@ -78,6 +78,14 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       paintIndex.remove(record);
       resources.release(record.resource);
     };
+    // Direct-mode atlas pixels exist only in the GPU worker. Switching renderer
+    // (fallback, idle release, a new GPU context) re-rasterizes from the scene.
+    const resetRasters = () => {
+      for (const record of records.values()) paintIndex.remove(record);
+      records.clear(); resources.destroy(); atlas.destroy(); clippedConnectors.clear();
+      sceneInputs = null; previousPaintKey = ''; bufferCamera = null; gpuSceneDirty = true; paintIndexValid = false;
+    };
+    const atlasHoldsOnlyGpuPixels = () => atlas.pages.some(page => !page.canvas) || [...atlas.standalone].some(handle => !handle.canvas);
     const ensureWorker=()=>{if(!compositor)compositor=new WorkerFrameCompositor(element,canvas,()=>{surfaceChanged=true;schedule();},stats);};
     // Hidden canvases keep their whole backing store in GPU memory until resized.
     // The pan scroll copy only helps during motion; the composite buffer and its
@@ -96,6 +104,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       stopGpuEvents();
       if(app?.threaded)app.destroy();
       releaseGpu?.(); releaseGpu = null;
+      atlas.direct = false; if (atlasHoldsOnlyGpuPixels()) resetRasters();
       canvas.style.display = 'none'; buffer.style.display = '';
       element.dataset.renderer = 'canvas2d';
       // Repaint all retained records, even if no object or camera has changed.
@@ -121,7 +130,8 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         candidate.onFrame=()=>{stats.gpuWorkerFrames=(stats.gpuWorkerFrames||0)+1;if(first){first=false;element.dataset.renderer=candidate.backend_kind();surface.style.display=preparation?.count?'':'none';compositor?.destroy();compositor=null;canvas.style.display='none';buffer.style.display='none';releaseCanvasSurfaces();schedule();}else if(gpuSceneDirty)schedule();};
       }else{canvas.style.display = 'none'; buffer.style.display = 'none'; releaseCanvasSurfaces();}
       element.dataset.renderer = candidate.backend_kind();
-      atlas.resetGpuState(); gpuSceneDirty = true;
+      if (atlasHoldsOnlyGpuPixels()) resetRasters(); else atlas.resetGpuState();
+      atlas.direct = Boolean(candidate.threaded); gpuSceneDirty = true;
       stopGpuEvents = observeGpuContextLoss(surface, () => disposed, fallBackToCanvas);
       schedule();
     };
@@ -136,7 +146,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       app.onFrame=null;app.onError=null;app.destroy();app.free?.();
       gpuCanvas?.remove();gpuCanvas=null;app=null;delete element.__agoraGpuRenderer;
       releaseGpu?.();releaseGpu=null;
-      atlas.resetGpuState();gpuSceneDirty=false;preparedSinceGpuSync=0;lastGpuCullKey='';
+      atlas.direct=false;if(atlasHoldsOnlyGpuPixels())resetRasters();else atlas.resetGpuState();gpuSceneDirty=false;preparedSinceGpuSync=0;lastGpuCullKey='';
       element.dataset.renderer='canvas2d';stats.engine='canvas2d';stats.gpuReleases=(stats.gpuReleases||0)+1;
       sceneInputs=null;previousPaintKey='';bufferCamera=null;schedule();
     };
@@ -531,8 +541,8 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
           if (area && area*targetRatio*targetRatio*.36>pixelBudget) {
             const vw=width/safeScale,vh=height/safeScale,mx=vw*.15,my=vh*.15;
             clip={minX:Math.floor(-camera.x/safeScale-mx),minY:Math.floor(-camera.y/safeScale-my),maxX:Math.ceil((width-camera.x)/safeScale+mx),maxY:Math.ceil((height-camera.y)/safeScale+my)};
-            objectBudget=Math.max(pixelBudget,Math.min(4_000_000,area,(vw+2*mx)*(vh+2*my))*targetRatio*targetRatio);
-            objectBudget=Math.max(pixelBudget,Math.min(4_000_000,objectBudget));
+            objectBudget=Math.max(pixelBudget,Math.min(2_000_000,area,(vw+2*mx)*(vh+2*my))*targetRatio*targetRatio);
+            objectBudget=Math.max(pixelBudget,Math.min(2_000_000,objectBudget));
           }
           const resourceKey=key+':'+targetRatio+':'+Math.round(objectBudget)+(clip?`:${clip.minX},${clip.minY},${clip.maxX},${clip.maxY}`:'');
           const resource=resources.acquire(resourceKey,()=>{
@@ -544,8 +554,9 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
           });
           if(!resource.textureHandle){
             resource.textureHandle=atlas.allocate(resource.raster.canvas);
+            // A direct slot keeps its canvas until the worker captures it (then frees it).
             if(resource.textureHandle.page){
-              resource.raster.canvas.width=resource.raster.canvas.height=1;
+              if(!resource.textureHandle.direct)resource.raster.canvas.width=resource.raster.canvas.height=1;
               resource.raster.canvas=null;
             }
           }

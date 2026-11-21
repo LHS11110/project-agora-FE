@@ -247,15 +247,15 @@ function passArray32ToWasm0(arg, malloc) {
     return ptr;
 }
 function __wbg_adapter_32(arg0, arg1, arg2) {
-    wasm.closure42_externref_shim(arg0, arg1, arg2);
+    wasm.closure46_externref_shim(arg0, arg1, arg2);
 }
 
 function __wbg_adapter_35(arg0, arg1, arg2) {
-    wasm.closure382_externref_shim(arg0, arg1, arg2);
+    wasm.closure386_externref_shim(arg0, arg1, arg2);
 }
 
-function __wbg_adapter_1138(arg0, arg1, arg2, arg3) {
-    wasm.closure1478_externref_shim(arg0, arg1, arg2, arg3);
+function __wbg_adapter_1141(arg0, arg1, arg2, arg3) {
+    wasm.closure1482_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 const __wbindgen_enum_GpuAddressMode = ["clamp-to-edge", "repeat", "mirror-repeat"];
@@ -378,6 +378,13 @@ export class WgpuCanvasRenderer {
         }
     }
     /**
+     * Drop a layer's scene; the active scene is emptied instead.
+     * @param {number} scene_id
+     */
+    remove_scene(scene_id) {
+        wasm.wgpucanvasrenderer_remove_scene(this.__wbg_ptr, scene_id);
+    }
+    /**
      * @param {number} camera_x
      * @param {number} camera_y
      * @param {number} camera_scale
@@ -388,6 +395,14 @@ export class WgpuCanvasRenderer {
     render_frame(camera_x, camera_y, camera_scale, viewport_width, viewport_height) {
         const ret = wasm.wgpucanvasrenderer_render_frame(this.__wbg_ptr, camera_x, camera_y, camera_scale, viewport_width, viewport_height);
         return ret !== 0;
+    }
+    /**
+     * Switch the scene that update_scene and render_frame use. One renderer (one
+     * WebGL context and surface) then serves every depth layer of a canvas.
+     * @param {number} scene_id
+     */
+    select_scene(scene_id) {
+        wasm.wgpucanvasrenderer_select_scene(this.__wbg_ptr, scene_id);
     }
     /**
      * @param {Uint32Array} instance_words
@@ -421,6 +436,22 @@ export class WgpuCanvasRenderer {
      */
     upload_canvas_texture(tex_id, source, width, height) {
         const ret = wasm.wgpucanvasrenderer_upload_canvas_texture(this.__wbg_ptr, tex_id, source, width, height);
+        return ret !== 0;
+    }
+    /**
+     * Copy an image into part of a texture (an atlas slot), creating the texture
+     * at `tex_width` x `tex_height` if needed. The main thread then keeps no page
+     * copy: each raster is uploaded once into its slot and freed.
+     * @param {number} tex_id
+     * @param {any} source
+     * @param {number} tex_width
+     * @param {number} tex_height
+     * @param {number} x
+     * @param {number} y
+     * @returns {boolean}
+     */
+    upload_canvas_subtexture(tex_id, source, tex_width, tex_height, x, y) {
+        const ret = wasm.wgpucanvasrenderer_upload_canvas_subtexture(this.__wbg_ptr, tex_id, source, tex_width, tex_height, x, y);
         return ret !== 0;
     }
     /**
@@ -1439,7 +1470,7 @@ function __wbg_get_imports() {
                 const a = state0.a;
                 state0.a = 0;
                 try {
-                    return __wbg_adapter_1138(a, state0.b, arg0, arg1);
+                    return __wbg_adapter_1141(a, state0.b, arg0, arg1);
                 } finally {
                     state0.a = a;
                 }
@@ -2437,12 +2468,12 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper1650 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 383, __wbg_adapter_35);
+    imports.wbg.__wbindgen_closure_wrapper1677 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 387, __wbg_adapter_35);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper761 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 43, __wbg_adapter_32);
+    imports.wbg.__wbindgen_closure_wrapper788 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 47, __wbg_adapter_32);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {

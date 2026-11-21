@@ -33,6 +33,10 @@ export class RasterTextureAtlas {
     this.standalone = new Set();
     this.uploadedTexIds = new Set();
     this.removedTexIds = [];
+    // Direct mode (GPU worker): pages hold no pixels on the main thread. Each raster
+    // is uploaded once into its slot of the worker texture and then freed, so the
+    // GPU keeps one copy instead of a page canvas plus its uploaded texture.
+    this.direct = false;
   }
 
   allocate(canvas) {
@@ -43,15 +47,16 @@ export class RasterTextureAtlas {
       if (slot) { page = candidate; break; }
     }
     if (!slot && width <= this.size && height <= this.size && this.pages.length < this.maxPages) {
-      const bitmap = document.createElement('canvas');
-      bitmap.width = bitmap.height = this.size;
+      let bitmap = null;
+      if (!this.direct) { bitmap = document.createElement('canvas'); bitmap.width = bitmap.height = this.size; }
       page = {
         texId: nextTextureId++,
         size: this.size,
         canvas: bitmap,
-        context: bitmap.getContext('2d'),
+        context: bitmap?.getContext('2d') || null,
         slots: new AtlasPageSlots(this.size),
         dirty: false,
+        regions: [],
       };
       this.pages.push(page);
       slot = page.slots.allocate(width, height);
@@ -71,10 +76,18 @@ export class RasterTextureAtlas {
       this.standalone.add(handle);
       return handle;
     }
-    page.context.clearRect(slot.x, slot.y, slot.width, slot.height);
-    page.context.drawImage(canvas, slot.x + 2, slot.y + 2);
-    page.dirty = true;
+    let direct = false;
+    if (page.context) {
+      page.context.clearRect(slot.x, slot.y, slot.width, slot.height);
+      page.context.drawImage(canvas, slot.x + 2, slot.y + 2);
+      page.dirty = true;
+    } else {
+      // The region includes the 2px transparent gutter, clearing a recycled slot.
+      page.regions.push({ canvas, x: slot.x, y: slot.y });
+      direct = true;
+    }
     return {
+      direct,
       page,
       slot,
       texId: page.texId,
@@ -95,8 +108,8 @@ export class RasterTextureAtlas {
       if (!page.slots.used && this.pages.length > 1) {
         this.pages = this.pages.filter(candidate => candidate !== page);
         if (this.uploadedTexIds.delete(page.texId)) this.removedTexIds.push(page.texId);
-        page.canvas.width = page.canvas.height = 1;
-        page.context = null;
+        if (page.canvas) page.canvas.width = page.canvas.height = 1;
+        page.context = null; page.regions.length = 0;
       }
     } else {
       this.standalone.delete(handle);
@@ -118,11 +131,17 @@ export class RasterTextureAtlas {
       }
     }
     for (const page of this.pages) {
-      if (page.dirty || !this.uploadedTexIds.has(page.texId)) {
+      if (page.canvas && (page.dirty || !this.uploadedTexIds.has(page.texId))) {
         if (renderer.upload_canvas_texture(page.texId, page.canvas, page.size, page.size)) {
           page.dirty = false;
           this.uploadedTexIds.add(page.texId);
+          // Entering direct mode: this page's pixels now live in the worker texture.
+          if (this.direct) { renderer.release_after_upload?.(page.canvas); page.canvas = null; page.context = null; }
         }
+      }
+      if (page.regions.length && renderer.upload_canvas_region) {
+        for (const region of page.regions.splice(0)) renderer.upload_canvas_region(page.texId, region.canvas, page.size, region.x, region.y);
+        this.uploadedTexIds.add(page.texId);
       }
     }
     for (const handle of this.standalone) {
@@ -130,6 +149,7 @@ export class RasterTextureAtlas {
         if (handle.canvas && renderer.upload_canvas_texture(handle.texId, handle.canvas, handle.width, handle.height)) {
           handle.dirty = false;
           this.uploadedTexIds.add(handle.texId);
+          if (this.direct) { renderer.release_after_upload?.(handle.canvas); handle.canvas = null; }
         }
       }
     }
@@ -143,7 +163,7 @@ export class RasterTextureAtlas {
     this.standalone.clear();
     for (const page of this.pages) {
       if (renderer) renderer.remove_texture(page.texId);
-      page.canvas.width = page.canvas.height = 1;
+      if (page.canvas) page.canvas.width = page.canvas.height = 1;
     }
     this.pages = [];
     this.uploadedTexIds.clear();

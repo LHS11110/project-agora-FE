@@ -6,10 +6,25 @@ export class WgpuCanvasRenderer {
   last_error(): string | undefined;
   adapter_name(): string;
   backend_kind(): string;
+  /**
+   * Drop a layer's scene; the active scene is emptied instead.
+   */
+  remove_scene(scene_id: number): void;
   render_frame(camera_x: number, camera_y: number, camera_scale: number, viewport_width: number, viewport_height: number): boolean;
+  /**
+   * Switch the scene that update_scene and render_frame use. One renderer (one
+   * WebGL context and surface) then serves every depth layer of a canvas.
+   */
+  select_scene(scene_id: number): void;
   update_scene(instance_words: Uint32Array, batch_tex_ids: Uint32Array, batch_starts: Uint32Array, batch_counts: Uint32Array): void;
   remove_texture(tex_id: number): void;
   upload_canvas_texture(tex_id: number, source: any, width: number, height: number): boolean;
+  /**
+   * Copy an image into part of a texture (an atlas slot), creating the texture
+   * at `tex_width` x `tex_height` if needed. The main thread then keeps no page
+   * copy: each raster is uploaded once into its slot and freed.
+   */
+  upload_canvas_subtexture(tex_id: number, source: any, tex_width: number, tex_height: number, x: number, y: number): boolean;
   width(): number;
   static create(canvas: any, width: number, height: number, prefer_webgl: boolean): Promise<WgpuCanvasRenderer>;
   height(): number;
@@ -28,10 +43,13 @@ export interface InitOutput {
   readonly wgpucanvasrenderer_destroy: (a: number) => void;
   readonly wgpucanvasrenderer_height: (a: number) => number;
   readonly wgpucanvasrenderer_last_error: (a: number) => [number, number];
+  readonly wgpucanvasrenderer_remove_scene: (a: number, b: number) => void;
   readonly wgpucanvasrenderer_remove_texture: (a: number, b: number) => void;
   readonly wgpucanvasrenderer_render_frame: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
   readonly wgpucanvasrenderer_resize: (a: number, b: number, c: number) => void;
+  readonly wgpucanvasrenderer_select_scene: (a: number, b: number) => void;
   readonly wgpucanvasrenderer_update_scene: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => void;
+  readonly wgpucanvasrenderer_upload_canvas_subtexture: (a: number, b: number, c: any, d: number, e: number, f: number, g: number) => number;
   readonly wgpucanvasrenderer_upload_canvas_texture: (a: number, b: number, c: any, d: number, e: number) => number;
   readonly wgpucanvasrenderer_width: (a: number) => number;
   readonly __wbindgen_exn_store: (a: number) => void;
@@ -41,9 +59,9 @@ export interface InitOutput {
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_export_5: WebAssembly.Table;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
-  readonly closure42_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure382_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure1478_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure46_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure386_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure1482_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_start: () => void;
 }
 

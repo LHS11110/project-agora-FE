@@ -43,8 +43,19 @@ struct DrawBatch {
     count: u32,
 }
 
+/// Draw state of one depth layer. Layers share a device, surface and textures;
+/// only the instance buffer and batches differ between them.
+struct SceneState {
+    instance_buffer: wgpu::Buffer,
+    instance_capacity: usize,
+    cached_batches: Vec<DrawBatch>,
+    cached_bundle: Option<wgpu::RenderBundle>,
+}
+
 #[wasm_bindgen]
 pub struct WgpuCanvasRenderer {
+    active_scene: u32,
+    saved_scenes: HashMap<u32, SceneState>,
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -379,6 +390,8 @@ impl WgpuCanvasRenderer {
         device.on_uncaptured_error(Box::new(move |error| { *failed_message.lock().unwrap()=Some(error.to_string());failed.store(true, Ordering::Relaxed); }));
 
         Ok(WgpuCanvasRenderer {
+            active_scene: 0,
+            saved_scenes: HashMap::new(),
             surface,
             device,
             queue,
@@ -458,8 +471,82 @@ impl WgpuCanvasRenderer {
             None => true,
         };
 
-        if recreate {
+        if recreate { self.create_texture_entry(tex_id, w, h); }
+
+        if let Some(entry) = self.textures.get(&tex_id) {
+            let premultiplied = self.backend_name != "webgl" || !matches!(&image, wgpu::ExternalImageSource::ImageBitmap(_));
+            let copy_w = w.min(image.width());
+            let copy_h = h.min(image.height());
+            self.queue.copy_external_image_to_texture(
+                &wgpu::CopyExternalImageSourceInfo {
+                    source: image,
+                    origin: wgpu::Origin2d::ZERO,
+                    flip_y: false,
+                },
+                wgpu::CopyExternalImageDestInfo {
+                    texture: &entry.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                    color_space: wgpu::PredefinedColorSpace::Srgb,
+                    premultiplied_alpha: premultiplied,
+                },
+                wgpu::Extent3d {
+                    width: copy_w,
+                    height: copy_h,
+                    depth_or_array_layers: 1,
+                },
+            );
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Switch the scene that update_scene and render_frame use. One renderer (one
+    /// WebGL context and surface) then serves every depth layer of a canvas.
+    pub fn select_scene(&mut self, scene_id: u32) {
+        if scene_id == self.active_scene { return; }
+        let next = self.saved_scenes.remove(&scene_id).unwrap_or_else(|| SceneState {
+            instance_buffer: self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("agora-instance-buffer"),
+                size: (256 * std::mem::size_of::<SpriteInstance>()) as u64,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }),
+            instance_capacity: 256,
+            cached_batches: Vec::new(),
+            cached_bundle: None,
+        });
+        let previous = SceneState {
+            instance_buffer: std::mem::replace(&mut self.instance_buffer, next.instance_buffer),
+            instance_capacity: std::mem::replace(&mut self.instance_capacity, next.instance_capacity),
+            cached_batches: std::mem::replace(&mut self.cached_batches, next.cached_batches),
+            cached_bundle: std::mem::replace(&mut self.cached_bundle, next.cached_bundle),
+        };
+        self.saved_scenes.insert(self.active_scene, previous);
+        self.active_scene = scene_id;
+    }
+
+    /// Drop a layer's scene; the active scene is emptied instead.
+    pub fn remove_scene(&mut self, scene_id: u32) {
+        if scene_id == self.active_scene {
+            self.cached_batches.clear();
             self.cached_bundle = None;
+        } else if let Some(scene) = self.saved_scenes.remove(&scene_id) {
+            scene.instance_buffer.destroy();
+        }
+    }
+
+    // Recorded bundles hold texture bind groups; any texture change invalidates
+    // them for every scene, not only the active one.
+    fn invalidate_bundles(&mut self) {
+        self.cached_bundle = None;
+        for scene in self.saved_scenes.values_mut() { scene.cached_bundle = None; }
+    }
+
+    fn create_texture_entry(&mut self, tex_id: u32, w: u32, h: u32) {
+            self.invalidate_bundles();
             let texture = self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("agora-atlas-texture"),
                 size: wgpu::Extent3d {
@@ -500,40 +587,57 @@ impl WgpuCanvasRenderer {
                     height: h,
                 },
             );
-        }
+    }
 
-        if let Some(entry) = self.textures.get(&tex_id) {
-            let premultiplied = self.backend_name != "webgl" || !matches!(&image, wgpu::ExternalImageSource::ImageBitmap(_));
-            let copy_w = w.min(image.width());
-            let copy_h = h.min(image.height());
-            self.queue.copy_external_image_to_texture(
-                &wgpu::CopyExternalImageSourceInfo {
-                    source: image,
-                    origin: wgpu::Origin2d::ZERO,
-                    flip_y: false,
-                },
-                wgpu::CopyExternalImageDestInfo {
-                    texture: &entry.texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                    aspect: wgpu::TextureAspect::All,
-                    color_space: wgpu::PredefinedColorSpace::Srgb,
-                    premultiplied_alpha: premultiplied,
-                },
-                wgpu::Extent3d {
-                    width: copy_w,
-                    height: copy_h,
-                    depth_or_array_layers: 1,
-                },
-            );
-            true
-        } else {
-            false
-        }
+    /// Copy an image into part of a texture (an atlas slot), creating the texture
+    /// at `tex_width` x `tex_height` if needed. The main thread then keeps no page
+    /// copy: each raster is uploaded once into its slot and freed.
+    pub fn upload_canvas_subtexture(
+        &mut self,
+        tex_id: u32,
+        source: &JsValue,
+        tex_width: u32,
+        tex_height: u32,
+        x: u32,
+        y: u32,
+    ) -> bool {
+        let max_dim = self.device.limits().max_texture_dimension_2d.max(1);
+        let w = tex_width.max(1).min(max_dim);
+        let h = tex_height.max(1).min(max_dim);
+        let image = if let Some(bitmap) = source.dyn_ref::<ImageBitmap>() {
+            wgpu::ExternalImageSource::ImageBitmap(bitmap.clone())
+        } else if let Some(html) = source.dyn_ref::<HtmlCanvasElement>() {
+            wgpu::ExternalImageSource::HTMLCanvasElement(html.clone())
+        } else if let Some(offscreen) = source.dyn_ref::<OffscreenCanvas>() {
+            wgpu::ExternalImageSource::OffscreenCanvas(offscreen.clone())
+        } else { return false; };
+        if image.width() == 0 || image.height() == 0 || x >= w || y >= h { return false; }
+        let recreate = match self.textures.get(&tex_id) {
+            Some(existing) => existing.width != w || existing.height != h,
+            None => true,
+        };
+        if recreate { self.create_texture_entry(tex_id, w, h); }
+        let Some(entry) = self.textures.get(&tex_id) else { return false; };
+        let premultiplied = self.backend_name != "webgl" || !matches!(&image, wgpu::ExternalImageSource::ImageBitmap(_));
+        let copy_w = (w - x).min(image.width());
+        let copy_h = (h - y).min(image.height());
+        self.queue.copy_external_image_to_texture(
+            &wgpu::CopyExternalImageSourceInfo { source: image, origin: wgpu::Origin2d::ZERO, flip_y: false },
+            wgpu::CopyExternalImageDestInfo {
+                texture: &entry.texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d { x, y, z: 0 },
+                aspect: wgpu::TextureAspect::All,
+                color_space: wgpu::PredefinedColorSpace::Srgb,
+                premultiplied_alpha: premultiplied,
+            },
+            wgpu::Extent3d { width: copy_w, height: copy_h, depth_or_array_layers: 1 },
+        );
+        true
     }
 
     pub fn remove_texture(&mut self, tex_id: u32) {
-        self.cached_bundle = None;
+        self.invalidate_bundles();
         if let Some(entry) = self.textures.remove(&tex_id) {
             entry.texture.destroy();
         }
@@ -679,6 +783,7 @@ impl WgpuCanvasRenderer {
 
     pub fn destroy(&mut self) {
         self.cached_bundle = None;
+        for (_, scene) in self.saved_scenes.drain() { scene.instance_buffer.destroy(); }
         for (_, entry) in self.textures.drain() {
             entry.texture.destroy();
         }

@@ -172,3 +172,17 @@ test('dragging strokes paints them once on an overlay and keeps the retained sur
   assert.equal(drag.width, 1, 'overlay backing store released');
   renderer.destroy();
 }));
+
+test('direct atlas mode keeps no page canvas and uploads each raster into its slot once', () => {
+  const old = globalThis.document; let created = 0;
+  globalThis.document = { createElement: () => { created++; return { width: 0, height: 0, getContext: () => ({ clearRect() {}, drawImage() {} }) }; } };
+  try {
+    const atlas = new RasterTextureAtlas(64, 4); atlas.direct = true;
+    const regions = [], renderer = { upload_canvas_texture: () => true, remove_texture() {}, upload_canvas_region: (id, canvas, size, x, y) => regions.push([id, canvas.name, size, x, y]) };
+    const a = atlas.allocate({ name: 'a', width: 20, height: 20 }), b = atlas.allocate({ name: 'b', width: 20, height: 20 });
+    assert.equal(created, 0, 'no page canvas in direct mode');
+    assert.equal(a.direct, true); assert.equal(a.texId, b.texId);
+    atlas.flush(renderer); atlas.flush(renderer);
+    assert.deepEqual(regions, [[a.texId, 'a', 64, 0, 0], [a.texId, 'b', 64, 24, 0]], 'each region once, with its gutter slot origin');
+  } finally { globalThis.document = old; }
+});

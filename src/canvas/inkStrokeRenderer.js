@@ -417,6 +417,10 @@ export function createInkStrokeRenderer(host, vectorCanvas, { requestRender = ()
     savedContext.drawImage(settleCanvas, 0, 0);
     setStyle(saved, 'transform', job.margin ? `translate3d(${-job.margin}px,${-job.margin}px,0)` : '');
     setStyle(overview, 'display', 'none');
+    // The back buffer and gesture copy are full-surface canvases; free them until
+    // the next gesture instead of holding two extra surfaces per depth layer.
+    releaseBacking(settleCanvas); settleCanvas = null;
+    if (gestureScratch) { releaseBacking(gestureScratch); gestureScratch = null; }
     savedPainted = true;
     savedBuffer = { items: state.items, hidden: job.hidden, visibleItemIds: state.visibleItemIds, width: state.width, height: state.height,
       viewportWidth: state.viewportWidth, viewportHeight: state.viewportHeight, ratio: job.ratio, scale: camera.scale, x: camera.x, y: camera.y, margin: job.margin };

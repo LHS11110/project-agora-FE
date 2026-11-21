@@ -141,7 +141,9 @@ export function rasterizeObject(id, descriptor, world, referenceItems, preferred
 
 let gpuUsers = 0;
 export function acquireGpuSlot() {
-  if (gpuUsers >= 4) return null;
+  // Depth layers share one GPU worker/context, so a slot no longer means a WebGL
+  // context; the cap only bounds renderer instances.
+  if (gpuUsers >= 8) return null;
   gpuUsers++;
   let released = false;
   return () => { if (!released) { released = true; gpuUsers--; } };

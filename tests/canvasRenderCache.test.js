@@ -27,7 +27,7 @@ test('moving and rotating vectors reuse raster geometry while shape or shadow ch
 });
 
 test('GPU context budget is bounded and releases are idempotent', () => {
-  const slots=Array.from({length:4},()=>acquireGpuSlot());
+  const slots=Array.from({length:8},()=>acquireGpuSlot());
   assert.ok(slots.every(Boolean)); assert.equal(acquireGpuSlot(),null);
   slots[0]();slots[0]();const replacement=acquireGpuSlot();assert.ok(replacement);assert.equal(acquireGpuSlot(),null);
   replacement();slots.slice(1).forEach(release=>release());

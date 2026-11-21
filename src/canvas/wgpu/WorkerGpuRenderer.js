@@ -3,31 +3,20 @@ const MARGIN=96,INTERACTIVE_FRAME_MS=120;
  * immediately, keeping editable DOM and the asynchronous GPU frame aligned. */
 export default class WorkerGpuRenderer {
   static create(canvas,width,height,preferWebgl){
-    return new Promise((resolve,reject)=>{
-      const app=new WorkerGpuRenderer(canvas,width,height);
-      const timer=setTimeout(()=>{app.destroy();reject(Error('GPU worker init timed out'));},12000);
-      app.worker.onmessage=({data})=>{
-        if(data.type==='ready'){
-          clearTimeout(timer);
-          try{
-            app.context=canvas.getContext('bitmaprenderer');
-            if(!app.context)throw Error('Bitmap presentation unavailable');
-            Object.assign(app,{backend:data.backend,adapter:data.adapter,contextAttributes:data.contextAttributes});
-            resolve(app);
-          }catch(error){app.destroy();reject(error);}
-        }else if(data.type==='failed'){
-          clearTimeout(timer);if(!app.context){app.destroy();reject(Error(data.error));}else app.fail(data.error);
-        }else if(data.type==='frame')app.receive(data);
-      };
-      app.worker.onerror=event=>{clearTimeout(timer);if(!app.context){app.destroy();reject(Error(event.message));}else app.fail(event.message);};
-      app.worker.postMessage({type:'init',width:app.pixelWidth,height:app.pixelHeight,preferWebgl});
-    });
+    const app=new WorkerGpuRenderer(canvas,width,height);
+    return GpuWorkerHost.acquire(app,preferWebgl).then(host=>{
+      try{
+        app.context=canvas.getContext('bitmaprenderer');
+        if(!app.context)throw Error('Bitmap presentation unavailable');
+        Object.assign(app,{host,backend:host.backend,adapter:host.adapter,contextAttributes:host.contextAttributes});
+        return app;
+      }catch(error){app.destroy();throw error;}
+    },error=>{app.destroy();throw error;});
   }
   constructor(canvas,width,height){
-    Object.assign(this,{canvas,pixelWidth:Math.max(1,Math.round(width)),pixelHeight:Math.max(1,Math.round(height)),threaded:true,hasFrame:false,version:0,seq:0,inFlight:false,preparing:false,needsFrame:false,disposed:false});
+    Object.assign(this,{canvas,layer:++GpuWorkerHost.nextLayer,pixelWidth:Math.max(1,Math.round(width)),pixelHeight:Math.max(1,Math.round(height)),threaded:true,hasFrame:false,version:0,seq:0,inFlight:false,preparing:false,needsFrame:false,disposed:false});
     this.telemetry={submitted:0,completed:0,presented:0,discarded:0,maxPending:0,samples:[]};
     this.uploads=new Map();this.removed=new Set();
-    this.worker=new Worker(new URL('./gpuRenderer.worker.js',import.meta.url),{type:'module',name:'agora-gpu-renderer'});
     canvas.className='vector-gpu-worker-surface';
     Object.assign(canvas.style,{inset:'auto',left:'0',top:'0',transformOrigin:'0 0'});
   }
@@ -37,7 +26,11 @@ export default class WorkerGpuRenderer {
   height(){return this.pixelHeight;}
   resize(width,height){this.pixelWidth=Math.max(1,Math.round(width));this.pixelHeight=Math.max(1,Math.round(height));}
   upload_canvas_texture(id,canvas,width,height){if(this.disposed)return false;this.removed.delete(id);this.uploads.set(id,{id,canvas,width,height});return true;}
-  remove_texture(id){this.uploads.delete(id);this.removed.add(id);}
+  remove_texture(id){this.uploads.delete(id);for(const [key,upload] of this.uploads)if(upload.id===id)this.uploads.delete(key);this.removed.add(id);}
+  /** Upload `canvas` (plus a 2px transparent gutter) into texture `id` at (x,y). */
+  upload_canvas_region(id,canvas,size,x,y){if(this.disposed)return false;this.removed.delete(id);this.uploads.set(`${id}@${x},${y}`,{id,canvas,region:{size,x,y},release:true});return true;}
+  /** Free a source canvas once its pixels have been captured for upload. */
+  release_after_upload(canvas){for(const upload of this.uploads.values())if(upload.canvas===canvas){upload.release=true;return;}if(canvas)canvas.width=canvas.height=1;}
   update_scene(words,ids,starts,counts){
     this.scene={words:words.slice(),ids:ids.slice(),starts:starts.slice(),counts:counts.slice()};this.version++;
   }
@@ -76,18 +69,23 @@ export default class WorkerGpuRenderer {
     let textures=[];const captureStart=performance.now();
     try{
       // Snapshot atlas pixels once per submitted frame, not once per input event.
-      const captured=uploads.length?await Promise.allSettled(uploads.map(async image=>({...image,canvas:undefined,bitmap:await createImageBitmap(image.canvas,{premultiplyAlpha:'premultiply'})}))):[];
+      const capture=async image=>{
+        const bitmap=image.region?await createImageBitmap(image.canvas,-2,-2,image.canvas.width+4,image.canvas.height+4,{premultiplyAlpha:'premultiply'}):await createImageBitmap(image.canvas,{premultiplyAlpha:'premultiply'});
+        if(image.release&&image.canvas)image.canvas.width=image.canvas.height=1;
+        return {...image,canvas:undefined,bitmap};
+      };
+      const captured=uploads.length?await Promise.allSettled(uploads.map(capture)):[];
       textures=captured.filter(result=>result.status==='fulfilled').map(result=>result.value);
       const rejected=captured.find(result=>result.status==='rejected');if(rejected)throw rejected.reason;
       if(this.disposed){for(const image of textures)image.bitmap.close();return;}
       const target=this.target,ratio=this.pixelWidth/Math.max(1,target.viewportWidth);
-      const packet={type:'frame',seq:++this.seq,version,scene,textures,removed,...target,margin:MARGIN,pixelWidth:Math.round((target.viewportWidth+MARGIN*2)*ratio),pixelHeight:Math.round((target.viewportHeight+MARGIN*2)*ratio)};
+      const packet={type:'frame',layer:this.layer,seq:++this.seq,version,scene,textures,removed,...target,margin:MARGIN,pixelWidth:Math.round((target.viewportWidth+MARGIN*2)*ratio),pixelHeight:Math.round((target.viewportHeight+MARGIN*2)*ratio)};
       const transfer=textures.map(image=>image.bitmap);
       if(scene)transfer.push(scene.words.buffer,scene.ids.buffer,scene.starts.buffer,scene.counts.buffer);
       this.captureMs=performance.now()-captureStart;this.sentAt=performance.now();
       this.telemetry.submitted++;this.telemetry.maxPending=Math.max(this.telemetry.maxPending,1);
       this.preparing=false;this.inFlight=true;
-      this.worker.postMessage(packet,transfer);
+      (this.host||=GpuWorkerHost.attach(this)).post(packet,transfer);
     }catch(error){for(const image of textures)try{image.bitmap.close();}catch{}this.fail(error);}
   }
   receive(frame){
@@ -112,10 +110,64 @@ export default class WorkerGpuRenderer {
     if(this.telemetry.samples.length>240)this.telemetry.samples.shift();
     this.pump();
   }
-  lose_context(){this.worker?.postMessage({type:'lose-context'});}
+  lose_context(){this.host?.post({type:'lose-context'});}
   fail(error){if(this.disposed)return;this.destroy();this.onError?.(String(error));}
-  destroy(){clearTimeout(this.paceTimer);this.paceTimer=null;if(this.disposed)return;this.disposed=true;clearTimeout(this.timeout);this.worker?.terminate();this.worker=null;
+  destroy(){clearTimeout(this.paceTimer);this.paceTimer=null;if(this.disposed)return;this.disposed=true;clearTimeout(this.timeout);
+    GpuWorkerHost.release(this);this.host=null;
     // Drop the presented frame bitmap now; a removed canvas otherwise holds it until GC.
     try{this.context?.transferFromImageBitmap(null);}catch{}this.uploads.clear();this.removed.clear();this.scene=null;this.presented=null;}
   free(){}
+  /** Terminates the shared worker (tests, or a full GPU reset). */
+  static resetSharedWorker(){GpuWorkerHost.reset();}
+}
+
+/** One GPU worker (one WebGL context, surface and texture store) shared by every
+ * depth layer: each layer is a scene in the same renderer, rendered in turn and
+ * returned as its own bitmap. A worker per layer cost a full set of surfaces and
+ * a WebGL device each. */
+class GpuWorkerHost {
+  static nextLayer=0;
+  static current=null;
+  static attach(app,preferWebgl=true){
+    let host=GpuWorkerHost.current;
+    if(!host||host.dead){host=GpuWorkerHost.current=new GpuWorkerHost(app.pixelWidth,app.pixelHeight,preferWebgl);}
+    clearTimeout(host.idleTimer);host.idleTimer=null;
+    host.layers.set(app.layer,app);
+    return host;
+  }
+  static acquire(app,preferWebgl){return GpuWorkerHost.attach(app,preferWebgl).ready;}
+  static reset(){GpuWorkerHost.current?.terminate();}
+  static release(app){
+    const host=app.host||GpuWorkerHost.current;
+    if(!host||!host.layers.delete(app.layer))return;
+    if(!host.dead)host.post({type:'release',layer:app.layer});
+    if(!host.layers.size&&!host.dead){host.idleTimer=setTimeout(()=>{if(!host.layers.size)host.terminate();},5000);host.idleTimer?.unref?.();}
+  }
+  constructor(width,height,preferWebgl){
+    this.layers=new Map();this.dead=false;this.idleTimer=null;
+    this.worker=new Worker(new URL('./gpuRenderer.worker.js',import.meta.url),{type:'module',name:'agora-gpu-renderer'});
+    this.ready=new Promise((resolve,reject)=>{
+      const timer=setTimeout(()=>{this.failAll('GPU worker init timed out');reject(Error('GPU worker init timed out'));},12000);timer?.unref?.();
+      this.initTimer=timer;
+      this.worker.onmessage=({data})=>{
+        if(data.type==='ready'){clearTimeout(timer);Object.assign(this,{backend:data.backend,adapter:data.adapter,contextAttributes:data.contextAttributes});resolve(this);}
+        else if(data.type==='frame')this.layers.get(data.layer)?.receive(data);
+        else if(data.type==='failed'){
+          clearTimeout(timer);
+          if(data.layer!=null&&this.layers.has(data.layer))this.layers.get(data.layer).fail(data.error);
+          else{this.failAll(data.error);reject(Error(data.error));}
+        }
+      };
+      this.worker.onerror=event=>{clearTimeout(timer);this.failAll(event.message);reject(Error(event.message));};
+    });
+    this.ready.catch(()=>{});
+    this.worker.postMessage({type:'init',width,height,preferWebgl});
+  }
+  post(message,transfer){if(!this.dead)this.worker.postMessage(message,transfer||[]);}
+  failAll(error){
+    if(this.dead)return;this.terminate();
+    for(const app of [...this.layers.values()])app.fail(error);
+    this.layers.clear();
+  }
+  terminate(){this.dead=true;clearTimeout(this.idleTimer);clearTimeout(this.initTimer);this.worker?.terminate();this.worker=null;if(GpuWorkerHost.current===this)GpuWorkerHost.current=null;}
 }
