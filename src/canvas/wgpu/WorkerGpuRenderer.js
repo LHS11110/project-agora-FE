@@ -134,7 +134,9 @@ export default class WorkerGpuRenderer {
   destroy(){clearTimeout(this.paceTimer);this.paceTimer=null;if(this.disposed)return;this.disposed=true;clearTimeout(this.timeout);
     GpuWorkerHost.release(this);this.host=null;
     // Drop the presented frame bitmap now; a removed canvas otherwise holds it until GC.
-    try{this.context?.transferFromImageBitmap(null);}catch{}this.uploads.clear();this.removed.clear();this.scene=null;this.presented=null;}
+    // transferFromImageBitmap(null) allocates a cleared bitmap at the canvas size,
+    // which took 15-40ms on a HiDPI viewport during layer unmount; shrink first.
+    try{const canvas=this.context?.canvas;if(canvas){canvas.width=1;canvas.height=1;}this.context?.transferFromImageBitmap(null);}catch{}this.uploads.clear();this.removed.clear();this.scene=null;this.presented=null;}
   free(){}
   /** Terminates the shared worker (tests, or a full GPU reset). */
   static resetSharedWorker(){GpuWorkerHost.reset();}

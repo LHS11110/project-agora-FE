@@ -1,0 +1,53 @@
+import {buildCreatedObject} from '../../src/canvas/objectCreation.js';
+import assert from 'node:assert/strict';
+const {chromium}=await import(process.env.AGORA_E2E_PLAYWRIGHT_MODULE||'playwright-core');
+const origin=process.env.AGORA_E2E_ORIGIN||'https://localhost:5191';
+const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox',...(process.env.AGORA_E2E_HOST_RESOLVER?['--host-resolver-rules='+process.env.AGORA_E2E_HOST_RESOLVER]:[])]});
+const user={email:'roles@example.invalid',nickname:'Roles',tag_number:1,role:'ROLE_USER',status:'ACTIVE'};
+const token='eyJhbGciOiJIUzI1NiJ9.'+Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+600})).toString('base64url')+'.roles';
+const policies={'admin-group':{read:true,write:true,execute:true},default:{read:true,write:false,execute:false}};
+const value=(valueType,x,y)=>({kind:'value',title:'',valueType,valueMin:0,valueMax:valueType==='real'?1:100,valueStep:valueType==='real'?.01:1,valueNumber:0,valueText:'',valueOptions:valueType==='select'?['A','B','C']:['꺼짐','켜짐'],x,y,width:.24,height:.21,permission:'default'});
+const N=Number(process.env.AGORA_PERF_OBJECTS||10000);const cols=Math.ceil(Math.sqrt(N));const items=Object.fromEntries(Array.from({length:N},(_,i)=>['load-'+i,{...(process.env.AGORA_PERF_KIND==='code'?{kind:'code',code:'def add(a, b):\n    return a + b\n\nprint(add(3, 4))',filename:'example'+i+'.py',language:'python'}:{kind:'shape',shapeType:'rectangle'}),x:(i%cols)/cols,y:Math.floor(i/cols)/cols,width:.65/cols,height:.65/cols,fill:['#98a8c4','#bab0cf','#a1bdb5'][i%3],strokeEnabled:false,shadowEnabled:false,permission:'default'}]));items.drag={kind:'shape',shapeType:'rectangle',runtimeRole:'output',x:.42,y:.3,width:.16,height:.15,permission:'default'};const packets=[];
+// Replace the load items with a rich DOM canvas (tables, notebooks, terminals, charts).
+for(const k of Object.keys(items))delete items[k];
+{const tools=['table','notebook','terminal','chart','code','note'];const C=Number(process.env.DOM_COLS||8),R=Number(process.env.DOM_ROWS||5);
+ for(let r=0;r<R;r++)for(let c=0;c<C;c++){const tool=tools[(r*C+c)%tools.length];const it=buildCreatedObject(tool,{x:.2+c*.075,y:.2+r*.09,width:.06,height:.07},{}).item;if(!it)continue;
+  Object.assign(it,{x:.2+c*.075,y:.2+r*.09,width:.06,height:.07,permission:'default'});if(it.kind==='table')it.rows=Array.from({length:6},(_,i)=>['a'+i,'b'+i,'c'+i]);if(it.kind==='text')it.text='def add(a, b):\n    return a + b\n';items['dom-'+r+'-'+c]=it;}}
+items.drag={kind:'shape',shapeType:'rectangle',x:.05,y:.05,width:.02,height:.02,permission:'default'};
+
+const peers=new Set(),receipts=new Map();
+const errors=[];
+try{for(const role of ['admin']){let executions=0,writes=0,settingsUpdate=null,revision=0,latest=structuredClone(items);const admin=role==='admin';const caps={groups:['default'],write_groups:admin?['default']:[],execute_groups:role==='viewer'?[]:['default'],is_admin:admin};
+const context=await browser.newContext({viewport:{width:2100,height:1450},locale:'ko-KR',ignoreHTTPSErrors:process.env.AGORA_E2E_INSECURE_LOCAL_TLS==='1'});
+await context.addInitScript(({token,user})=>{localStorage.setItem('frelog_tool_categories',JSON.stringify({structure:true}));localStorage.setItem('agora_token',token);localStorage.setItem('agora_user',JSON.stringify(user));},{token,user});
+context.setDefaultTimeout(60000);
+const settings=()=>({canvas_name:'Role fixture',settings_revision:revision,visibility:'private',participants:[],group_permissions:policies,can_manage:admin});
+await context.route(url=>url.pathname.startsWith('/api/'),r=>{const path=new URL(r.request().url()).pathname.replace(/\/runtime\/execute\/stream$/, '/runtime/execute');let data={canvas_id:999003,canvas_name:'Role fixture'};if(path==='/api/auth/me')data=user;else if(path==='/api/auth/session/refresh')data={accessToken:token,user};else if(path.endsWith('/access'))data={ws_port:8002,canvas_access_token:'fixture'};else if((path.endsWith('/runtime/execute')||path.endsWith('/runtime/build'))){executions++;data={output:'1\n',exitCode:0};}else if(path.endsWith('/runtime/settings'))data={revision:0,languages:{cpp:{engine:'clang21',standard:'c++17'}},catalog:{cpp:{label:'C++',engines:{clang21:{label:'Clang',mode:'shared'}},fields:{standard:{label:'언어 표준',values:['c++17']}}}}};else if(path.endsWith('/settings'))data=settings();return r.fulfill(new URL(r.request().url()).pathname.endsWith('/runtime/execute/stream')?{contentType:'application/x-ndjson',body:JSON.stringify({type:'result',result:data})+'\n'}:{json:data});});
+await context.routeWebSocket(/\/wss\/port\//,ws=>{const rtc=ws.url().includes('/rtc/');if(!rtc){peers.add(ws);ws.onClose(()=>peers.delete(ws));}const client=new URL(ws.url()).searchParams.get('client_id');setTimeout(()=>ws.send(JSON.stringify(rtc?{type:'rtc_ready'}:{type:'init_items',items:latest,...caps,groups:['default'],sync_protocol:2,sync_user_id:7,revision,accepted_count:0,rtc_canvas_connection_id:'fixture',rtc_canvas_connection_hash:'proof'})),100);ws.onMessage(raw=>{const data=JSON.parse(String(raw));packets.push(data);if(data.type==='canvas_sync')ws.send(JSON.stringify({type:'canvas_snapshot',client_id:data.client_id,items:latest,...caps,sync_protocol:2,sync_user_id:7,revision,accepted_count:receipts.get(data.client_id)||0}));if(data.type==='rtc_join')ws.send(JSON.stringify({type:'rtc_peers',self_peer_id:'peer',peers:[]}));if(data.type==='canvas_settings_update'){settingsUpdate=data;revision++;ws.send(JSON.stringify({type:'canvas_settings_result',ok:true,request_id:data.request_id,settings:settings()}));}if(data.type==='canvas_ops'){if((receipts.get(data.client_id)||0)>=data.request_count){ws.send(JSON.stringify({type:'canvas_result',request_id:data.request_id,ok:true,duplicate:true,server_revision:revision}));return;}const touched={};writes++;receipts.set(data.client_id,data.request_count);for(const op of data.operations){
+ if(op.action==='delete'){delete latest[op.id];continue;}
+ if(op.action==='translate'){for(const id of op.ids){latest[id]={...latest[id],x:latest[id].x+op.dx,y:latest[id].y+op.dy};touched[id]=latest[id];}continue;}
+ latest[op.id]={...latest[op.id],...op.patch};for(const field of op.unset||[])delete latest[op.id][field];touched[op.id]=latest[op.id];
+ }const deleted=Object.fromEntries(data.operations.filter(o=>o.action==='delete').map(o=>[o.id,null]));revision++;for(const peer of peers)peer.send(JSON.stringify({type:'canvas_commit',client_id:data.client_id,author_id:7,request_count:data.request_count,revision,items:{...touched,...deleted}}));}});});
+
+const page=await context.newPage();page.on('pageerror',error=>{errors.push(error.message);console.error(error.stack || error.message);});await page.goto(origin+'/canvases/999003');await page.waitForFunction(()=>window.frelogCanvas);await page.locator('.canvas-loading-status.is-overlay').waitFor({state:'hidden'});await page.waitForFunction(()=>[...document.querySelectorAll('.vector-layer')].some(node=>node.__agoraRenderStats?.visibleObjects>=0)&&[...document.querySelectorAll('.vector-layer')].every(node=>!node.__agoraRenderStats?.preparing));await page.waitForTimeout(400);
+await page.waitForTimeout(1500);
+const cam=await page.evaluate(()=>{const s=document.querySelector('.canvas-stage');return {dom:document.querySelectorAll('.canvas-world-layer .canvas-object').length,w:s.clientWidth}});console.log('dom objects',JSON.stringify(cam));
+if(process.env.INJECT_CSS)await page.addStyleTag({content:process.env.INJECT_CSS});await page.waitForTimeout(300);
+await page.mouse.move(1000,700);
+await browser.startTracing(page,{categories:['devtools.timeline','disabled-by-default-devtools.timeline','blink','cc','benchmark','disabled-by-default-devtools.timeline.frame','disabled-by-default-devtools.timeline.invalidationTracking','disabled-by-default-blink.invalidation']});
+await page.evaluate(()=>{window.gaps=[];let l=performance.now();const f=n=>{window.gaps.push(n-l);l=n;if(!window.stopG)requestAnimationFrame(f);};requestAnimationFrame(f);});
+const mode=process.env.MOTION||'zoom';
+for(let i=0;i<80;i++){if(mode==='zoom')await page.mouse.wheel(0,(Math.floor(i/20)%2?-1:1)*20);else{if(i===0)await page.mouse.down({button:'middle'});await page.mouse.move(1000+Math.sin(i/10)*300,700+Math.cos(i/10)*100);}await page.waitForTimeout(16);}
+if(mode!=='zoom')await page.mouse.up({button:'middle'});
+await page.waitForTimeout(300);
+const gaps=await page.evaluate(()=>{window.stopG=true;return window.gaps.slice(2);});
+const buf=await browser.stopTracing();const tr=JSON.parse(buf.toString()).traceEvents;
+const main=tr.find(e=>e.name==='thread_name'&&e.args.name==='CrRendererMain'&&tr.some(x=>x.pid===e.pid&&x.name==='Paint'));
+const sum=n=>{const xs=tr.filter(e=>e.pid===main.pid&&e.tid===main.tid&&e.name===n&&e.ph==='X');return {n:xs.length,ms:+(xs.reduce((a,e)=>a+e.dur,0)/1000).toFixed(1)}};
+const paints={};for(const e of tr.filter(e=>e.pid===main.pid&&e.name==='Paint')){const k=String(e.args?.data?.nodeName||'').split(' ').slice(0,2).join(' ').slice(0,60);paints[k]=(paints[k]||0)+1;}
+const mainEv=tr.filter(e=>e.pid===main.pid&&e.tid===main.tid&&e.ph==='X'&&e.dur).sort((a,b)=>a.ts-b.ts||b.dur-a.dur);const self=new Map(),st=[];for(const e of mainEv){while(st.length&&e.ts>=st.at(-1).ts+st.at(-1).dur)st.pop();const d=e.args?.data||{};const k=e.name==='FunctionCall'?`FC ${d.functionName||''} ${String(d.url||'').split('/').pop().split('?')[0]}:${d.lineNumber}`:e.name==='EventDispatch'?'Ev '+d.type:e.name;if(st.length){const p=st.at(-1);self.set(p.k,(self.get(p.k)||0)-e.dur);}self.set(k,(self.get(k)||0)+e.dur);e.k=k;st.push(e);}
+const top=[...self].sort((a,b)=>b[1]-a[1]).slice(0,+(process.env.TOP||0)).map(([k,v])=>k.slice(0,70)+'='+(v/1000).toFixed(0));if(top.length)console.log('TOP',top.join(' | '));
+if(process.env.INVAL){const inv={};for(const e of tr.filter(e=>e.pid===main.pid&&/Invalidat/.test(e.name))){const d=e.args?.data||{};const k=e.name+' | '+String(d.nodeName||'').slice(0,80)+' | '+(d.reason||d.cause?.reason||'');inv[k]=(inv[k]||0)+1;}console.log('INVAL\n'+Object.entries(inv).sort((a,b)=>b[1]-a[1]).slice(0,25).map(([k,v])=>v+'  '+k).join('\n'));}
+const s=gaps.slice().sort((a,b)=>a-b);
+console.log(JSON.stringify({mode,frames:gaps.length,p95:+s[Math.floor(s.length*.95)].toFixed(1),max:+s.at(-1).toFixed(1),over20:gaps.filter(g=>g>20).length,Paint:sum('Paint'),Layerize:sum('Layerize'),Layout:sum('Layout'),UpdateLayoutTree:sum('UpdateLayoutTree'),PrePaint:sum('PrePaint'),Commit:sum('Commit'),paints}));
+assert.deepEqual(errors,[]);await context.close();}}finally{await browser.close();}

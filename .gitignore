@@ -67,3 +67,9 @@ appendonlydir/
 
 # Rust renderer build cache
 rust/**/target/
+
+# Chrome performance traces (hundreds of MB; kept locally for analysis)
+docs/performance/traces/
+Trace-*.json
+Trace-*.json.gz
+*.cpuprofile

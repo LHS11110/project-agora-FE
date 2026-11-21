@@ -1,3 +1,4 @@
+import { changeItems } from './itemSnapshots.js';
 import {installCanvasTransport} from '../api/canvasTransport.js';
 import {canvasCodecUrl,installSocketCodec} from './sync/socketCodec.js';
 import { registerGroupLayout } from './permissions/groupBits.js';
@@ -676,9 +677,9 @@ export function useCanvasConnection(options) {
                   const isLatestRejectedChange = rejected.syncVersion
                     && compareSyncVersions(currentVersion, rejected.syncVersion) === 0;
                   if (!rejected.syncVersion || isLatestRejectedChange) {
-                    const next = { ...itemsRef.current };
-                    if (rejected.previous == null) delete next[rejected.id];
-                    else next[rejected.id] = rejected.previous;
+                    const next = rejected.previous == null
+                      ? changeItems(itemsRef.current, {}, [rejected.id])
+                      : changeItems(itemsRef.current, { [rejected.id]: rejected.previous });
                     itemsRef.current = next;
                     setItems(next);
                     refreshSpatialIndex();

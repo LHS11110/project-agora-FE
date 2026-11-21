@@ -58,6 +58,10 @@ const paths = {
   ellipse: <ellipse cx="12" cy="12" rx="9" ry="6"/>,
   play: <polygon points="6 4 20 12 6 20 6 4"/>,
   pause: <><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></>,
+  hash: <><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></>,
+  folder: <><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2.5h6.5A2.5 2.5 0 0 1 21 9v8.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5Z"/></>,
+  video: <><rect x="2.5" y="5.5" width="14" height="13" rx="2"/><path d="m16.5 10 5-3v10l-5-3Z"/></>,
+  paperclip: <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>,
 };
 
 export default function Icon({ name, size = 20, strokeWidth = 1.8, className = '' }) {

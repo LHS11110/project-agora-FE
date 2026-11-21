@@ -4,6 +4,7 @@ import { isObjectFontSize, supportsObjectFontSize } from './objectSize.js';
 import { MIN_CONTENT_SCALE, MAX_CONTENT_SCALE } from './objectContentScale.js';
 import { isCodeLanguage } from './codeLanguages.js';
 import { useCallback } from 'react';
+import { changeItems } from './itemSnapshots.js';
 import * as Automerge from '@automerge/automerge/slim';
 import {
   canPeerAccessItem,
@@ -70,7 +71,7 @@ export function useCanvasPeerEvents(options) {
           || (previous && previous.kind !== item.kind)
           || (previous && (!canPeerAccessItem(previous, localPeer) || !canPeerAccessItem(previous, peer)))) return;
         syncClockRef.current = Math.max(syncClockRef.current, version.clock);
-        const next = { ...itemsRef.current, [key]: item };
+        const next = changeItems(itemsRef.current, { [key]: item });
         itemsRef.current = next;
         itemSyncVersionsRef.current.set(key, version);
         deletedItemSyncVersionsRef.current.delete(key);
@@ -86,8 +87,7 @@ export function useCanvasPeerEvents(options) {
         if (!canPeerAccessItem(accessItem, localPeer) || !canPeerAccessItem(accessItem, peer)
           || (previous && (!canPeerAccessItem(previous, localPeer) || !canPeerAccessItem(previous, peer)))) return;
         syncClockRef.current = Math.max(syncClockRef.current, version.clock);
-        const next = { ...itemsRef.current };
-        delete next[key];
+        const next = changeItems(itemsRef.current, {}, [key]);
         itemsRef.current = next;
         itemSyncVersionsRef.current.set(key, version);
         deletedItemSyncVersionsRef.current.set(key, { version, permission: data.permission });
@@ -176,7 +176,7 @@ export function useCanvasPeerEvents(options) {
         permission: previous.permission,
       };
       if (!itemsRef.current[strokeId]) {
-        itemsRef.current = { ...itemsRef.current, [strokeId]: item };
+        itemsRef.current = changeItems(itemsRef.current, { [strokeId]: item });
         setItems((current) => ({ ...current, [strokeId]: item }));
         refreshSpatialIndex();
       }
@@ -233,7 +233,7 @@ export function useCanvasPeerEvents(options) {
         }
         catch { return; }
       }
-      itemsRef.current = { ...itemsRef.current, [key]: item };
+      itemsRef.current = changeItems(itemsRef.current, { [key]: item });
       itemSyncVersionsRef.current.set(key, incomingIsNewer ? version : localVersion);
       if (tombstone && compareSyncVersions(version, tombstone.version) > 0) deletedItemSyncVersionsRef.current.delete(key);
       newCollaborativeItemsRef.current.add(key);
@@ -270,7 +270,7 @@ export function useCanvasPeerEvents(options) {
           ? { ...localItem, ...item, [field]: mergedDoc.content }
           : { ...item, ...localItem, [field]: mergedDoc.content };
         collaborativeDocsRef.current.set(key, mergedDoc);
-        itemsRef.current = { ...itemsRef.current, [key]: mergedItem };
+        itemsRef.current = changeItems(itemsRef.current, { [key]: mergedItem });
         itemSyncVersionsRef.current.set(key, incomingIsNewer ? version : localVersion);
         if (tombstone && compareSyncVersions(version, tombstone.version) > 0) deletedItemSyncVersionsRef.current.delete(key);
         setItems((current) => ({ ...current, [key]: mergedItem }));
@@ -313,7 +313,7 @@ export function useCanvasPeerEvents(options) {
           if (compareSyncVersions(version, currentVersion) > 0) itemSyncVersionsRef.current.set(key, version);
         }
         const nextItem = { ...item, [expectedField]: doc.content };
-        itemsRef.current = { ...itemsRef.current, [key]: nextItem };
+        itemsRef.current = changeItems(itemsRef.current, { [key]: nextItem });
         setItems((current) => ({ ...current, [key]: nextItem }));
         markItemDirty(key);
       } catch { /* A later snapshot can recover an interrupted peer sync. */ }
@@ -354,7 +354,7 @@ export function useCanvasPeerEvents(options) {
       const nextValue = data.field === 'fontSize' ? Number(value) : data.field === 'groupId' ? value || null : value;
       if (item[data.field] === nextValue) return;
       const nextItem = { ...item, [data.field]: nextValue };
-      itemsRef.current = { ...itemsRef.current, [key]: nextItem };
+      itemsRef.current = changeItems(itemsRef.current, { [key]: nextItem });
       setItems((current) => ({ ...current, [key]: nextItem }));
       refreshSpatialIndex();
       markItemDirty(key);
@@ -415,7 +415,7 @@ export function useCanvasPeerEvents(options) {
         syncClockRef.current = Math.max(syncClockRef.current, version.clock);
         itemSyncVersionsRef.current.set(key, version);
       }
-      itemsRef.current = { ...itemsRef.current, [key]: nextItem };
+      itemsRef.current = changeItems(itemsRef.current, { [key]: nextItem });
       setItems((current) => ({ ...current, [key]: nextItem }));
       if (item.x !== nextItem.x || item.y !== nextItem.y || item.width !== nextItem.width || item.height !== nextItem.height || item.rotation !== nextItem.rotation || item.contentScale !== nextItem.contentScale || item.contentScaleX !== nextItem.contentScaleX || item.contentScaleY !== nextItem.contentScaleY || item.fontSize !== nextItem.fontSize) refreshSpatialIndex();
       if (isCollaborativeItem(item)) markItemDirty(key);
@@ -436,8 +436,7 @@ export function useCanvasPeerEvents(options) {
       deletedItemSyncVersionsRef.current.set(key, { version, permission });
       takePendingPeerEvents(pendingPeerItemEventsRef, pendingPeerItemEventsSizeRef, key);
       if (!item) return;
-      const next = { ...itemsRef.current };
-      delete next[key];
+      const next = changeItems(itemsRef.current, {}, [key]);
       itemsRef.current = next;
       collaborativeDocsRef.current.delete(key);
       collaborativeBaseDocsRef.current.delete(key);

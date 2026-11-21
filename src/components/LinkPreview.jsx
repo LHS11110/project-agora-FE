@@ -231,8 +231,9 @@ export function LinkSummary({
   );
 }
 
-export function MessageLinkPreviews({ text, token, transportReady = false, showFallback = true }) {
-  const urls = messageLinks(text);
+export function MessageLinkPreviews({ text, token, transportReady = false, showFallback = true, excludeUrls = null }) {
+  const excluded = excludeUrls instanceof Set ? excludeUrls : excludeUrls ? new Set(excludeUrls) : null;
+  const urls = messageLinks(text).filter(url => !excluded?.has(url));
   if (!urls.length) return null;
   return (
     <div className="message-link-previews">

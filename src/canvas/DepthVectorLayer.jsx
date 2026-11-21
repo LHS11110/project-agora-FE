@@ -30,6 +30,7 @@ import '../components/vector-layer.css';
 const EMPTY_PREVIEWS = [];
 const EMPTY_ITEMS={};
 const GPU_CULL_THRESHOLD = 4096;
+const CAMERA_RASTER_PIXEL_CAP = 262_144;
 
 const DepthVectorLayer = memo(function DepthVectorLayer(props) {
   useUiLocale();
@@ -46,6 +47,10 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
     buffer.className='vector-composite-surface';element.insertBefore(buffer,canvas);
     let compositor=null,bufferVersion=0,surfaceChanged=false,worldPaintBounds=null,bufferCamera=null,previousPaintCamera=null,previousPaintRatio=0,sceneInputs=null,lastCamera=null,cameraIdleTimer=null,budgetIdleTimer=null,refreshCamera=false,cameraActive=false,cameraIdlePending=false,viewportMetrics=null,textAppearanceCache=null,inkHasContent=false,inkVisibleCount=0,settledDesiredRatio=null,dragPreview=null,previousDragPreview=null,gpuDragIds=null,lastGpuCullKey='';
     const activeDragPainted=new Map();
+    // Rasters made while the camera moves are capped so one large shadowed or
+    // image object cannot block a frame (a 2M px raster took ~40ms); they are
+    // redrawn at full resolution once the camera settles.
+    const provisionalIds=new Set();
     // The ink renderer asks for a pass when a released drag overlay times out.
     // A request made during ink.render() must survive the key update that follows it.
     let inkRerender = false;
@@ -360,6 +365,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         }
         if (stale.length) preparationQueue.invalidate(stale);
       }
+      if (!cameraActive && provisionalIds.size) preparationQueue.invalidate([...provisionalIds]);
       const pending = preparationQueue.pending;
       const imagesChanged = readyImageIds.size > 0;
       const zoomRatio=bufferCamera && camera.scale>0 && bufferCamera.scale>0 ? camera.scale/bufferCamera.scale : 0;
@@ -468,7 +474,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         for (const [id,record] of records) if (!preparationQueue.ids.has(id)
           || (!['shape','connector','stroke'].includes(items[id]?.kind) && !isRasterText(items[id]))) {
           if (record.paintedBounds) damage.push(record.paintedBounds);
-          destroyRecord(record); records.delete(id); structuralGpuChange = true;
+          destroyRecord(record); records.delete(id); provisionalIds.delete(id); structuralGpuChange = true;
         }
         const hidden = new Set(previewStrokes.map(stroke => String(stroke.id)));
         if (draft?.id) hidden.add(String(draft.id));
@@ -545,7 +551,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         // with the zoom frames they are meant to improve.
         const qualityNeeded=!cameraActive && record && targetRatio>record.quality*qualityRatioThreshold;
         const deferPreview = item.__imagePreview && preview?.state !== 'ready' && sameImage && record?.previewVersion;
-        const rebuild = !deferPreview && (!record || record.key !== key || qualityNeeded || record.clipStale
+        const rebuild = !deferPreview && (!record || record.key !== key || qualityNeeded || record.clipStale || (!cameraActive && provisionalIds.has(id))
           || (record.pixelBudget > pixelBudget*1.1 && record.raster.pixelWidth*record.raster.pixelHeight > pixelBudget*1.1));
         if (rebuild) {
           if (record) {paintIndex.remove(record);damage.push(record.paintedBounds);destroyRecord(record);}
@@ -559,6 +565,8 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
             objectBudget=Math.max(pixelBudget,Math.min(2_000_000,area,(vw+2*mx)*(vh+2*my))*targetRatio*targetRatio);
             objectBudget=Math.max(pixelBudget,Math.min(2_000_000,objectBudget));
           }
+          if (cameraActive && objectBudget > CAMERA_RASTER_PIXEL_CAP) { objectBudget = CAMERA_RASTER_PIXEL_CAP; provisionalIds.add(id); }
+          else provisionalIds.delete(id);
           const resourceKey=key+':'+targetRatio+':'+Math.round(objectBudget)+(clip?`:${clip.minX},${clip.minY},${clip.maxX},${clip.maxY}`:'');
           const resource=resources.acquire(resourceKey,()=>{
             stats.rasterizations++;

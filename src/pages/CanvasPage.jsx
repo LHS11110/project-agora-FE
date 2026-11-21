@@ -118,7 +118,25 @@ const CanvasInspectorPanel = lazy(() => import('../components/canvas/CanvasInspe
 import CanvasChatPanel from '../components/canvas/CanvasChatPanel.jsx';
 import CanvasLoadingStatus from '../components/canvas/CanvasLoadingStatus.jsx';
 import { CHAT_HISTORY_LIMIT } from '../canvas/canvasChat.js';
-import { CHANNEL_LIMIT, DEFAULT_TEXT_CHANNEL, chatTarget, isChannelItem, listChannels, newChannel, newChannelId, nextChannelOrder } from '../canvas/channels/channelModel.js';
+import {
+  CATEGORY_LIMIT,
+  CHANNEL_KIND,
+  CHANNEL_LIMIT,
+  DEFAULT_TEXT_CHANNEL,
+  chatTarget,
+  isCategoryItem,
+  isChannelItem,
+  listCategories,
+  listChannels,
+  moveChannelPatch,
+  newCategory,
+  newCategoryId,
+  newChannel,
+  newChannelId,
+  nextChannelOrder,
+  reorderCategoryPatch,
+} from '../canvas/channels/channelModel.js';
+import { validateChatMediaFile } from '../canvas/chat/chatMedia.js';
 import { createId } from '../canvas/canvasIds.js';
 import {
   canPeerAccessItem,
@@ -1819,11 +1837,23 @@ function CanvasWorkspace() {
         setActiveTool('select'); selectItems([id]); return id;
       } catch { setToast('이미지를 읽지 못했습니다.'); }
     };
-    const submitMessage = (event) => {
-      event?.preventDefault(); const text = message.trim();
-      if (new TextEncoder().encode(text).length > 4096) { setToast('메시지는 UTF-8 기준 4096바이트 이하여야 합니다.'); return; }
-      if (!text || !sendRaw({ type: 'chat', ...chatTarget(activeChatChannelRef.current), text, request_id: createId() })) return;
+    const uploadChatMedia = async (file) => {
+      const check = validateChatMediaFile(file);
+      if (!check.ok) throw new Error(ui(check.error));
+      const body = new FormData();
+      body.append('file', file);
+      const resource = await api(`/api/canvases/${encodeURIComponent(canvasId)}/media`, { method: 'POST', body, token });
+      const url = resource?.url || resource?.src || '';
+      if (!url) throw new Error(ui('미디어를 업로드하지 못했습니다.'));
+      return { url, mediaType: check.mediaType };
+    };
+    const submitMessage = (event, textOverride) => {
+      event?.preventDefault();
+      const text = (typeof textOverride === 'string' ? textOverride : message).trim();
+      if (new TextEncoder().encode(text).length > 4096) { setToast('메시지는 UTF-8 기준 4096바이트 이하여야 합니다.'); return false; }
+      if (!text || !sendRaw({ type: 'chat', ...chatTarget(activeChatChannelRef.current), text, request_id: createId() })) return false;
       setMessage('');
+      return true;
     };
     const {
       startObjectDrag,
@@ -2209,8 +2239,15 @@ function CanvasWorkspace() {
     const { backgroundColor, setBackgroundColor, backgroundStyle } = useCanvasBackground(canvasId);
     const onlineParticipants = useMemo(() => onlineCanvasParticipants(user, peerList, canvasParticipants, connection === 'connected'), [user, peerList, canvasParticipants, connection]);
     const mentionParticipants = useMemo(() => uniqueCanvasParticipants([...canvasParticipants, ...onlineParticipants]), [canvasParticipants, onlineParticipants]);
-    const textChannels = useMemo(() => listChannels(items, 'text', ui('일반')), [items]);
-    const voiceChannels = useMemo(() => listChannels(items, 'voice', ui('일반 통화')), [items]);
+    // Channel lists only depend on channel items. Scanning every item on each
+    // drag frame or peer update cost O(N) twice per change on large canvases.
+    const channelSubset = useRef(null);
+    if (!channelSubset.current) channelSubset.current = new ItemSubset(item => item.kind === CHANNEL_KIND);
+    const channelEntries = channelSubset.current.update(items);
+    const channelItems = useMemo(() => Object.fromEntries(channelEntries), [channelEntries]);
+    const channelCategories = useMemo(() => listCategories(channelItems), [channelItems]);
+    const textChannels = useMemo(() => listChannels(channelItems, 'text', ui('일반')), [channelItems]);
+    const voiceChannels = useMemo(() => listChannels(channelItems, 'voice', ui('일반 통화')), [channelItems]);
     // A deleted (or no longer visible) channel falls back to the default one.
     useEffect(() => {
       if (!textChannels.some(channel => channel.id === activeChatChannel)) selectChatChannel(DEFAULT_TEXT_CHANNEL);
@@ -2222,13 +2259,14 @@ function CanvasWorkspace() {
       const canManage = canWriteCanvas && hostStatus.editable && connection === 'connected';
       const duplicate = (list, name, except) => list.some(channel => channel.id !== except && channel.name.toLocaleLowerCase() === name.toLocaleLowerCase());
       return {
-        text: textChannels, voice: voiceChannels, activeText: activeChatChannel, unread: chatUnread, canManage,
+        text: textChannels, voice: voiceChannels, categories: channelCategories, activeText: activeChatChannel, unread: chatUnread, canManage,
         selectText: selectChatChannel,
-        create: (type, name) => {
+        create: (type, name, categoryId = null) => {
           const list = type === 'text' ? textChannels : voiceChannels;
           if (list.length > CHANNEL_LIMIT) { setToast(ui('채널은 종류별로 최대 50개까지 만들 수 있습니다.')); return false; }
           if (duplicate(list, name)) { setToast(ui('같은 이름의 채널이 이미 있습니다.')); return false; }
-          const id = newChannelId(), item = newChannel(type, name, permission, nextChannelOrder(list));
+          const validCatId = categoryId && channelCategories.some(cat => cat.id === categoryId) ? categoryId : null;
+          const id = newChannelId(), item = newChannel(type, name, permission, nextChannelOrder(list), validCatId);
           if (!canWriteItem(item)) { setToast(WRITE_DENIED); return false; }
           if (!patchItems({ [id]: item })) { setToast(ui('채널을 만들지 못했습니다. 연결 상태를 확인해주세요.')); return false; }
           if (type === 'text') selectChatChannel(id); else if (!voice.state.active) voice.call.setChannel(id);
@@ -2245,6 +2283,56 @@ function CanvasWorkspace() {
           if (!isChannelItem(item) || !canWriteItem(item)) { setToast(WRITE_DENIED); return; }
           if (!window.confirm(ui(item.channelType === 'text' ? '이 채팅 채널과 메시지 기록을 삭제할까요?' : '이 통화 채널을 삭제할까요? 참여 중인 사람은 기본 통화 채널로 이동합니다.'))) return;
           patchItems({}, [id]);
+        },
+        createCategory: name => {
+          if (channelCategories.length >= CATEGORY_LIMIT) { setToast(ui('카테고리는 최대 50개까지 만들 수 있습니다.')); return false; }
+          if (duplicate(channelCategories, name)) { setToast(ui('같은 이름의 카테고리가 이미 있습니다.')); return false; }
+          const id = newCategoryId(), item = newCategory(name, permission, nextChannelOrder(channelCategories));
+          if (!canWriteItem(item)) { setToast(WRITE_DENIED); return false; }
+          if (!patchItems({ [id]: item })) { setToast(ui('카테고리를 만들지 못했습니다. 연결 상태를 확인해주세요.')); return false; }
+          return true;
+        },
+        renameCategory: (id, name) => {
+          const item = itemsRef.current[id];
+          if (!isCategoryItem(item) || !canWriteItem(item)) { setToast(WRITE_DENIED); return false; }
+          if (duplicate(channelCategories, name, id)) { setToast(ui('같은 이름의 카테고리가 이미 있습니다.')); return false; }
+          return patchItems({ [id]: { ...item, name } }) !== false;
+        },
+        removeCategory: id => {
+          const item = itemsRef.current[id];
+          if (!isCategoryItem(item) || !canWriteItem(item)) { setToast(WRITE_DENIED); return; }
+          if (!window.confirm(ui('이 카테고리를 삭제할까요? 속한 채널은 삭제되지 않고 미분류로 이동합니다.'))) return;
+          const updates = {};
+          for (const [channelId, candidate] of Object.entries(itemsRef.current || {})) {
+            if (isChannelItem(candidate) && candidate.categoryId === id && canWriteItem(candidate)) {
+              const next = { ...candidate };
+              delete next.categoryId;
+              updates[channelId] = next;
+            }
+          }
+          patchItems(updates, [id]);
+        },
+        moveChannel: (id, categoryId = null, targetChannelId = null) => {
+          const item = itemsRef.current[id];
+          if (!isChannelItem(item) || !canWriteItem(item)) { setToast(WRITE_DENIED); return false; }
+          const patches = moveChannelPatch(itemsRef.current, id, categoryId, targetChannelId);
+          if (!patches || !Object.keys(patches).length) return true;
+          const writablePatches = Object.fromEntries(
+            Object.entries(patches).filter(([patchId]) => canWriteItem(itemsRef.current[patchId])),
+          );
+          if (!writablePatches[id]) { setToast(WRITE_DENIED); return false; }
+          return patchItems(writablePatches) !== false;
+        },
+        reorderCategory: (id, targetCategoryId) => {
+          const item = itemsRef.current[id];
+          if (!isCategoryItem(item) || !canWriteItem(item)) { setToast(WRITE_DENIED); return false; }
+          const patches = reorderCategoryPatch(itemsRef.current, id, targetCategoryId);
+          if (!patches || !Object.keys(patches).length) return true;
+          const writablePatches = Object.fromEntries(
+            Object.entries(patches).filter(([patchId]) => canWriteItem(itemsRef.current[patchId])),
+          );
+          if (!Object.keys(writablePatches).length) return false;
+          return patchItems(writablePatches) !== false;
         },
       };
     })();
@@ -2419,6 +2507,7 @@ function CanvasWorkspace() {
       loadOlderMessages: (...args) => loadOlderMessages(...args),
       setMessage: (...args) => setMessage(...args),
       submitMessage: (...args) => submitMessage(...args),
+      onUploadChatMedia: (...args) => uploadChatMedia(...args),
       onChatHighlightExpired: () => setChatHighlight(null),
       onChatHighlightVisible: () => { if (chatJumpNote) { comments.dismiss(chatJumpNote); setChatJumpNote(null); } },
       onAgentBusyChange: (...args) => setAgentBusy(...args),
@@ -2606,7 +2695,7 @@ function CanvasWorkspace() {
             updateShapeArrowBend: uiActions.updateShapeArrowBend,
             zoomSensitivity
           }} /></Suspense></ResizablePanel>
-          <ScreenShareViewer voice={voice} /><ResizablePanel {...panelLayout.handle('chat')} title={ui('채팅 · 통화')} callActive={voice.state.active}><CanvasChatPanel token={token} voice={voice} tab={communicationTab} onTabChange={uiActions.onChatTabChange} canWrite={canUseCanvas(capabilities, 'write')} chatHistoryLoading={chatHistoryLoading} connection={connection} hasOlderMessages={hasOlderMessages} loadOlderMessages={uiActions.loadOlderMessages} message={message} messages={messages} setMessage={uiActions.setMessage} submitMessage={uiActions.submitMessage} chatMessageTotal={chatMessageTotal} participants={mentionParticipants} highlight={chatHighlight} onHighlightExpired={uiActions.onChatHighlightExpired} onHighlightVisible={uiActions.onChatHighlightVisible} channels={channelControls} /></ResizablePanel>
+          <ScreenShareViewer voice={voice} /><ResizablePanel {...panelLayout.handle('chat')} title={ui('채팅 · 통화')} callActive={voice.state.active}><CanvasChatPanel token={token} voice={voice} tab={communicationTab} onTabChange={uiActions.onChatTabChange} canWrite={canUseCanvas(capabilities, 'write')} chatHistoryLoading={chatHistoryLoading} connection={connection} hasOlderMessages={hasOlderMessages} loadOlderMessages={uiActions.loadOlderMessages} message={message} messages={messages} setMessage={uiActions.setMessage} submitMessage={uiActions.submitMessage} chatMessageTotal={chatMessageTotal} participants={mentionParticipants} highlight={chatHighlight} onHighlightExpired={uiActions.onChatHighlightExpired} onHighlightVisible={uiActions.onChatHighlightVisible} channels={channelControls} onUploadChatMedia={uiActions.onUploadChatMedia} /></ResizablePanel>
         </div>}
         {passwordPrompt.prompt && <CanvasPasswordDialog prompt={passwordPrompt.prompt} theme={theme} />}
         {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{ui(toast)}</div>}

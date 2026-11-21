@@ -1059,6 +1059,14 @@
 
 .canvas-stage .canvas-scene .canvas-object {
   contain: layout style;
+}
+
+/* A will-change layer under the scaled/translated world layer is re-recorded and
+ * re-rastered on every camera step: with ~30 DOM objects each table/notebook was
+ * repainted per wheel event (zoom p95 33ms -> 16.7ms without it). Even a handful
+ * of promoted sticky notes kept p95 at 33ms, so only selected objects (moved via
+ * `translate` while dragging) get their own layer. */
+.canvas-stage .canvas-scene .canvas-object.selected {
   will-change: transform;
 }
 
