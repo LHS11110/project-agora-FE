@@ -22,14 +22,15 @@ self.onmessage=async({data})=>{
       for(const id of data.removed){renderer.remove_texture(id);owned.delete(id);}
       for(const image of data.textures){const ok=image.region?renderer.upload_canvas_subtexture(image.id,image.bitmap,image.region.size,image.region.size,image.region.x,image.region.y):renderer.upload_canvas_texture(image.id,image.bitmap,image.width,image.height);if(!ok)throw Error('Texture upload failed');owned.add(image.id);}
       if(data.scene)renderer.update_scene(data.scene.words,data.scene.ids,data.scene.starts,data.scene.counts);
-      const {camera,viewportWidth,viewportHeight,pixelWidth,pixelHeight,margin}=data;
+      const {camera,viewportWidth,viewportHeight,pixelWidth,pixelHeight,margin,dragOffset}=data;
       renderer.resize(pixelWidth,pixelHeight);
+      renderer.set_drag_offset?.(dragOffset?.dx||0,dragOffset?.dy||0);
       const prepared=performance.now();
       if(!renderer.render_frame(camera.x+margin,camera.y+margin,camera.scale,viewportWidth+margin*2,viewportHeight+margin*2))throw Error(renderer.last_error()||'GPU surface unavailable');
       const submitted=performance.now();
       for(const image of data.textures)image.bitmap.close();
       const bitmap=canvas.transferToImageBitmap();
-      self.postMessage({type:'frame',layer:data.layer,seq:data.seq,version:data.version,camera,viewportWidth,viewportHeight,margin,bitmap,timings:{sceneMs:prepared-start,submitMs:submitted-prepared,exportMs:performance.now()-submitted,workerMs:performance.now()-start}},[bitmap]);
+      self.postMessage({type:'frame',layer:data.layer,seq:data.seq,version:data.version,camera,viewportWidth,viewportHeight,margin,dragOffset:dragOffset||null,bitmap,timings:{sceneMs:prepared-start,submitMs:submitted-prepared,exportMs:performance.now()-submitted,workerMs:performance.now()-start}},[bitmap]);
     }else if(data.type==='release'){
       for(const id of layerTextures.get(data.layer)||[])renderer?.remove_texture(id);
       layerTextures.delete(data.layer);renderer?.remove_scene(data.layer);

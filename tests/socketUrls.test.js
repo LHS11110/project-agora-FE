@@ -6,7 +6,8 @@ async function client(env) {
   const transportUrl = new URL('../src/api/canvasTransport.js', import.meta.url).href;
   const source = (await readFile(new URL('../src/api/client.js', import.meta.url), 'utf8'))
     .replaceAll('import.meta.env', JSON.stringify(env))
-    .replaceAll("'./canvasTransport.js'", JSON.stringify(transportUrl));
+    .replaceAll("'./canvasTransport.js'", JSON.stringify(transportUrl))
+    .replaceAll("'../state/authSession.js'", JSON.stringify(new URL('../src/state/authSession.js', import.meta.url).href));
   return import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 }
 

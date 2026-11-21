@@ -7,7 +7,7 @@ import {TEXT_COLOR_MARK} from '../content/textColors.js';
 export function restoreOperations(manifest,items){
  const wanted=Object.fromEntries(planManifest({...manifest,mode:'replace',remove:[]},{},'default').creates.map(e=>[e.id,e.item]));
  const operations=[],removed=[];
- for(const [id,old] of Object.entries(items))if(old?.type!=='chat_room'&&!wanted[id]){if(old.locked)throw new Error('잠긴 객체를 삭제하는 복원은 적용할 수 없습니다.');removed.push({id,action:'delete',connector:old.kind==='connector'});}
+ for(const [id,old] of Object.entries(items))if(old?.type!=='chat_room'&&old?.kind!=='channel'&&!wanted[id]){if(old.locked)throw new Error('잠긴 객체를 삭제하는 복원은 적용할 수 없습니다.');removed.push({id,action:'delete',connector:old.kind==='connector'});}
  for(const [id,item] of Object.entries(wanted).sort((a,b)=>Number(a[1].kind==='connector')-Number(b[1].kind==='connector'))){
   const old=items[id];if(old&&stable(exportManifest({[id]:old}).items[id])===stable(exportManifest({[id]:item}).items[id]))continue;
   if(old?.locked)throw new Error('잠긴 객체를 변경하는 복원은 적용할 수 없습니다.');

@@ -109,6 +109,7 @@ function getTickSprite(state, label, colors, dpr) {
 
 const STRIP_X_H = 44;
 const STRIP_Y_W = 108;
+const STRIP_OVERSCAN = 256;
 
 function syncStripVisibility(el, stateKey, state, visible) {
   if (!el) return;
@@ -118,11 +119,43 @@ function syncStripVisibility(el, stateKey, state, visible) {
   }
 }
 
-function drawFastStrip(canvas, ctxKey, trKey, state, rows, origin, viewportWidth, viewportHeight, horizontal, colors) {
+function drawFastStrip(canvas, ctxKey, trKey, cacheKey, state, camera, origin, viewportWidth, viewportHeight, horizontal, colors) {
   if (!canvas || !viewportWidth || !viewportHeight) return;
   const dpr = Math.min(2, globalThis.devicePixelRatio || 1);
-  const cssW = horizontal ? viewportWidth : STRIP_Y_W;
-  const cssH = horizontal ? STRIP_X_H : viewportHeight;
+  const left = !horizontal && origin > viewportWidth - 100;
+  const textFlip = horizontal ? (origin > viewportHeight - 30) : left;
+  const stripPos = horizontal
+    ? Math.round(origin - 22)
+    : Math.round(left ? origin - 100 : origin - 6);
+  const localOrigin = origin - stripPos;
+
+  // Reuse the overscanned strip canvas during pure panning by translating only.
+  const cached = state[cacheKey];
+  if (
+    cached
+    && cached.dpr === dpr
+    && cached.vw === viewportWidth
+    && cached.vh === viewportHeight
+    && cached.scale === camera.scale
+    && cached.textFlip === textFlip
+    && cached.colors === colors
+    && Math.abs(localOrigin - cached.localOrigin) < 0.75
+  ) {
+    const panDelta = horizontal ? (camera.x - cached.panOrigin) : (camera.y - cached.panOrigin);
+    if (Math.abs(panDelta) <= STRIP_OVERSCAN - 16) {
+      const tr = horizontal
+        ? `translate3d(${panDelta - STRIP_OVERSCAN}px,${stripPos}px,0)`
+        : `translate3d(${stripPos}px,${panDelta - STRIP_OVERSCAN}px,0)`;
+      if (state[trKey] !== tr) {
+        canvas.style.transform = tr;
+        state[trKey] = tr;
+      }
+      return;
+    }
+  }
+
+  const cssW = horizontal ? viewportWidth + STRIP_OVERSCAN * 2 : STRIP_Y_W;
+  const cssH = horizontal ? STRIP_X_H : viewportHeight + STRIP_OVERSCAN * 2;
   const tw = Math.max(1, Math.round(cssW * dpr));
   const th = Math.max(1, Math.round(cssH * dpr));
   if (canvas.width !== tw || canvas.height !== th || !state[ctxKey]) {
@@ -135,21 +168,37 @@ function drawFastStrip(canvas, ctxKey, trKey, state, rows, origin, viewportWidth
   const ctx = state[ctxKey];
   if (!ctx) return;
 
-  const left = !horizontal && origin > viewportWidth - 100;
-  const stripPos = horizontal
-    ? Math.round(origin - 22)
-    : Math.round(left ? origin - 100 : origin - 6);
-  const tr = horizontal ? `translate3d(0,${stripPos}px,0)` : `translate3d(${stripPos}px,0,0)`;
+  const tr = horizontal
+    ? `translate3d(${-STRIP_OVERSCAN}px,${stripPos}px,0)`
+    : `translate3d(${stripPos}px,${-STRIP_OVERSCAN}px,0)`;
   if (state[trKey] !== tr) {
     canvas.style.transform = tr;
     state[trKey] = tr;
   }
 
+  const expandedCamera = horizontal
+    ? { x: camera.x + STRIP_OVERSCAN, y: camera.y, scale: camera.scale }
+    : { x: camera.x, y: camera.y + STRIP_OVERSCAN, scale: camera.scale };
+  const expandedLayout = axisTickLayout(expandedCamera, {
+    width: horizontal ? cssW : viewportWidth,
+    height: horizontal ? viewportHeight : cssH,
+  });
+  const rows = horizontal ? expandedLayout.x : expandedLayout.y;
+
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssW, cssH);
+  state[cacheKey] = {
+    dpr,
+    vw: viewportWidth,
+    vh: viewportHeight,
+    scale: camera.scale,
+    textFlip,
+    colors,
+    localOrigin,
+    panOrigin: horizontal ? camera.x : camera.y,
+  };
   if (!rows.length) return;
 
-  const localOrigin = origin - stripPos;
   ctx.beginPath();
   for (let i = 0; i < rows.length; i++) {
     const p = rows[i].position;
@@ -188,7 +237,7 @@ const CanvasAxisTicks = memo(function CanvasAxisTicks({ boardRef, camera, showXA
     const stage = boardRef.current; if (!stage) return undefined;
     let width = stage.clientWidth, height = stage.clientHeight, last = '', lastSvg = '', lastW = -1, lastH = -1, lastStep = null;
     let svgHidden = false, cachedThemeKey = '', cachedColors = null;
-    const canvasState = { ctxX: null, ctxY: null, trX: '', trY: '', visX: false, visY: false, sprites: new Map() };
+    const canvasState = { ctxX: null, ctxY: null, trX: '', trY: '', cacheX: null, cacheY: null, visX: false, visY: false, sprites: new Map() };
     const readColors = () => {
       const page = stage.closest('.canvas-app-page');
       const themeKey = page?.dataset?.theme || 'light';
@@ -212,8 +261,8 @@ const CanvasAxisTicks = memo(function CanvasAxisTicks({ boardRef, camera, showXA
         const colors = readColors();
         syncStripVisibility(fastX.current, 'visX', canvasState, Boolean(c.showXAxis));
         syncStripVisibility(fastY.current, 'visY', canvasState, Boolean(c.showYAxis));
-        if (c.showXAxis) drawFastStrip(fastX.current, 'ctxX', 'trX', canvasState, layout.x, layout.displayY ?? layout.originY, width, height, true, colors);
-        if (c.showYAxis) drawFastStrip(fastY.current, 'ctxY', 'trY', canvasState, layout.y, layout.displayX ?? layout.originX, width, height, false, colors);
+        if (c.showXAxis) drawFastStrip(fastX.current, 'ctxX', 'trX', 'cacheX', canvasState, c.camera, layout.displayY ?? layout.originY, width, height, true, colors);
+        if (c.showYAxis) drawFastStrip(fastY.current, 'ctxY', 'trY', 'cacheY', canvasState, c.camera, layout.displayX ?? layout.originX, width, height, false, colors);
         return;
       }
       syncStripVisibility(fastX.current, 'visX', canvasState, false);

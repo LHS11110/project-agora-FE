@@ -26,7 +26,7 @@ export class AtlasPageSlots {
 let nextTextureId = 1;
 
 export class RasterTextureAtlas {
-  constructor(size = 1024, maxPages = 8) {
+  constructor(size = 2048, maxPages = 8) {
     this.size = size;
     this.maxPages = maxPages;
     this.pages = [];

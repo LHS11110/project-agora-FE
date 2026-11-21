@@ -3,11 +3,14 @@ export default class CanvasVoiceCall {
  constructor({send,iceServers=[],iceTransportPolicy='relay',media=globalThis.navigator?.mediaDevices,Peer=globalThis.RTCPeerConnection,audio=()=>new Audio(),AudioContext=globalThis.AudioContext||globalThis.webkitAudioContext,onCue=null,reconnectTimeout=60000,disconnectDelay=4500,negotiationTimeout=15000,muteRepairDelay=8000,handoffTimeout=12000,leaveCueGrace=3000}){
   Object.assign(this,{send,iceServers,iceTransportPolicy,media,Peer,audio,AudioContext,onCue,reconnectTimeout,disconnectDelay,negotiationTimeout,muteRepairDelay,handoffTimeout,leaveCueGrace});
   this.peers=new Map();this.links=new Map();this.handoffs=new Map();this.pendingLeaveCues=new Map();this.recentDepartures=new Map();this.suppressJoinKeys=new Map();this.volumes=new Map();this.systemVolumes=new Map();this.listeners=new Set();this.outbox=[];
-  this.screenAudioVolume=100;this.self='';this.stream=null;this.screenStream=null;this.screenPending=false;this.watchingScreen=null;this.generation=0;this.muted=false;this.deafened=false;this.pending=false;this.reconnecting=false;this.closed=false;this.error='';
+  this.screenAudioVolume=100;this.channel='general';this.self='';this.stream=null;this.screenStream=null;this.screenPending=false;this.watchingScreen=null;this.generation=0;this.muted=false;this.deafened=false;this.pending=false;this.reconnecting=false;this.closed=false;this.error='';
   this.relayTimer=null;this.reconnectTimer=null;this.signalTimer=null;this.audioContext=null;this.audioHealthTimer=null;this.emit();
  }
  subscribe=fn=>{this.listeners.add(fn);return()=>this.listeners.delete(fn);};
  getSnapshot=()=>this.snapshot;
+ // Call channels split one canvas into separate calls; peers without one (older clients) are in "general".
+ channelOf(peer){return typeof peer?.voice_channel==='string'&&peer.voice_channel?peer.voice_channel:'general';}
+ inChannel(peer){return Boolean(peer?.voice_active)&&this.channelOf(peer)===this.channel;}
  volumeKey(peer){return peer?.nickname!=null&&peer?.tag_number!=null?`${peer.nickname}#${peer.tag_number}`:peer?.peer_id;}
  volumeFor(peer){return this.volumes.get(this.volumeKey(peer))??100;}
  hasLiveHandoff(){for(const h of this.handoffs.values())if(this.isTransportConnected(h.link.pc))return true;return false;}
@@ -15,8 +18,24 @@ export default class CanvasVoiceCall {
  emit(){
   const reconnectingView=this.reconnecting&&!this.hasLiveHandoff();
   this.snapshot={ready:Boolean(this.self)&&!this.closed&&this.mediaConfigured!==false,active:Boolean(this.stream),reconnecting:reconnectingView,pending:this.pending,screenAudio:Boolean(this.screenMix),screenAudioVolume:this.screenAudioVolume,screenSharing:Boolean(this.screenStream),screenPending:this.screenPending,watchingScreen:this.watchingScreen,screenVideo:this.links.get(this.watchingScreen)?.screenStream||null,muted:this.muted,deafened:this.deafened,error:this.error,
-   participants:[...this.peers.values()].filter(p=>p.voice_active).map(p=>{const link=this.links.get(p.peer_id),handoffConnected=Boolean(link?.waitingHandoff&&this.isTransportConnected(this.handoffs.get(this.volumeKey(p))?.link.pc));return {...p,volume:this.volumeFor(p),systemVolume:this.systemVolumes.get(this.volumeKey(p))??100,status:reconnectingView?'reconnecting':link?.exhausted?'failed':handoffConnected?'connected':link?.recovering?'reconnecting':link?.pc.connectionState||'connecting'};})};
+   channel:this.channel,channelMembers:this.channelMembers(),
+   participants:[...this.peers.values()].filter(p=>this.inChannel(p)).map(p=>{const link=this.links.get(p.peer_id),handoffConnected=Boolean(link?.waitingHandoff&&this.isTransportConnected(this.handoffs.get(this.volumeKey(p))?.link.pc));return {...p,volume:this.volumeFor(p),systemVolume:this.systemVolumes.get(this.volumeKey(p))??100,status:reconnectingView?'reconnecting':link?.exhausted?'failed':handoffConnected?'connected':link?.recovering?'reconnecting':link?.pc.connectionState||'connecting'};})};
   this.listeners.forEach(fn=>fn());
+ }
+ channelMembers(){
+  const members={};const add=(channel,member)=>{(members[channel]||=[]).push(member);};
+  for(const p of this.peers.values())if(p.voice_active)add(this.channelOf(p),{peer_id:p.peer_id,nickname:p.nickname,tag_number:p.tag_number,muted:Boolean(p.voice_muted),self:false});
+  if(this.stream&&this.self)add(this.channel,{peer_id:this.self,self:true,muted:this.muted});
+  return members;
+ }
+ /** Moves to another call channel, keeping the microphone if a call is active. */
+ setChannel(channel){
+  const next=typeof channel==='string'&&/^[A-Za-z0-9_-]{1,96}$/.test(channel)?channel:'general';
+  if(next===this.channel)return;
+  for(const id of [...this.links.keys()])this.drop(id);
+  this.channel=next;
+  if(this.stream){this.announce();for(const peer of this.peers.values())this.connect(peer);}
+  this.emit();
  }
  signal(event,link=null){
   if(this.closed||!this.self)return false;
@@ -39,8 +58,10 @@ export default class CanvasVoiceCall {
   },100);
  }
  clearSignals(){clearTimeout(this.signalTimer);this.signalTimer=null;this.outbox=[];}
- announce(){return this.signal({type:'voice_state',active:Boolean(this.stream),muted:this.muted,screen_sharing:Boolean(this.screenStream)});}
- async join(){
+ announce(){return this.signal({type:'voice_state',active:Boolean(this.stream),muted:this.muted,screen_sharing:Boolean(this.screenStream),channel:this.channel});}
+ async join(channel){
+  if(channel!==undefined&&!this.stream&&!this.pending)this.setChannel(channel);
+  else if(channel!==undefined&&this.stream){this.setChannel(channel);return;}
   if(this.closed||this.stream||this.pending||!this.self||this.mediaConfigured===false)return;
   const generation=++this.generation;this.pending=true;this.error='';this.emit();
   try{
@@ -236,7 +257,7 @@ export default class CanvasVoiceCall {
   this.emit();
  }
  connect(peer){
-  if(this.closed||!this.self||!this.stream||!peer.voice_active||peer.peer_id===this.self||this.links.has(peer.peer_id))return;
+  if(this.closed||!this.self||!this.stream||!this.inChannel(peer)||peer.peer_id===this.self||this.links.has(peer.peer_id))return;
   let pc;try{pc=new this.Peer({iceServers:this.iceServers,iceTransportPolicy:this.iceTransportPolicy,bundlePolicy:'max-bundle',rtcpMuxPolicy:'require'});}catch{this.error='VOICE_CONNECTION_FAILED';this.emit();return;}
   const audio=this.audio();audio.autoplay=true;audio.muted=this.deafened;audio.volume=this.volumeFor(peer)/100;
   const key=this.volumeKey(peer),waitingHandoff=this.handoffs.has(key);
@@ -316,7 +337,7 @@ export default class CanvasVoiceCall {
  }
  candidateMatches(candidate,description){return Boolean(description)&&(!candidate.usernameFragment||description.sdp.split(/\r?\n/).includes(`a=ice-ufrag:${candidate.usernameFragment}`));}
  receiveSignal(event){
-  const peer=this.peers.get(event.from_peer_id);if(!this.stream||!this.self||!peer?.voice_active)return;
+  const peer=this.peers.get(event.from_peer_id);if(!this.stream||!this.self||!this.inChannel(peer))return;
   this.connect(peer);const id=peer.peer_id,link=this.links.get(id);if(!link)return;
   this.enqueue(id,link,async()=>{
    const pc=link.pc;
@@ -365,7 +386,7 @@ export default class CanvasVoiceCall {
    this.applyRelay(event.media_relay);
    this.self=event.self_peer_id;this.peers=new Map((Array.isArray(event.peers)?event.peers:[]).map(p=>[p.peer_id,p]));
    clearTimeout(this.reconnectTimer);this.reconnectTimer=null;this.reconnecting=false;this.applyAudioState();
-   for(const id of this.links.keys())if(!this.peers.get(id)?.voice_active)this.drop(id);
+   for(const id of [...this.links.keys()])if(!this.inChannel(this.peers.get(id)))this.drop(id);
    for(const p of this.peers.values())if(p.voice_active)this.notePeerReturning(p);
    this.announce();for(const p of this.peers.values())this.connect(p);this.emit();
   }else if(event.type==='rtc_media_config'){this.applyRelay(event.media_relay);}
@@ -381,8 +402,8 @@ export default class CanvasVoiceCall {
    this.peers.delete(event.peer_id);if(this.watchingScreen===event.peer_id)this.watchingScreen=null;this.emit();
   }
   else if(event.type==='voice_state'){
-   const peer=this.peers.get(event.peer_id);if(!peer)return;Object.assign(peer,{voice_active:event.active,voice_muted:event.muted,screen_sharing:event.active&&event.screen_sharing===true});
-   if(event.active){this.notePeerReturning(peer);this.connect(peer);const existing=this.links.get(event.peer_id);if(existing&&(existing.exhausted||existing.pc.connectionState==='failed'||existing.pc.iceConnectionState==='failed'||existing.pc.connectionState==='closed'))this.repair(event.peer_id,true);}
+   const peer=this.peers.get(event.peer_id);if(!peer)return;Object.assign(peer,{voice_active:event.active,voice_muted:event.muted,screen_sharing:event.active&&event.screen_sharing===true,voice_channel:typeof event.channel==='string'&&event.channel?event.channel:'general'});
+   if(event.active&&this.inChannel(peer)){this.notePeerReturning(peer);this.connect(peer);const existing=this.links.get(event.peer_id);if(existing&&(existing.exhausted||existing.pc.connectionState==='failed'||existing.pc.iceConnectionState==='failed'||existing.pc.connectionState==='closed'))this.repair(event.peer_id,true);}
    else{this.drop(event.peer_id);this.clearHandoff(this.volumeKey(peer));}
    if(!event.screen_sharing&&this.watchingScreen===event.peer_id)this.watchingScreen=null;this.emit();
   }else if(event.type==='voice_notice'){

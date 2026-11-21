@@ -2,6 +2,7 @@ import {sharedAuthenticatedImageBlob} from '../components/authenticatedImageCach
 import {canvasFetch} from '../api/client.js';
 import {decodeDataUriBlob} from '../api/canvasTransport.js';
 import { objectCornerRadius } from './objectCorners.js';
+import { bearer } from '../state/authSession.js';
 // Small decoded previews are bounded independently of GPU atlas resources.
 // Eviction never invalidates pixels already copied into a layer's raster atlas.
 export default class ImagePreviewCache {
@@ -78,7 +79,7 @@ export async function loadImagePreview(source, token, apiUrl, signal, maxSide=10
         const shared=sharedAuthenticatedImageBlob(url.href,token);
         if(shared)blob=await shared;
         if(!blob) {
-          const response = await canvasFetch(url.href, { signal, cache: 'no-store', headers: url.origin === apiOrigin && token ? { Authorization: `Bearer ${token}` } : {} });
+          const response = await canvasFetch(url.href, { signal, cache: 'no-store', headers: url.origin === apiOrigin && token ? { Authorization: bearer(token) } : {} });
           if (!response.ok) throw Error('Image preview unavailable');
           blob = await response.blob();
         }

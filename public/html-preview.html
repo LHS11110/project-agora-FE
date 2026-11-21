@@ -1,0 +1,20 @@
+<!doctype html>
+<meta charset="utf-8">
+<!--
+  Host for user-authored HTML previews. It is loaded in an iframe with
+  sandbox="allow-scripts" (opaque origin, no access to the app) and is served
+  with its own CSP, because srcdoc frames inherit the app's strict script-src.
+  The parent posts the generated document once; it replaces this page.
+-->
+<script>
+(() => {
+  addEventListener('message', function receive(event) {
+    if (event.source !== parent || event.data?.type !== 'frelog-document' || typeof event.data.html !== 'string') return;
+    removeEventListener('message', receive);
+    document.open();
+    document.write(event.data.html);
+    document.close();
+  });
+  parent.postMessage({ type: 'frelog-preview-ready' }, '*');
+})();
+</script>

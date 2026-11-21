@@ -254,7 +254,7 @@ function __wbg_adapter_35(arg0, arg1, arg2) {
     wasm.closure386_externref_shim(arg0, arg1, arg2);
 }
 
-function __wbg_adapter_1141(arg0, arg1, arg2, arg3) {
+function __wbg_adapter_1142(arg0, arg1, arg2, arg3) {
     wasm.closure1482_externref_shim(arg0, arg1, arg2, arg3);
 }
 
@@ -426,6 +426,13 @@ export class WgpuCanvasRenderer {
      */
     remove_texture(tex_id) {
         wasm.wgpucanvasrenderer_remove_texture(this.__wbg_ptr, tex_id);
+    }
+    /**
+     * @param {number} dx
+     * @param {number} dy
+     */
+    set_drag_offset(dx, dy) {
+        wasm.wgpucanvasrenderer_set_drag_offset(this.__wbg_ptr, dx, dy);
     }
     /**
      * @param {number} tex_id
@@ -1470,7 +1477,7 @@ function __wbg_get_imports() {
                 const a = state0.a;
                 state0.a = 0;
                 try {
-                    return __wbg_adapter_1141(a, state0.b, arg0, arg1);
+                    return __wbg_adapter_1142(a, state0.b, arg0, arg1);
                 } finally {
                     state0.a = a;
                 }
@@ -2468,11 +2475,11 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper1677 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper1680 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 387, __wbg_adapter_35);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper788 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper791 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 47, __wbg_adapter_32);
         return ret;
     };

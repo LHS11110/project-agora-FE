@@ -63,7 +63,9 @@ export function useCommentsAndMentions({ sendRaw, connection, user, canvasId, on
   // Only the server decides which notifications exist and whether they were read.
   const notify = useCallback((entry) => {
     if (entry && !entry.own && mentionsUser(entry.text, latest.current.user)) {
-      const msgKey = entry.sequence != null ? `general:${entry.sequence}` : entry.id;
+      // Channel messages are comment threads ("object:<id>-<seq>"); keys match receiveMentions.
+      const scope = String(entry.id).startsWith('object:') ? String(entry.id).slice(0, String(entry.id).lastIndexOf('-')) : 'general';
+      const msgKey = entry.sequence != null ? `${scope}:${entry.sequence}` : entry.id;
       const seen = seenMentionsRef.current;
       if (!seen.messageKeys.has(msgKey)) {
         seen.messageKeys.add(msgKey);

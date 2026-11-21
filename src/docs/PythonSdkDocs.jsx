@@ -98,7 +98,7 @@ export default function PythonSdkDocs(){return <section className="docs-section 
   <Code>{'python -m pip install ./agora_canvas-0.1.4-py3-none-any.whl\n\n# Or install from the cloned backend repository:\npython -m pip install ./project-agora-BE/sdk/python'}</Code>
   <p>{ui('외부 주소는 https://frelog.p-e.kr입니다. TLS 인증서 검증은 항상 활성화되며 내부 CA가 필요한 환경에서는 ca_file을 지정합니다. with 블록이 끝나면 연결을 정리합니다.')}</p>
   <Heading id="sdk-auth">{ui('사용자 인증과 MFA')}</Heading>
-  <p>{ui('이메일·비밀번호 로그인은 MFA를 그대로 적용합니다. OAuth·패스키 로그인으로 받은 기존 사용자 토큰은 AgoraClient(token=...)에 전달합니다. 사용자 토큰은 발급받은 네트워크의 IP에 묶입니다.')}</p>
+  <p>{ui('이메일·비밀번호 로그인은 MFA를 그대로 적용하고, 15분마다 만료되는 사용자 토큰을 세션 쿠키로 자동 갱신합니다. OAuth·패스키 로그인으로 받은 사용자 토큰을 AgoraClient(token=...)에 전달하면 갱신 없이 만료 시점까지만 사용할 수 있으므로, 장시간 실행하는 스크립트에는 봇 토큰을 사용하세요. 사용자 토큰은 발급받은 네트워크의 IP에 묶입니다.')}</p>
   <Code>{authCode}</Code>
   <div className="docs-note"><strong>{ui('권한은 서버가 검증합니다.')}</strong><p>{ui('사용자와 봇 모두 읽기 권한이 있어야 접속할 수 있습니다. 생성·수정·삭제는 쓰기 권한, 코드 실행은 실행 권한이 필요합니다. 객체별 그룹과 잠금도 적용하며 캔버스 비밀번호가 있으면 password 인자로 전달합니다.')}</p></div>
   <Heading id="sdk-bots">{ui('봇 참여자')}</Heading>

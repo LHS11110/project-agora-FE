@@ -1,3 +1,4 @@
+import {bearer,sameSession} from '../state/authSession.js';
 let active=null;
 export function installCanvasTransport(options){
  active?.dispose?.();
@@ -52,7 +53,7 @@ export function canvasApiRequest(path,options){
  const destination=target(path);if(!destination)return null;
  const {entry,path:relative}=destination;
  return (async()=>{
-  if(options.token&&options.token!==entry.token)throw Error('캔버스 인증 정보가 변경되었습니다.');
+  if(options.token&&!sameSession(options.token,entry.token))throw Error('캔버스 인증 정보가 변경되었습니다.');
   if(options.body instanceof FormData){
    const files=[...options.body.entries()].filter(([,file])=>file instanceof Blob);
    if(files.length!==[...options.body.keys()].length)throw Error('지원하지 않는 파일 업로드 형식입니다.');
@@ -68,7 +69,7 @@ export function canvasApiRequest(path,options){
     return await entry.request({operation:'upload_finish',path:relative,uploadId:started.uploadId});
    }catch(error){entry.request({operation:'upload_cancel',path:relative,uploadId:started.uploadId}).catch(()=>{});throw error;}
   }
-  return entry.request({operation:'api',path:relative,method:options.method||'GET',body:options.body||{},...(relative==='/runtime/terminal/ticket'?{authorization:`Bearer ${entry.token}`}:{})});
+  return entry.request({operation:'api',path:relative,method:options.method||'GET',body:options.body||{},...(relative==='/runtime/terminal/ticket'?{authorization:bearer(entry.token)}:{})});
  })();
 }
 export async function canvasFetch(input,options={}){
@@ -80,7 +81,7 @@ export async function canvasFetch(input,options={}){
  }
  const destination=target(raw);
  if(!destination||!resourcePath(destination.path)||options.method&&options.method!=='GET')return fetch(input,options);
- const {entry,path}=destination;const authorization=new Headers(options.headers||{}).get('Authorization');if(authorization&&authorization!==`Bearer ${entry.token}`)throw Error('캔버스 인증 정보가 변경되었습니다.');let offset=0,size=null,type,version;const chunks=[];
+ const {entry,path}=destination;const authorization=new Headers(options.headers||{}).get('Authorization');if(authorization&&!(authorization.startsWith('Bearer ')&&sameSession(authorization.slice(7),entry.token)))throw Error('캔버스 인증 정보가 변경되었습니다.');let offset=0,size=null,type,version;const chunks=[];
  do{
   abort(options.signal);const part=await entry.request({operation:'resource',path,offset,...(version?{version}:{})});abort(options.signal);
   const bytes=decode(part.data);

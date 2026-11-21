@@ -49,6 +49,7 @@ import { isVolumeShape } from '../canvas/volumeGeometry.js';
 import { numericObjectPatch } from '../canvas/objectNumericGeometry.js';
 import SceneViewModel from '../canvas/SceneViewModel.js';
 import { itemCount, changeItems } from '../canvas/itemSnapshots.js';
+import { overviewScale } from '../canvas/sceneRepresentation.js';
 import { useCanvasCamera } from '../canvas/useCanvasCamera.js';
 import { isRasterContent as isRasterText } from '../canvas/plainTextRaster.js';
 import { buildDepthLayers, itemDepth } from '../canvas/itemDepth.js';
@@ -116,7 +117,8 @@ import CanvasParticipantsDialog from '../components/canvas/CanvasParticipantsDia
 const CanvasInspectorPanel = lazy(() => import('../components/canvas/CanvasInspectorPanel.jsx'));
 import CanvasChatPanel from '../components/canvas/CanvasChatPanel.jsx';
 import CanvasLoadingStatus from '../components/canvas/CanvasLoadingStatus.jsx';
-import { CHAT_HISTORY_LIMIT, CHAT_ROOM_ID } from '../canvas/canvasChat.js';
+import { CHAT_HISTORY_LIMIT } from '../canvas/canvasChat.js';
+import { CHANNEL_LIMIT, DEFAULT_TEXT_CHANNEL, chatTarget, isChannelItem, listChannels, newChannel, newChannelId, nextChannelOrder } from '../canvas/channels/channelModel.js';
 import { createId } from '../canvas/canvasIds.js';
 import {
   canPeerAccessItem,
@@ -315,7 +317,8 @@ function CanvasWorkspace() {
   const [peerList, setPeerList] = useState([]);
   const [remoteEditors, setRemoteEditors] = useState({});
   const [remoteDrawingStrokes, setRemoteDrawingStrokes] = useState([]);
-  const [laserStrokes, setLaserStrokes] = useState([]);
+  const laserUpdaterRef = useRef(null);
+  const setLaserStrokes = useCallback((update) => { laserUpdaterRef.current?.(update); }, []);
   const [dirtyItems, setDirtyItems] = useState(() => new Set());
   const [copiedStyle, setCopiedStyle] = useState(() => loadCopiedStyle());
   const [camera, applyCanvasCamera] = useCanvasCamera(boardRef, sceneRef);
@@ -387,8 +390,34 @@ function CanvasWorkspace() {
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [selectedItemIds, setSelectedItemIds] = useState([]);
   const [personalAnchors, setPersonalAnchors] = usePersonalAnchors(canvasId, user);
-  const [selectionBox, setSelectionBox] = useState(null);
-  const [creationBox, setCreationBox] = useState(null);
+  const selectionBoxRef = useRef(null);
+  const creationBoxRef = useRef(null);
+  const setSelectionBox = useCallback((box) => {
+    const node = selectionBoxRef.current;
+    if (!node) return;
+    if (!box) {
+      if (node.style.display !== 'none') node.style.display = 'none';
+      return;
+    }
+    if (node.style.display !== '') node.style.display = '';
+    node.style.transform = `translate3d(${box.left}px,${box.top}px,0)`;
+    node.style.width = `${box.width}px`;
+    node.style.height = `${box.height}px`;
+  }, []);
+  const setCreationBox = useCallback((box) => {
+    const node = creationBoxRef.current;
+    if (!node) return;
+    if (!box) {
+      if (node.style.display !== 'none') node.style.display = 'none';
+      return;
+    }
+    if (node.style.display !== '') node.style.display = '';
+    node.style.transform = `translate3d(${box.left}px,${box.top}px,0)`;
+    node.style.width = `${box.width}px`;
+    node.style.height = `${box.height}px`;
+    const labelNode = node.firstElementChild;
+    if (labelNode && labelNode.textContent !== box.label) labelNode.textContent = box.label;
+  }, []);
   const [editingId, setEditingId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [chatMessageTotal, setChatMessageTotal] = useState(0);
@@ -398,6 +427,16 @@ function CanvasWorkspace() {
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const [chatHistoryLoading, setChatHistoryLoading] = useState(false);
   const [message, setMessage] = useState('');
+  // Text channel shown in the chat list; other channels only collect unread counts.
+  const [activeChatChannel, setActiveChatChannel] = useState(DEFAULT_TEXT_CHANNEL);
+  const activeChatChannelRef = useRef(DEFAULT_TEXT_CHANNEL);
+  const [chatUnread, setChatUnread] = useState({});
+  const chatChannelRef = useRef(null);
+  chatChannelRef.current = {
+    activeId: activeChatChannelRef.current,
+    isChannel: id => { const item = itemsRef.current[id]; return isChannelItem(item) && item.channelType === 'text'; },
+    onUnread: id => setChatUnread(current => ({ ...current, [id]: (current[id] || 0) + 1 })),
+  };
   const [showSettings, setShowSettings] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
   const [settingsPending, setSettingsPending] = useState(false);
@@ -526,7 +565,7 @@ function CanvasWorkspace() {
     }
     return Object.keys(changes).length ? patchItems(changes) : false;
   };
-  const runAnimations = (ids, action = 'play') => { const changes = {}, runId = createId(); for (const id of [...new Set(ids)]) { const item = itemsRef.current[id]; if (!item || ['portfolio', 'frame'].includes(item.kind)) continue; if (!portfolioWritable(item)) throw Error('선택 객체의 쓰기 권한과 잠금 상태를 확인해주세요.'); const config = item.animation || defaultAnimation(); const vis = readObjectVisibility(item); if (action === 'play' && config.effect === 'none' && !vis.revealAfterAnimation) continue; const effectiveConfig = action === 'play' && config.effect === 'none' && vis.revealAfterAnimation ? ensureRevealAnimationConfig(item) : config; changes[id] = { ...item, ...(effectiveConfig !== config ? { animation: effectiveConfig } : {}), animationPlayback: { runId, action, startedAt: 0, config: effectiveConfig } }; } if (action === 'stop' && portfolioViewingRef.current && currentFrameRef.current && itemsRef.current[currentFrameRef.current]?.kind === 'frame') { const meta = itemsRef.current[PORTFOLIO_ID]; if (meta && portfolioWritable(meta)) changes[PORTFOLIO_ID] = { ...meta, portfolioCursor: { runId, previousRunId: meta.portfolioCursor?.runId || '', frameId: currentFrameRef.current, step: meta.portfolioCursor?.frameId === currentFrameRef.current ? meta.portfolioCursor.step : 0, startedAt: 0 } }; } if (!Object.keys(changes).length && action === 'play') throw Error('재생할 객체에 애니메이션 효과를 먼저 지정해주세요.'); return Object.keys(changes).length ? patchItems(changes) : false; };
+  const runAnimations = (ids, action = 'play') => { const changes = {}, runId = createId(); for (const id of [...new Set(ids)]) { const item = itemsRef.current[id]; if (!item || ['portfolio', 'frame', 'channel'].includes(item.kind)) continue; if (!portfolioWritable(item)) throw Error('선택 객체의 쓰기 권한과 잠금 상태를 확인해주세요.'); const config = item.animation || defaultAnimation(); const vis = readObjectVisibility(item); if (action === 'play' && config.effect === 'none' && !vis.revealAfterAnimation) continue; const effectiveConfig = action === 'play' && config.effect === 'none' && vis.revealAfterAnimation ? ensureRevealAnimationConfig(item) : config; changes[id] = { ...item, ...(effectiveConfig !== config ? { animation: effectiveConfig } : {}), animationPlayback: { runId, action, startedAt: 0, config: effectiveConfig } }; } if (action === 'stop' && portfolioViewingRef.current && currentFrameRef.current && itemsRef.current[currentFrameRef.current]?.kind === 'frame') { const meta = itemsRef.current[PORTFOLIO_ID]; if (meta && portfolioWritable(meta)) changes[PORTFOLIO_ID] = { ...meta, portfolioCursor: { runId, previousRunId: meta.portfolioCursor?.runId || '', frameId: currentFrameRef.current, step: meta.portfolioCursor?.frameId === currentFrameRef.current ? meta.portfolioCursor.step : 0, startedAt: 0 } }; } if (!Object.keys(changes).length && action === 'play') throw Error('재생할 객체에 애니메이션 효과를 먼저 지정해주세요.'); return Object.keys(changes).length ? patchItems(changes) : false; };
   const frameMeta = () => itemsRef.current[PORTFOLIO_ID] || { ...newPortfolio(permission), title: ui('포트폴리오') };
   const showPortfolioPage = (index, publish = true) => {
     const page = frameStore.getSnapshot()[index], rect = boardRef.current?.getBoundingClientRect(); if (!page || !rect) return;
@@ -632,7 +671,7 @@ function CanvasWorkspace() {
   const requestChatHistory = useCallback((toSequence, aroundSequence) => {
     if (chatHistoryRequestRef.current) return false;
     const requestId = createId();
-    const payload = { type: 'chat_history', room_id: CHAT_ROOM_ID, request_id: requestId, limit: CHAT_HISTORY_LIMIT };
+    const payload = { type: 'chat_history', ...chatTarget(activeChatChannelRef.current), request_id: requestId, limit: CHAT_HISTORY_LIMIT };
     if (aroundSequence) { payload.from_sequence = Math.max(1, aroundSequence - 10); payload.to_sequence = aroundSequence + 10; }
     else if (toSequence != null) payload.to_sequence = toSequence;
     chatHistoryRequestRef.current = requestId;
@@ -646,6 +685,17 @@ function CanvasWorkspace() {
   const loadOlderMessages = useCallback(() => {
     const { hasMore, nextToSequence } = chatHistoryPageRef.current;
     if (hasMore && nextToSequence != null) requestChatHistory(nextToSequence);
+  }, [requestChatHistory]);
+  const selectChatChannel = useCallback((channelId) => {
+    if (channelId === activeChatChannelRef.current) return;
+    activeChatChannelRef.current = channelId;
+    chatChannelRef.current = { ...chatChannelRef.current, activeId: channelId };
+    setActiveChatChannel(channelId);
+    setChatUnread(current => { if (!current[channelId]) return current; const next = { ...current }; delete next[channelId]; return next; });
+    setMessages([]); setChatMessageTotal(0); setHasOlderMessages(false); setChatHistoryLoading(false); setChatHighlight(null);
+    chatHistoryRequestRef.current = null;
+    chatHistoryPageRef.current = { hasMore: false, nextToSequence: null };
+    requestChatHistory();
   }, [requestChatHistory]);
   useEffect(() => {
     if (!chatJumpNote || chatHistoryLoading || messages.some(entry => entry.id === chatJumpNote.id) || requestedChatMention.current === chatJumpNote.key) return;
@@ -768,9 +818,9 @@ function CanvasWorkspace() {
           : isTextContent(item) && (field === 'filename' ? nextValue.length <= 80 : field === 'language' && isCodeLanguage(nextValue));
     if (!isCollaborativeItem(item) || isObjectLocked(item) || !canWriteItem(item) || !validField) return;
     const nextItem = { ...item, [field]: field === 'fontSize' ? Number(nextValue) : field === 'groupId' ? nextValue || null : nextValue };
-    itemsRef.current = { ...itemsRef.current, [key]: nextItem };
-    setItems((current) => ({ ...current, [key]: nextItem }));
-    if (['fontSize', 'renderMode', 'filename', 'language'].includes(field)) refreshSpatialIndex();
+    itemsRef.current = changeItems(itemsRef.current, { [key]: nextItem });
+    setItems((current) => changeItems(current, { [key]: nextItem }), [key]);
+    if (['fontSize', 'renderMode', 'filename', 'language'].includes(field)) refreshSpatialIndex([key]);
     markItemDirty(key);
     const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
     itemSyncVersionsRef.current.set(key, version);
@@ -828,13 +878,13 @@ function CanvasWorkspace() {
     if (!(['table', 'chart', 'question', 'value', 'pdf', 'link'].includes(previous?.kind) || ['notebook', 'notebook-cell', 'timer'].includes(previous?.runtimeRole)) || !hostSessionRef.current.editable || isObjectLocked(previous) || (!canWriteItem(previous) && !mediaOnly)) return false;
     const nextItem = typeof update === 'function' ? update(previous) : { ...previous, ...update };
     if (!nextItem || nextItem === previous) return false;
-    itemsRef.current = { ...itemsRef.current, [key]: nextItem };
-    setItems((current) => ({ ...current, [key]: nextItem }));
-    if (previous.x !== nextItem.x || previous.y !== nextItem.y || previous.width !== nextItem.width || previous.height !== nextItem.height) refreshSpatialIndex();
+    itemsRef.current = changeItems(itemsRef.current, { [key]: nextItem });
+    setItems((current) => changeItems(current, { [key]: nextItem }), [key]);
+    if (previous.x !== nextItem.x || previous.y !== nextItem.y || previous.width !== nextItem.width || previous.height !== nextItem.height) refreshSpatialIndex([key]);
     if (!mediaOnly && !sendItemChange({ type: 'item_update', item_id: key, item: nextItem }, previous)) {
-      itemsRef.current = { ...itemsRef.current, [key]: previous };
-      setItems((current) => ({ ...current, [key]: previous }));
-      refreshSpatialIndex();
+      itemsRef.current = changeItems(itemsRef.current, { [key]: previous });
+      setItems((current) => changeItems(current, { [key]: previous }), [key]);
+      refreshSpatialIndex([key]);
       setToast(previous.kind === 'question' ? '연결이 복구되면 문제를 다시 편집해주세요.' : previous.kind === 'chart' ? '연결이 복구되면 그래프를 다시 편집해주세요.' : '연결이 복구되면 테이블을 다시 편집해주세요.');
       return false;
     }
@@ -854,11 +904,11 @@ function CanvasWorkspace() {
     const previous = itemsRef.current[key];
     if (previous?.kind !== 'math' || previous.formula === formula) return false;
     const nextItem = { ...previous, formula };
-    itemsRef.current = { ...itemsRef.current, [key]: nextItem };
-    setItems((current) => ({ ...current, [key]: nextItem }));
+    itemsRef.current = changeItems(itemsRef.current, { [key]: nextItem });
+    setItems((current) => changeItems(current, { [key]: nextItem }), [key]);
     if (!sendItemChange({ type: 'item_update', item_id: key, item: nextItem }, previous)) {
-      itemsRef.current = { ...itemsRef.current, [key]: previous };
-      setItems((current) => ({ ...current, [key]: previous }));
+      itemsRef.current = changeItems(itemsRef.current, { [key]: previous });
+      setItems((current) => changeItems(current, { [key]: previous }), [key]);
       setToast('연결이 복구되면 수식을 다시 편집해주세요.');
       return false;
     }
@@ -871,16 +921,16 @@ function CanvasWorkspace() {
     const patch = field === 'fontSize' ? (supportsObjectFontSize(previous) && isObjectFontSize(value) ? { fontSize: value } : null) : numericObjectPatch(previous, field, value);
     if (!patch) return;
     const nextItem = { ...previous, ...patch };
-    itemsRef.current = { ...itemsRef.current, [key]: nextItem };
-    setItems(current => ({ ...current, [key]: nextItem }));
-    refreshSpatialIndex();
+    itemsRef.current = changeItems(itemsRef.current, { [key]: nextItem });
+    setItems(current => changeItems(current, { [key]: nextItem }), [key]);
+    refreshSpatialIndex([key]);
     sendPeerItemGeometry(key, nextItem);
     if (isCollaborativeItem(nextItem)) markItemDirty(key);
     else if (!sendItemChange({ type: 'item_update', item_id: key, item: nextItem }, previous)) {
-      itemsRef.current = { ...itemsRef.current, [key]: previous };
-      setItems(current => ({ ...current, [key]: previous }));
+      itemsRef.current = changeItems(itemsRef.current, { [key]: previous });
+      setItems(current => changeItems(current, { [key]: previous }), [key]);
       sendPeerItemGeometry(key, previous);
-      refreshSpatialIndex();
+      refreshSpatialIndex([key]);
     }
   };
   const updateObjectDimensions = (id, field, value) => updateObjectSize(id, field, value);
@@ -993,9 +1043,9 @@ function CanvasWorkspace() {
       if (!previous || isObjectLocked(previous) || !canWriteItem(previous)) continue;
       if ((Number(previous.rotation) || 0) === rotation) continue;
       const nextItem = { ...previous, rotation, ...(previous.kind === 'connector' && !(Number(previous.bend) > 0) ? connectorBendPatch(previous, 0.18) : {}) };
-      itemsRef.current = { ...itemsRef.current, [key]: nextItem };
-      setItems((current) => ({ ...current, [key]: nextItem }));
-      refreshSpatialIndex();
+      itemsRef.current = changeItems(itemsRef.current, { [key]: nextItem });
+      setItems((current) => changeItems(current, { [key]: nextItem }), [key]);
+      refreshSpatialIndex([key]);
       if (isCollaborativeItem(nextItem)) {
         const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
         itemSyncVersionsRef.current.set(key, version);
@@ -1003,9 +1053,9 @@ function CanvasWorkspace() {
         markItemDirty(key);
         if (nextItem.kind === 'note') saveCollaborativeItemRef.current?.(key, { silent: true });
       } else if (!sendItemChange({ type: 'item_update', item_id: key, item: nextItem }, previous)) {
-        itemsRef.current = { ...itemsRef.current, [key]: previous };
-        setItems((current) => ({ ...current, [key]: previous }));
-        refreshSpatialIndex();
+        itemsRef.current = changeItems(itemsRef.current, { [key]: previous });
+        setItems((current) => changeItems(current, { [key]: previous }), [key]);
+        refreshSpatialIndex([key]);
         setToast('연결이 복구되면 회전을 다시 적용해주세요.');
       }
     }
@@ -1014,13 +1064,13 @@ function CanvasWorkspace() {
     const key = String(id), previous = itemsRef.current[key];
     if (previous?.kind !== 'user-group') return;
     const nextItem = { ...previous, ...patch };
-    itemsRef.current = { ...itemsRef.current, [key]: nextItem };
-    setItems(current => ({ ...current, [key]: nextItem }));
-    refreshSpatialIndex();
+    itemsRef.current = changeItems(itemsRef.current, { [key]: nextItem });
+    setItems(current => changeItems(current, { [key]: nextItem }), [key]);
+    refreshSpatialIndex([key]);
     if (!sendItemChange({ type: 'item_update', item_id: key, item: nextItem }, previous)) {
-      itemsRef.current = { ...itemsRef.current, [key]: previous };
-      setItems(current => ({ ...current, [key]: previous }));
-      refreshSpatialIndex();
+      itemsRef.current = changeItems(itemsRef.current, { [key]: previous });
+      setItems(current => changeItems(current, { [key]: previous }), [key]);
+      refreshSpatialIndex([key]);
       setToast('연결이 복구되면 그룹을 다시 변경해주세요.');
     }
   };
@@ -1058,13 +1108,13 @@ function CanvasWorkspace() {
     const bend = Math.max(-1.5, Math.min(1.5, Number(value) || 0));
     const patch = field === 'bendPointCount' ? resizeShapeArrowControls(previous, previous.width * boardSize.width, previous.height * boardSize.height, value) : shapeArrowBendPatch(previous, bend);
     const nextItem = { ...previous, ...patch };
-    itemsRef.current = { ...itemsRef.current, [key]: nextItem };
-    setItems((current) => ({ ...current, [key]: nextItem }));
-    refreshSpatialIndex();
+    itemsRef.current = changeItems(itemsRef.current, { [key]: nextItem });
+    setItems((current) => changeItems(current, { [key]: nextItem }), [key]);
+    refreshSpatialIndex([key]);
     if (!sendItemChange({ type: 'item_update', item_id: key, item: nextItem }, previous)) {
-      itemsRef.current = { ...itemsRef.current, [key]: previous };
-      setItems((current) => ({ ...current, [key]: previous }));
-      refreshSpatialIndex();
+      itemsRef.current = changeItems(itemsRef.current, { [key]: previous });
+      setItems((current) => changeItems(current, { [key]: previous }), [key]);
+      refreshSpatialIndex([key]);
       setToast('연결이 복구되면 화살표 곡률을 다시 변경해주세요.');
     }
   };
@@ -1076,13 +1126,13 @@ function CanvasWorkspace() {
     const head = field === 'headSize' ? Math.max(2, Math.min(128, Number(value))) : normalizeArrowHead(value, null);
     if (!head || previous[field] === head) return;
     const nextItem = { ...previous, [field]: head };
-    itemsRef.current = { ...itemsRef.current, [key]: nextItem };
-    setItems((current) => ({ ...current, [key]: nextItem }));
-    refreshSpatialIndex();
+    itemsRef.current = changeItems(itemsRef.current, { [key]: nextItem });
+    setItems((current) => changeItems(current, { [key]: nextItem }), [key]);
+    refreshSpatialIndex([key]);
     if (!sendItemChange({ type: 'item_update', item_id: key, item: nextItem }, previous)) {
-      itemsRef.current = { ...itemsRef.current, [key]: previous };
-      setItems((current) => ({ ...current, [key]: previous }));
-      refreshSpatialIndex();
+      itemsRef.current = changeItems(itemsRef.current, { [key]: previous });
+      setItems((current) => changeItems(current, { [key]: previous }), [key]);
+      refreshSpatialIndex([key]);
       setToast('연결이 복구되면 화살표 머리 모양을 다시 변경해주세요.');
     }
   };
@@ -1112,13 +1162,13 @@ function CanvasWorkspace() {
     const patch = field === 'bendPointCount' ? resizeConnectorControls(previous, connectorGeometry(previous, itemsRef.current, boardSize.width, boardSize.height, spatialIndex), nextValue) : field === 'bend' ? connectorBendPatch(previous, nextValue) : { [field]: nextValue };
     const nextItem = { ...previous, ...patch };
     if (portField && value === '') delete nextItem[field];
-    itemsRef.current = { ...itemsRef.current, [key]: nextItem };
-    setItems((current) => ({ ...current, [key]: nextItem }));
-    refreshSpatialIndex();
+    itemsRef.current = changeItems(itemsRef.current, { [key]: nextItem });
+    setItems((current) => changeItems(current, { [key]: nextItem }), [key]);
+    refreshSpatialIndex([key]);
     if (!sendItemChange({ type: 'item_update', item_id: key, item: nextItem }, previous)) {
-      itemsRef.current = { ...itemsRef.current, [key]: previous };
-      setItems((current) => ({ ...current, [key]: previous }));
-      refreshSpatialIndex();
+      itemsRef.current = changeItems(itemsRef.current, { [key]: previous });
+      setItems((current) => changeItems(current, { [key]: previous }), [key]);
+      refreshSpatialIndex([key]);
       setToast('연결이 복구되면 화살표 모양을 다시 변경해주세요.');
     }
   };
@@ -1128,27 +1178,28 @@ function CanvasWorkspace() {
     if (!canWriteItem(item)) { setToast(WRITE_DENIED); return false; }
     if (item?.kind === 'connector' && !connectorGeometry(item, itemsRef.current, boardSize.width, boardSize.height, spatialIndex)) { setToast('객체가 겹쳐 연결을 만들 수 없습니다. 객체를 옮긴 뒤 다시 연결해주세요.'); return false; }
     const sharedItem = makeCollaborativeItem(item);
+    const key = String(id);
     if (isCollaborativeItem(sharedItem)) {
       const baseDoc = Automerge.load(decodeBase64(sharedItem.automerge_snapshot), { actor: createActorId() });
       const version = nextPeerSyncVersion(syncClockRef, syncActorRef);
-      itemSyncVersionsRef.current.set(String(id), version);
-      deletedItemSyncVersionsRef.current.delete(String(id));
-      itemsRef.current = { ...itemsRef.current, [id]: sharedItem };
-      collaborativeDocsRef.current.set(String(id), baseDoc);
-      collaborativeBaseDocsRef.current.set(String(id), baseDoc);
-      newCollaborativeItemsRef.current.add(String(id));
-      setItems((current) => ({ ...current, [id]: sharedItem }));
+      itemSyncVersionsRef.current.set(key, version);
+      deletedItemSyncVersionsRef.current.delete(key);
+      itemsRef.current = changeItems(itemsRef.current, { [key]: sharedItem });
+      collaborativeDocsRef.current.set(key, baseDoc);
+      collaborativeBaseDocsRef.current.set(key, baseDoc);
+      newCollaborativeItemsRef.current.add(key);
+      setItems((current) => changeItems(current, { [key]: sharedItem }), [key]);
       selectItems([id], id);
-      refreshSpatialIndex();
+      refreshSpatialIndex([key]);
       markItemDirty(id);
-      peerMeshRef.current?.sendData({ type: 'item_create', item_id: String(id), item: sharedItem, version }, (peer) => canPeerAccessItem(sharedItem, peer));
+      peerMeshRef.current?.sendData({ type: 'item_create', item_id: key, item: sharedItem, version }, (peer) => canPeerAccessItem(sharedItem, peer));
       if (sharedItem.kind === 'note') saveCollaborativeItemRef.current?.(id, { silent: true });
       return true;
     }
     if (!sendItemChange({ type: 'item_update', item_id: id, item: sharedItem }, null)) return false;
-    itemsRef.current = { ...itemsRef.current, [id]: sharedItem };
-    setItems((current) => ({ ...current, [id]: sharedItem }));
-    refreshSpatialIndex();
+    itemsRef.current = changeItems(itemsRef.current, { [key]: sharedItem });
+    setItems((current) => changeItems(current, { [key]: sharedItem }), [key]);
+    refreshSpatialIndex([key]);
     return true;
   }, [boardSize, markItemDirty, refreshSpatialIndex, selectItems, sendItemChange, snapToGrid, gridSpacing]);
   const addItems = useCallback(entries => {
@@ -1228,28 +1279,6 @@ function CanvasWorkspace() {
   }, [receiveLegacyPeerData]);
   const permission = useMemo(() => creationGroupPermission(capabilities, groups, settings, user), [capabilities, groups, settings, user]);
 
-  useEffect(() => {
-    if (!laserStrokes.length) return undefined;
-    const timer = window.setInterval(() => {
-      const now = Date.now();
-      setLaserStrokes((current) => {
-        let changed = false;
-        const next = current.flatMap((stroke) => {
-          if (stroke.endedAt) {
-            if (now - stroke.endedAt < LASER_FADE_MS + 120) return [stroke];
-            changed = true;
-            return [];
-          }
-          if ((stroke.active && laserDrawingRef.current?.key === stroke.id) || now - stroke.updatedAt < 6000) return [stroke];
-          changed = true;
-          return [{ ...stroke, active: false, endedAt: now }];
-        });
-        return changed ? next : current;
-      });
-    }, 160);
-    return () => window.clearInterval(timer);
-  }, [laserStrokes.length]);
-
   useCanvasConnection({
     identity: {
       canvasId,
@@ -1265,6 +1294,7 @@ function CanvasWorkspace() {
       chatHistoryPageRef,
       chatHistoryRequestRef,
       chatEventsRef,
+      chatChannelRef,
       voiceCallRef: voice.ref,
       collaborativeBaseDocsRef,
       collaborativeDocsRef,
@@ -1452,7 +1482,8 @@ function CanvasWorkspace() {
   }, [visibleEntries, previewHiddenEffective, revealNow, hiddenCandidates]);
   const portfolioEntries = useMemo(() => { if (!portfolioViewing) return stageEntries; const ids = new Set(presentationPage?.objectIds || []); return stageEntries.filter(entry => ids.has(entry.id)); }, [stageEntries, portfolioViewing, presentationPage]);
   const pendingEntrance = useMemo(() => portfolioViewing ? new Set(animationGroups(presentationPage, items).slice(cursor?.frameId === presentationPage?.frameId ? cursor?.step || 0 : 0).flatMap(g => g.ids).filter(id => ['fade', 'slide-up', 'slide-left', 'zoom'].includes(items[id]?.animation?.effect))) : null, [portfolioViewing, presentationPage, cursor, items]);
-  const representationScale = Infinity;
+  const usesOverview = useMemo(() => portfolioEntries.some(({ item }) => Boolean(item.runtimeRole) || !['shape', 'stroke', 'connector'].includes(item.kind)), [portfolioEntries, items[selectedItemId]?.renderMode]);
+  const representationScale = usesOverview ? overviewScale(zoomingActive ? (camera.detailScale ?? camera.scale) : Math.min(camera.scale, camera.detailScale ?? camera.scale)) : 1;
   const selectedObjectIdsKey = selectedItemIds.filter(id => Boolean(items[id])).join('|');
   const selectedObjectIds = useMemo(() => selectedItemIds.filter(id => Boolean(items[id])), [selectedObjectIdsKey]);
   const selectedObjectIdSet = useMemo(() => (selectedObjectIds.length ? new Set(selectedObjectIds) : EMPTY_ID_SET), [selectedObjectIds]);
@@ -1791,7 +1822,7 @@ function CanvasWorkspace() {
     const submitMessage = (event) => {
       event?.preventDefault(); const text = message.trim();
       if (new TextEncoder().encode(text).length > 4096) { setToast('메시지는 UTF-8 기준 4096바이트 이하여야 합니다.'); return; }
-      if (!text || !sendRaw({ type: 'chat', room_id: CHAT_ROOM_ID, text, request_id: createId() })) return;
+      if (!text || !sendRaw({ type: 'chat', ...chatTarget(activeChatChannelRef.current), text, request_id: createId() })) return;
       setMessage('');
     };
     const {
@@ -2178,8 +2209,55 @@ function CanvasWorkspace() {
     const { backgroundColor, setBackgroundColor, backgroundStyle } = useCanvasBackground(canvasId);
     const onlineParticipants = useMemo(() => onlineCanvasParticipants(user, peerList, canvasParticipants, connection === 'connected'), [user, peerList, canvasParticipants, connection]);
     const mentionParticipants = useMemo(() => uniqueCanvasParticipants([...canvasParticipants, ...onlineParticipants]), [canvasParticipants, onlineParticipants]);
+    const textChannels = useMemo(() => listChannels(items, 'text', ui('일반')), [items]);
+    const voiceChannels = useMemo(() => listChannels(items, 'voice', ui('일반 통화')), [items]);
+    // A deleted (or no longer visible) channel falls back to the default one.
+    useEffect(() => {
+      if (!textChannels.some(channel => channel.id === activeChatChannel)) selectChatChannel(DEFAULT_TEXT_CHANNEL);
+    }, [textChannels, activeChatChannel, selectChatChannel]);
+    useEffect(() => {
+      if (!voiceChannels.some(channel => channel.id === voice.state.channel)) voice.call.setChannel(voiceChannels[0].id);
+    }, [voiceChannels, voice]);
+    const channelControls = (() => {
+      const canManage = canWriteCanvas && hostStatus.editable && connection === 'connected';
+      const duplicate = (list, name, except) => list.some(channel => channel.id !== except && channel.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+      return {
+        text: textChannels, voice: voiceChannels, activeText: activeChatChannel, unread: chatUnread, canManage,
+        selectText: selectChatChannel,
+        create: (type, name) => {
+          const list = type === 'text' ? textChannels : voiceChannels;
+          if (list.length > CHANNEL_LIMIT) { setToast(ui('채널은 종류별로 최대 50개까지 만들 수 있습니다.')); return false; }
+          if (duplicate(list, name)) { setToast(ui('같은 이름의 채널이 이미 있습니다.')); return false; }
+          const id = newChannelId(), item = newChannel(type, name, permission, nextChannelOrder(list));
+          if (!canWriteItem(item)) { setToast(WRITE_DENIED); return false; }
+          if (!patchItems({ [id]: item })) { setToast(ui('채널을 만들지 못했습니다. 연결 상태를 확인해주세요.')); return false; }
+          if (type === 'text') selectChatChannel(id); else if (!voice.state.active) voice.call.setChannel(id);
+          return true;
+        },
+        rename: (id, name) => {
+          const item = itemsRef.current[id];
+          if (!isChannelItem(item) || !canWriteItem(item)) { setToast(WRITE_DENIED); return false; }
+          if (duplicate(item.channelType === 'text' ? textChannels : voiceChannels, name, id)) { setToast(ui('같은 이름의 채널이 이미 있습니다.')); return false; }
+          return patchItems({ [id]: { ...item, name } }) !== false;
+        },
+        remove: id => {
+          const item = itemsRef.current[id];
+          if (!isChannelItem(item) || !canWriteItem(item)) { setToast(WRITE_DENIED); return; }
+          if (!window.confirm(ui(item.channelType === 'text' ? '이 채팅 채널과 메시지 기록을 삭제할까요?' : '이 통화 채널을 삭제할까요? 참여 중인 사람은 기본 통화 채널로 이동합니다.'))) return;
+          patchItems({}, [id]);
+        },
+      };
+    })();
     const jumpToMention = note => {
-      if (note.objectId) { focusCanvasObject(note.objectId); comments.open(note.objectId, note.id, note.sequence, note); }
+      if (note.objectId && chatChannelRef.current.isChannel(note.objectId)) {
+        const chat = panelLayout.handle('chat');
+        if (chat.collapsed) chat.onToggle();
+        setCommunicationTab('chat');
+        selectChatChannel(note.objectId);
+        setChatHighlight(note.id);
+        requestedChatMention.current = null;
+        setChatJumpNote(note);
+      } else if (note.objectId) { focusCanvasObject(note.objectId); comments.open(note.objectId, note.id, note.sequence, note); }
       else {
         const chat = panelLayout.handle('chat');
         if (chat.collapsed) chat.onToggle();
@@ -2409,9 +2487,9 @@ function CanvasWorkspace() {
                   <RemoteCursorLayer updaterRef={remoteCursorUpdaterRef} activePeerIds={activePeerIds} visibleBounds={visibleBounds} />
                 </div>
               </div></BlurBudgetContext.Provider>
-              <LaserLayer strokes={laserStrokes} width={viewportSize.width} height={viewportSize.height} worldSize={boardSize} camera={camera} />
-              {selectionBox && <div className="canvas-selection-marquee" style={{ left: selectionBox.left, top: selectionBox.top, width: selectionBox.width, height: selectionBox.height }} aria-hidden="true" />}
-              {creationBox && <div className="canvas-creation-preview" style={{ left: creationBox.left, top: creationBox.top, width: creationBox.width, height: creationBox.height }} aria-hidden="true"><span className="canvas-creation-preview-size">{creationBox.label}</span></div>}
+              <LaserLayer updaterRef={laserUpdaterRef} activeDrawingRef={laserDrawingRef} width={viewportSize.width} height={viewportSize.height} worldSize={boardSize} camera={camera} />
+              <div ref={selectionBoxRef} className="canvas-selection-marquee" style={{ display: 'none', left: 0, top: 0 }} aria-hidden="true" />
+              <div ref={creationBoxRef} className="canvas-creation-preview" style={{ display: 'none', left: 0, top: 0 }} aria-hidden="true"><span className="canvas-creation-preview-size" /></div>
               {selectedObjectIds.length > 0 && (previewHiddenEffective || selectedObjectIds.some((id) => items[id] && !isObjectInvisibleAtTime(items[id], revealNow))) && activeTool === 'select' && editingId == null && !watchState.watching_id && !portfolioViewing && hostStatus.editable && (
                 <FloatingContextToolbar
                   selectedIds={selectedObjectIds}
@@ -2430,7 +2508,7 @@ function CanvasWorkspace() {
                   onToggleHidden={(ids, hidden) => updateItemHidden(ids, hidden, { deselectHidden: !previewHiddenEffective })}
                 />
               )}
-              {activeTool === 'eraser' && <div className="eraser-cursor" ref={eraserCursorRef} style={{ width: `${eraserWidth}px`, height: `${eraserWidth}px` }} aria-hidden="true" />}
+              {activeTool === 'eraser' && <div className="eraser-cursor" ref={eraserCursorRef} style={{ left: 0, top: 0, width: `${eraserWidth}px`, height: `${eraserWidth}px` }} aria-hidden="true" />}
               {sharePosition && <ShareComposer onCancel={() => { setSharePosition(null); setActiveTool('select'); }} onSubmit={placeSharedLink} />}
               {activeTool === 'anchor' && <div className="draw-cursor-label"><Icon name="anchor" size={13} /> {ui('저장할 위치를 클릭하세요.')}</div>}{activeTool === 'laser' && <div className="draw-cursor-label laser-cursor-label"><Icon name="laser" size={13} />{" " + ui("가리키는 중 · 1.6초 후 사라짐") + ""}</div>}{activeTool === 'pen' && <div className="draw-cursor-label"><Icon name="pen" size={13} />{" " + ui("그리는 중") + ""}</div>}{activeTool === 'eraser' && <div className="draw-cursor-label"><Icon name="eraser" size={13} />{" " + ui("드로잉을 드래그해 지우기") + ""}</div>}{activeTool === 'connect' && <div className="draw-cursor-label"><Icon name="connect" size={13} /> {connectionStartId ? ui("도착 오브젝트 선택") : ui("시작 오브젝트 선택")}</div>}{activeTool === 'link' && !sharePosition && <div className="draw-cursor-label"><Icon name="link" size={13} />{" " + ui("공유 자료를 놓을 위치 선택") + ""}</div>}
             </div>
@@ -2528,12 +2606,12 @@ function CanvasWorkspace() {
             updateShapeArrowBend: uiActions.updateShapeArrowBend,
             zoomSensitivity
           }} /></Suspense></ResizablePanel>
-          <ScreenShareViewer voice={voice} /><ResizablePanel {...panelLayout.handle('chat')} title={ui('채팅 · 통화')} callActive={voice.state.active}><CanvasChatPanel token={token} voice={voice} tab={communicationTab} onTabChange={uiActions.onChatTabChange} canWrite={canUseCanvas(capabilities, 'write')} chatHistoryLoading={chatHistoryLoading} connection={connection} hasOlderMessages={hasOlderMessages} loadOlderMessages={uiActions.loadOlderMessages} message={message} messages={messages} setMessage={uiActions.setMessage} submitMessage={uiActions.submitMessage} chatMessageTotal={chatMessageTotal} participants={mentionParticipants} highlight={chatHighlight} onHighlightExpired={uiActions.onChatHighlightExpired} onHighlightVisible={uiActions.onChatHighlightVisible} /></ResizablePanel>
+          <ScreenShareViewer voice={voice} /><ResizablePanel {...panelLayout.handle('chat')} title={ui('채팅 · 통화')} callActive={voice.state.active}><CanvasChatPanel token={token} voice={voice} tab={communicationTab} onTabChange={uiActions.onChatTabChange} canWrite={canUseCanvas(capabilities, 'write')} chatHistoryLoading={chatHistoryLoading} connection={connection} hasOlderMessages={hasOlderMessages} loadOlderMessages={uiActions.loadOlderMessages} message={message} messages={messages} setMessage={uiActions.setMessage} submitMessage={uiActions.submitMessage} chatMessageTotal={chatMessageTotal} participants={mentionParticipants} highlight={chatHighlight} onHighlightExpired={uiActions.onChatHighlightExpired} onHighlightVisible={uiActions.onChatHighlightVisible} channels={channelControls} /></ResizablePanel>
         </div>}
         {passwordPrompt.prompt && <CanvasPasswordDialog prompt={passwordPrompt.prompt} theme={theme} />}
         {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{ui(toast)}</div>}
         {comments.activeId && <ObjectCommentsPanel token={token} comments={comments} participants={mentionParticipants} connection={connection} />}
-        <MentionNotifications notifications={comments.notifications} onJump={jumpToMention} onDismiss={comments.dismiss} />
+        <MentionNotifications notifications={comments.notifications} onJump={jumpToMention} onDismiss={comments.dismiss} channelName={id => textChannels.find(channel => channel.id === id)?.name} />
         <CanvasAgentPanel key={`${canvasId}:${user?.user_id || ''}`} theme={theme} onBusyChange={uiActions.onAgentBusyChange} open={showAgent} onClose={uiActions.onAgentClose} canvasId={canvasId} selectedIds={selectedObjectIds} anchor={showAgent ? centeredItemPosition(0, 0) : null} request={uiActions.onAgentRequest} />
         {showRuntimeSettings && <RuntimeSettingsDialog request={management => executeCanvasCode({ canvasId, action: 'manage', management, sendRaw, pendingRequests: runtimeSocketRequestsRef.current })} canManage={canWriteCanvas && canUseCanvas(capabilities, 'execute')} canvasId={canvasId} token={token} user={user} initialLanguage={selectedItem?.language || 'cpp'} isRunning={() => runtimeStore.isRunning()} onClose={() => setShowRuntimeSettings(false)} />}
         {versionsOpened.current && <CanvasVersionDialog open={showVersions} api={canvasCodeApi} canvasId={canvasId} onClose={() => setShowVersions(false)} onInspect={source => { setCanvasCodeSource(source); setShowVersions(false); setShowCanvasCode(true); }} />}

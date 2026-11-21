@@ -1,4 +1,5 @@
 import {canvasApiRequest} from './canvasTransport.js';
+import {bearer,currentAccessToken,refreshAccessToken,sameSession,tokenExpired} from '../state/authSession.js';
 export {canvasFetch} from './canvasTransport.js';
 const API_BASE = ((import.meta.env && import.meta.env.VITE_API_BASE_URL) || '').replace(/\/$/, '');
 
@@ -19,19 +20,49 @@ export class ApiError extends Error {
   }
 }
 
-export async function api(path, { method = 'GET', body, token, headers = {}, signal } = {}) {
+const SESSION_ENDPOINT = /^\/api\/auth\/session\//;
+const REFRESH_AHEAD_MS = 30_000;
+
+function unauthorized(token, payload) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('agora:unauthorized', { detail: { token, message: payload?.message, reason: payload?.reason } }));
+}
+
+async function freshToken(token) {
+  if (!token || !tokenExpired(currentAccessToken(token), Date.now() + REFRESH_AHEAD_MS)) return;
+  try { await refreshAccessToken({ ifExpiringBefore: Date.now() + REFRESH_AHEAD_MS }); } catch { /* The request itself reports the failure. */ }
+}
+
+export async function api(path, options = {}) {
+  const { token } = options;
+  await freshToken(token);
+  try {
+    return await sendApi(path, options);
+  } catch (error) {
+    // An access token can expire or be rejected mid-flight; one refresh and retry
+    // keeps the session, and only a failed refresh ends it.
+    if (!(error instanceof ApiError) || error.status !== 401 || !token || SESSION_ENDPOINT.test(path)) throw error;
+    let refreshed = null;
+    try { refreshed = await refreshAccessToken(); } catch { throw error; }
+    if (!refreshed || !sameSession(token, refreshed.accessToken)) { unauthorized(token, error.payload); throw error; }
+    try { return await sendApi(path, options); }
+    catch (retryError) { if (retryError instanceof ApiError && retryError.status === 401) unauthorized(token, retryError.payload); throw retryError; }
+  }
+}
+
+async function sendApi(path, { method = 'GET', body, token, headers = {}, signal } = {}) {
   if (signal?.aborted) throw new DOMException('The request was aborted', 'AbortError');
   const routed=canvasApiRequest(apiUrl(path),{method,body,token,headers});
   if(routed){try{return await routed;}catch(error){
-    if(error.status===401&&token)window.dispatchEvent(new CustomEvent('agora:unauthorized',{detail:{token,message:error.message}}));
     throw new ApiError(error.message,error.status,error.code,error.payload);
   }}
   const response = await fetch(apiUrl(path), {
     method,
     ...(signal ? { signal } : {}),
+    ...(path.startsWith('/api/auth/') ? { credentials: 'include' } : {}),
     headers: {
       ...(body instanceof FormData ? {} : body ? { 'Content-Type': 'application/json' } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(token ? { Authorization: bearer(token) } : {}),
       ...headers,
     },
     body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
@@ -42,9 +73,6 @@ export async function api(path, { method = 'GET', body, token, headers = {}, sig
     ? await response.json().catch(() => null)
     : await response.text().catch(() => '');
   if (!response.ok) {
-    if (response.status === 401 && token && typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('agora:unauthorized', { detail: { token, message: payload?.message, reason: payload?.reason } }));
-    }
     throw new ApiError(payload?.message || payload?.error || '요청을 처리하지 못했습니다.', response.status, payload?.code, payload);
   }
   return payload;

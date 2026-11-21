@@ -1,4 +1,4 @@
-const MARGIN=96,INTERACTIVE_FRAME_MS=120;
+const MARGIN=192,INTERACTIVE_FRAME_MS=120,MAX_UPLOADS_PER_FRAME=8;
 /** Bounded GPU command worker. Main-thread presentation reprojects cached pixels
  * immediately, keeping editable DOM and the asynchronous GPU frame aligned. */
 export default class WorkerGpuRenderer {
@@ -16,7 +16,7 @@ export default class WorkerGpuRenderer {
   constructor(canvas,width,height){
     Object.assign(this,{canvas,layer:++GpuWorkerHost.nextLayer,pixelWidth:Math.max(1,Math.round(width)),pixelHeight:Math.max(1,Math.round(height)),threaded:true,hasFrame:false,version:0,seq:0,inFlight:false,preparing:false,needsFrame:false,disposed:false});
     this.telemetry={submitted:0,completed:0,presented:0,discarded:0,maxPending:0,samples:[]};
-    this.uploads=new Map();this.removed=new Set();
+    this.uploads=new Map();this.removed=new Set();this.dragOffset={dx:0,dy:0};
     canvas.className='vector-gpu-worker-surface';
     Object.assign(canvas.style,{inset:'auto',left:'0',top:'0',transformOrigin:'0 0'});
   }
@@ -31,6 +31,11 @@ export default class WorkerGpuRenderer {
   upload_canvas_region(id,canvas,size,x,y){if(this.disposed)return false;this.removed.delete(id);this.uploads.set(`${id}@${x},${y}`,{id,canvas,region:{size,x,y},release:true});return true;}
   /** Free a source canvas once its pixels have been captured for upload. */
   release_after_upload(canvas){for(const upload of this.uploads.values())if(upload.canvas===canvas){upload.release=true;return;}if(canvas)canvas.width=canvas.height=1;}
+  set_drag_offset(dx,dy){
+    const nx=Number.isFinite(dx)?dx:0,ny=Number.isFinite(dy)?dy:0;
+    if(this.dragOffset.dx===nx&&this.dragOffset.dy===ny)return;
+    this.dragOffset={dx:nx,dy:ny};
+  }
   update_scene(words,ids,starts,counts){
     this.scene={words:words.slice(),ids:ids.slice(),starts:starts.slice(),counts:counts.slice()};this.version++;
   }
@@ -59,13 +64,26 @@ export default class WorkerGpuRenderer {
     // that still covers the viewport no new worker frame is rendered: each one is a
     // full-surface GPU render and bitmap transfer competing with the compositor.
     // Frames resume (paced) once zooming out exposes an edge, and on settle.
-    if(this.interactive&&this.hasFrame&&!this.scene&&!this.uploads.size&&!this.removed.size){
+    const dragChanged=Boolean(this.presented&&((this.presented.dragOffset?.dx||0)!==this.dragOffset.dx||(this.presented.dragOffset?.dy||0)!==this.dragOffset.dy));
+    if(this.interactive&&this.hasFrame&&!dragChanged&&!this.scene&&!this.uploads.size&&!this.removed.size){
       if(this.reprojectionCovers()){return;}
       const wait=INTERACTIVE_FRAME_MS-(performance.now()-(this.sentAt||0));
       if(wait>0){if(!this.paceTimer)this.paceTimer=setTimeout(()=>{this.paceTimer=null;this.pump();},wait);return;}
     }
-    this.preparing=true;this.needsFrame=false;this.timeout=setTimeout(()=>this.fail('GPU worker frame timed out'),12000);const uploads=[...this.uploads.values()];this.uploads.clear();
-    const scene=this.scene;this.scene=null;const version=this.version,removed=[...this.removed];this.removed.clear();
+    this.preparing=true;this.needsFrame=false;this.timeout=setTimeout(()=>this.fail('GPU worker frame timed out'),12000);
+    const uploads=[];
+    if(this.uploads.size<=MAX_UPLOADS_PER_FRAME){
+      for(const u of this.uploads.values())uploads.push(u);
+      this.uploads.clear();
+    }else{
+      for(const [k,u] of this.uploads){
+        uploads.push(u);this.uploads.delete(k);
+        if(uploads.length>=MAX_UPLOADS_PER_FRAME)break;
+      }
+      this.needsFrame=true;
+    }
+    const scene=this.uploads.size?null:this.scene;if(!this.uploads.size)this.scene=null;
+    const version=this.version,removed=[...this.removed];this.removed.clear();
     let textures=[];const captureStart=performance.now();
     try{
       // Snapshot atlas pixels once per submitted frame, not once per input event.
@@ -79,7 +97,8 @@ export default class WorkerGpuRenderer {
       const rejected=captured.find(result=>result.status==='rejected');if(rejected)throw rejected.reason;
       if(this.disposed){for(const image of textures)image.bitmap.close();return;}
       const target=this.target,ratio=this.pixelWidth/Math.max(1,target.viewportWidth);
-      const packet={type:'frame',layer:this.layer,seq:++this.seq,version,scene,textures,removed,...target,margin:MARGIN,pixelWidth:Math.round((target.viewportWidth+MARGIN*2)*ratio),pixelHeight:Math.round((target.viewportHeight+MARGIN*2)*ratio)};
+      const dragOffset={dx:this.dragOffset.dx,dy:this.dragOffset.dy};
+      const packet={type:'frame',layer:this.layer,seq:++this.seq,version,scene,textures,removed,dragOffset,...target,margin:MARGIN,pixelWidth:Math.round((target.viewportWidth+MARGIN*2)*ratio),pixelHeight:Math.round((target.viewportHeight+MARGIN*2)*ratio)};
       const transfer=textures.map(image=>image.bitmap);
       if(scene)transfer.push(scene.words.buffer,scene.ids.buffer,scene.starts.buffer,scene.counts.buffer);
       this.captureMs=performance.now()-captureStart;this.sentAt=performance.now();

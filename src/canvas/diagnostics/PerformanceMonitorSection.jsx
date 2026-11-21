@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { itemCount } from '../itemSnapshots.js';
 import Icon from '../../components/Icon.jsx';
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
@@ -115,7 +116,7 @@ export default function PerformanceMonitorSection({ items, onClose }) {
   const [hoverIndex, setHoverIndex] = useState(null);
 
   const itemsCountRef = useRef(0);
-  itemsCountRef.current = items && typeof items === 'object' ? Object.keys(items).length : 0;
+  itemsCountRef.current = itemCount(items);
 
   const baselineFrameMsRef = useRef(16.67);
   const mountedAtRef = useRef(typeof performance !== 'undefined' ? performance.now() : 0);

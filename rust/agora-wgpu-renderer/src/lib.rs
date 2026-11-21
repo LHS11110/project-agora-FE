@@ -13,8 +13,8 @@ struct CameraUniform {
     _pad0: f32,
     viewport_width: f32,
     viewport_height: f32,
-    _pad1: f32,
-    _pad2: f32,
+    drag_dx: f32,
+    drag_dy: f32,
 }
 
 #[repr(C)]
@@ -74,6 +74,8 @@ pub struct WgpuCanvasRenderer {
     adapter_description: String,
     width: u32,
     height: u32,
+    drag_dx: f32,
+    drag_dy: f32,
     device_failed: Arc<AtomicBool>,
     error_message: Arc<Mutex<Option<String>>>,
 }
@@ -410,6 +412,8 @@ impl WgpuCanvasRenderer {
             adapter_description,
             width: clamped_w,
             height: clamped_h,
+            drag_dx: 0.0,
+            drag_dy: 0.0,
             device_failed,
             error_message,
         })
@@ -538,15 +542,28 @@ impl WgpuCanvasRenderer {
         }
     }
 
-    // Recorded bundles hold texture bind groups; any texture change invalidates
-    // them for every scene, not only the active one.
-    fn invalidate_bundles(&mut self) {
-        self.cached_bundle = None;
-        for scene in self.saved_scenes.values_mut() { scene.cached_bundle = None; }
+    // Recorded bundles hold texture bind groups; only invalidate scenes whose
+    // draw batches actually reference the replaced or removed texture id.
+    fn invalidate_bundles_using(&mut self, tex_id: u32) {
+        if self.cached_batches.iter().any(|batch| batch.tex_id == tex_id) {
+            self.cached_bundle = None;
+        }
+        for scene in self.saved_scenes.values_mut() {
+            if scene.cached_batches.iter().any(|batch| batch.tex_id == tex_id) {
+                scene.cached_bundle = None;
+            }
+        }
+    }
+
+    pub fn set_drag_offset(&mut self, dx: f32, dy: f32) {
+        self.drag_dx = if dx.is_finite() { dx } else { 0.0 };
+        self.drag_dy = if dy.is_finite() { dy } else { 0.0 };
     }
 
     fn create_texture_entry(&mut self, tex_id: u32, w: u32, h: u32) {
-            self.invalidate_bundles();
+            if self.textures.contains_key(&tex_id) {
+                self.invalidate_bundles_using(tex_id);
+            }
             let texture = self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("agora-atlas-texture"),
                 size: wgpu::Extent3d {
@@ -637,7 +654,7 @@ impl WgpuCanvasRenderer {
     }
 
     pub fn remove_texture(&mut self, tex_id: u32) {
-        self.invalidate_bundles();
+        self.invalidate_bundles_using(tex_id);
         if let Some(entry) = self.textures.remove(&tex_id) {
             entry.texture.destroy();
         }
@@ -703,8 +720,8 @@ impl WgpuCanvasRenderer {
             _pad0: 0.0,
             viewport_width: viewport_width.max(1.0),
             viewport_height: viewport_height.max(1.0),
-            _pad1: 0.0,
-            _pad2: 0.0,
+            drag_dx: self.drag_dx,
+            drag_dy: self.drag_dy,
         };
         self.queue
             .write_buffer(&self.camera_buffer, 0, bytemuck::bytes_of(&cam));

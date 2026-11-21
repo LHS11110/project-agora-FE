@@ -96,6 +96,31 @@ export function rasterDescriptor(id, item, world, referenceItems, routeKey = '',
   return { key, local, shadow, x, y, centerX, centerY, rotation };
 }
 
+let shadowScratch = null, shadowScratchCtx = null, shadowScratchTimer = null;
+function acquireShadowScratch(width, height) {
+  if (shadowScratchTimer) { clearTimeout(shadowScratchTimer); shadowScratchTimer = null; }
+  if (!shadowScratch) {
+    shadowScratch = document.createElement('canvas');
+    shadowScratchCtx = shadowScratch.getContext('2d');
+  }
+  if (shadowScratch.width !== width || shadowScratch.height !== height) {
+    shadowScratch.width = width;
+    shadowScratch.height = height;
+  } else {
+    shadowScratchCtx.setTransform(1, 0, 0, 1, 0, 0);
+    shadowScratchCtx.clearRect(0, 0, width, height);
+  }
+  return { canvas: shadowScratch, context: shadowScratchCtx };
+}
+function releaseShadowScratchIdle() {
+  if (shadowScratchTimer) clearTimeout(shadowScratchTimer);
+  shadowScratchTimer = setTimeout(() => {
+    shadowScratchTimer = null;
+    if (shadowScratch) { shadowScratch.width = shadowScratch.height = 1; shadowScratch = null; shadowScratchCtx = null; }
+  }, 2000);
+  shadowScratchTimer?.unref?.();
+}
+
 export function rasterizeObject(id, descriptor, world, referenceItems, preferredRatio = 1, pixelBudget = 2_000_000, textAppearance = {}) {
   const bounds = objectBounds(descriptor.local, referenceItems, world.width, world.height);
   const { shadow } = descriptor;
@@ -110,9 +135,17 @@ export function rasterizeObject(id, descriptor, world, referenceItems, preferred
   const width = Math.max(1, right-left);
   const height = Math.max(1, bottom-top);
   const ratio = Math.min(preferredRatio, 4096 / Math.max(width,height), Math.sqrt(pixelBudget / (width*height)));
-  const raw = document.createElement('canvas');
-  raw.width = Math.max(1,Math.ceil(width*ratio)); raw.height = Math.max(1,Math.ceil(height*ratio));
-  const context = raw.getContext('2d');
+  const pixelWidth = Math.max(1, Math.ceil(width * ratio));
+  const pixelHeight = Math.max(1, Math.ceil(height * ratio));
+  const needsShadow = shadow.enabled && shadow.opacity > 0;
+  let raw, context;
+  if (needsShadow) {
+    ({ canvas: raw, context } = acquireShadowScratch(pixelWidth, pixelHeight));
+  } else {
+    raw = document.createElement('canvas');
+    raw.width = pixelWidth; raw.height = pixelHeight;
+    context = raw.getContext('2d');
+  }
   context.imageSmoothingQuality=textAppearance.smoothingQuality||'high';
   context.setTransform(ratio,0,0,ratio,-left*ratio,-top*ratio);
   if (descriptor.local.__overviewKind) drawRichOverview(context, descriptor.local, world, textAppearance, textAppearance.imagePreview);
@@ -127,12 +160,12 @@ export function rasterizeObject(id, descriptor, world, referenceItems, preferred
       (bounds.maxX-bounds.minX)*world.width+5,(bounds.maxY-bounds.minY)*world.height+5);
   }
   let canvas = raw;
-  if (shadow.enabled && shadow.opacity > 0) {
-    canvas = document.createElement('canvas'); canvas.width = raw.width; canvas.height = raw.height;
+  if (needsShadow) {
+    canvas = document.createElement('canvas'); canvas.width = pixelWidth; canvas.height = pixelHeight;
     const shaded = canvas.getContext('2d');
     shaded.filter = `drop-shadow(${shadow.x*ratio}px ${shadow.y*ratio}px ${shadow.blur*ratio}px rgba(24,34,43,${shadow.opacity}))`;
     shaded.drawImage(raw,0,0);
-    raw.width = raw.height = 1;
+    releaseShadowScratchIdle();
   }
   // Preserve the sampling ratio after integer pixel rounding; otherwise the
   // sprite compresses glyphs and paper proportions at fractional zoom quality.

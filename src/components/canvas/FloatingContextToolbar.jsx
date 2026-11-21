@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../Icon.jsx';
 import { ui } from '../../i18n/locale.js';
 import '../../canvas/runtimeEn.js';
@@ -89,7 +89,7 @@ function computeBarCoords(worldBounds, cam, viewport, layout) {
 
 let cachedToolbarLayoutMetrics = { barWidth: 560, barHeight: 42, tools: null, inspector: null };
 
-export default function FloatingContextToolbar({
+const FloatingContextToolbar = memo(function FloatingContextToolbar({
   selectedIds,
   items,
   camera,
@@ -420,4 +420,6 @@ export default function FloatingContextToolbar({
       )}
     </div>
   );
-}
+});
+
+export default FloatingContextToolbar;

@@ -4,6 +4,7 @@ import {apiUrl} from '../../api/client.js';
 import {ui} from '../../i18n/locale.js';
 import {mediaPosition} from './mediaModel.js';
 import './media.css';
+import { bearer } from '../../state/authSession.js';
 export default function UploadedMedia({item,token,selected=false,interactive,writable,onChange}){
  const fieldId=useId();
  const video=useRef(null),surface=useRef(null),worker=useRef(null),pending=useRef(false),requested=useRef(0),sent=useRef(0),generation=useRef(0),applying=useRef(false),latest=useRef(null),actor=useRef(crypto.randomUUID());
@@ -18,7 +19,7 @@ export default function UploadedMedia({item,token,selected=false,interactive,wri
   const load=async()=>{try{
    const address=new URL(apiUrl(item.url)),internal=address.origin===new URL(apiUrl('/')).origin;
    if(!gif&&!internal){setSource(address.href);return;}
-   const response=await canvasFetch(address,{headers:internal&&token?{Authorization:`Bearer ${token}`}:{},signal:abort.signal});if(!response.ok)throw Error('미디어를 불러오지 못했습니다.');
+   const response=await canvasFetch(address,{headers:internal&&token?{Authorization:bearer(token)}:{},signal:abort.signal});if(!response.ok)throw Error('미디어를 불러오지 못했습니다.');
    const limit=(gif?20:100)*1024*1024;if(Number(response.headers.get('content-length'))>limit)throw Error('동영상은 100MiB, GIF는 20MiB 이하로 올려주세요.');
    const blob=await response.blob();if(blob.size>limit)throw Error('동영상은 100MiB, GIF는 20MiB 이하로 올려주세요.');if(generation.current!==turn)return;
    if(gif){const buffer=await blob.arrayBuffer();if(generation.current!==turn)return;gifWorker=new Worker(new URL('./gifWorker.js',import.meta.url),{type:'module'});worker.current=gifWorker;

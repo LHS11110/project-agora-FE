@@ -18,6 +18,7 @@ export class WgpuCanvasRenderer {
   select_scene(scene_id: number): void;
   update_scene(instance_words: Uint32Array, batch_tex_ids: Uint32Array, batch_starts: Uint32Array, batch_counts: Uint32Array): void;
   remove_texture(tex_id: number): void;
+  set_drag_offset(dx: number, dy: number): void;
   upload_canvas_texture(tex_id: number, source: any, width: number, height: number): boolean;
   /**
    * Copy an image into part of a texture (an atlas slot), creating the texture
@@ -48,6 +49,7 @@ export interface InitOutput {
   readonly wgpucanvasrenderer_render_frame: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
   readonly wgpucanvasrenderer_resize: (a: number, b: number, c: number) => void;
   readonly wgpucanvasrenderer_select_scene: (a: number, b: number) => void;
+  readonly wgpucanvasrenderer_set_drag_offset: (a: number, b: number, c: number) => void;
   readonly wgpucanvasrenderer_update_scene: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => void;
   readonly wgpucanvasrenderer_upload_canvas_subtexture: (a: number, b: number, c: any, d: number, e: number, f: number, g: number) => number;
   readonly wgpucanvasrenderer_upload_canvas_texture: (a: number, b: number, c: any, d: number, e: number) => number;

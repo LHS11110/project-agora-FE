@@ -13,3 +13,18 @@ test('late 401 and canvas access token failures cannot clear a newer account ses
   assert.equal(isCurrentAccountFailure(null, 'old-account'), false);
   assert.equal(isCurrentAccountFailure('account', 'account'), true);
 });
+
+test('refreshed access tokens replace the stable session token only within the same session', async () => {
+  const { setAccessToken, currentAccessToken, bearer, sameSession, clearAccessToken } = await import('../src/state/authSession.js');
+  const first = token({ sid: 'a', exp: 1 }), refreshed = token({ sid: 'a', exp: 2 }), other = token({ sid: 'b', exp: 3 });
+  assert.equal(sameSession(first, refreshed), true);
+  assert.equal(sameSession(first, other), false);
+  assert.equal(sameSession(token({ exp: 1 }), token({ exp: 2 })), false);
+  setAccessToken(refreshed);
+  assert.equal(currentAccessToken(first), refreshed);
+  assert.equal(bearer(first), `Bearer ${refreshed}`);
+  assert.equal(currentAccessToken(other), other);
+  assert.equal(isCurrentAccountFailure(first, refreshed), true);
+  clearAccessToken();
+  assert.equal(currentAccessToken(first), first);
+});

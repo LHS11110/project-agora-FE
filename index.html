@@ -5,23 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#302c4a" />
     <meta name="description" content="FreLog — 생각을 자유롭게 기록하고 연결하는 협업 캔버스" />
-    <script>
-      (() => {
-        const reloadKey = 'agora:stale-vite-chunk-reload-at';
-        window.addEventListener('vite:preloadError', (event) => {
-          let lastReloadAt = 0;
-          try {
-            lastReloadAt = Number(sessionStorage.getItem(reloadKey)) || 0;
-            if (Date.now() - lastReloadAt < 15000) return;
-            sessionStorage.setItem(reloadKey, String(Date.now()));
-          } catch {
-            return;
-          }
-          event.preventDefault();
-          window.location.reload();
-        });
-      })();
-    </script>
+    <script src="/stale-chunk-reload.js"></script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

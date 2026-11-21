@@ -1,13 +1,14 @@
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { apiUrl } from '../../api/client.js';
+import { bearer } from '../../state/authSession.js';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 const options = { cMapUrl: '/pdfjs/cmaps/', cMapPacked: true, standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/', iccUrl: '/pdfjs/iccs/', isEvalSupported: false };
 export function loadPdfBytes(bytes) { return getDocument({ ...options, data: bytes }); }
 export function loadCanvasPdf(src, token) {
   if (!/^\/api\/canvases\/\d+\/pdfs\/[0-9a-f-]{36}$/.test(src || '')) throw new Error('PDF 파일 주소가 올바르지 않습니다.');
-  return getDocument({ ...options, url: apiUrl(src), httpHeaders: token ? { Authorization: `Bearer ${token}` } : {}, disableRange: true, disableStream: true });
+  return getDocument({ ...options, url: apiUrl(src), httpHeaders: token ? { Authorization: bearer(token) } : {}, disableRange: true, disableStream: true });
 }
 export function pdfErrorMessage(error) {
   if (error?.name === 'PasswordException') return '암호로 잠긴 PDF입니다. 암호를 해제한 파일을 업로드해주세요.';

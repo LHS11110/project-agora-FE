@@ -24,7 +24,7 @@ export function findAutoLayoutChildren(parentId, parentItem, allItems = {}, boar
   const children = [];
 
   for (const [id, candidate] of Object.entries(allItems)) {
-    if (id === String(parentId) || !candidate || ['connector', 'stroke', 'portfolio', 'host-tombstone', 'frame'].includes(candidate.kind)) {
+    if (id === String(parentId) || !candidate || ['connector', 'stroke', 'portfolio', 'channel', 'host-tombstone', 'frame'].includes(candidate.kind)) {
       continue;
     }
     const belongsByFrame = parentItem.kind === 'frame' && candidate.frameId === String(parentId);

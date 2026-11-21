@@ -29,6 +29,7 @@ import '../components/vector-layer.css';
 
 const EMPTY_PREVIEWS = [];
 const EMPTY_ITEMS={};
+const GPU_CULL_THRESHOLD = 4096;
 
 const DepthVectorLayer = memo(function DepthVectorLayer(props) {
   useUiLocale();
@@ -43,7 +44,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
     let scrollBuffer = null, scrollBufferContext = null;
     const margin=128;
     buffer.className='vector-composite-surface';element.insertBefore(buffer,canvas);
-    let compositor=null,bufferVersion=0,surfaceChanged=false,worldPaintBounds=null,bufferCamera=null,previousPaintCamera=null,previousPaintRatio=0,sceneInputs=null,lastCamera=null,cameraIdleTimer=null,budgetIdleTimer=null,refreshCamera=false,cameraActive=false,cameraIdlePending=false,viewportMetrics=null,textAppearanceCache=null,inkHasContent=false,inkVisibleCount=0,settledDesiredRatio=null,dragPreview=null,previousDragPreview=null,lastGpuCullKey='';
+    let compositor=null,bufferVersion=0,surfaceChanged=false,worldPaintBounds=null,bufferCamera=null,previousPaintCamera=null,previousPaintRatio=0,sceneInputs=null,lastCamera=null,cameraIdleTimer=null,budgetIdleTimer=null,refreshCamera=false,cameraActive=false,cameraIdlePending=false,viewportMetrics=null,textAppearanceCache=null,inkHasContent=false,inkVisibleCount=0,settledDesiredRatio=null,dragPreview=null,previousDragPreview=null,gpuDragIds=null,lastGpuCullKey='';
     const activeDragPainted=new Map();
     // The ink renderer asks for a pass when a released drag overlay times out.
     // A request made during ink.render() must survive the key update that follows it.
@@ -83,7 +84,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
     const resetRasters = () => {
       for (const record of records.values()) paintIndex.remove(record);
       records.clear(); resources.destroy(); atlas.destroy(); clippedConnectors.clear();
-      sceneInputs = null; previousPaintKey = ''; bufferCamera = null; gpuSceneDirty = true; paintIndexValid = false;
+      sceneInputs = null; previousPaintKey = ''; bufferCamera = null; gpuSceneDirty = true; paintIndexValid = false; gpuDragIds = null;
     };
     let gpuOnlyRasterSkipped = false;
     const atlasHoldsOnlyGpuPixels = () => atlas.pages.some(page => !page.canvas) || [...atlas.standalone].some(handle => !handle.canvas);
@@ -132,7 +133,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       }else{canvas.style.display = 'none'; buffer.style.display = 'none'; releaseCanvasSurfaces();}
       element.dataset.renderer = candidate.backend_kind();
       if (atlasHoldsOnlyGpuPixels()) resetRasters(); else atlas.resetGpuState();
-      atlas.direct = Boolean(candidate.threaded); gpuSceneDirty = true;
+      atlas.direct = Boolean(candidate.threaded); gpuSceneDirty = true; gpuDragIds = null;
       stopGpuEvents = observeGpuContextLoss(surface, () => disposed, fallBackToCanvas);
       schedule();
     };
@@ -147,7 +148,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       app.onFrame=null;app.onError=null;app.destroy();app.free?.();
       gpuCanvas?.remove();gpuCanvas=null;app=null;delete element.__agoraGpuRenderer;
       releaseGpu?.();releaseGpu=null;
-      atlas.direct=false;if(atlasHoldsOnlyGpuPixels())resetRasters();else atlas.resetGpuState();gpuSceneDirty=false;preparedSinceGpuSync=0;lastGpuCullKey='';
+      atlas.direct=false;if(atlasHoldsOnlyGpuPixels())resetRasters();else atlas.resetGpuState();gpuSceneDirty=false;preparedSinceGpuSync=0;lastGpuCullKey='';gpuDragIds=null;
       element.dataset.renderer='canvas2d';stats.engine='canvas2d';stats.gpuReleases=(stats.gpuReleases||0)+1;
       sceneInputs=null;previousPaintKey='';bufferCamera=null;schedule();
     };
@@ -216,6 +217,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         if (!app.threaded || !app.hasFrame || hasPendingGpuSync || gpuSceneDirty || app.scene || app.uploads?.size || app.removed?.size || app.inFlight || app.preparing || app.needsFrame) return false;
         const prev = app.presented;
         if (!prev || prev.version !== app.version) return false;
+        if ((prev.dragOffset?.dx || 0) !== (app.dragOffset?.dx || 0) || (prev.dragOffset?.dy || 0) !== (app.dragOffset?.dy || 0)) return false;
         if (width !== prev.viewportWidth || height !== prev.viewportHeight) return false;
         const expectedW = Math.round((width + prev.margin * 2) * ratio);
         const expectedH = Math.round((height + prev.margin * 2) * ratio);
@@ -363,8 +365,17 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       const zoomRatio=bufferCamera && camera.scale>0 && bufferCamera.scale>0 ? camera.scale/bufferCamera.scale : 0;
       const keepZoomedBuffer=false;
       const scaleSettling=!gpu && Boolean(bufferCamera && (zoomRatio<0.96 || zoomRatio>1.04));
-      const cullChanged = Boolean(gpu && (preparation?.count || 0) > 256 && gpuCullKey !== lastGpuCullKey);
+      const cullChanged = Boolean(gpu && (preparation?.count || 0) > GPU_CULL_THRESHOLD && gpuCullKey !== lastGpuCullKey);
       if (cullChanged) gpuSceneDirty = true;
+      const syncGpuBatch = (slots) => {
+        const useGpuDrag = Boolean(app?.set_drag_offset);
+        const batchDrag = dragPx ? (useGpuDrag ? { ids: dragPx.ids, dx: 0, dy: 0, gpuOffset: true } : dragPx) : null;
+        const count = gpuBatcher.sync(app, slots, batchDrag, preparation.count > GPU_CULL_THRESHOLD ? gpuCullBounds : null);
+        gpuDragIds = useGpuDrag ? (dragPx?.ids || null) : null;
+        app.set_drag_offset?.(dragPx ? dragPx.dx : 0, dragPx ? dragPx.dy : 0);
+        lastGpuCullKey = gpuCullKey;
+        return count;
+      };
       const needsFirstWorkerGpuFrame = Boolean(!cameraActive && app?.threaded && !app.hasFrame && !gpuFailed && !app.inFlight && !app.preparing && gpuSceneDirty);
       if(unchanged && !pending && !imagesChanged && !qualityRefresh && !surfaceChanged && !moved && !settling && !scaleSettling && !dragVectorChanged && !(gpu && gpuSceneDirty) && !needsFirstWorkerGpuFrame && (gpu || bufferFits)){previousDragPreview=dragPreview;return;}
       surfaceChanged=false;
@@ -374,8 +385,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
             let didSync = false;
             if (gpuSceneDirty && (!app.threaded || (!app.inFlight && !app.preparing))) {
               atlas.flush(app); stats.texturePages = atlas.pages.length;
-              stats.lastDrawnObjects = gpuBatcher.sync(app, preparation.slots, dragPx, preparation.count > 256 ? gpuCullBounds : null);
-              lastGpuCullKey = gpuCullKey;
+              stats.lastDrawnObjects = syncGpuBatch(preparation.slots);
               gpuSceneDirty = false; preparedSinceGpuSync = 0; didSync = true;
             }
             presentGpu(didSync);
@@ -384,8 +394,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
           blitBuffer();
           if (needsFirstWorkerGpuFrame) {
             try {
-              atlas.flush(app); gpuBatcher.sync(app, preparation.slots, dragPx, preparation.count > 256 ? gpuCullBounds : null);
-              lastGpuCullKey = gpuCullKey;
+              atlas.flush(app); syncGpuBatch(preparation.slots);
               gpuSceneDirty = false; preparedSinceGpuSync = 0; presentGpu();
             } catch (error) { stats.gpuError = String(error); fallBackToCanvas(); }
           }
@@ -412,13 +421,18 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       }
       if (unchanged && dragVectorChanged && !pending && !imagesChanged && !qualityRefresh && !scaleSettling && (gpu || bufferFits)) {
         if (gpu) {
-          gpuSceneDirty = true;
           try {
+            const nextDragIds = dragPx?.ids || null;
+            const uniformOnly = Boolean(app?.set_drag_offset && !gpuSceneDirty && gpuDragIds === nextDragIds);
             let didSync = false;
-            if (!app.threaded || (!app.inFlight && !app.preparing)) {
-              stats.lastDrawnObjects = gpuBatcher.sync(app, preparation.slots, dragPx, preparation.count > 256 ? gpuCullBounds : null);
-              lastGpuCullKey = gpuCullKey;
-              gpuSceneDirty = false; preparedSinceGpuSync = 0; didSync = true;
+            if (uniformOnly) {
+              app.set_drag_offset(dragPx ? dragPx.dx : 0, dragPx ? dragPx.dy : 0);
+            } else {
+              gpuSceneDirty = true;
+              if (!app.threaded || (!app.inFlight && !app.preparing)) {
+                stats.lastDrawnObjects = syncGpuBatch(preparation.slots);
+                gpuSceneDirty = false; preparedSinceGpuSync = 0; didSync = true;
+              }
             }
             presentGpu(didSync);
           } catch { fallBackToCanvas(); return; }
@@ -609,8 +623,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         try {
           if (syncAllowed) {
             atlas.flush(app); stats.texturePages = atlas.pages.length;
-            drawn = gpuBatcher.sync(app, ordered, dragPx, preparation.count > 256 ? gpuCullBounds : null);
-            lastGpuCullKey = gpuCullKey;
+            drawn = syncGpuBatch(ordered);
             gpuSceneDirty = false; preparedSinceGpuSync = 0;
             presentGpu(true);
           } else {
@@ -781,7 +794,7 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         stats.outputPixels = 0;
       }
       if(app?.threaded&&!app.hasFrame&&!gpuFailed&&!workerBusy&&gpuSceneDirty){
-        try{atlas.flush(app);gpuBatcher.sync(app,ordered,dragPx,preparation.count > 256 ? gpuCullBounds : null);lastGpuCullKey=gpuCullKey;gpuSceneDirty=false;preparedSinceGpuSync=0;presentGpu();}catch(error){stats.gpuError=String(error);fallBackToCanvas();}
+        try{atlas.flush(app);syncGpuBatch(ordered);gpuSceneDirty=false;preparedSinceGpuSync=0;presentGpu();}catch(error){stats.gpuError=String(error);fallBackToCanvas();}
       }
       previousDragPreview = dragPreview;
       stats.drawnObjects += drawn; stats.lastDrawnObjects = drawn; stats.visibleObjects = preparation.count + inkVisibleCount;
@@ -892,7 +905,9 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
       compositor?.destroy();releaseCanvasSurfaces();buffer.remove();ink.destroy(); canvas.remove();
     };
   }, []);
-  useLayoutEffect(() => { renderer.current?.(); });
+  useLayoutEffect(() => {
+    renderer.current?.();
+  }, [props.items, props.referenceItems, props.worldSize, props.camera, props.routingRevision, props.previewStrokes, props.inkItems, props.token]);
   return <div className="vector-layer" style={props.style} ref={host} aria-label={ui("깊이별 벡터 캔버스")} />;
 });
 

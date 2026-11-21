@@ -1,4 +1,5 @@
 import { apiUrl, canvasFetch } from '../api/client.js';
+import { bearer } from '../state/authSession.js';
 
 const MAX_ENTRIES = 64;
 const MAX_BYTES = 48 * 1024 * 1024;
@@ -51,7 +52,7 @@ function evict() {
 async function fetchImageEntry(target) {
   const response = await canvasFetch(target.href, {
     cache: 'no-store',
-    headers: target.internal && target.token ? { Authorization: `Bearer ${target.token}` } : {},
+    headers: target.internal && target.token ? { Authorization: bearer(target.token) } : {},
   });
   if (!response.ok) throw new Error(`Image request failed (${response.status})`);
   if (response.status === 204) return null;

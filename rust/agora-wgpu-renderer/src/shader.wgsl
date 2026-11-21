@@ -5,8 +5,8 @@ struct CameraUniform {
     _pad0: f32,
     viewport_width: f32,
     viewport_height: f32,
-    _pad1: f32,
-    _pad2: f32,
+    drag_dx: f32,
+    drag_dy: f32,
 };
 
 @group(0) @binding(0)
@@ -42,7 +42,10 @@ fn vs_main(
         2.0 / max(1.0, camera.viewport_width),
         2.0 / max(1.0, camera.viewport_height),
     );
-    let screen_center = instance.center * camera.camera_scale + vec2<f32>(camera.camera_x, camera.camera_y);
+    let is_dragged = (instance.tint & 0x80000000u) != 0u;
+    let drag_shift = select(vec2<f32>(0.0, 0.0), vec2<f32>(camera.drag_dx, camera.drag_dy), is_dragged);
+    let world_center = instance.center + drag_shift;
+    let screen_center = world_center * camera.camera_scale + vec2<f32>(camera.camera_x, camera.camera_y);
     let ndc_center = vec2<f32>(
         screen_center.x * ndc_scale.x - 1.0,
         1.0 - screen_center.y * ndc_scale.y,
@@ -80,7 +83,7 @@ fn vs_main(
             local.x * s + local.y * c,
         );
     }
-    let screen = (instance.center + rotated) * camera.camera_scale + vec2<f32>(camera.camera_x, camera.camera_y);
+    let screen = (world_center + rotated) * camera.camera_scale + vec2<f32>(camera.camera_x, camera.camera_y);
     let ndc = vec2<f32>(
         screen.x * ndc_scale.x - 1.0,
         1.0 - screen.y * ndc_scale.y,

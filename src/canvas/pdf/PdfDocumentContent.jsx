@@ -6,6 +6,7 @@ import { useUiLocale } from '../../i18n/useUiLocale.js';
 import { useEffect, useRef, useState } from 'react';
 import { apiUrl } from '../../api/client.js';
 import './pdf-object.css';
+import { bearer } from '../../state/authSession.js';
 
 export default function PdfDocumentContent({ item, token, interactive, canChangePage=true, onPageChange }) {
   useUiLocale();
@@ -65,7 +66,7 @@ export default function PdfDocumentContent({ item, token, interactive, canChange
     if (downloadPending.current) return;
     downloadPending.current = true;
     try {
-      const response = await canvasFetch(apiUrl(item.src), { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const response = await canvasFetch(apiUrl(item.src), { headers: token ? { Authorization: bearer(token) } : {} });
       if (!response.ok) throw new Error();
       const url = URL.createObjectURL(await response.blob());
       const link = document.createElement('a'); link.href = url; link.download = item.filename || 'document.pdf'; link.click();

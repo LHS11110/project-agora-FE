@@ -34,6 +34,7 @@ export function useCanvasConnection(options) {
       chatHistoryPageRef,
       chatHistoryRequestRef,
       chatEventsRef,
+      chatChannelRef,
       voiceCallRef,
       collaborativeBaseDocsRef,
       collaborativeDocsRef,
@@ -586,7 +587,9 @@ export function useCanvasConnection(options) {
           if (data.type === 'host_batch_result') return;
           if (['item_update', 'item_add', 'update_item', 'item_save', 'item_delete', 'delete_item'].includes(data.type)) return;
           if (data.type === 'chat_history') {
-            if (data.object_id) { chatEventsRef.current?.receiveHistory(data); return; }
+            const historyChannel = chatChannelRef?.current?.activeId;
+            if (data.object_id && String(data.object_id) !== historyChannel) { chatEventsRef.current?.receiveHistory(data); return; }
+            if (!data.object_id && historyChannel && historyChannel !== 'general') return;
             if (chatHistoryRequestRef.current && data.request_id !== chatHistoryRequestRef.current) return;
             chatHistoryRequestRef.current = null;
             setChatHistoryLoading(false);
@@ -603,8 +606,13 @@ export function useCanvasConnection(options) {
             return;
           }
           if (data.type === 'chat') {
-            if (data.object_id) { chatEventsRef.current?.receiveComment(data); return; }
+            // Text channels are comment threads on channel items; the active one
+            // feeds the chat list and the others only count unread messages.
+            const channels = chatChannelRef?.current;
+            const messageChannel = data.object_id ? String(data.object_id) : 'general';
+            if (data.object_id && !channels?.isChannel(messageChannel)) { chatEventsRef.current?.receiveComment(data); return; }
             const entry = toChatEntry(data, user);
+            if (channels && messageChannel !== channels.activeId) { channels.onUnread(messageChannel, entry); chatEventsRef.current?.notify(entry); return; }
             const page = chatHistoryPageRef.current;
             if (entry.sequence && entry.sequence > (page.lastSequence || 0)) {
               page.lastSequence = entry.sequence;

@@ -16,7 +16,7 @@ export function updateObjectDiagnostics(current, items, spatialIndex) {
   let modified=changed===null;
   for(const id of dirty){const item=items[id];
     if(!item){if(current.reasons.delete(id))modified=true;continue;}
-    if (item?.type === 'chat_room'||item?.kind==='portfolio') continue;
+    if (item?.type === 'chat_room'||item?.kind==='portfolio'||item?.kind==='channel') continue;
     let reason;
     if (!item || !kinds.has(item.kind)) reason = '지원하지 않는 객체 형식';
     else if (item.kind === 'connector' && (!items[item.from] || !items[item.to] || String(item.from) === String(item.to))) reason = '연결 대상이 없거나 잘못된 화살표';

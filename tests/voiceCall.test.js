@@ -349,3 +349,30 @@ test('seamless token rotation preserves connected WebRTC audio, skips duplicate 
   assert.deepEqual(cues,['voice_join','voice_leave']);
  }finally{call.close();}
 });
+
+test('call channels connect only peers in the same channel and moving keeps the microphone',async()=>{
+ const {call,events,captures}=fixture();
+ call.handle({type:'rtc_peers',self_peer_id:'a',peers:[
+  {peer_id:'b',nickname:'B',tag_number:2,voice_active:true,voice_channel:'general'},
+  {peer_id:'c',nickname:'C',tag_number:3,voice_active:true,voice_channel:'standup'},
+  {peer_id:'d',nickname:'D',tag_number:4,voice_active:true}]});
+ await call.join('standup');
+ assert.equal(call.channel,'standup');
+ assert.deepEqual([...call.links.keys()],['c']);
+ assert.equal(events.filter(e=>e.type==='voice_state').at(-1).channel,'standup');
+ assert.deepEqual(call.snapshot.participants.map(p=>p.peer_id),['c']);
+ assert.deepEqual(Object.keys(call.snapshot.channelMembers).sort(),['general','standup']);
+ assert.equal(call.snapshot.channelMembers.general.length,2,'peers without a channel are in general');
+ // A signal from another channel cannot open a connection.
+ call.handle({type:'rtc_signal',from_peer_id:'b',action:'offer',description:{type:'offer',sdp:'fake'}});
+ assert.equal(call.links.has('b'),false);
+ await call.join('general');
+ assert.equal(captures(),1,'moving channels reuses the microphone');
+ assert.deepEqual([...call.links.keys()].sort(),['b','d']);
+ assert.equal(events.filter(e=>e.type==='voice_state').at(-1).channel,'general');
+ // A peer moving away is disconnected.
+ call.handle({type:'voice_state',peer_id:'b',active:true,muted:false,channel:'standup'});
+ assert.equal(call.links.has('b'),false);
+ call.setChannel('../bad');assert.equal(call.channel,'general');
+ call.close();
+});

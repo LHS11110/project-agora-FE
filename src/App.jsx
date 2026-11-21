@@ -20,8 +20,10 @@ function PageLoading() {
 
 function Protected({ children }) {
 
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, ready } = useAuth();
   const location = useLocation();
+  // Wait for the refresh cookie to restore the session before deciding to redirect.
+  if (!ready) return <PageLoading />;
   return isAuthenticated ? <AppShell>{children}</AppShell> : <Navigate to="/login" replace state={{ from: location.pathname }} />;
 }
 

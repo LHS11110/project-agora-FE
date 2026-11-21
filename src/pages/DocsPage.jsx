@@ -11,6 +11,8 @@ import '../docs-directory.css';
 const publicEndpoints = [
   ['POST', '/api/auth/signup', '없음', '회원가입. JSON { email, password, nickname, emailVerificationToken }. 먼저 이메일 인증을 완료해야 합니다. 인증 증명은 해당 이메일에만 한 번 사용할 수 있습니다. 성공 시 201 + UserResponse.'],
   ['POST', '/api/auth/login', '없음', '로그인. JSON { email, password }. 200 응답에 tokenType, accessToken, user 또는 2단계 인증 필요 시 mfaRequired, challengeToken을 반환합니다.'],
+  ['POST', '/api/auth/session/refresh', 'refresh 쿠키 · X-Agora-Session', 'access token 갱신. 로그인 시 발급된 HttpOnly·SameSite=Strict refresh 쿠키를 회전하고 15분짜리 새 accessToken과 user를 반환합니다. 회전된 이전 쿠키를 다시 쓰면 세션이 폐기됩니다.'],
+  ['POST', '/api/auth/session/logout · /logout-all', 'refresh 쿠키 · Bearer JWT', '현재 세션 또는 모든 기기의 세션을 서버에서 즉시 종료합니다. 종료된 세션의 access token은 다음 요청부터 401입니다.'],
   ['GET', '/api/auth/me', 'Bearer JWT · Bot token', '현재 인증된 사용자 또는 봇을 조회합니다. 인증이 없으면 401입니다.'],
   ['POST', '/api/auth/me', '본문 token', '현재 사용자 조회. JSON { token }에 로그인 JWT를 넣습니다. 누락·무효 토큰은 401입니다.'],
   ['GET', '/api/auth/providers', '없음', '활성화된 간편 로그인 제공자 상태 { google, naver, kakao, orcid }를 반환합니다.'],

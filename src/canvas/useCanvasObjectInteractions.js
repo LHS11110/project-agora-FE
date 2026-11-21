@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { changeItems } from './itemSnapshots.js';
 import { activeGridInterval, BASE_GRID_INTERVAL, snapPosition, snappedTranslation, strokeGridAnchor } from './gridPlacement.js';
 import { isObjectLocked, OBJECT_LOCK_MESSAGE } from './locks/objectLock.js';
 import { isLogicGate, nearestLogicPort } from './logicGates.js';
@@ -51,12 +52,14 @@ export function useCanvasObjectInteractions(options) {
     startPan,
     vectorDragRef,
   } = options;
-  const commitGeometry = (next,ids) => {
-    for(const id of ids)inheritConnectorObjectSize(itemsRef.current[id],next[id]);
-    itemsRef.current=next;
-    const index=spatialIndexRef?.current;
-    index?.update(next,boardSize,index.revision,ids);
-    setItems(next);
+  const commitGeometry = (changes, ids) => {
+    const previous = itemsRef.current;
+    const next = changeItems(previous, changes);
+    for (const id of ids) inheritConnectorObjectSize(previous[id], next[id]);
+    itemsRef.current = next;
+    const index = spatialIndexRef?.current;
+    index?.update(next, boardSize, index.revision, ids);
+    setItems(next, ids);
   };
 
   const startObjectDrag = (event, id, item) => {
@@ -229,6 +232,13 @@ export function useCanvasObjectInteractions(options) {
     pendingMoveRef.current = null;
   };
   const applyScheduledMove = (pending) => {
+    if (pending.commitChanges) {
+      commitGeometry(pending.commitChanges, pending.commitIds);
+      if (pending.broadcast) {
+        for (const [itemId, next] of Object.entries(pending.commitChanges)) sendRealtimePeerItemGeometry(itemId, next);
+      }
+      return;
+    }
     const { drag, dx, dy } = pending;
     if (drag.fastPreview) {
       drag.lastMove = { dx, dy };
@@ -263,8 +273,8 @@ export function useCanvasObjectInteractions(options) {
     if (!pending || dragRef.current !== pending.drag) return;
     applyScheduledMove(pending);
   };
-  const scheduleObjectMovePreview = (drag, dx, dy) => {
-    pendingMoveRef.current = { drag, dx, dy };
+  const scheduleMoveTask = (pending) => {
+    pendingMoveRef.current = pending;
     if (!moveStateRef.current.scheduled) {
       moveStateRef.current.scheduled = true;
       const token = (moveStateRef.current.token += 1);
@@ -276,6 +286,12 @@ export function useCanvasObjectInteractions(options) {
         }
       });
     }
+  };
+  const scheduleObjectMovePreview = (drag, dx, dy) => {
+    scheduleMoveTask({ drag, dx, dy });
+  };
+  const scheduleGeometryCommit = (drag, commitChanges, commitIds, broadcast = true) => {
+    scheduleMoveTask({ drag, commitChanges, commitIds, broadcast });
   };
   useEffect(() => {
     moveStateRef.current.disposed = false;
@@ -299,8 +315,7 @@ export function useCanvasObjectInteractions(options) {
       const drag = dragRef.current;
       const degrees = rotationAtPointer(0, drag.startAngle, event.clientX, event.clientY, drag.centerX, drag.centerY);
       const changes = rotateGroup(drag.initialItems, drag.layout, degrees, boardSize);
-      commitGeometry({ ...itemsRef.current, ...changes },Object.keys(changes));
-      for (const [itemId, next] of Object.entries(changes)) sendRealtimePeerItemGeometry(itemId, next);
+      scheduleGeometryCommit(drag, changes, Object.keys(changes), true);
       return;
     }
     const moveGridSpacing = activeGridInterval(snapToGrid, gridSpacing);
@@ -321,14 +336,13 @@ export function useCanvasObjectInteractions(options) {
       const next = initial.kind === 'connector'
         ? { ...initial, ...(connectorPointCount(initial) > 1 || Array.isArray(initial.bendPoints) ? connectorControlFromPointer(initial, connectorGeometry(initial, itemsRef.current, viewport.width, viewport.height), point, viewport, dragRef.current.bendPointIndex) : connectorBendFromPointer(connectorGeometry(initial, itemsRef.current, viewport.width, viewport.height), point, viewport)) }
         : { ...initial, ...shapeArrowControlFromPointer(initial, point, viewport, dragRef.current.bendPointIndex) };
-      commitGeometry({ ...itemsRef.current, [id]: next },[id]);
+      scheduleGeometryCommit(dragRef.current, { [id]: next }, [id], false);
       return;
     }
     if (mode === 'rotate') {
       const { centerX, centerY, startAngle, initialRotation } = dragRef.current;
       const next = { ...initial, rotation: rotationAtPointer(initialRotation, startAngle, event.clientX, event.clientY, centerX, centerY) };
-      commitGeometry({ ...itemsRef.current, [id]: next },[id]);
-      sendRealtimePeerItemGeometry(id, next);
+      scheduleGeometryCommit(dragRef.current, { [id]: next }, [id], true);
       return;
     }
     const point = pointerPosition(event);
@@ -347,14 +361,18 @@ export function useCanvasObjectInteractions(options) {
       if(initial.kind==='stroke'){const anchor=gridAnchorFor(initial),delta=anchor?snappedTranslation(anchor,point.x-startX,point.y-startY,moveGridSpacing,boardSize):{dx:point.x-startX,dy:point.y-startY};next={...initial,points:initial.points.map(p=>({...p,x:p.x+delta.dx,y:p.y+delta.dy}))};}
       else next={...next,...snapPosition(next,moveGridSpacing,boardSize)};
     }
-    commitGeometry({ ...itemsRef.current, [id]: next },[id]);
-    sendRealtimePeerItemGeometry(id, next);
+    scheduleGeometryCommit(dragRef.current, { [id]: next }, [id], true);
   };
   const stopObjectDrag = (event) => {
     if (!dragRef.current) return;
     if (event && dragRef.current.pointerId !== event.pointerId) return;
     if (event?.type === 'lostpointercapture' && event.target !== dragRef.current.captureElement) return;
-    if(event?.type==='pointerup' && ['move','multi-move'].includes(dragRef.current.mode)){moveObject(event);flushScheduledMove();}else{cancelScheduledMove();}
+    if (event?.type === 'pointerup') {
+      if (['move', 'multi-move'].includes(dragRef.current.mode)) moveObject(event);
+      flushScheduledMove();
+    } else {
+      cancelScheduledMove();
+    }
     const drag = dragRef.current;
     dragRef.current = null;
     releaseObjectPointer(drag);
@@ -384,9 +402,9 @@ export function useCanvasObjectInteractions(options) {
           markItemDirty(id);
           if (item.kind === 'note') saveCollaborativeItemRef.current?.(id, { silent: true });
         } else if (item && !sendItemChange({ type: 'item_update', item_id: id, item }, initial)) {
-          const rolledBack = { ...itemsRef.current, [id]: initial };
+          const rolledBack = changeItems(itemsRef.current, { [id]: initial });
           itemsRef.current = rolledBack;
-          setItems(rolledBack);
+          setItems(rolledBack, [id]);
           sendPeerItemGeometry(id, initial);
           setToast('연결이 복구되면 선택한 오브젝트를 다시 이동해주세요.');
         }
@@ -407,8 +425,9 @@ export function useCanvasObjectInteractions(options) {
       markItemDirty(id);
       if (item.kind === 'note') saveCollaborativeItemRef.current?.(id, { silent: true });
     } else if (item && !sendItemChange({ type: 'item_update', item_id: id, item }, initial)) {
-      itemsRef.current = { ...itemsRef.current, [id]: initial };
-      setItems((current) => ({ ...current, [id]: initial }));
+      const rolledBack = changeItems(itemsRef.current, { [id]: initial });
+      itemsRef.current = rolledBack;
+      setItems(rolledBack, [id]);
       sendPeerItemGeometry(id, initial);
       refreshSpatialIndex(dirtyIdList);
     }

@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';const {chromium}=await import(process.env.AGORA_E2E_PLAYWRIGHT_MODULE||'playwright-core');const b=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox']});
+try{const p=await b.newPage({ignoreHTTPSErrors:true}),errors=[];p.on('pageerror',e=>errors.push(e.message));
+await p.goto((process.env.AGORA_E2E_ORIGIN||'https://localhost:5191')+'/tests/browser/channels.html');
+const chat=p.getByRole('navigation',{name:'채팅 채널'});await chat.getByRole('button',{name:'일반',exact:true}).waitFor();
+assert.equal(await chat.getByRole('button',{name:'일반',exact:true}).getAttribute('aria-current'),'true');
+await chat.getByRole('button',{name:'채팅 채널 추가'}).click();await chat.getByRole('textbox').fill('  디자인   팀 ');await chat.getByRole('button',{name:'추가',exact:true}).click();
+await chat.getByRole('button',{name:'디자인 팀',exact:true}).waitFor();assert.equal(await chat.getByRole('button',{name:'디자인 팀',exact:true}).getAttribute('aria-current'),'true');
+assert.match(await p.getByRole('textbox',{name:'채팅 메시지 입력'}).getAttribute('placeholder'),/^#디자인 팀 · /);
+await chat.getByRole('button',{name:'이름 변경: 디자인 팀'}).click();await chat.getByRole('textbox').fill('디자인');await chat.getByRole('textbox').press('Enter');
+await chat.getByRole('button',{name:'디자인',exact:true}).waitFor();
+await chat.getByRole('button',{name:'일반',exact:true}).click();assert.equal(await p.evaluate(()=>window.channelFixture.active),'general');
+await p.getByRole('tab',{name:'통화'}).click();const vc=p.getByRole('navigation',{name:'통화 채널'});
+await vc.getByText('Kim#1').waitFor();
+await vc.getByRole('button',{name:'통화 채널 추가'}).click();await vc.getByRole('textbox').fill('회의');await vc.getByRole('button',{name:'추가',exact:true}).click();
+await vc.getByRole('button',{name:'회의',exact:true}).click();
+await p.getByRole('button',{name:'통화 참여',exact:true}).click();
+await vc.getByText('나',{exact:true}).waitFor();
+const states=await p.evaluate(()=>window.channelFixture.sent.filter(e=>e.type==='voice_state').map(e=>e.channel));
+assert.match(states.at(-1),/^channel-/);
+assert.match(await p.locator('.voice-channel-name').innerText(),/·\s*회의/);
+await vc.locator('.channel-select',{has:p.locator('.channel-name',{hasText:/^일반 통화$/})}).click();
+assert.equal(await p.evaluate(()=>window.channelFixture.sent.filter(e=>e.type==='voice_state').at(-1).channel),'general');
+await p.screenshot({path:process.env.AGORA_E2E_SCREENSHOT||'/tmp/channels.png'});
+assert.deepEqual(errors,[]);console.log('PASS chat channels create/rename/select, call channels list/join/move');}finally{await b.close();}

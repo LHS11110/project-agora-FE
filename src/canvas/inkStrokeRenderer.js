@@ -6,6 +6,7 @@ import { strokeOpacity } from './penStyles.js';
 import { INK_BRUSH, inkStrokeOutline, inkStrokeSize, strokePaintSize } from './inkStroke.js';
 import { addPenOutline } from './penStroke.js';
 import { changedItemIds } from './itemSnapshots.js';
+import CanvasGridIndex from './grid/CanvasGridIndex.js';
 
 const completedPaths = new WeakMap();
 const quickBoundsCache = new WeakMap();
@@ -146,17 +147,23 @@ function quickStrokeWorldBounds(stroke, width, height) {
 }
 
 function buildStrokeGeometry(stroke, width, height, createPath) {
-  const points = (stroke.points || []).filter(p => Number.isFinite(p.x) && Number.isFinite(p.y))
-    .map(p => ({ ...p, x: p.x * width, y: p.y * height }));
+  const rawPoints = stroke.points;
+  const points = [];
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  if (Array.isArray(rawPoints)) {
+    for (let i = 0; i < rawPoints.length; i++) {
+      const pt = rawPoints[i];
+      if (!pt || !Number.isFinite(pt.x) || !Number.isFinite(pt.y)) continue;
+      const x = pt.x * width, y = pt.y * height;
+      points.push(pt.pressure !== undefined ? { x, y, pressure: pt.pressure } : { x, y });
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
   const path = createPath();
   let bristles;
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const p of points) {
-    if (p.x < minX) minX = p.x;
-    if (p.y < minY) minY = p.y;
-    if (p.x > maxX) maxX = p.x;
-    if (p.y > maxY) maxY = p.y;
-  }
   if (!points.length) {
     return { path, bristles, centerX: 0, centerY: 0, dot: false, rawMinX: 0, rawMinY: 0, rawMaxX: 0, rawMaxY: 0, bounds: null };
   }
@@ -230,7 +237,7 @@ export function drawStroke(context, stroke, width, height) {
   const scaledBlur = Math.min(64, shadow.blur * scale);
   const scaledOffX = shadow.x * scale;
   const scaledOffY = shadow.y * scale;
-  const paintShadow = shadow.enabled && shadow.opacity > 0 && (scaledBlur >= 0.35 || Math.hypot(scaledOffX, scaledOffY) >= 0.35);
+  const paintShadow = shadow.enabled && shadow.opacity > 0 && (scaledBlur >= 0.75 || Math.hypot(scaledOffX, scaledOffY) >= 0.75);
   context.shadowColor = paintShadow ? `rgba(24,34,43,${shadow.opacity})` : 'transparent';
   context.shadowBlur = paintShadow ? scaledBlur : 0;
   context.shadowOffsetX = paintShadow ? scaledOffX : 0;
@@ -310,6 +317,43 @@ export function createInkStrokeRenderer(host, vectorCanvas, { requestRender = ()
   const overviewContext = overview.getContext('2d', { alpha: true });
   const OVERVIEW_MAX_PX = 1536, OVERVIEW_IDLE_MS = 250;
   let overviewView = null, overviewTimer = null;
+  // Spatial index over completed stroke bounds (world px) so dirty-rect and
+  // viewport repaints avoid O(M) linear scans on dense ink canvases.
+  let strokeSpatial = null;
+  function ensureStrokeSpatial(entries, width, height) {
+    if (entries.length <= 64) return null;
+    if (strokeSpatial && strokeSpatial.entries === entries && strokeSpatial.width === width && strokeSpatial.height === height) {
+      return strokeSpatial.grid;
+    }
+    const grid = new CanvasGridIndex(1, 1);
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      const b = quickStrokeWorldBounds(entry[1], width, height);
+      if (!b) continue;
+      grid.insert({ minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY, order: i, entry });
+    }
+    strokeSpatial = { entries, width, height, grid };
+    return grid;
+  }
+  function queryRegionEntries(entries, region, width, height) {
+    const grid = ensureStrokeSpatial(entries, width, height);
+    if (!grid) {
+      const out = [];
+      for (let i = 0; i < entries.length; i++) {
+        const b = quickStrokeWorldBounds(entries[i][1], width, height);
+        if (b && (b.maxX < region.minX || b.minX > region.maxX || b.maxY < region.minY || b.minY > region.maxY)) continue;
+        out.push(entries[i]);
+      }
+      return out;
+    }
+    const root = grid.getRootBounds();
+    if (region.minX <= root.minX && region.minY <= root.minY && region.maxX >= root.maxX && region.maxY >= root.maxY) {
+      return entries;
+    }
+    const hits = grid.search(region);
+    if (hits.length > 1) hits.sort((a, b) => a.order - b.order);
+    return hits.map(hit => hit.entry);
+  }
   const overviewFresh = (hidden) => Boolean(overviewView && overviewView.items === state.items && overviewView.visible === state.visibleItemIds
     && overviewView.width === state.width && overviewView.height === state.height && overviewView.hiddenKey === [...hidden].join('|'));
   function paintOverview(entries, hidden) {
@@ -393,7 +437,7 @@ export function createInkStrokeRenderer(host, vectorCanvas, { requestRender = ()
       const inv = 1 / Math.max(1e-4, camera.scale || 1);
       const minX = (-camera.x - margin) * inv, minY = (-camera.y - margin) * inv;
       const maxX = (state.viewportWidth - camera.x + margin) * inv, maxY = (state.viewportHeight - camera.y + margin) * inv;
-      const list = entries.filter(([, stroke]) => { const b = quickStrokeWorldBounds(stroke, state.width, state.height); return !b || !(b.maxX < minX || b.minX > maxX || b.maxY < minY || b.minY > maxY); });
+      const list = queryRegionEntries(entries, { minX, minY, maxX, maxY }, state.width, state.height);
       settleJob = { key, items: state.items, hiddenKey, visible: state.visibleItemIds, context, list, index: 0, margin, ratio, hidden };
     } else if (!showRetained(hidden, ratio)) { settleJob = null; return false; }
     const job = settleJob;
@@ -719,11 +763,9 @@ export function createInkStrokeRenderer(host, vectorCanvas, { requestRender = ()
           savedContext.clip();
           savedContext.clearRect(damageRect.left, damageRect.top, damageRect.right - damageRect.left, damageRect.bottom - damageRect.top);
           savedContext.setTransform(k, 0, 0, k, ox, oy);
-          for (let i = 0; i < entries.length; i++) {
-            const stroke = entries[i][1];
-            const b = quickStrokeWorldBounds(stroke, state.width, state.height);
-            if (b && (b.maxX < region.minX || b.minX > region.maxX || b.maxY < region.minY || b.minY > region.maxY)) continue;
-            drawStroke(savedContext, stroke, state.width, state.height);
+          const hits = queryRegionEntries(entries, region, state.width, state.height);
+          for (let i = 0; i < hits.length; i++) {
+            drawStroke(savedContext, hits[i][1], state.width, state.height);
           }
           savedContext.restore();
         }
@@ -771,11 +813,13 @@ export function createInkStrokeRenderer(host, vectorCanvas, { requestRender = ()
           exposed.rect(kept.minX, kept.minY, kept.maxX - kept.minX, kept.maxY - kept.minY);
           savedContext.clip(exposed, 'evenodd');
         }
-        for (let i = 0; i < entries.length; i++) {
-          const stroke = entries[i][1];
-          const b = quickStrokeWorldBounds(stroke, state.width, state.height);
-          if (b && (b.maxX < viewMinX || b.minX > viewMaxX || b.maxY < viewMinY || b.minY > viewMaxY)) continue;
-          if (kept && b && b.minX >= kept.minX && b.minY >= kept.minY && b.maxX <= kept.maxX && b.maxY <= kept.maxY) continue;
+        const visibleEntries = queryRegionEntries(entries, { minX: viewMinX, minY: viewMinY, maxX: viewMaxX, maxY: viewMaxY }, state.width, state.height);
+        for (let i = 0; i < visibleEntries.length; i++) {
+          const stroke = visibleEntries[i][1];
+          if (kept) {
+            const b = quickStrokeWorldBounds(stroke, state.width, state.height);
+            if (b && b.minX >= kept.minX && b.minY >= kept.minY && b.maxX <= kept.maxX && b.maxY <= kept.maxY) continue;
+          }
           drawStroke(savedContext, stroke, state.width, state.height);
         }
         if (previous) savedContext.restore();
@@ -805,6 +849,6 @@ export function createInkStrokeRenderer(host, vectorCanvas, { requestRender = ()
       renderDraft(draft);
       return true;
     },
-    destroy() { flushContext = null; settleJob = null; if (settleCanvas) releaseBacking(settleCanvas); settleCanvas = null; clearTimeout(overviewTimer); releaseBacking(overview); overview.remove(); overviewView = null; clearTimeout(liveReleaseTimer); clearTimeout(settling?.timer); settling = null; hideDrag(); if (gestureScratch) releaseBacking(gestureScratch); gestureScratch = null; releaseBacking(saved); releaseBacking(live); saved.remove(); live.remove(); drag.remove(); state = null; savedBuffer = null; },
+    destroy() { strokeSpatial = null; flushContext = null; settleJob = null; if (settleCanvas) releaseBacking(settleCanvas); settleCanvas = null; clearTimeout(overviewTimer); releaseBacking(overview); overview.remove(); overviewView = null; clearTimeout(liveReleaseTimer); clearTimeout(settling?.timer); settling = null; hideDrag(); if (gestureScratch) releaseBacking(gestureScratch); gestureScratch = null; releaseBacking(saved); releaseBacking(live); saved.remove(); live.remove(); drag.remove(); state = null; savedBuffer = null; },
   };
 }

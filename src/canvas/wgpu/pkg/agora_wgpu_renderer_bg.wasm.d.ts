@@ -13,6 +13,7 @@ export const wgpucanvasrenderer_remove_texture: (a: number, b: number) => void;
 export const wgpucanvasrenderer_render_frame: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
 export const wgpucanvasrenderer_resize: (a: number, b: number, c: number) => void;
 export const wgpucanvasrenderer_select_scene: (a: number, b: number) => void;
+export const wgpucanvasrenderer_set_drag_offset: (a: number, b: number, c: number) => void;
 export const wgpucanvasrenderer_update_scene: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => void;
 export const wgpucanvasrenderer_upload_canvas_subtexture: (a: number, b: number, c: any, d: number, e: number, f: number, g: number) => number;
 export const wgpucanvasrenderer_upload_canvas_texture: (a: number, b: number, c: any, d: number, e: number) => number;

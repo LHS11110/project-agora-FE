@@ -48,8 +48,9 @@ export class WgpuSceneBatcher {
     let batchStarts = this.batchStarts;
     let batchCounts = this.batchCounts;
     const dragIds = dragPreview?.ids;
-    const dragDx = dragIds?.size ? (dragPreview.dx || 0) : 0;
-    const dragDy = dragIds?.size ? (dragPreview.dy || 0) : 0;
+    const gpuOffset = Boolean(dragPreview?.gpuOffset && dragIds?.size);
+    const dragDx = !gpuOffset && dragIds?.size ? (dragPreview.dx || 0) : 0;
+    const dragDy = !gpuOffset && dragIds?.size ? (dragPreview.dy || 0) : 0;
     const useCull = Boolean(
       cullBounds &&
       Number.isFinite(cullBounds.minX) &&
@@ -75,11 +76,9 @@ export class WgpuSceneBatcher {
       if (!handle || !descriptor || !raster) continue;
 
       const shifted = Boolean(dragIds && dragIds.has(record.id));
-      if (useCull && record.paintedBounds) {
+      if (useCull && !shifted && record.paintedBounds) {
         const pb = record.paintedBounds;
-        const offX = shifted ? dragDx : 0;
-        const offY = shifted ? dragDy : 0;
-        if (pb.maxX + offX < cMinX || pb.minX + offX > cMaxX || pb.maxY + offY < cMinY || pb.minY + offY > cMaxY) {
+        if (pb.maxX < cMinX || pb.minX > cMaxX || pb.maxY < cMinY || pb.minY > cMaxY) {
           continue;
         }
       }
@@ -99,7 +98,8 @@ export class WgpuSceneBatcher {
       f32[base + 9] = handle.uvMaxY;
       f32[base + 10] = (descriptor.rotation || 0) * DEG_TO_RAD;
       const tint = record.tint;
-      u32[base + 11] = tint === null || tint === undefined ? 0xffffff : (tint >>> 0);
+      const rgb = tint === null || tint === undefined ? 0xffffff : (tint & 0xffffff);
+      u32[base + 11] = (shifted && gpuOffset ? (rgb | 0x80000000) : rgb) >>> 0;
 
       const texId = handle.texId >>> 0;
       if (batchCount > 0 && currentTexId === texId) {

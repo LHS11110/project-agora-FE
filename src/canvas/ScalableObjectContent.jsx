@@ -6,18 +6,44 @@ import ResizeHandles from '../components/ResizeHandles.jsx';
 import { isContentScalable, objectContentScale } from './objectContentScale.js';
 import './scalable-object-content.css';
 
+const observedContentNodes = new WeakMap();
+let sharedContentResizeObserver = null;
+function ensureContentResizeObserver() {
+  if (sharedContentResizeObserver || typeof ResizeObserver !== 'function') return sharedContentResizeObserver;
+  sharedContentResizeObserver = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      const callback = observedContentNodes.get(entry.target);
+      if (callback) callback(entry);
+    }
+  });
+  return sharedContentResizeObserver;
+}
+
 function ScalableObjectContent({ children, className, scaleX, scaleY, fixedHeight, fillSpace, fontScale }) {
   // Axis scales describe the available box, not stretching of its contents.
   const fittedScale = fontScale ?? Math.min(scaleX, scaleY);
   const contentRef = useRef(null);
   const [height, setHeight] = useState(1);
   useLayoutEffect(() => {
+    if (fixedHeight) return undefined;
     const content = contentRef.current;
-    const measure = () => { if (!fixedHeight) setHeight(content.offsetHeight * fittedScale); };
+    if (!content) return undefined;
+    const measure = (entry) => {
+      const block = entry?.borderBoxSize?.[0]?.blockSize;
+      const next = (Number.isFinite(block) && block > 0 ? block : content.offsetHeight) * fittedScale;
+      setHeight((prev) => (prev === next ? prev : next));
+    };
+    const observer = ensureContentResizeObserver();
+    if (observer) {
+      observedContentNodes.set(content, measure);
+      observer.observe(content);
+      return () => {
+        observedContentNodes.delete(content);
+        observer.unobserve(content);
+      };
+    }
     measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(content);
-    return () => observer.disconnect();
+    return undefined;
   }, [scaleX, fittedScale, fixedHeight]);
   return <div className={`object-content-viewport${fillSpace ? ` ${fillSpace}-content-viewport` : ''}`} style={{ height: fixedHeight ? '100%' : height, '--content-scale-x': scaleX, '--content-scale-y': scaleY, '--content-fit-scale': fittedScale }}>
     <div ref={contentRef} className={`${className} scalable-object-content`} style={{ height: fixedHeight ? `calc(100% / var(${fillSpace ? '--content-fit-scale' : '--content-scale-y'}))` : undefined }}>{children}</div>

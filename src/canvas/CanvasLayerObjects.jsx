@@ -2,6 +2,7 @@ import {canUseItem} from './permissions/access.js';
 import { memo } from 'react';
 import CanvasObject from './CanvasObject.jsx';
 const NO_EDITORS=[];
+const EMPTY_CELLS=[];
 
 function visibleNotebookReferencesChanged(before,after){
   const oldItems=before.allItems||{},newItems=after.allItems||{};
@@ -21,9 +22,9 @@ function visibleNotebookReferencesChanged(before,after){
 // Camera translation does not change object content or hit controls.
 export default memo(function CanvasLayerObjects({presentation=false,pendingEntrance,access,canWriteItem=()=>true,canExecuteItem=()=>true,objects,allItems,domSelection,editingId,connectionStartId,world,scale,token,runtimeStore,selected,singleSelection,activeTool,dirtyItems,editorsByItem,actions}) {
   return objects.map(([id,item,bounds,connectorCurve])=>{
-    const notebookCells=item.runtimeRole==='notebook'?((item.notebookCellIds||[]).map(cellId=>({id:cellId,item:allItems?.[cellId]})).filter(entry=>entry.item?.runtimeRole==='notebook-cell')):[];
+    const notebookCells=item.runtimeRole==='notebook'?((item.notebookCellIds||[]).map(cellId=>({id:cellId,item:allItems?.[cellId]})).filter(entry=>entry.item?.runtimeRole==='notebook-cell')):EMPTY_CELLS;
     const notebookParent=item.runtimeRole==='notebook-cell'?allItems?.[item.notebookId]:null;
-    const notebookSiblingCells=notebookParent?.notebookCellIds?.map(cellId=>({id:cellId,item:allItems?.[cellId]})).filter(entry=>entry.item?.runtimeRole==='notebook-cell')||[];
+    const notebookSiblingCells=notebookParent?.notebookCellIds?.map(cellId=>({id:cellId,item:allItems?.[cellId]})).filter(entry=>entry.item?.runtimeRole==='notebook-cell')||EMPTY_CELLS;
     const notebookOrder=notebookParent?.notebookCellIds?.indexOf(id)+1||0;
     return <CanvasObject presentationHidden={Boolean(pendingEntrance?.has(id))} mediaWritable={!item.locked&&canUseItem(item,access,'write')} readOnly={presentation||!canWriteItem(item)} canExecute={!presentation&&canExecuteItem(item)} key={id} id={id} item={item} notebookCells={notebookCells} notebookSiblingCells={notebookSiblingCells} notebookParent={notebookParent} notebookOrder={notebookOrder} notebookCellCount={notebookParent?.notebookCellIds?.length||0} bounds={bounds} connectorCurve={connectorCurve} viewSize={world} token={token} runtimeStore={runtimeStore} selected={selected.has(String(id))} allowSingleSelectionControls={singleSelection} activeTool={activeTool} connectionStartId={connectionStartId} editing={editingId===id && !item.locked && canWriteItem(item)} dirty={dirtyItems.has(String(id))} remoteEditors={editorsByItem.get(String(id)) || NO_EDITORS} {...actions} />;
   });

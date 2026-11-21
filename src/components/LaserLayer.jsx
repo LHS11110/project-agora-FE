@@ -1,3 +1,6 @@
+import { memo, useEffect, useState } from 'react';
+import { LASER_FADE_MS } from '../canvas/canvasConstants.js';
+
 function pathForPoints(points, width, height) {
   if (!Array.isArray(points) || points.length === 0) return '';
   const scaled = points.map((point) => ({ x: point.x * width, y: point.y * height }));
@@ -14,7 +17,40 @@ function pathForPoints(points, width, height) {
   return `${path} L ${last.x} ${last.y}`;
 }
 
-export default function LaserLayer({ strokes = [], width = 1, height = 1, camera, worldSize }) {
+const LaserLayer = memo(function LaserLayer({ strokes: propStrokes, updaterRef, activeDrawingRef, width = 1, height = 1, camera, worldSize }) {
+  const [internalStrokes, setInternalStrokes] = useState([]);
+  const strokes = updaterRef ? internalStrokes : (propStrokes || []);
+
+  useEffect(() => {
+    if (!updaterRef) return undefined;
+    updaterRef.current = setInternalStrokes;
+    return () => {
+      if (updaterRef.current === setInternalStrokes) updaterRef.current = null;
+    };
+  }, [updaterRef]);
+
+  useEffect(() => {
+    if (!updaterRef || !internalStrokes.length) return undefined;
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      setInternalStrokes((current) => {
+        let changed = false;
+        const next = current.flatMap((stroke) => {
+          if (stroke.endedAt) {
+            if (now - stroke.endedAt < LASER_FADE_MS + 120) return [stroke];
+            changed = true;
+            return [];
+          }
+          if ((stroke.active && activeDrawingRef?.current?.key === stroke.id) || now - stroke.updatedAt < 6000) return [stroke];
+          changed = true;
+          return [{ ...stroke, active: false, endedAt: now }];
+        });
+        return changed ? next : current;
+      });
+    }, 160);
+    return () => window.clearInterval(timer);
+  }, [updaterRef, internalStrokes.length, activeDrawingRef]);
+
   if (!strokes.length) return null;
   const viewWidth = Math.max(1, width);
   const viewHeight = Math.max(1, height);
@@ -35,4 +71,6 @@ export default function LaserLayer({ strokes = [], width = 1, height = 1, camera
       </g>)}
     </g>
   </svg>;
-}
+});
+
+export default LaserLayer;

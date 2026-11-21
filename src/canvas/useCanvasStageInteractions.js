@@ -84,11 +84,10 @@ export function useCanvasStageInteractions(options) {
   };
   const updateEraserCursor = (event) => {
     if (activeTool !== 'eraser') return;
-    const bounds = event.currentTarget.getBoundingClientRect();
+    const bounds = getStageBounds();
     const cursor = eraserCursorRef.current;
-    if (!cursor) return;
-    cursor.style.left = `${event.clientX - bounds.left}px`;
-    cursor.style.top = `${event.clientY - bounds.top}px`;
+    if (!cursor || !bounds) return;
+    cursor.style.transform = `translate3d(${event.clientX - bounds.left}px,${event.clientY - bounds.top}px,0) translate(-50%,-50%)`;
     cursor.classList.add('is-visible');
   };
   const hideEraserCursor = () => eraserCursorRef.current?.classList.remove('is-visible');
@@ -372,7 +371,7 @@ export function useCanvasStageInteractions(options) {
   const moveMarqueeSelection = (event) => {
     const selection = selectionRef.current;
     if (!selection || selection.pointerId !== event.pointerId) return;
-    const bounds = boardRef.current?.getBoundingClientRect();
+    const bounds = getStageBounds();
     if (!bounds) return;
     const x = event.clientX - bounds.left;
     const y = event.clientY - bounds.top;
@@ -522,7 +521,7 @@ export function useCanvasStageInteractions(options) {
     if (creationDragRef.current) {
       const drag = creationDragRef.current;
       if (drag.pointerId !== event.pointerId) return;
-      const bounds = boardRef.current?.getBoundingClientRect();
+      const bounds = getStageBounds();
       if (!bounds) return;
       const point = pointerPosition(event);
       drag.current = point;

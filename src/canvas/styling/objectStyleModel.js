@@ -493,7 +493,7 @@ export function hasAdvancedStyle(item) {
  * Return true when an item can be hidden/revealed on the canvas.
  */
 export function isHideableObject(item) {
-  return Boolean(item && typeof item === 'object' && item.kind && item.kind !== 'portfolio' && item.type !== 'chat_room');
+  return Boolean(item && typeof item === 'object' && item.kind && item.kind !== 'portfolio' && item.kind !== 'channel' && item.type !== 'chat_room');
 }
 
 /**

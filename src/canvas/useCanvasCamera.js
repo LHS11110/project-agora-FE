@@ -12,7 +12,7 @@ export function useCanvasCamera(boardRef, sceneRef) {
   const work = useRef({
     frame: 0, idle: null, detailScale: 1, observer: null, size: null,
     refs: { stage: null, grid: null, axes: null, coordX: null, coordY: null, coordOrigin: null, laser: null, laserMissing: false, minimapRect: null, minimapMissing: false, zoom: null },
-    last: { x: NaN, y: NaN, scale: NaN, width: 0, height: 0, gx: 0, gy: 0, layers: 0, axisChildren: 0, stageChildCount: -1, gridSpec: '', gridTileKey: '', gridTransform: '', gridPending: false, wasActive: false, zoomText: '', coordXTr: '', coordYTr: '', coordOriginShown: null, coordOriginTr: '' },
+    last: { x: NaN, y: NaN, scale: NaN, width: 0, height: 0, gx: 0, gy: 0, layers: 0, axisChildren: 0, stageChildCount: -1, gridSpec: '', gridTileKey: '', gridTransform: '', gridBgPos: '', gridPending: false, wasActive: false, zoomText: '', coordXTr: '', coordYTr: '', coordOriginShown: null, coordOriginTr: '' },
   });
   const commit = useCallback((settled = false) => {
     committed.current = { ...current.current };
@@ -69,9 +69,16 @@ export function useCanvasCamera(boardRef, sceneRef) {
           last.gridTransform = proj.transform;
         }
         if (gridZooming && last.gridSpec !== gridSpec) last.gridPending = true;
+      } else if (proj.coarse && last.gridSpec === gridSpec) {
+        const bgPos = `${proj.x + 48}px ${proj.y + 48}px`;
+        if (last.gridBgPos !== bgPos) {
+          grid.style.backgroundPosition = bgPos;
+          last.gridBgPos = bgPos;
+        }
       } else {
         applyGridProjection(grid, camera, { x: gx, y: gy });
         last.gridTransform = proj.transform;
+        last.gridBgPos = proj.coarse ? `${proj.x + 48}px ${proj.y + 48}px` : '0 0';
         last.gridTileKey = proj.coarse ? '' : gridTileKey;
         last.gridSpec = gridSpec;
         last.gridPending = false;

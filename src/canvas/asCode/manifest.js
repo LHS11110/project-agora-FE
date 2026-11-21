@@ -87,7 +87,7 @@ function convert(item, direction) {
   return result;
 }
 export function exportManifest(items) {
-  return { version: 1, mode: 'merge', items: Object.fromEntries(Object.entries(items).filter(([, item]) => item?.type !== 'chat_room').map(([id, item]) => [id, convert(item, 'export')])), remove: [] };
+  return { version: 1, mode: 'merge', items: Object.fromEntries(Object.entries(items).filter(([, item]) => item?.type !== 'chat_room' && item?.kind !== 'channel').map(([id, item]) => [id, convert(item, 'export')])), remove: [] };
 }
 function validateItem(id, item) {
   if (unsafeId(id) || !plain(item)) fail(`${id}: 올바른 객체 ID와 객체 정의가 필요합니다.`);
@@ -176,7 +176,7 @@ export function planManifest(source, currentItems, permission) {
   if (remove.some(id => currentItems[id]?.type === 'chat_room') || Object.keys(manifest.items).some(id => currentItems[id]?.type === 'chat_room')) fail('채팅방 내부 데이터는 객체로 수정하거나 삭제할 수 없습니다.');
   const definitions = Object.entries(manifest.items);
   const deletes = new Set(remove.filter(id => Object.hasOwn(currentItems, id)));
-  if (mode === 'replace') Object.keys(currentItems).forEach(id => { if (currentItems[id]?.type !== 'chat_room' && !Object.hasOwn(manifest.items, id)) deletes.add(id); });
+  if (mode === 'replace') Object.keys(currentItems).forEach(id => { if (currentItems[id]?.type !== 'chat_room' && currentItems[id]?.kind !== 'channel' && !Object.hasOwn(manifest.items, id)) deletes.add(id); });
   const creates = [], updates = [];
   const desired = { ...currentItems };
   deletes.forEach(id => { delete desired[id]; });
