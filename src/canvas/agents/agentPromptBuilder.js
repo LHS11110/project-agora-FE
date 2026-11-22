@@ -1,4 +1,5 @@
-import { isAgentNodeItem, readAgentNodeConfig } from './agentCanvasModel.js';
+import { isAgentInputItem, isAgentNodeItem, readAgentNodeConfig } from './agentCanvasModel.js';
+import { formatTypeLabel } from './agentRouter.js';
 import { extractCanvasObjectData, isAgentOutputSink } from './multiAgentGraph.js';
 
 export const MAX_AGENT_PROMPT_CHARS = 7600;
@@ -11,12 +12,13 @@ function formatInputSection(entries, items, freshOutputs, labelPrefix = '', maxE
     const delivery = entry.edgeConfig?.delivery || 'both';
     const edgeNote = entry.label ? ` · 연결 설명: "${entry.label}"` : '';
     const data = extractCanvasObjectData(id, item, freshOutputs);
+    const fmtBadge = data.formatType ? ` · 형식: ${formatTypeLabel(data.formatType)}` : '';
     if (delivery === 'reference') {
       const safeTitle = item?.title || item?.filename || item?.groupTitle || data.typeLabel;
-      lines.push(`- [${data.typeLabel}] ${safeTitle} (ID: ${id})${edgeNote}\n  (객체 ID 참조만 전달됨 — 필요 시 캔버스 도구로 직접 읽으세요.)`);
+      lines.push(`- [${data.typeLabel}${fmtBadge}] ${safeTitle} (ID: ${id})${edgeNote}\n  (객체 ID 참조만 전달됨 — 필요 시 캔버스 도구로 직접 읽으세요.)`);
       continue;
     }
-    const header = `- [${data.typeLabel}] ${data.title} (ID: ${id})${edgeNote}`;
+    const header = `- [${data.typeLabel}${fmtBadge}] ${data.title} (ID: ${id})${edgeNote}`;
     if (data.content) {
       const content = data.content.length > maxEntryChars
         ? `${data.content.slice(0, Math.max(80, maxEntryChars - 16))}\n…(일부 생략)`
@@ -30,11 +32,31 @@ function formatInputSection(entries, items, freshOutputs, labelPrefix = '', maxE
   return labelPrefix ? `${labelPrefix}\n${lines.join('\n\n')}` : lines.join('\n\n');
 }
 
+function formatRoutedItemsSection(routedInputs = [], maxEntryChars = 2400) {
+  const lines = [];
+  for (const entry of routedInputs || []) {
+    const fmt = formatTypeLabel(entry.formatType);
+    const header = `- [${fmt}] ${entry.title}${entry.sourceId ? ` (ID: ${entry.sourceId})` : ''}`;
+    const body = String(entry.content || '');
+    if (!body) {
+      lines.push(header);
+      continue;
+    }
+    const clipped = body.length > maxEntryChars
+      ? `${body.slice(0, Math.max(80, maxEntryChars - 16))}\n…(일부 생략)`
+      : body;
+    lines.push(`${header}\n${clipped}`);
+  }
+  return lines.join('\n\n');
+}
+
 export function collectSelectedIdsForAgent({
   agentConfig,
   promptInputs = [],
   dataInputs = [],
+  inputNodes = [],
   orchestratorInputs = [],
+  routedInputs = [],
   outputSinks = [],
 }) {
   if (agentConfig?.attachInputsAsSelection === false) return [];
@@ -43,8 +65,11 @@ export function collectSelectedIdsForAgent({
     const key = String(id || '');
     if (key && !ids.includes(key) && ids.length < 20) ids.push(key);
   };
-  for (const entry of [...promptInputs, ...dataInputs, ...orchestratorInputs]) {
+  for (const entry of [...promptInputs, ...dataInputs, ...inputNodes, ...orchestratorInputs]) {
     if (entry?.edgeConfig?.delivery !== 'inline') push(entry.sourceId || entry.otherId);
+  }
+  for (const entry of routedInputs || []) {
+    push(entry.sourceId);
   }
   for (const entry of outputSinks) {
     if (isAgentOutputSink(entry.item, entry.channel)) push(entry.targetId || entry.otherId);
@@ -61,8 +86,11 @@ export function compileAgentPrompt({
   freshAgentOutputs,
   freshRuntimeOutputs,
   orchestratorInputs = [],
+  inputNodes = [],
   promptInputs = [],
   dataInputs = [],
+  routedInputs = [],
+  routeContext = null,
   upstreamAgents = [],
   upstreamAgentIds = [],
   peerMessages = [],
@@ -86,13 +114,15 @@ export function compileAgentPrompt({
       + (mode !== 'single' ? `\n- 협업 모드: ${mode} (라운드 ${round}/${maxRounds}${isSupervisor ? ' · 팀 감독자' : ''})` : ''),
   });
 
-  const perPromptEntry = Math.max(240, Math.floor((maxChars * 0.3) / Math.max(1, promptInputs.length)));
+  const allPromptInputs = promptInputs;
+  const connectedInputNodes = (inputNodes || []).filter(e => isAgentInputItem(e.item || items[e.sourceId]));
+  const perPromptEntry = Math.max(240, Math.floor((maxChars * 0.3) / Math.max(1, allPromptInputs.length)));
   const perOrchEntry = Math.max(240, Math.floor((maxChars * 0.3) / Math.max(1, orchestratorInputs.length)));
-  const perDataEntry = Math.max(240, Math.floor((maxChars * 0.4) / Math.max(1, dataInputs.length)));
+  const perDataEntry = Math.max(240, Math.floor((maxChars * 0.4) / Math.max(1, dataInputs.length + connectedInputNodes.length)));
 
   const promptParts = [];
   if (cfg.systemPrompt?.trim()) promptParts.push(cfg.systemPrompt.trim());
-  const connectedPromptText = formatInputSection(promptInputs, items, { freshAgentOutputs, freshRuntimeOutputs }, '', perPromptEntry);
+  const connectedPromptText = formatInputSection(allPromptInputs, items, { freshAgentOutputs, freshRuntimeOutputs }, '', perPromptEntry);
   if (connectedPromptText) promptParts.push(`### 연결된 프롬프트 객체\n${connectedPromptText}`);
   if (promptParts.length) {
     sections.push({
@@ -114,7 +144,30 @@ export function compileAgentPrompt({
     });
   }
 
-  const dataText = formatInputSection(dataInputs, items, { freshAgentOutputs, freshRuntimeOutputs }, '', perDataEntry);
+  if (routeContext) {
+    const routeLines = [
+      `- 라우터: ${routeContext.routerName || '라우터 객체'} (${routeContext.modeUsed === 'intelligent' ? '지능형 판단' : '포맷 규칙'})`,
+      routeContext.formats?.length ? `- 감지된 포맷: ${routeContext.formats.map(formatTypeLabel).join(', ')}` : '',
+      routeContext.reason ? `- 분기 사유: ${routeContext.reason}` : '',
+    ].filter(Boolean);
+    sections.push({
+      key: 'routeContext',
+      priority: 88,
+      text: `## [라우터 전달 정보]\n${routeLines.join('\n')}`,
+    });
+  }
+
+  const routedText = formatRoutedItemsSection(routedInputs, perDataEntry);
+  if (routedText) {
+    sections.push({
+      key: 'routedInputs',
+      priority: 82,
+      text: `## [라우팅된 입력 자료]\n${routedText}`,
+    });
+  }
+
+  const combinedDataInputs = [...connectedInputNodes, ...dataInputs];
+  const dataText = formatInputSection(combinedDataInputs, items, { freshAgentOutputs, freshRuntimeOutputs }, '', perDataEntry);
   if (dataText) {
     sections.push({
       key: 'data',
@@ -195,8 +248,8 @@ export function compileAgentPrompt({
   let compiled = sections.map(s => s.text).join('\n\n');
   if (compiled.length <= maxChars) return compiled;
 
-  // Trim lowest priority sections first (`sharedLog`, then `data`, then `handoffs`) to stay within backend limit.
-  const shrinkOrder = ['sharedLog', 'data', 'handoffs', 'goal'];
+  // Trim lowest priority sections first (`sharedLog`, then `data`, then `routedInputs`, then `handoffs`) to stay within backend limit.
+  const shrinkOrder = ['sharedLog', 'data', 'routedInputs', 'handoffs', 'goal'];
   for (const targetKey of shrinkOrder) {
     if (compiled.length <= maxChars) break;
     const section = sections.find(s => s.key === targetKey);

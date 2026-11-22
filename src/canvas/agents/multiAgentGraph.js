@@ -2,20 +2,33 @@ import { contentMode, contentSource, isTextContent } from '../content/contentPre
 import { displayedValue } from '../values/valueData.js';
 import {
   isAgentCanvasObject,
+  isAgentInputItem,
   isAgentNodeItem,
   isAgentOrchestratorItem,
+  isAgentOutputItem,
+  isAgentRouterItem,
   readAgentEdgeConfig,
+  readAgentInputConfig,
   readAgentNodeConfig,
+  readAgentOutputConfig,
+  readAgentRouterConfig,
   readOrchestratorConfig,
 } from './agentCanvasModel.js';
+import {
+  detectItemFormatType,
+  extractRouterRoutes,
+  formatTypeLabel,
+} from './agentRouter.js';
 
 export const MAX_MULTI_AGENTS = 16;
+export const MAX_PIPELINE_NODES = 48;
 export const MAX_GRAPH_OBJECTS = 256;
 export const MAX_EXTRACTED_ITEM_CHARS = 4000;
 
 const PROMPT_LABEL_RE = /프롬프트|시스템|지시|규칙|역할|prompt|system|instruction/i;
 const CONTEXT_LABEL_RE = /컨텍스트|배경|참고|context|ref/i;
 const FEEDBACK_LABEL_RE = /피드백|리뷰|검토|수정|feedback|review|revise|critique/i;
+const SUPERVISOR_LABEL_RE = /감독|리더|supervisor|lead/i;
 
 function clip(text, max = MAX_EXTRACTED_ITEM_CHARS) {
   const value = String(text ?? '').trim();
@@ -33,18 +46,29 @@ function sortIdsByPosition(ids, items) {
   });
 }
 
+function isPipelineNode(item) {
+  return isAgentInputItem(item) || isAgentRouterItem(item) || isAgentNodeItem(item);
+}
+
 function itemLabel(id, item) {
   if (!item) return String(id);
   if (isAgentNodeItem(item)) return item.title || readAgentNodeConfig(item).role || 'AI 에이전트';
   if (isAgentOrchestratorItem(item)) return item.title || '멀티 에이전트 오케스트레이터';
+  if (isAgentInputItem(item)) return item.title || '입력 객체';
+  if (isAgentRouterItem(item)) return item.title || '라우터 객체';
+  if (isAgentOutputItem(item)) return item.title || '출력 객체';
   if (item.kind === 'note') return (item.text || '').split('\n').find(l => l.trim())?.replace(/^#+\s*/, '').slice(0, 40) || '포스트잇';
   if (isTextContent(item) && contentMode(item) === 'code') return item.filename || '코드 객체';
   if (isTextContent(item)) return (contentSource(item) || '').split('\n').find(l => l.trim())?.replace(/^#+\s*/, '').slice(0, 40) || '텍스트';
+  if (item.kind === 'image') return item.title || item.filename || '이미지';
   if (item.kind === 'value') return item.title || `값 (${item.valueType})`;
   if (item.kind === 'table') return item.title || `테이블 (${item.rows?.length || 0}×${item.columns?.length || 0})`;
   if (item.kind === 'chart') return item.chartTitle || item.title || `그래프 (${item.chartType || 'bar'})`;
   if (item.kind === 'question') return (item.questionPrompt || '문제 객체').slice(0, 40);
-  if (item.kind === 'link') return item.title || item.url || '링크';
+  if (item.kind === 'link') {
+    const fallback = item.mediaType === 'audio' ? '오디오' : item.mediaType === 'video' ? '동영상' : '링크';
+    return item.title || item.url || fallback;
+  }
   if (item.kind === 'pdf') return item.filename || item.title || 'PDF';
   if (item.kind === 'project') return item.title || '프로젝트';
   if (item.kind === 'user-group') return item.groupTitle || '사용자 그룹';
@@ -56,17 +80,25 @@ function itemLabel(id, item) {
 export function inferEdgeChannel(sourceItem, targetItem, connector) {
   const edgeConfig = readAgentEdgeConfig(connector);
   if (edgeConfig.channel !== 'auto') return edgeConfig.channel;
-  if (isAgentOrchestratorItem(sourceItem) && isAgentNodeItem(targetItem)) return 'orchestrate';
+  if (isAgentInputItem(sourceItem)) return 'input';
+  if (isAgentRouterItem(sourceItem)) return 'route';
+  if (isAgentOutputItem(targetItem)) return 'output';
+  if (isAgentOrchestratorItem(sourceItem) && isAgentNodeItem(targetItem)) {
+    return SUPERVISOR_LABEL_RE.test(connector?.label || '') ? 'supervisor' : 'orchestrate';
+  }
+  if (isAgentOrchestratorItem(sourceItem) && (isAgentRouterItem(targetItem) || isAgentInputItem(targetItem))) {
+    return isAgentRouterItem(targetItem) ? 'route' : 'input';
+  }
   if (isAgentNodeItem(sourceItem) && isAgentNodeItem(targetItem)) {
     return FEEDBACK_LABEL_RE.test(connector?.label || '') ? 'feedback' : 'handoff';
   }
   if (
-    (isAgentNodeItem(sourceItem) || isAgentOrchestratorItem(sourceItem))
+    (isAgentNodeItem(sourceItem) || isAgentOrchestratorItem(sourceItem) || isAgentRouterItem(sourceItem))
     && (targetItem?.runtimeRole === 'output' || ['value', 'text', 'note'].includes(targetItem?.kind))
   ) {
     return 'output';
   }
-  if (isAgentNodeItem(targetItem) || isAgentOrchestratorItem(targetItem)) {
+  if (isAgentNodeItem(targetItem) || isAgentOrchestratorItem(targetItem) || isAgentRouterItem(targetItem) || isAgentInputItem(targetItem)) {
     const label = connector?.label || '';
     if (PROMPT_LABEL_RE.test(label)) return 'prompt';
     if (CONTEXT_LABEL_RE.test(label)) return 'context';
@@ -76,7 +108,9 @@ export function inferEdgeChannel(sourceItem, targetItem, connector) {
 }
 
 export function isAgentOutputSink(item, channel = 'auto') {
-  if (!item || isAgentCanvasObject(item)) return false;
+  if (!item) return false;
+  if (isAgentOutputItem(item)) return true;
+  if (isAgentCanvasObject(item)) return false;
   if (item.runtimeRole === 'output' || item.kind === 'value' || item.kind === 'note') return true;
   if (item.kind === 'text') {
     const mode = contentMode(item);
@@ -89,9 +123,10 @@ export function isAgentOutputSink(item, channel = 'auto') {
 export function extractCanvasObjectData(id, item, { freshAgentOutputs, freshRuntimeOutputs } = {}) {
   const key = String(id);
   if (!item) {
-    return { id: key, kind: 'missing', title: key, typeLabel: '없음', content: '', summary: '', empty: true };
+    return { id: key, kind: 'missing', title: key, typeLabel: '없음', formatType: 'text', content: '', summary: '', empty: true };
   }
   const title = itemLabel(key, item);
+  const formatType = detectItemFormatType(item);
   let typeLabel = item.kind || 'object';
   let content = '';
 
@@ -103,13 +138,32 @@ export function extractCanvasObjectData(id, item, { freshAgentOutputs, freshRunt
     const cfg = readOrchestratorConfig(item);
     typeLabel = '오케스트레이터';
     content = String(item.text || cfg.goal || '');
-  } else if (item.runtimeRole === 'output') {
-    typeLabel = '실행 결과';
+  } else if (isAgentInputItem(item)) {
+    const cfg = readAgentInputConfig(item);
+    typeLabel = `입력(${formatTypeLabel(formatType)})`;
+    const parts = [];
+    if (item.text) parts.push(String(item.text));
+    if (cfg.attachments.length) {
+      parts.push(cfg.attachments.map(att => {
+        const meta = [att.name, att.mimeType, att.url].filter(Boolean).join(' · ');
+        return `[${formatTypeLabel(att.formatType)}] ${meta}${att.textSnippet ? `\n${att.textSnippet}` : ''}`;
+      }).join('\n'));
+    }
+    content = parts.join('\n\n');
+  } else if (isAgentRouterItem(item)) {
+    const cfg = readAgentRouterConfig(item);
+    typeLabel = `라우터(${cfg.routingMode})`;
+    content = cfg.lastDecision?.reason
+      ? `선택: ${(cfg.lastDecision.selectedTargetNames || []).join(', ')} (${cfg.lastDecision.reason})`
+      : (cfg.routingPrompt || '');
+  } else if (isAgentOutputItem(item) || item.runtimeRole === 'output') {
+    typeLabel = isAgentOutputItem(item) ? '출력 객체' : '실행 결과';
     const records = freshRuntimeOutputs?.get(key) || item.runtimeResults || [];
-    content = records
+    const fromRecords = records
       .map(entry => entry?.error || entry?.output || '')
       .filter(Boolean)
       .join('\n---\n');
+    content = isAgentOutputItem(item) ? String(item.text || fromRecords) : fromRecords;
   } else if (isTextContent(item)) {
     const mode = contentMode(item);
     const raw = contentSource(item);
@@ -124,6 +178,9 @@ export function extractCanvasObjectData(id, item, { freshAgentOutputs, freshRunt
   } else if (item.kind === 'note') {
     typeLabel = '메모';
     content = String(item.text || '');
+  } else if (item.kind === 'image') {
+    typeLabel = '이미지';
+    content = [item.title || item.filename || '이미지 파일', item.url || item.src].filter(Boolean).join('\n');
   } else if (item.kind === 'value') {
     typeLabel = `값(${item.valueType})`;
     const val = displayedValue(item);
@@ -150,7 +207,14 @@ export function extractCanvasObjectData(id, item, { freshAgentOutputs, freshRunt
     if (item.questionFeedback) parts.push(`피드백: ${item.questionFeedback}`);
     content = parts.join('\n');
   } else if (item.kind === 'link') {
-    typeLabel = `링크(${item.mediaType || 'link'})`;
+    const mediaLabel = ({
+      audio: '오디오',
+      video: '동영상',
+      youtube: 'YouTube',
+      gif: 'GIF 이미지',
+      link: '웹 링크',
+    })[item.mediaType || 'link'] || item.mediaType || 'link';
+    typeLabel = `링크(${mediaLabel})`;
     content = [item.title, item.url].filter(Boolean).join('\n');
   } else if (item.kind === 'pdf') {
     typeLabel = 'PDF';
@@ -177,6 +241,7 @@ export function extractCanvasObjectData(id, item, { freshAgentOutputs, freshRunt
     kind: item.kind,
     title,
     typeLabel,
+    formatType,
     content: trimmed,
     summary: trimmed.replace(/\s+/g, ' ').slice(0, 140),
     empty: !trimmed.length,
@@ -236,11 +301,16 @@ export function inspectAgentConnections(items = {}, nodeId) {
   return {
     incoming,
     outgoing,
+    inputNodes: enabledIncoming.filter(e => isAgentInputItem(e.item)),
+    routerNodes: enabledIncoming.filter(e => isAgentRouterItem(e.item)),
     promptInputs: enabledIncoming.filter(e => !isAgentCanvasObject(e.item) && e.channel === 'prompt'),
     dataInputs: enabledIncoming.filter(e => !isAgentCanvasObject(e.item) && !['prompt', 'output'].includes(e.channel)),
     upstreamAgents: enabledIncoming.filter(e => isAgentNodeItem(e.item) && e.channel !== 'feedback'),
     feedbackAgents: enabledIncoming.filter(e => isAgentNodeItem(e.item) && e.channel === 'feedback'),
     orchestrators: enabledIncoming.filter(e => isAgentOrchestratorItem(e.item)),
+    outgoingInputs: enabledOutgoing.filter(e => isAgentInputItem(e.item)),
+    outgoingRouters: enabledOutgoing.filter(e => isAgentRouterItem(e.item)),
+    outgoingOrchestrators: enabledOutgoing.filter(e => isAgentOrchestratorItem(e.item)),
     downstreamAgents: enabledOutgoing.filter(e => isAgentNodeItem(e.item) && e.channel !== 'feedback'),
     feedbackTargets: enabledOutgoing.filter(e => isAgentNodeItem(e.item) && e.channel === 'feedback'),
     outputSinks: enabledOutgoing.filter(e => isAgentOutputSink(e.item, e.channel)),
@@ -258,6 +328,8 @@ export function resolveSingleAgentGraph(items = {}, agentId) {
     item,
     config,
     connections,
+    inputNodes: connections.inputNodes,
+    routerNodes: connections.routerNodes,
     promptInputs: connections.promptInputs,
     dataInputs: connections.dataInputs,
     upstreamAgents: connections.upstreamAgents,
@@ -266,99 +338,94 @@ export function resolveSingleAgentGraph(items = {}, agentId) {
   };
 }
 
-export function resolveMultiAgentGraph(items = {}, orchestratorId) {
-  const rootId = String(orchestratorId);
-  const rootItem = items[rootId];
-  if (!isAgentOrchestratorItem(rootItem)) throw new Error('멀티 에이전트 오케스트레이터 객체가 필요합니다.');
-
-  const config = readOrchestratorConfig(rootItem);
-  const rootConnections = inspectAgentConnections(items, rootId);
-  const orchestratorInputs = rootConnections.incoming.filter(e => e.edgeConfig.enabled && !isAgentCanvasObject(e.item));
-  const orchestratorOutputs = rootConnections.outputSinks;
-
-  const entryAgentIds = sortIdsByPosition(
-    [...new Set(rootConnections.outgoing.filter(e => e.edgeConfig.enabled && isAgentNodeItem(e.item)).map(e => e.targetId))],
-    items,
-  );
-  if (!entryAgentIds.length) {
-    throw new Error('오케스트레이터에 연결된 AI 에이전트 객체가 없습니다.');
+function buildTopologicalWaves(nodeIds, forwardEdges, items) {
+  const inDegree = new Map(nodeIds.map(id => [id, 0]));
+  const forwardAdj = new Map(nodeIds.map(id => [id, new Set()]));
+  for (const e of forwardEdges) {
+    if (!inDegree.has(e.from) || !inDegree.has(e.to)) continue;
+    if (!forwardAdj.get(e.from).has(e.to)) {
+      forwardAdj.get(e.from).add(e.to);
+      inDegree.set(e.to, inDegree.get(e.to) + 1);
+    }
   }
 
-  // Collect all reachable agent nodes via enabled Agent -> Agent connectors.
-  const allConnectors = Object.entries(items)
-    .filter(([, item]) => item?.kind === 'connector')
-    .sort(([a], [b]) => a.localeCompare(b));
+  const waves = [];
+  let ready = sortIdsByPosition(nodeIds.filter(id => inDegree.get(id) === 0), items);
+  while (ready.length) {
+    waves.push(ready);
+    const nextReady = [];
+    for (const id of ready) {
+      for (const next of forwardAdj.get(id) || []) {
+        const deg = inDegree.get(next) - 1;
+        inDegree.set(next, deg);
+        if (deg === 0) nextReady.push(next);
+      }
+    }
+    ready = sortIdsByPosition(nextReady, items);
+  }
+  return waves;
+}
 
-  const teamAgentSet = new Set(entryAgentIds);
-  const queue = [...entryAgentIds];
+function collectReachablePipeline(items, seedIds, allConnectors) {
+  const pipelineSet = new Set();
+  const queue = [];
+
+  for (const seed of seedIds) {
+    const key = String(seed);
+    if (!pipelineSet.has(key) && isPipelineNode(items[key])) {
+      pipelineSet.add(key);
+      queue.push(key);
+    }
+  }
+
+  let agentCount = [...pipelineSet].filter(id => isAgentNodeItem(items[id])).length;
   while (queue.length) {
     const currentId = queue.shift();
     for (const [, edge] of allConnectors) {
       const from = String(edge.from);
       const to = String(edge.to);
-      if (from !== currentId || !isAgentNodeItem(items[to])) continue;
+      if (from !== currentId || !isPipelineNode(items[to])) continue;
       if (!readAgentEdgeConfig(edge).enabled) continue;
-      if (!teamAgentSet.has(to)) {
-        if (teamAgentSet.size >= MAX_MULTI_AGENTS) {
-          throw new Error(`멀티 에이전트 팀은 최대 ${MAX_MULTI_AGENTS}개까지 연결할 수 있습니다.`);
+      if (!pipelineSet.has(to)) {
+        if (pipelineSet.size >= MAX_PIPELINE_NODES) {
+          throw new Error(`멀티 에이전트 파이프라인 노드는 최대 ${MAX_PIPELINE_NODES}개까지 연결할 수 있습니다.`);
         }
-        teamAgentSet.add(to);
+        if (isAgentNodeItem(items[to])) {
+          if (agentCount >= MAX_MULTI_AGENTS) {
+            throw new Error(`멀티 에이전트 팀은 최대 ${MAX_MULTI_AGENTS}개까지 연결할 수 있습니다.`);
+          }
+          agentCount++;
+        }
+        pipelineSet.add(to);
         queue.push(to);
       }
     }
   }
 
-  const agentIds = sortIdsByPosition([...teamAgentSet], items);
-  const rawAgentEdges = [];
-  for (const [connectorId, edge] of allConnectors) {
-    const from = String(edge.from);
-    const to = String(edge.to);
-    if (!teamAgentSet.has(from) || !teamAgentSet.has(to)) continue;
-    const edgeConfig = readAgentEdgeConfig(edge);
-    if (!edgeConfig.enabled) continue;
-    const channel = inferEdgeChannel(items[from], items[to], edge);
-    rawAgentEdges.push({ connectorId, edge, edgeConfig, channel, from, to });
-  }
+  const pipelineIds = sortIdsByPosition([...pipelineSet], items);
+  const inputIds = pipelineIds.filter(id => isAgentInputItem(items[id]));
+  const routerIds = pipelineIds.filter(id => isAgentRouterItem(items[id]));
+  const agentIds = pipelineIds.filter(id => isAgentNodeItem(items[id]));
+  return { pipelineSet, pipelineIds, inputIds, routerIds, agentIds };
+}
 
-  if (config.mode === 'graph') {
-    const adj = new Map(agentIds.map(id => [id, []]));
-    for (const e of rawAgentEdges) {
-      if (e.from === e.to) {
-        throw new Error('에이전트 그래프에 순환 연결이 있습니다. 협업 라운드 모드로 전환하거나 연결을 확인해주세요.');
-      }
-      adj.get(e.from).push(e.to);
-    }
-    const state = new Map();
-    const visit = (id) => {
-      const s = state.get(id);
-      if (s === 1) {
-        throw new Error('에이전트 그래프에 순환 연결이 있습니다. 협업 라운드 모드로 전환하거나 연결을 확인해주세요.');
-      }
-      if (s === 2) return;
-      state.set(id, 1);
-      for (const next of sortIdsByPosition(adj.get(id) || [], items)) visit(next);
-      state.set(id, 2);
-    };
-    for (const id of entryAgentIds) visit(id);
-    for (const id of agentIds) visit(id);
-  }
-
-  // Classify forward edges (forming a guaranteed DAG) vs feedback edges.
+function classifyPipelineEdges(nodeIds, entryIds, rawEdges, items) {
   const forwardEdges = [];
   const feedbackEdges = [];
-  const nonExplicitFeedbackAdj = new Map(agentIds.map(id => [id, []]));
-  for (const e of rawAgentEdges) {
+  const nonExplicitAdj = new Map(nodeIds.map(id => [id, []]));
+
+  for (const e of rawEdges) {
     if (e.channel === 'feedback' || e.from === e.to) {
       feedbackEdges.push(e);
     } else {
-      nonExplicitFeedbackAdj.get(e.from).push(e);
+      nonExplicitAdj.get(e.from)?.push(e);
     }
   }
 
   const dfsState = new Map();
   const classifyDfs = (id) => {
     dfsState.set(id, 1);
-    const outgoing = [...(nonExplicitFeedbackAdj.get(id) || [])].sort((a, b) => {
+    const outgoing = [...(nonExplicitAdj.get(id) || [])].sort((a, b) => {
       const ia = items[a.to] || {};
       const ib = items[b.to] || {};
       return (Number(ia.y) || 0) - (Number(ib.y) || 0)
@@ -376,70 +443,284 @@ export function resolveMultiAgentGraph(items = {}, orchestratorId) {
     }
     dfsState.set(id, 2);
   };
-  for (const id of entryAgentIds) if (!dfsState.has(id)) classifyDfs(id);
-  for (const id of agentIds) if (!dfsState.has(id)) classifyDfs(id);
 
-  // Compute topological waves via Kahn's algorithm on forwardEdges.
-  const inDegree = new Map(agentIds.map(id => [id, 0]));
-  const forwardAdj = new Map(agentIds.map(id => [id, new Set()]));
-  for (const e of forwardEdges) {
-    if (!forwardAdj.get(e.from).has(e.to)) {
-      forwardAdj.get(e.from).add(e.to);
-      inDegree.set(e.to, inDegree.get(e.to) + 1);
+  for (const id of entryIds) if (nonExplicitAdj.has(id) && !dfsState.has(id)) classifyDfs(id);
+  for (const id of nodeIds) if (!dfsState.has(id)) classifyDfs(id);
+
+  return { forwardEdges, feedbackEdges };
+}
+
+function checkStrictDag(nodeIds, entryIds, edges, items) {
+  const adj = new Map(nodeIds.map(id => [id, []]));
+  for (const e of edges) {
+    if (e.from === e.to) {
+      throw new Error('에이전트 그래프에 순환 연결이 있습니다. 협업 라운드 모드로 전환하거나 연결을 확인해주세요.');
     }
+    adj.get(e.from)?.push(e.to);
   }
-
-  const waves = [];
-  let ready = sortIdsByPosition(agentIds.filter(id => inDegree.get(id) === 0), items);
-  while (ready.length) {
-    waves.push(ready);
-    const nextReady = [];
-    for (const id of ready) {
-      for (const next of forwardAdj.get(id) || []) {
-        const deg = inDegree.get(next) - 1;
-        inDegree.set(next, deg);
-        if (deg === 0) nextReady.push(next);
-      }
+  const state = new Map();
+  const visit = (id) => {
+    const s = state.get(id);
+    if (s === 1) {
+      throw new Error('에이전트 그래프에 순환 연결이 있습니다. 협업 라운드 모드로 전환하거나 연결을 확인해주세요.');
     }
-    ready = sortIdsByPosition(nextReady, items);
-  }
+    if (s === 2) return;
+    state.set(id, 1);
+    for (const next of sortIdsByPosition(adj.get(id) || [], items)) visit(next);
+    state.set(id, 2);
+  };
+  for (const id of entryIds) if (adj.has(id)) visit(id);
+  for (const id of nodeIds) visit(id);
+}
 
-  const supervisorAgentId = config.mode === 'supervisor'
-    ? (config.supervisorAgentId && teamAgentSet.has(config.supervisorAgentId) ? config.supervisorAgentId : entryAgentIds[0])
-    : '';
-
+function buildNodeSummaries(items, { agentIds, routerIds, inputIds, teamAgentSet, forwardAgentEdges, feedbackAgentEdges, forwardPipelineEdges }) {
   const agentsById = {};
   for (const id of agentIds) {
     const conn = inspectAgentConnections(items, id);
-    const upstreamForward = forwardEdges.filter(e => e.to === id).map(e => e.from);
-    const downstreamForward = forwardEdges.filter(e => e.from === id).map(e => e.to);
-    const feedbackFrom = feedbackEdges.filter(e => e.to === id).map(e => e.from);
+    const upstreamForward = forwardAgentEdges.filter(e => e.to === id).map(e => e.from);
+    const downstreamForward = forwardAgentEdges.filter(e => e.from === id).map(e => e.to);
+    const feedbackFrom = feedbackAgentEdges.filter(e => e.to === id).map(e => e.from);
+    const incomingPipelineIds = forwardPipelineEdges.filter(e => e.to === id).map(e => e.from);
+    const downstreamRouterIds = forwardPipelineEdges
+      .filter(e => e.from === id && isAgentRouterItem(items[e.to]))
+      .map(e => e.to);
+
     agentsById[id] = {
       id,
       item: items[id],
       config: readAgentNodeConfig(items[id]),
+      inputNodes: conn.inputNodes,
+      routerNodes: conn.routerNodes,
       promptInputs: conn.promptInputs,
       dataInputs: conn.dataInputs,
       externalUpstreamAgents: conn.upstreamAgents.filter(e => !teamAgentSet.has(e.sourceId)),
       upstreamAgentIds: [...new Set(upstreamForward)],
       downstreamAgentIds: [...new Set(downstreamForward)],
+      downstreamRouterIds: [...new Set(downstreamRouterIds)],
+      incomingPipelineIds: [...new Set(incomingPipelineIds)],
       feedbackFromIds: [...new Set(feedbackFrom)],
       outputSinks: conn.outputSinks,
     };
+  }
+
+  const routersById = {};
+  for (const id of routerIds) {
+    const conn = inspectAgentConnections(items, id);
+    const config = readAgentRouterConfig(items[id]);
+    const routes = extractRouterRoutes(items, id, config);
+    routersById[id] = {
+      id,
+      item: items[id],
+      config,
+      routes,
+      inputNodes: conn.inputNodes,
+      dataInputs: [...conn.promptInputs, ...conn.dataInputs],
+      upstreamIds: [...new Set(forwardPipelineEdges.filter(e => e.to === id).map(e => e.from))],
+      downstreamIds: [...new Set(forwardPipelineEdges.filter(e => e.from === id).map(e => e.to))],
+      outputSinks: conn.outputSinks,
+    };
+  }
+
+  const inputsById = {};
+  for (const id of inputIds) {
+    const conn = inspectAgentConnections(items, id);
+    inputsById[id] = {
+      id,
+      item: items[id],
+      config: readAgentInputConfig(items[id]),
+      dataInputs: [...conn.promptInputs, ...conn.dataInputs],
+      outgoing: conn.outgoing,
+    };
+  }
+
+  return { agentsById, routersById, inputsById };
+}
+
+export function resolveMultiAgentGraph(items = {}, orchestratorId) {
+  const rootId = String(orchestratorId);
+  const rootItem = items[rootId];
+  if (!isAgentOrchestratorItem(rootItem)) throw new Error('멀티 에이전트 오케스트레이터 객체가 필요합니다.');
+
+  const config = readOrchestratorConfig(rootItem);
+  const rootConnections = inspectAgentConnections(items, rootId);
+  const incomingInputNodes = rootConnections.inputNodes;
+  const incomingInputIds = incomingInputNodes.map(e => e.sourceId);
+  const orchestratorInputs = rootConnections.incoming.filter(
+    e => e.edgeConfig.enabled && (!isAgentCanvasObject(e.item) || isAgentInputItem(e.item)),
+  );
+  const orchestratorOutputs = rootConnections.outputSinks;
+
+  const entryPipelineIds = sortIdsByPosition(
+    [...new Set(rootConnections.outgoing.filter(e => e.edgeConfig.enabled && isPipelineNode(e.item)).map(e => e.targetId))],
+    items,
+  );
+  if (!entryPipelineIds.length) {
+    throw new Error('오케스트레이터에 연결된 AI 에이전트 또는 라우터 객체가 없습니다.');
+  }
+
+  const allConnectors = Object.entries(items)
+    .filter(([, item]) => item?.kind === 'connector')
+    .sort(([a], [b]) => a.localeCompare(b));
+
+  const { pipelineSet, pipelineIds, inputIds: downstreamInputIds, routerIds, agentIds } = collectReachablePipeline(
+    items,
+    entryPipelineIds,
+    allConnectors,
+  );
+
+  if (!agentIds.length) {
+    throw new Error('오케스트레이터에 연결된 AI 에이전트 객체가 없습니다.');
+  }
+
+  const teamAgentSet = new Set(agentIds);
+  const entryAgentIds = sortIdsByPosition(
+    entryPipelineIds.filter(id => isAgentNodeItem(items[id])),
+    items,
+  );
+
+  const pipelineEdges = [];
+  const rawAgentEdges = [];
+  for (const [connectorId, edge] of allConnectors) {
+    const from = String(edge.from);
+    const to = String(edge.to);
+    if (!pipelineSet.has(from) || !pipelineSet.has(to)) continue;
+    const edgeConfig = readAgentEdgeConfig(edge);
+    if (!edgeConfig.enabled) continue;
+    const channel = inferEdgeChannel(items[from], items[to], edge);
+    const entry = { connectorId, edge, edgeConfig, channel, from, to };
+    pipelineEdges.push(entry);
+    if (teamAgentSet.has(from) && teamAgentSet.has(to)) {
+      rawAgentEdges.push(entry);
+    }
+  }
+
+  if (config.mode === 'graph') {
+    checkStrictDag(pipelineIds, entryPipelineIds, pipelineEdges, items);
+  }
+
+  const { forwardEdges, feedbackEdges } = classifyPipelineEdges(agentIds, entryAgentIds, rawAgentEdges, items);
+  const { forwardEdges: forwardPipelineEdges } = classifyPipelineEdges(pipelineIds, entryPipelineIds, pipelineEdges, items);
+
+  const waves = buildTopologicalWaves(agentIds, forwardEdges, items);
+  const flowWaves = buildTopologicalWaves(pipelineIds, forwardPipelineEdges, items);
+
+  const supervisorEdge = rootConnections.outgoing.find(
+    e => e.edgeConfig.enabled && e.channel === 'supervisor' && isAgentNodeItem(e.item) && teamAgentSet.has(e.targetId),
+  );
+  const supervisorAgentId = config.mode === 'supervisor'
+    ? (supervisorEdge?.targetId
+      || (config.supervisorAgentId && teamAgentSet.has(config.supervisorAgentId) ? config.supervisorAgentId : '')
+      || entryAgentIds[0]
+      || agentIds[0])
+    : '';
+
+  const allInputIds = [...new Set([...incomingInputIds, ...downstreamInputIds])];
+  const { agentsById, routersById, inputsById } = buildNodeSummaries(items, {
+    agentIds,
+    routerIds,
+    inputIds: allInputIds,
+    teamAgentSet,
+    forwardAgentEdges: forwardEdges,
+    feedbackAgentEdges: feedbackEdges,
+    forwardPipelineEdges,
+  });
+
+  const outputIdSet = new Set(orchestratorOutputs.map(e => e.targetId || e.otherId));
+  for (const node of [...Object.values(agentsById), ...Object.values(routersById)]) {
+    for (const sink of node.outputSinks || []) {
+      outputIdSet.add(sink.targetId || sink.otherId);
+    }
   }
 
   return {
     orchestratorId: rootId,
     item: rootItem,
     config,
+    entryPipelineIds,
     entryAgentIds,
+    incomingInputIds,
+    inputIds: downstreamInputIds,
+    routerIds,
     agentIds,
+    pipelineIds,
+    outputIds: [...outputIdSet],
     waves,
+    flowWaves,
     forwardEdges,
+    forwardPipelineEdges,
     feedbackEdges,
     orchestratorInputs,
     orchestratorOutputs,
     supervisorAgentId,
     agentsById,
+    routersById,
+    inputsById,
+  };
+}
+
+export function resolveFlowFromNode(items = {}, startNodeId) {
+  const startId = String(startNodeId);
+  const startItem = items[startId];
+  if (!isAgentInputItem(startItem) && !isAgentRouterItem(startItem)) {
+    throw new Error('입력 객체 또는 라우터 객체가 필요합니다.');
+  }
+
+  const startConn = inspectAgentConnections(items, startId);
+  const orchestratorTargets = startConn.outgoingOrchestrators.map(e => e.targetId);
+
+  const allConnectors = Object.entries(items)
+    .filter(([, item]) => item?.kind === 'connector')
+    .sort(([a], [b]) => a.localeCompare(b));
+
+  const { pipelineSet, pipelineIds, inputIds, routerIds, agentIds } = collectReachablePipeline(
+    items,
+    [startId],
+    allConnectors,
+  );
+
+  const teamAgentSet = new Set(agentIds);
+  const pipelineEdges = [];
+  const rawAgentEdges = [];
+  for (const [connectorId, edge] of allConnectors) {
+    const from = String(edge.from);
+    const to = String(edge.to);
+    if (!pipelineSet.has(from) || !pipelineSet.has(to)) continue;
+    const edgeConfig = readAgentEdgeConfig(edge);
+    if (!edgeConfig.enabled) continue;
+    const channel = inferEdgeChannel(items[from], items[to], edge);
+    const entry = { connectorId, edge, edgeConfig, channel, from, to };
+    pipelineEdges.push(entry);
+    if (teamAgentSet.has(from) && teamAgentSet.has(to)) rawAgentEdges.push(entry);
+  }
+
+  const { forwardEdges, feedbackEdges } = classifyPipelineEdges(agentIds, [], rawAgentEdges, items);
+  const { forwardEdges: forwardPipelineEdges } = classifyPipelineEdges(pipelineIds, [startId], pipelineEdges, items);
+  const flowWaves = buildTopologicalWaves(pipelineIds, forwardPipelineEdges, items);
+
+  const { agentsById, routersById, inputsById } = buildNodeSummaries(items, {
+    agentIds,
+    routerIds,
+    inputIds,
+    teamAgentSet,
+    forwardAgentEdges: forwardEdges,
+    feedbackAgentEdges: feedbackEdges,
+    forwardPipelineEdges,
+  });
+
+  return {
+    startId,
+    startItem,
+    startKind: isAgentInputItem(startItem) ? 'input' : 'router',
+    orchestratorIds: orchestratorTargets,
+    inputIds,
+    routerIds,
+    agentIds,
+    pipelineIds,
+    flowWaves,
+    forwardPipelineEdges,
+    agentsById,
+    routersById,
+    inputsById,
+    directOutputs: startConn.outputSinks,
   };
 }

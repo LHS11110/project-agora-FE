@@ -20,8 +20,7 @@ export default function UploadedMedia({item,token,selected=false,interactive,wri
    const address=new URL(apiUrl(item.url)),internal=address.origin===new URL(apiUrl('/')).origin;
    if(!gif&&!internal){setSource(address.href);return;}
    const response=await canvasFetch(address,{headers:internal&&token?{Authorization:bearer(token)}:{},signal:abort.signal});if(!response.ok)throw Error('미디어를 불러오지 못했습니다.');
-   const limit=(gif?20:100)*1024*1024;if(Number(response.headers.get('content-length'))>limit)throw Error('동영상은 100MiB, GIF는 20MiB 이하로 올려주세요.');
-   const blob=await response.blob();if(blob.size>limit)throw Error('동영상은 100MiB, GIF는 20MiB 이하로 올려주세요.');if(generation.current!==turn)return;
+   const blob=await response.blob();if(generation.current!==turn)return;
    if(gif){const buffer=await blob.arrayBuffer();if(generation.current!==turn)return;gifWorker=new Worker(new URL('./gifWorker.js',import.meta.url),{type:'module'});worker.current=gifWorker;
     gifWorker.onmessage=({data})=>{if(generation.current!==turn){data.bitmap?.close();return;}if(data.type==='ready'){surface.current.width=data.width;surface.current.height=data.height;setReady(true);setDuration(data.duration);renderGif(mediaPosition(latest.current.item.mediaState,data.duration,latest.current.item.mediaLoop));}else if(data.type==='frame'){pending.current=false;const context=surface.current?.getContext('2d');if(context){context.clearRect(0,0,surface.current.width,surface.current.height);context.drawImage(data.bitmap,0,0);}data.bitmap.close();if(Math.abs(requested.current-sent.current)>.001)renderGif(requested.current);}else if(data.type==='unchanged'){pending.current=false;if(Math.abs(requested.current-sent.current)>.001)renderGif(requested.current);}else if(data.type==='error'){pending.current=false;setError(data.message);}};
     gifWorker.onerror=()=>setError('GIF를 재생하지 못했습니다.');gifWorker.postMessage({type:'load',buffer},[buffer]);

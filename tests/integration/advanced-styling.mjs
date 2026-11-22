@@ -46,7 +46,8 @@ try {
   await context.route((url) => url.pathname.startsWith('/api/'), (r) => {
     const p = new URL(r.request().url()).pathname;
     let data = { canvas_id: 999055, canvas_name: '고급 스타일링 테스트' };
-    if (p === '/api/auth/me') data = user;
+    if (p === '/api/auth/session/refresh') data = { tokenType: 'Bearer', accessToken: token, user };
+    else if (p === '/api/auth/me') data = user;
     else if (p.endsWith('/access')) data = { ws_port: 8002, canvas_access_token: 'fixture' };
     else if (p.endsWith('/settings')) data = { canvas_name: '고급 스타일링 테스트', settings_revision: revision, visibility: 'private', participants: [], can_manage: true };
     return r.fulfill({ json: data });

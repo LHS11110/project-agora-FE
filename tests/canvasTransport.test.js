@@ -17,3 +17,53 @@ test('downloads assemble binary chunks and include version checks without using 
  const calls=[];const uninstall=installCanvasTransport({canvasId:'1',token:'user-token',origin:'https://canvas.example.test',request:async r=>{calls.push(r);return r.offset===0?{offset:0,size:4,type:'application/pdf',version:'v1',data:'AQI='}:{offset:2,size:4,type:'application/pdf',version:'v1',data:'AwQ='};}});
  const response=await canvasFetch('https://canvas.example.test/api/canvases/1/pdfs/id');assert.deepEqual([...new Uint8Array(await response.arrayBuffer())],[1,2,3,4]);assert.equal(calls[1].version,'v1');uninstall();
 });
+
+test('cancelled file uploads discard the staged session without finishing', async () => {
+ const requests = [];
+ const controller = new AbortController();
+ const uninstall = installCanvasTransport({
+  canvasId: '1', token: 'user-token', origin: 'https://canvas.example.test',
+  request: async request => {
+   requests.push(request.operation);
+   if (request.operation === 'upload_begin') return { uploadId: 'upload', chunkSize: 3 };
+   return {};
+  },
+ });
+ try {
+  const body = new FormData();
+  body.append('file', new Blob(['notebook']), 'notebook.ipynb');
+  await assert.rejects(canvasApiRequest('/api/canvases/1/notebooks', {
+   method: 'POST', body, signal: controller.signal,
+   onUploadProgress: (done, total) => {
+    assert.equal(done, 3);
+    assert.equal(total, 8);
+    controller.abort();
+   },
+  }), { name: 'AbortError' });
+  assert.deepEqual(requests, ['upload_begin', 'upload_chunk', 'upload_cancel']);
+ } finally {
+  uninstall();
+ }
+});
+
+test('large downloads start streaming with their original size and can be cancelled', async () => {
+ const size = 101 * 1024 * 1024;
+ const offsets = [];
+ const uninstall = installCanvasTransport({
+  canvasId: '1', token: 'user-token', origin: 'https://canvas.example.test',
+  request: async request => {
+   offsets.push(request.offset);
+   return { offset: request.offset, size, type: 'video/mp4', version: 'v1', data: 'AQ==' };
+  },
+ });
+ try {
+  const response = await canvasFetch('/api/canvases/1/media/large.mp4');
+  assert.equal(response.headers.get('Content-Length'), String(size));
+  const reader = response.body.getReader();
+  assert.deepEqual(await reader.read(), { done: false, value: Uint8Array.of(1) });
+  await reader.cancel();
+  assert.ok(offsets.length < 4);
+ } finally {
+  uninstall();
+ }
+});

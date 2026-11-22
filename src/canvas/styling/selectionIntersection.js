@@ -8,8 +8,9 @@ const FILL_KINDS = new Set([
   'shape', 'text', 'note', 'frame', 'code', 'math', 'table', 'chart', 'link', 'value', 'question', 'project', 'user-group',
 ]);
 
+// Drawings ('stroke') are excluded: their renderers use pen color/width, not the style envelope.
 const STROKE_KINDS = new Set([
-  'shape', 'connector', 'frame', 'text', 'note', 'image', 'table', 'chart', 'link', 'code', 'value', 'question', 'project', 'stroke',
+  'shape', 'connector', 'frame', 'text', 'note', 'image', 'table', 'chart', 'link', 'code', 'value', 'question', 'project',
 ]);
 
 const TYPO_KINDS = new Set([

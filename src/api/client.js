@@ -50,12 +50,14 @@ export async function api(path, options = {}) {
   }
 }
 
-async function sendApi(path, { method = 'GET', body, token, headers = {}, signal } = {}) {
+async function sendApi(path, { method = 'GET', body, token, headers = {}, signal, requireCanvasTransport, canContinue, onUploadProgress } = {}) {
   if (signal?.aborted) throw new DOMException('The request was aborted', 'AbortError');
-  const routed=canvasApiRequest(apiUrl(path),{method,body,token,headers});
+  const routed=canvasApiRequest(apiUrl(path),{method,body,token,headers,signal,canContinue,onUploadProgress});
   if(routed){try{return await routed;}catch(error){
+    if (error.name === 'AbortError') throw error;
     throw new ApiError(error.message,error.status,error.code,error.payload);
   }}
+  if (requireCanvasTransport) throw new ApiError('캔버스에 연결된 뒤 파일을 업로드할 수 있어요.');
   const response = await fetch(apiUrl(path), {
     method,
     ...(signal ? { signal } : {}),

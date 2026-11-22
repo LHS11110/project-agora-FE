@@ -1,6 +1,5 @@
 import { stripSandboxedExternalTags } from '../content/htmlPreviewDocument.js';
 export const NOTEBOOK_LIMIT=32;
-export const NOTEBOOK_FILE_LIMIT_BYTES=1024*1024;
 const text=value=>Array.isArray(value)?value.join(''):String(value??'');
 export const notebookCell=(cellType='code')=>({id:crypto.randomUUID(),cellType,source:''});
 export function notebookCellObjectId(notebookId,cellId){

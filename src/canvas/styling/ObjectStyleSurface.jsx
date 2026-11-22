@@ -1,4 +1,5 @@
-import { useContext, useId } from 'react';
+import { useContext, useEffect, useId, useRef } from 'react';
+import { observeFlowVisibility } from './flowVisibility.js';
 import { BlurBudgetContext } from './BlurBudgetContext.js';
 import {
   readObjectStyle,
@@ -233,9 +234,14 @@ export function AdvancedShapeSurface({ id, item, widthPx, heightPx }) {
       ? { borderRadius: '50%', overflow: 'hidden' }
       : { clipPath: shapePaths.length === 1 ? `path("${primaryPath}")` : `url(#${clipId})` };
 
+  // Non rect/ellipse outlines cannot use box-shadow/border-radius tricks: clip the
+  // backdrop blur to the outline and paint inner shadows with an SVG filter.
+  const pathBackdropBlur = hasBackdropBlur && !useHardwareBoxShadow;
+  const pathInnerShadows = useHardwareBoxShadow ? [] : innerShadows;
+
   return (
     <div
-      className={`canvas-shape-advanced-surface${hasBackdropBlur && useHardwareBoxShadow ? ' has-backdrop-blur' : ''}`}
+      className={`canvas-shape-advanced-surface${hasBackdropBlur ? ' has-backdrop-blur' : ''}`}
       style={{
         filter: filterCss,
         ...(rectDropShadow ? { boxShadow: rectDropShadow } : {}),
@@ -244,6 +250,14 @@ export function AdvancedShapeSurface({ id, item, widthPx, heightPx }) {
         ...(hasBackdropBlur && useHardwareBoxShadow ? { backdropFilter: backdropCss, WebkitBackdropFilter: backdropCss, overflow: 'hidden' } : {}),
       }}
     >
+      {pathBackdropBlur && (
+        <div
+          className="canvas-shape-backdrop-blur"
+          style={{ position: 'absolute', inset: 0, pointerEvents: 'none', clipPath: fillClipStyle.clipPath, backdropFilter: backdropCss, WebkitBackdropFilter: backdropCss }}
+          aria-hidden="true"
+        />
+      )}
+
       {visibleFills.length > 0 && (
         <div className="canvas-shape-fill-host" style={{ position: 'absolute', inset: 0, ...fillClipStyle }} aria-hidden="true">
           {visibleFills.map((layer) => (
@@ -272,6 +286,23 @@ export function AdvancedShapeSurface({ id, item, widthPx, heightPx }) {
       )}
 
       <svg className="canvas-shape-svg" viewBox={`0 0 ${w} ${h}`} width="100%" height="100%" aria-hidden="true">
+        {pathInnerShadows.length > 0 && (
+          <defs>
+            {pathInnerShadows.map((fx, index) => (
+              <filter key={fx.id} id={`${uid}_inner_${index}`} x="-50%" y="-50%" width="200%" height="200%" colorInterpolationFilters="sRGB">
+                {fx.spread > 0 && <feMorphology in="SourceAlpha" operator="erode" radius={fx.spread} result="spread" />}
+                <feOffset in={fx.spread > 0 ? 'spread' : 'SourceAlpha'} dx={fx.x} dy={fx.y} result="offset" />
+                <feGaussianBlur in="offset" stdDeviation={fx.blur / 2} result="blurred" />
+                <feComposite in="SourceAlpha" in2="blurred" operator="arithmetic" k2="1" k3="-1" result="rim" />
+                <feFlood floodColor={fx.color} floodOpacity={fx.opacity} />
+                <feComposite in2="rim" operator="in" />
+              </filter>
+            ))}
+          </defs>
+        )}
+        {pathInnerShadows.map((fx, index) => (
+          <path key={fx.id} className="canvas-shape-inner-shadow" d={combinedPath} fill="#000" filter={`url(#${uid}_inner_${index})`} />
+        ))}
         {(stroke.align === 'inside' || stroke.align === 'outside' || shapePaths.length > 1) && (
           <defs>
             {(stroke.align === 'inside' || shapePaths.length > 1) && (
@@ -365,15 +396,21 @@ export function AdvancedShapeSurface({ id, item, widthPx, heightPx }) {
   );
 }
 
+const FLOW_UPDATES_PER_SECOND = 30;
+
 export function AdvancedConnectorSvg({ id, item, geometry, offsetX, offsetY, width, height }) {
   const style = readObjectStyle(item);
   const curvePath = geometry?.points?.map((point, index) => `${index ? 'L' : 'M'}${point.x - offsetX} ${point.y - offsetY}`).join(' ');
+  const svgRef = useRef(null);
+  const animated = Boolean(curvePath) && style.connector.dashAnimation !== 'none';
+  useEffect(() => (animated ? observeFlowVisibility(svgRef.current) : undefined), [animated]);
   if (!curvePath) return null;
 
   const stroke = style.stroke;
   const strokeWidth = stroke.enabled ? stroke.width : (Number(item.strokeWidth) || 1.5);
   const strokeColor = stroke.color || item.color || '#8b8f8c';
   const flow = style.connector.dashAnimation;
+  const flowDuration = 1.2 / (style.connector.animationSpeed || 1);
   const dashArray = buildStrokeDashArray(stroke) || (flow !== 'none' ? '8 6' : undefined);
   const filterCss = !filtersEqualDefault(style.filters) || style.explicitEffects
     ? buildCssFilterString(style, 'none')
@@ -382,14 +419,16 @@ export function AdvancedConnectorSvg({ id, item, geometry, offsetX, offsetY, wid
 
   return (
     <svg
+      ref={svgRef}
       className={`connector-hit-path connector-advanced-svg${flow !== 'none' ? ` connector-flow-${flow}` : ''}`}
       viewBox={`0 0 ${width} ${height}`}
       preserveAspectRatio="none"
       style={{
-        opacity: style.opacity,
+        // Object opacity is applied once on the connector host element (CanvasObject).
         mixBlendMode: style.blendMode !== 'normal' ? style.blendMode : undefined,
         filter: filterCss,
-        '--connector-flow-duration': `${(1.2 / (style.connector.animationSpeed || 1)).toFixed(2)}s`,
+        '--connector-flow-duration': `${flowDuration.toFixed(2)}s`,
+        '--connector-flow-steps': Math.max(8, Math.round(flowDuration * FLOW_UPDATES_PER_SECOND)),
         '--object-color': strokeColor,
       }}
       aria-hidden="true"

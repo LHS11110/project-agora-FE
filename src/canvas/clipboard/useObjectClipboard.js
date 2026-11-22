@@ -6,7 +6,7 @@ import { collectCopyObjects, serializeCopyObjects, rememberObjects, rememberedOb
 import { createId } from '../canvasIds.js';
 import { clipboardTextObject, resolveExternalClipboardObjects, clipboardDataContent, readClipboardEntries } from './externalClipboard.js';
 import { initialVideoFields } from '../media/mediaModel.js';
-import { importNotebook, notebookCellItem, NOTEBOOK_FILE_LIMIT_BYTES } from '../notebook/notebookData.js';
+import { importNotebook, notebookCellItem } from '../notebook/notebookData.js';
 import { isCollaborativeItem } from '../collaborativeSync.js';
 
 const editable = target => target?.isContentEditable || target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"]), .monaco-editor, .canvas-code-editor, [role="dialog"], dialog, .modal-backdrop, .canvas-as-code-overlay');
@@ -93,9 +93,16 @@ export function useObjectClipboard(options) {
         try {
           let id;
           if(definition.fileType==='notebook'||definition.notebookDocument){
-            let document=definition.notebookDocument;
-            if(definition.file){if(definition.file.size>NOTEBOOK_FILE_LIMIT_BYTES)throw Error(ui('노트북 파일은 1MB 이하로 선택하세요.'));document ||= JSON.parse((await definition.file.text()).replace(/^\uFEFF/, ''));if(!canInsert())break;}
-            const notebook=importNotebook(document);id=createId();
+            const file = definition.file;
+            const archive = file && c.uploadNotebookFile
+              ? await c.uploadNotebookFile(file, { canContinue: canInsert, document: definition.notebookDocument })
+              : null;
+            if (!canInsert()) break;
+            const notebook = archive
+              ? { src: archive.src, filename: archive.filename, notebookCells: archive.notebookCells ?? [], notebookResults: {} }
+              : importNotebook(definition.notebookDocument ?? JSON.parse((await file.text()).replace(/^\uFEFF/, '')));
+            if (!canInsert()) break;
+            id = createId();
             const value={kind:'shape',shapeType:'rectangle',runtimeRole:'notebook',x:position.x-.24,y:position.y-.34,width:.48,height:.65,permission:c.permission,...notebook};
             if(!c.addItems([{id,item:value}])){skipped++;continue;}
           } else if (definition.file && ['media','image','pdf','sheet'].includes(definition.fileType)) {

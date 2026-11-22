@@ -1,6 +1,6 @@
 import {useEffect,useRef} from 'react';
 import {selectedRunnableForShortcut} from './codeExecutionShortcut.js';
-import {isAgentCanvasObject,isAgentOrchestratorItem} from '../agents/agentCanvasModel.js';
+import {isAgentInputItem,isAgentOrchestratorItem,isAgentRouterItem,isAgentRunnableItem} from '../agents/agentCanvasModel.js';
 
 export default function useCodeExecutionShortcut(options) {
   const latest=useRef(options);latest.current=options;
@@ -13,13 +13,19 @@ export default function useCodeExecutionShortcut(options) {
       const id=selectedRunnableForShortcut(event,selection,itemsRef.current,editingIdRef?editingIdRef.current:editingId);
       if(id==null)return;
       const targetItem=itemsRef.current[id];
-      const isAgent=isAgentCanvasObject(targetItem)&&Boolean(multiAgentStore);
+      const isAgent=isAgentRunnableItem(targetItem)&&Boolean(multiAgentStore);
       // Capture before Monaco so the shortcut never inserts a newline or runs twice.
       event.preventDefault();event.stopPropagation();
       if(event.repeat||(isAgent?multiAgentStore.isRunning():store.isRunning()))return;
       if(canExecuteItem&&!canExecuteItem(targetItem)){onMessage('이 그룹에는 실행 권한이 없습니다.');return;}
       if(isAgent){
-        const run=isAgentOrchestratorItem(targetItem)?multiAgentStore.runOrchestrator(id):multiAgentStore.runAgent(id);
+        const run=isAgentOrchestratorItem(targetItem)
+          ?multiAgentStore.runOrchestrator(id)
+          :isAgentInputItem(targetItem)
+            ?multiAgentStore.runInput(id)
+            :isAgentRouterItem(targetItem)
+              ?multiAgentStore.runRouter(id)
+              :multiAgentStore.runAgent(id);
         void run.then(()=>{
           if(!mounted)return;
           const state=multiAgentStore.getNodeState(id);

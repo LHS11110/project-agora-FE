@@ -4,7 +4,7 @@ import {useObjectRuntimeState} from '../runtime/useObjectRuntimeState.js';
 import {useEffect,useId,useRef,useState} from 'react';
 import MarkdownText from '../../components/MarkdownText.jsx';
 import {ui} from '../../i18n/locale.js';
-import {exportNotebook,importNotebook,notebookCell,notebookHtml,NOTEBOOK_LIMIT,NOTEBOOK_FILE_LIMIT_BYTES} from './notebookData.js';
+import {exportNotebook,importNotebook,notebookCell,notebookHtml,NOTEBOOK_LIMIT} from './notebookData.js';
 import './notebook.css';
 import Output from './NotebookOutput.jsx';
 export {default as NotebookOutput} from './NotebookOutput.jsx';
@@ -64,14 +64,38 @@ export default function NotebookObject({id,item,store,readOnly,canExecute,select
   if(operation.type==='clear-results')patch({notebookResults:{}});
   else if(operation.type==='replace')patch({...importNotebook({nbformat:4,cells:operation.cells.map(cell=>({cell_type:cell.cellType,source:cell.source}))})});
  };
- const download=()=>{const blob=new Blob([JSON.stringify(exportNotebook(item,getCellItems()),null,2)],{type:'application/x-ipynb+json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='notebook.ipynb';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
- const importFile=async event=>{const f=event.target.files?.[0];event.target.value='';if(!f)return;try{if(f.size>NOTEBOOK_FILE_LIMIT_BYTES)throw Error(ui('노트북 파일은 1MB 이하로 선택하세요.'));const parsed=importNotebook(JSON.parse(await f.text()));if(separate)await structure({type:'replace',cells:parsed.notebookCells});else patch(parsed);}catch(error){setMessage(error.message);}};
+ const downloadBlob=(blob,name)=>{const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+ const download=()=>downloadBlob(new Blob([JSON.stringify(exportNotebook(item,getCellItems()),null,2)],{type:'application/x-ipynb+json'}),'notebook.ipynb');
+ const downloadOriginal=async()=>{
+  setMessage(ui('노트북 원본을 불러오는 중…'));
+  try{downloadBlob(await store.fetchNotebookFile(item.src),item.filename||'notebook.ipynb');setMessage('');}
+  catch(error){setMessage(ui(error.message));}
+ };
+ const importRequest=useRef(null);
+ useEffect(()=>()=>importRequest.current?.abort(),[id]);
+ const importFile=async event=>{
+  const f=event.target.files?.[0];event.target.value='';if(!f)return;
+  importRequest.current?.abort();
+  const controller=new AbortController();importRequest.current=controller;
+  setBusy('import');setMessage('');
+  try{
+   if(store?.importNotebookFile){
+    const result=await store.importNotebookFile(id,f,controller.signal);
+    if(result&&!result.editable)setMessage(ui('편집 범위를 넘는 노트북입니다. 원본 파일을 저장했습니다.'));
+   }else{
+    const parsed=importNotebook(JSON.parse((await f.text()).replace(/^\uFEFF/,'')));
+    if(controller.signal.aborted)return;
+    if(separate)await structure({type:'replace',cells:parsed.notebookCells});else patch(parsed);
+   }
+  }catch(error){if(!controller.signal.aborted)setMessage(ui(error.message));}
+  finally{if(importRequest.current===controller&&!controller.signal.aborted)setBusy(null);}
+ };
  const clearResults=()=>separate?void structure({type:'clear-results'}):patch({notebookResults:{}});
  return <section ref={root} className={`notebook-content${separate?' notebook-controls-only':''}${remoteBusy?' is-running':''}`} data-object-action onPointerDown={event=>{if(selected)event.stopPropagation();}} onWheel={event=>{if(selected)event.stopPropagation();}} onKeyDown={event=>{event.stopPropagation();if(event.shiftKey&&event.key==='Enter'&&!event.nativeEvent.isComposing&&event.keyCode!==229&&event.target.dataset.cellId){event.preventDefault();void run(event.target.dataset.cellId);}}}>
   <header><strong>Jupyter Notebook</strong><span>Python</span><button disabled={!canExecute||busy||remoteBusy} onClick={()=>run()}>{ui('모두 실행')}</button></header>
-  <nav aria-label={ui('노트북 도구')}><button title={ui('새 기능 적용 시 VM이 다시 시작될 수 있으며 파일은 유지됩니다.')} disabled={!canExecute||readOnly||busy||remoteBusy} onClick={()=>run(null,'prepare')}>{busy==='prepare'?ui('환경 준비 중…'):ui('환경 준비')}</button><button disabled={!canExecute||busy||remoteBusy} onClick={()=>run(null,'reset')}>{ui('커널 초기화')}</button><button disabled={!writable||busy||remoteBusy} onClick={()=>file.current?.click()}>{ui('ipynb 가져오기')}</button><button disabled={!writable||busy||remoteBusy} onClick={clearResults}>{ui('출력 지우기')}</button><button onClick={download}>{ui('ipynb 내보내기')}</button><input id={`${fieldId}-import`} name="notebook-import" hidden ref={file} type="file" accept=".ipynb,application/json" onChange={importFile}/></nav>
+  <nav aria-label={ui('노트북 도구')}><button title={ui('새 기능 적용 시 VM이 다시 시작될 수 있으며 파일은 유지됩니다.')} disabled={!canExecute||readOnly||busy||remoteBusy} onClick={()=>run(null,'prepare')}>{busy==='prepare'?ui('환경 준비 중…'):ui('환경 준비')}</button><button disabled={!canExecute||busy||remoteBusy} onClick={()=>run(null,'reset')}>{ui('커널 초기화')}</button><button disabled={!writable||busy||remoteBusy} onClick={()=>file.current?.click()}>{ui('ipynb 가져오기')}</button><button disabled={!writable||busy||remoteBusy} onClick={clearResults}>{ui('출력 지우기')}</button><button onClick={download}>{ui('ipynb 내보내기')}</button>{item.src&&store?.fetchNotebookFile&&<button onClick={downloadOriginal}>{ui('ipynb 원본 다운로드')}</button>}<input id={`${fieldId}-import`} name="notebook-import" hidden ref={file} type="file" accept=".ipynb,application/json" onChange={importFile}/></nav>
   {!separate&&<div className="notebook-cells legacy-notebook-cells" style={{pointerEvents:selected?'auto':'none'}}>{cells.map((cell,index)=><article key={cell.id} data-status={results[cell.id]?results[cell.id].exitCode?'error':'success':undefined} className={`notebook-cell${cell.cellType==='markdown'?' is-markdown':''}${editingMarkdown===cell.id?' is-editing':''}${busy===cell.id||remoteBusy&&item.runtimeState?.detail===cell.id?' is-running':''}`}><div className="notebook-cell-toolbar"><small>{cell.cellType==='code'?`In [${results[cell.id]?.executionCount??' '}]`:`${index+1}`}</small><select id={`${fieldId}-cell-type-${cell.id}`} name={`notebook-cell-type-${cell.id}`} aria-label={ui('셀 유형')} disabled={!writable||busy||remoteBusy} value={cell.cellType} onChange={event=>changeLegacyCell(cell.id,{cellType:event.target.value})}><option value="code">Code</option><option value="markdown">Markdown</option></select><button aria-label={ui('셀 실행')} disabled={!canExecute||busy||remoteBusy||cell.cellType!=='code'} onClick={()=>run(cell.id)}>▶</button><button aria-label={ui('셀 삭제')} disabled={!writable||busy||remoteBusy} onClick={()=>patch(old=>({...old,notebookCells:old.notebookCells.filter(value=>value.id!==cell.id),notebookResults:Object.fromEntries(Object.entries(old.notebookResults||{}).filter(([key])=>key!==cell.id))}))}>×</button></div>{cell.cellType==='code'&&<NotebookCodeInput cell={cell} index={index+1} active={activeCodeCell===cell.id} onActivate={()=>setActiveCodeCell(cell.id)} onDeactivate={()=>setActiveCodeCell(current=>current===cell.id?null:current)} editable={writable&&!busy&&!remoteBusy} onChange={source=>changeLegacyCell(cell.id,{source})} onRun={()=>run(cell.id)} factor={fontFactor}/>}
 {editingMarkdown===cell.id&&<textarea id={`${fieldId}-cell-md-${cell.id}`} name={`notebook-cell-markdown-${cell.id}`} autoFocus={cell.cellType==='markdown'} onBlur={()=>{if(cell.cellType==='markdown')setEditingMarkdown(null);}} data-cell-id={cell.id} aria-label={`${ui('노트북 셀')} ${index+1}`} spellCheck={false} readOnly={!writable||busy||remoteBusy} value={cell.source} onChange={event=>changeLegacyCell(cell.id,{source:event.target.value})} style={{minHeight:Math.min(320,Math.max(76,cell.source.split('\n').length*19+20))*fontFactor}}/>}{cell.cellType==='markdown'?<div className="notebook-markdown" tabIndex={writable&&!busy?0:undefined} role={writable&&!busy?'button':undefined} aria-label={ui('마크다운 편집')} onDoubleClick={()=>{if(writable&&!busy)setEditingMarkdown(cell.id);}} onKeyDown={event=>{if(writable&&!busy&&event.key==='Enter'){event.preventDefault();setEditingMarkdown(cell.id);}}}>{editingMarkdown!==cell.id&&<MarkdownText source={cell.source||ui('더블 클릭하여 마크다운 편집')}/>}</div>:<div className="notebook-outputs">{results[cell.id]?.outputs?.map((output,index)=><Output ownerId={id} key={index} output={output} fontSize={13*fontFactor}/>)}{results[cell.id]?.truncated&&<small>{ui('출력 일부가 생략되었습니다.')}</small>}{results[cell.id]?.error&&<p role="alert">{results[cell.id].error}</p>}</div>}</article>)}</div>}
-  <footer><button disabled={!writable||busy||remoteBusy||cells.length>=NOTEBOOK_LIMIT} onClick={add}>+ {ui('셀 추가')}</button><span role="status">{busy||remoteBusy?ui('노트북 실행 중…'):message||runtime?.error||ui('Shift + Enter로 셀 실행')}</span></footer>
+  <footer><button disabled={!writable||busy||remoteBusy||cells.length>=NOTEBOOK_LIMIT} onClick={add}>+ {ui('셀 추가')}</button><span role="status">{busy==='import'?ui('노트북을 가져오는 중…'):busy||remoteBusy?ui('노트북 실행 중…'):message||runtime?.error||ui('Shift + Enter로 셀 실행')}</span></footer>
  </section>;
 }

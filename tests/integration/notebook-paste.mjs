@@ -24,5 +24,20 @@ try{
  const items=await page.evaluate(()=>Object.values(window.pasteFixture.items()));
  for(const item of items){assert.equal(item.runtimeRole,'notebook');assert.equal(item.notebookCells.length,2);assert.equal(item.notebookCells[0].source,'print(42)');assert.equal(item.notebookCells[1].source,'# Notes');}
  assert.equal(await page.locator('.notebook-content').count(),4);assert.deepEqual(errors,[]);
+ const large=JSON.stringify({nbformat:4,metadata:{padding:'x'.repeat(2*1024*1024)},cells:[{cell_type:'code',source:'print("large")'}]});
+ await page.locator('.canvas-stage').evaluate((stage,text)=>{
+  const data=new DataTransfer();
+  data.items.add(new File([text],'large.ipynb',{type:'application/x-ipynb+json'}));
+  stage.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));
+ },large);
+ await page.waitForFunction(()=>Object.values(window.pasteFixture.items()).some(item=>item.filename==='large.ipynb'));
+ const archive=await page.evaluate(()=>({
+  item:Object.values(window.pasteFixture.items()).find(item=>item.filename==='large.ipynb'),
+  upload:window.pasteFixture.uploads.at(-1),
+ }));
+ assert.equal(archive.item.notebookCells[0].source,'print("large")');
+ assert.match(archive.item.src,/\/notebooks\//);
+ assert.equal(archive.upload.bytes,large.length);
+ assert.ok(archive.upload.parts>1);
  console.log('PASS ipynb file, items-only file transfer, notebook MIME text, filename-free JSON via paste button, source cells and rendered notebooks');
 }finally{await browser.close();}

@@ -25,6 +25,7 @@ import {
 } from '../src/canvas/styling/styleTokens.js';
 import {
   analyzeSelectionIntersection,
+  itemCapabilities,
   extractSelectionColors,
   replaceSelectionColorPatch,
 } from '../src/canvas/styling/selectionIntersection.js';
@@ -178,6 +179,7 @@ test('heterogeneous multi-selection intersection, selection colors batch swap, a
   assert.equal(intersection.capabilities.stroke, true);
   assert.equal(intersection.capabilities.cornerRadius, true);
   assert.equal(intersection.capabilities.fill, false); // image does not support fill
+  assert.equal(itemCapabilities({ kind: 'stroke', points: [] }).stroke, false); // drawings use pen controls
   assert.equal(intersection.mixed.opacity, true);
 
   const colors = extractSelectionColors(items, ['s1', 't1', 'img1']);
@@ -264,4 +266,10 @@ test('connectorGeometry supports straight and orthogonal routing alongside curve
   assert.equal(orthoGeom.points.length, 4);
   // Orthogonal middle segment shares exact X coordinate
   assert.equal(Math.round(orthoGeom.points[1].x), Math.round(orthoGeom.points[2].x));
+});
+
+test('vector shape hosts never carry an unbudgeted backdrop blur', () => {
+  const brush = 'style1:' + JSON.stringify({ effects: [{ type: 'background-blur', blur: 12 }] });
+  assert.equal(buildDomSurfaceStyle({ kind: 'shape', shapeType: 'triangle', brush }).inline.backdropFilter, undefined);
+  assert.equal(buildDomSurfaceStyle({ kind: 'note', text: 'memo', brush }).inline.backdropFilter, 'blur(12px)');
 });

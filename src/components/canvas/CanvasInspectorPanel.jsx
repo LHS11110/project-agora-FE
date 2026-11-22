@@ -43,8 +43,23 @@ import Icon from '../Icon.jsx';
 import ArrowHeadControls from '../ArrowHeadControls.jsx';
 import { MAX_TABLE_COLUMNS, MAX_TABLE_ROWS } from '../tableModel.js';
 import { LASER_COLOR, MAX_STROKE_WIDTH, MAX_ZOOM_SENSITIVITY, MIN_STROKE_WIDTH, MIN_ZOOM_SENSITIVITY, stickyNoteColors } from '../../canvas/canvasConstants.js';
-import { isAgentCanvasObject, isAgentNodeItem, isAgentOrchestratorItem } from '../../canvas/agents/agentCanvasModel.js';
-import { AgentEdgeControls, AgentNodeInspector, AgentOrchestratorInspector, AgentToolHint } from '../../canvas/agents/AgentInspectorSection.jsx';
+import {
+  isAgentCanvasObject,
+  isAgentInputItem,
+  isAgentNodeItem,
+  isAgentOrchestratorItem,
+  isAgentOutputItem,
+  isAgentRouterItem,
+} from '../../canvas/agents/agentCanvasModel.js';
+import {
+  AgentEdgeControls,
+  AgentInputInspector,
+  AgentNodeInspector,
+  AgentOrchestratorInspector,
+  AgentOutputInspector,
+  AgentRouterInspector,
+  AgentToolHint,
+} from '../../canvas/agents/AgentInspectorSection.jsx';
 
 const KIND_EDIT_LABELS = {
   image: '이미지 편집', shape: '도형 편집', text: '텍스트 편집', note: '포스트잇 편집',
@@ -191,11 +206,11 @@ const InspectorBody = memo(function CanvasInspectorPanel({
     ? { className: 'object-property-fields', disabled: true }
     : { className: 'object-property-fields' };
   const headingTitle = activeTool !== 'select'
-    ? ui('{tool} 설정', {tool:ui(({ anchor:'앵커',frame:'프레임',project:'프로젝트 관리',notebook:'주피터 노트북',terminal:'터미널','continuous-value':'연속 값','discrete-value':'이산 값','agent-node':'AI 에이전트 객체','agent-orchestrator':'에이전트 오케스트레이터','user-group': '사용자 그룹', pen: '드로잉', laser: '레이저 포인터', eraser: '지우개', connect: '연결', shape: '도형', chart: '그래프', question: '문제', text: '텍스트', note: '포스트잇', math: '수식', table: '테이블', code: '코드', link: '동영상·링크' })[activeTool] || ui("도구"))})
+    ? ui('{tool} 설정', {tool:ui(({ anchor:'앵커',frame:'프레임',project:'프로젝트 관리',notebook:'주피터 노트북',terminal:'터미널','continuous-value':'연속 값','discrete-value':'이산 값','agent-input':'에이전트 입력 객체','agent-router':'에이전트 라우터 객체','agent-node':'AI 에이전트 객체','agent-mock':'모형 에이전트','agent-orchestrator':'에이전트 오케스트레이터','agent-output':'에이전트 출력 객체','user-group': '사용자 그룹', pen: '드로잉', laser: '레이저 포인터', eraser: '지우개', connect: '연결', shape: '도형', chart: '그래프', question: '문제', text: '텍스트', note: '포스트잇', math: '수식', table: '테이블', code: '코드', link: '동영상·링크' })[activeTool] || ui("도구"))})
     : !hasSelection
     ? ui('환경 설정')
     : selectedObjectIds.length === 1
-    ? ui(isAgentNodeItem(selectedItem) ? 'AI 에이전트 편집' : isAgentOrchestratorItem(selectedItem) ? '오케스트레이터 편집' : KIND_EDIT_LABELS[selectedItem?.kind] || '객체 편집')
+    ? ui(isAgentNodeItem(selectedItem) ? 'AI 에이전트 편집' : isAgentOrchestratorItem(selectedItem) ? '오케스트레이터 편집' : isAgentInputItem(selectedItem) ? '입력 객체 편집' : isAgentRouterItem(selectedItem) ? '라우터 객체 편집' : isAgentOutputItem(selectedItem) ? '출력 객체 편집' : KIND_EDIT_LABELS[selectedItem?.kind] || '객체 편집')
     : ui('객체 {count}개 편집', { count: selectedObjectIds.length });
   const envSections = <>
     <details className="inspector-section inspector-timer-section" open><summary className="inspector-timer-summary"><span className="inspector-label">{ui('개인 타이머')}</span></summary>{personalTimer}</details>
@@ -238,6 +253,9 @@ const InspectorBody = memo(function CanvasInspectorPanel({
           {selectionDetailStage >= 2 && <PropertyFieldsTag {...propertyFieldsProps}>
             {isAgentNodeItem(selectedItem) && <AgentNodeInspector key={primarySelectedItemId} id={primarySelectedItemId} item={selectedItem} items={items} store={multiAgentStore} onPatchAgent={(targetId, patch) => updateAgentItem?.(targetId, patch)} onPatchConnector={(connId, patch) => updateAgentItem?.(connId, patch)} onNavigateObject={onNavigateObject} />}
             {isAgentOrchestratorItem(selectedItem) && <AgentOrchestratorInspector key={primarySelectedItemId} id={primarySelectedItemId} item={selectedItem} items={items} store={multiAgentStore} onPatchOrchestrator={(targetId, patch) => updateAgentItem?.(targetId, patch)} onNavigateObject={onNavigateObject} />}
+            {isAgentInputItem(selectedItem) && <AgentInputInspector key={primarySelectedItemId} id={primarySelectedItemId} item={selectedItem} items={items} store={multiAgentStore} onPatchItem={(targetId, patch) => updateAgentItem?.(targetId, patch)} onNavigateObject={onNavigateObject} />}
+            {isAgentRouterItem(selectedItem) && <AgentRouterInspector key={primarySelectedItemId} id={primarySelectedItemId} item={selectedItem} items={items} store={multiAgentStore} onPatchItem={(targetId, patch) => updateAgentItem?.(targetId, patch)} onPatchConnector={(connId, patch) => updateAgentItem?.(connId, patch)} onNavigateObject={onNavigateObject} />}
+            {isAgentOutputItem(selectedItem) && <AgentOutputInspector key={primarySelectedItemId} id={primarySelectedItemId} item={selectedItem} items={items} onPatchItem={(targetId, patch) => updateAgentItem?.(targetId, patch)} onNavigateObject={onNavigateObject} />}
             {selectedItem?.kind === 'chart' && <ChartControls key={primarySelectedItemId} item={selectedItem} onChange={patch => updateChartItem(primarySelectedItemId, patch)} />}
             {portfolioActions && <PortfolioControls items={items} selectedIds={selectedObjectIds} canWriteItem={canWriteItem} frames={portfolioFrames} actions={portfolioActions} viewing={portfolioViewing} activeTool={activeTool} />}
             {showBatchCornerControls && <ObjectCornerControls item={selectedItem || items[cornerState.targetIds[0]]} value={cornerState.value} count={cornerState.targetIds.length} onChange={value => updateObjectCornerStyle(cornerState.targetIds, value)} />}
@@ -306,7 +324,7 @@ const InspectorBody = memo(function CanvasInspectorPanel({
         {activeTool === 'select' && !hasSelection && portfolioActions && portfolioFrames.length > 0 && <PortfolioControls items={items} selectedIds={selectedObjectIds} canWriteItem={canWriteItem} frames={portfolioFrames} actions={portfolioActions} viewing={portfolioViewing} activeTool={activeTool} />}
         {activeTool !== 'select' && <>
           {(['executor', 'execution-output', 'code'].includes(activeTool)) && <section className="inspector-section"><strong className="inspector-label">{ui('블루프린트 실행')}</strong><p className="inspector-hint">{ui('실행 객체 → 코드 객체 → 결과 객체 순서로 연결하세요. 실행 객체의 코드 실행 버튼을 눌러 실행합니다.')}</p><p className="inspector-hint">{ui('연결 화살표의 방향을 따릅니다. 결과 객체끼리 연결하면 같은 출력을 여러 곳에서 볼 수 있습니다.')}</p></section>}
-          {(['agent-node', 'agent-orchestrator'].includes(activeTool)) && <AgentToolHint tool={activeTool} />}
+          {(['agent-input', 'agent-router', 'agent-node', 'agent-mock', 'agent-orchestrator', 'agent-output'].includes(activeTool)) && <AgentToolHint tool={activeTool} />}
           {activeTool === 'frame' && portfolioActions && <PortfolioControls items={items} selectedIds={selectedObjectIds} canWriteItem={canWriteItem} frames={portfolioFrames} actions={portfolioActions} viewing={portfolioViewing} activeTool={activeTool} />}
           {activeTool === 'shape' && <>
             <section className="inspector-section"><strong className="inspector-label">{ui("새 도형 스타일")}</strong><VectorStyleSelector value={shapeVisualStyle} onChange={setShapeVisualStyle} /></section>

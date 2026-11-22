@@ -32,7 +32,16 @@ import RawTerminalObject from './runtime/TerminalObject.jsx';
 import RawBlueprintNode from './runtime/BlueprintNode.jsx';
 import RawCanvasAgentNode from './agents/CanvasAgentNode.jsx';
 import RawCanvasAgentOrchestratorNode from './agents/CanvasAgentOrchestratorNode.jsx';
-import { isAgentNodeItem, isAgentOrchestratorItem } from './agents/agentCanvasModel.js';
+import RawCanvasAgentInputNode from './agents/CanvasAgentInputNode.jsx';
+import RawCanvasAgentRouterNode from './agents/CanvasAgentRouterNode.jsx';
+import RawCanvasAgentOutputNode from './agents/CanvasAgentOutputNode.jsx';
+import {
+  isAgentInputItem,
+  isAgentNodeItem,
+  isAgentOrchestratorItem,
+  isAgentOutputItem,
+  isAgentRouterItem,
+} from './agents/agentCanvasModel.js';
 import RuntimeCodeFrame from './runtime/RuntimeCodeFrame.jsx';
 import { contentMode, isTextContent } from './content/contentPresentation.js';
 import RawConnectorLabel from '../components/canvas/ConnectorLabel.jsx';
@@ -71,6 +80,9 @@ const BlueprintNode=memo(RawBlueprintNode,objectContentPropsEqual);
 const agentContentPropsEqual=(before,after)=>before.id===after.id&&before.allItems===after.allItems&&before.store===after.store&&before.selected===after.selected&&before.readOnly===after.readOnly&&before.canExecute===after.canExecute&&before.onChange===after.onChange&&renderValueEqual(objectContentView(before.item),objectContentView(after.item));
 const CanvasAgentNode=memo(RawCanvasAgentNode,agentContentPropsEqual);
 const CanvasAgentOrchestratorNode=memo(RawCanvasAgentOrchestratorNode,agentContentPropsEqual);
+const CanvasAgentInputNode=memo(RawCanvasAgentInputNode,agentContentPropsEqual);
+const CanvasAgentRouterNode=memo(RawCanvasAgentRouterNode,agentContentPropsEqual);
+const CanvasAgentOutputNode=memo(RawCanvasAgentOutputNode,agentContentPropsEqual);
 const UnifiedTextContent=memo(RawUnifiedTextContent,objectContentPropsEqual);
 const EditableTable=memo(RawEditableTable,objectContentPropsEqual);
 const ChartView=memo(RawChartView,objectContentPropsEqual);
@@ -219,6 +231,7 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
     advancedStyled && isDomStylable && parsedStyle.cornerRadius?.explicit ? 'has-styled-radius' : '',
     isDomStylable && domSurfaceStyle.backdropFilter ? 'has-backdrop-blur' : '',
     parsedStyle.typography?.explicit ? 'has-custom-typography' : '',
+    parsedStyle.typography?.explicit && parsedStyle.typography.textColor ? 'has-typo-color' : '',
     parsedStyle.typography?.explicit && parsedStyle.typography.overflowMode === 'truncate' ? 'has-typo-truncate' : '',
     parsedStyle.autoLayout?.enabled ? 'has-auto-layout' : '',
     parsedStyle.autoLayout?.widthMode === 'hug' ? 'has-auto-layout-hug-w' : '',
@@ -234,6 +247,12 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
     'data-item-id': id,
     onDoubleClickCapture: (event) => handleObjectDoubleClick(event, { id, item, activeTool, editing, onStartEditing, onConnectorDoubleClick }),
     onPointerDownCapture: (event) => {
+      if (activeTool === 'connect' && event.button === 0 && !['connector', 'stroke'].includes(item.kind)) {
+        selectingPointerRef.current = false;
+        event.preventDefault(); event.stopPropagation();
+        onPointerDown(event, id, item);
+        return;
+      }
       if (event.target.closest?.('[data-object-action]')) { selectingPointerRef.current = false; return; }
       if (editing || event.target.closest?.('.canvas-code-editor')) { selectingPointerRef.current = false; return; }
       selectingPointerRef.current = activeTool === 'select' && !selected && event.button === 0
@@ -243,6 +262,11 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
       onPointerDown(event, id, item);
     },
     onClickCapture: (event) => {
+      if (activeTool === 'connect') {
+        selectingPointerRef.current = false;
+        event.preventDefault(); event.stopPropagation();
+        return;
+      }
       if (event.target.closest?.('[data-object-action]')) { selectingPointerRef.current = false; return; }
       if (editing || event.target.closest?.('.canvas-code-editor')) { selectingPointerRef.current = false; return; }
       if (!selectingPointerRef.current && (editing || !event.target.closest?.('a'))) return;
@@ -277,6 +301,9 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
   if (item.kind === 'shape' && item.runtimeRole==='terminal') return withResizeHandles(<div className={`${classes} terminal-object`} style={style} {...handlers}><TerminalObject id={id} item={item} store={runtimeStore} selected={selected && activeTool==='select'} canExecute={canExecute}/></div>);
   if (isAgentNodeItem(item)) return withResizeHandles(<div className={`${classes} agent-canvas-object agent-node-object`} style={style} {...handlers}><CanvasAgentNode id={id} item={item} allItems={allItems} store={multiAgentStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} canExecute={canExecute} onChange={onQuestionChange} /></div>);
   if (isAgentOrchestratorItem(item)) return withResizeHandles(<div className={`${classes} agent-canvas-object agent-orchestrator-object`} style={style} {...handlers}><CanvasAgentOrchestratorNode id={id} item={item} allItems={allItems} store={multiAgentStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} canExecute={canExecute} onChange={onQuestionChange} /></div>);
+  if (isAgentInputItem(item)) return withResizeHandles(<div className={`${classes} agent-canvas-object agent-input-object`} style={style} {...handlers}><CanvasAgentInputNode id={id} item={item} allItems={allItems} store={multiAgentStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} canExecute={canExecute} onChange={onQuestionChange} /></div>);
+  if (isAgentRouterItem(item)) return withResizeHandles(<div className={`${classes} agent-canvas-object agent-router-object`} style={style} {...handlers}><CanvasAgentRouterNode id={id} item={item} allItems={allItems} store={multiAgentStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} canExecute={canExecute} onChange={onQuestionChange} /></div>);
+  if (isAgentOutputItem(item)) return withResizeHandles(<div className={`${classes} agent-canvas-object agent-output-object`} style={style} {...handlers}><CanvasAgentOutputNode id={id} item={item} allItems={allItems} store={multiAgentStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} onChange={onQuestionChange} /></div>);
   if (item.kind === 'shape' && ['executor', 'output'].includes(item.runtimeRole)) return withResizeHandles(<div className={`${classes} blueprint-object${item.runtimeRole==='executor'?' blueprint-executor-object':''}`} style={style} {...handlers}><BlueprintNode id={id} item={item} store={runtimeStore} selected={selected} canExecute={canExecute} canReset={canExecute&&!readOnly} /></div>);
   if (item.kind === 'pdf') return withResizeHandles(<div className={`${classes} pdf-object`} style={style} {...handlers}><PdfDocumentContent item={item} token={token} interactive={selected && activeTool === 'select'} canChangePage={mediaWritable??(!readOnly&&!item.locked)} onPageChange={contentActions.page}/></div>);
   if (item.kind === 'user-group') return withResizeHandles(<div className={`${classes} user-group-object`} style={style} {...handlers}><UserGroupContent item={item} token={token} /></div>);

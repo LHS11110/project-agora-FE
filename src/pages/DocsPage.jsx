@@ -1,4 +1,5 @@
 import PythonSdkDocs, { sdkSections, botEndpoints } from '../docs/PythonSdkDocs.jsx';
+import CanvasObjectsDocs, { canvasObjectSections } from '../docs/CanvasObjectsDocs.jsx';
 import LanguageSwitcher from '../i18n/LanguageSwitcher.jsx';
 import { ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
@@ -8,7 +9,7 @@ import Icon from '../components/Icon.jsx';
 import FreLogBrand from '../components/frelog/FreLogBrand.jsx';
 import '../docs-directory.css';
 
-const publicEndpoints = [
+const authEndpoints = [
   ['POST', '/api/auth/signup', '없음', '회원가입. JSON { email, password, nickname, emailVerificationToken }. 먼저 이메일 인증을 완료해야 합니다. 인증 증명은 해당 이메일에만 한 번 사용할 수 있습니다. 성공 시 201 + UserResponse.'],
   ['POST', '/api/auth/login', '없음', '로그인. JSON { email, password }. 200 응답에 tokenType, accessToken, user 또는 2단계 인증 필요 시 mfaRequired, challengeToken을 반환합니다.'],
   ['POST', '/api/auth/session/refresh', 'refresh 쿠키 · X-Agora-Session', 'access token 갱신. 로그인 시 발급된 HttpOnly·SameSite=Strict refresh 쿠키를 회전하고 15분짜리 새 accessToken과 user를 반환합니다. 회전된 이전 쿠키를 다시 쓰면 세션이 폐기됩니다.'],
@@ -17,6 +18,19 @@ const publicEndpoints = [
   ['POST', '/api/auth/me', '본문 token', '현재 사용자 조회. JSON { token }에 로그인 JWT를 넣습니다. 누락·무효 토큰은 401입니다.'],
   ['GET', '/api/auth/providers', '없음', '활성화된 간편 로그인 제공자 상태 { google, naver, kakao, orcid }를 반환합니다.'],
   ['GET', '/api/auth/health', '없음', '인증 서비스 상태 확인. { status: "UP", service: "Agora Auth Service" }.'],
+  ['GET', '/api/auth/oauth2/authorize/{provider}', '없음', 'Google·Naver·Kakao OAuth2 인증 시작 리디렉션. 완료 후 GET /api/auth/oauth2/session으로 로그인 또는 가입 이메일 확인 상태를 조회합니다.'],
+  ['GET', '/api/auth/oauth2/session', '세션 쿠키', '소셜 로그인 리디렉션 완료 후 결과를 한 번만 꺼냅니다. 로그인 응답(accessToken, user) 또는 최초 가입 이메일 확인용 enrollmentToken을 반환하며, 세션이 없으면 401입니다.'],
+  ['POST', '/api/auth/oauth2/email/request · /enrollment', '없음', '최초 소셜 가입 시 이메일 소유 확인 코드 발송 및 enrollmentToken 바인딩 가입 완료 처리.'],
+  ['GET · POST', '/api/irade/auth/orcid/status · /start · /callback · /link · /api/irade/auth/session · /me', '선택 Bearer', 'ORCID 사용 가능 여부 조회, 인증 시작·콜백, 일회성 세션 교환(POST /api/irade/auth/session), 로그인 사용자 계정 연동(/link)과 현재 ORCID 사용자 조회(/me).'],
+];
+
+const securityAuthEndpoints = [
+  ['GET · POST · DELETE', '/api/auth/passkeys/status · / · /registration/* · /login/* · /{id}', '없음 · Bearer JWT', 'WebAuthn 패스키 지원 여부 조회, 패스키 로그인 옵션·검증, 등록·삭제 관리.'],
+  ['GET · POST · DELETE', '/api/auth/mfa · /enrollment · /enrollment/confirm · /verify · /disable · /recovery-codes', '없음 · Bearer JWT', 'TOTP 2단계 인증 상태 조회(GET), 등록 시작(POST /enrollment)·확인(/enrollment/confirm)·취소(DELETE /enrollment), 로그인 2차 검증(/verify), 복구 코드 재발급 및 해제.'],
+  ['POST', '/api/auth/qr/start · /poll · /cancel · /preview · /decide', '없음 · Bearer JWT', '로그인 QR 세션 발급·폴링·취소 및 인증된 모바일/타 기기에서 미리보기·승인/거절.'],
+];
+
+const userEndpoints = [
   ['POST', '/api/users', '없음', '회원가입 호환 별칭. /api/auth/signup과 같은 요청·201 응답을 사용합니다.'],
   ['GET', '/api/users/{nickname}/{tagNumber}', 'Bearer JWT', '닉네임과 태그 번호로 사용자 한 명을 조회합니다.'],
   ['GET', '/api/users/profiles/{nickname}/{tagNumber}', 'Bearer JWT', '공개 프로필 정보 및 프로필 이미지 경로를 조회합니다.'],
@@ -25,11 +39,14 @@ const publicEndpoints = [
   ['GET', '/api/users/me/activity', 'Bearer JWT', 'C++가 30분 주기로 SQL에 반영하는 본인 캔버스 커밋 편집(생성·수정·삭제) 일별 활동 통계를 조회합니다.'],
   ['DELETE', '/api/users/{nickname}/{tagNumber}', 'Bearer JWT', '본인 또는 관리자만 삭제할 수 있습니다. 사용자가 접속 중이면 409 USER_003; 세션 종료 후 다시 요청합니다. 성공은 204입니다.'],
   ['GET', '/api/users · /api/auth/users', '없음', '사용자 응답 배열(email, nickname, tag_number, role, status, last_login_at, password_changed_at, created_at, updated_at). user_id·password_hash는 공개하지 않습니다.'],
-  ['POST', '/api/canvases', 'Bearer JWT', '캔버스 생성. JSON { canvasName, description?, visibility?, canvasPassword? } 또는 multipart canvasName·description·canvasPassword·image(선택). 201 + 요약 응답.'],
+];
+
+const canvasEndpoints = [
+  ['POST', '/api/canvases', 'Bearer JWT', '캔버스 생성. JSON { canvasName, description?, visibility?, canvasPassword? } 또는 multipart canvasName·description·visibility·canvasPassword·image(선택, PNG/JPEG 5MiB·가로세로 2048px 이하). 201 + 요약 응답.'],
   ['GET', '/api/canvases · /api/canvases/search?name={name}', 'Bearer JWT', '캔버스 목록·검색. 두 경로 모두 선택 쿼리 name을 받습니다. 이름 생략 시 전체 검색 결과는 최대 1000건입니다.'],
   ['GET', '/api/canvases/{canvasId} · /preview', 'Bearer JWT', '캔버스 요약 및 프리뷰 정보를 조회합니다.'],
   ['POST · GET', '/api/canvases/{canvasId}/image', 'Bearer JWT', '캔버스 대표 이미지 업로드(POST multipart) 및 바이너리 조회(GET). Authorization 헤더가 필요합니다.'],
-  ['POST · GET', '/api/canvases/{canvasId}/media · /media/{id}', 'Bearer JWT', '캔버스 내 업로드 이미지·동영상·오디오 미디어 파일 업로드 및 바이너리 스트림 조회.'],
+  ['POST · GET', '/api/canvases/{canvasId}/media · /media/{id}', 'Bearer JWT', '캔버스 미디어 업로드(POST multipart file, 쓰기 권한)와 바이너리 조회(읽기 권한). 이미지 PNG·JPG·WebP·GIF·BMP·AVIF와 동영상 MP4·WebM·OGV의 형식은 파일 헤더로 판별합니다. 캔버스 화면은 파일을 분할 전송합니다. 201 + { url, mediaType: image|gif|video }.'],
   ['POST · GET', '/api/canvases/{canvasId}/pdfs · /pdfs/{id} · /thumbnail', 'Bearer JWT', 'PDF 문서 업로드(POST)와 원본 파일·첫 페이지 썸네일 조회.'],
   ['POST', '/api/link-preview', 'Bearer JWT', '링크 카드 및 허용된 URL의 오픈그래프 메타데이터(제목·설명·썸네일)를 안전하게 조회합니다.'],
   ['GET', '/api/canvases/{canvasId}/settings', 'Bearer JWT', '설정과 참여자 목록·그룹 권한. password_protected, visibility, settings_revision 및 nickname + tag_number 목록을 반환합니다.'],
@@ -41,17 +58,8 @@ const publicEndpoints = [
   ['DELETE', '/api/canvases/{canvasId}', 'Bearer JWT', '소유자 또는 관리자만 삭제할 수 있습니다. 활성 세션이 있으면 409, 성공은 204입니다.'],
 ];
 
-const securityAuthEndpoints = [
-  ['GET', '/api/auth/oauth2/authorize/{provider}', '없음', 'Google·Naver·Kakao OAuth2 인증 시작 리디렉션. 완료 후 GET /api/auth/oauth2/session으로 로그인 또는 가입 이메일 확인 상태를 조회합니다.'],
-  ['POST', '/api/auth/oauth2/email/request · /enrollment', '없음', '최초 소셜 가입 시 이메일 소유 확인 코드 발송 및 enrollmentToken 바인딩 가입 완료 처리.'],
-  ['GET · POST', '/api/irade/auth/orcid/status · /start · /session · /link', '선택 Bearer', 'ORCID 계정 인증 시작, 일회성 세션 교환(POST /session), 로그인 사용자 계정 연동.'],
-  ['GET · POST · DELETE', '/api/auth/passkeys/status · / · /registration/* · /login/* · /{id}', '없음 · Bearer JWT', 'WebAuthn 패스키 지원 여부 조회, 패스키 로그인 옵션·검증, 등록·삭제 관리.'],
-  ['GET · POST · DELETE', '/api/auth/mfa · /enrollment · /verify · /disable · /recovery-codes', '없음 · Bearer JWT', 'TOTP 2단계 인증 등록·활성화 확인, 로그인 2차 검증(/verify), 복구 코드 재발급 및 해제.'],
-  ['POST', '/api/auth/qr/start · /poll · /cancel · /preview · /decide', '없음 · Bearer JWT', '로그인 QR 세션 발급·폴링·취소 및 인증된 모바일/타 기기에서 미리보기·승인/거절.'],
-];
-
 const runtimeEndpoints = [
-  ['GET · PUT', '/api/canvases/{canvasId}/runtime/settings · /resources · /disk · /reset', 'Bearer JWT', '격리 VM 실행 환경 설정·CPU/메모리·디스크·초기화를 제어합니다. 활성 캔버스는 브로커 WebSocket의 action: "manage" 경로도 함께 사용합니다.'],
+  ['GET · PUT · POST', '/api/canvases/{canvasId}/runtime/settings · /resources · /disk · /reset', 'Bearer JWT', '격리 VM 실행 환경 설정 조회(GET /settings)·변경(PUT /settings), CPU/메모리(PUT /resources)·디스크(PUT /disk) 조정과 초기화(POST /reset). 활성 캔버스는 브로커 WebSocket의 action: "manage" 경로도 함께 사용합니다.'],
   ['POST', '/api/canvases/{canvasId}/runtime/java/dependencies', 'Bearer JWT', '캔버스 실행 VM의 Java/Maven 의존성 동기화 및 사전 설치를 수행합니다.'],
   ['POST', '/api/canvases/{canvasId}/runtime/execute · /execute/stream · /build', 'Bearer JWT', 'API 클라이언트용 코드 실행, NDJSON 스트리밍 실행(/execute/stream), 컴파일 사전 빌드(/build). 캔버스 UI 실행은 WebSocket runtime_execute를 사용합니다.'],
   ['POST', '/api/canvases/{canvasId}/runtime/notebook', 'Bearer JWT', '주피터 노트북 실행 환경 준비(prepare)·초기화(reset) 및 API 셀 실행. UI 셀 실행은 WebSocket action: "notebook"을 사용합니다.'],
@@ -65,6 +73,13 @@ const githubEndpoints = [
   ['POST', '/api/canvases/{canvasId}/github/permissions · /authorize', '관리자 · 참여자', '그룹별 GitHub 작업 권한(commit·push·pr·create_branch·switch_branch) 설정 및 실행 전 서버 권한 재검사.'],
 ];
 
+const iradeWorkspaceEndpoints = [
+  ['GET · POST', '/api/irade/workspaces · /{id} · /{id}/preview', 'Bearer JWT', 'IRADE 워크스페이스 검색(쿼리 q, 최대 255자)·단건·프리뷰 조회와 생성(POST JSON { name, description? }, 201). 응답은 { workspaceId, name, description, visibility, imageUrl }입니다.'],
+  ['POST', '/api/irade/workspaces/{id}/access', 'Bearer JWT', '워크스페이스 접속 정보 발급. 캔버스 /access와 같은 비밀번호·토큰 규칙과 응답 형식을 사용합니다.'],
+  ['GET · PATCH · POST · DELETE', '/api/irade/workspaces/{id}/settings · /name · /description · /people · /image', 'Bearer JWT', '설정·참여자 조회, 이름·설명 변경, 참여자 추가·제외, 대표 이미지 업로드·조회. 캔버스 관리 API와 같은 권한 규칙을 따릅니다.'],
+  ['DELETE', '/api/irade/workspaces/{id}', 'Bearer JWT', '워크스페이스를 삭제합니다. 소유자 또는 관리자만 가능합니다.'],
+];
+
 const internalEndpoints = [
   ['GET · POST · PUT · DELETE', '/api/servers · /api/servers/{serverId}', 'ROLE_ADMIN', 'C++ 실시간 서버 등록·수정·목록 조회·삭제를 관리합니다.'],
   ['GET · POST', '/api/load-balancer/allocate/server · /redis', 'ROLE_ADMIN', '활성 heartbeat·부하를 기준으로 C++ 서버 또는 Redis 인스턴스를 할당합니다.'],
@@ -76,17 +91,18 @@ const internalEndpoints = [
 ];
 
 const publicApiGroups = [
-  { id: 'api-auth', title: '인증 · 소셜 OAuth · ORCID', rows: [...publicEndpoints.slice(0, 6), ...securityAuthEndpoints.slice(0, 3)] },
+  { id: 'api-auth', title: '인증 · 소셜 OAuth · ORCID', rows: authEndpoints },
   { id: 'api-email', title: '이메일 인증', rows: [
     ['GET', '/api/auth/email/status', '없음', '인증 메일 발송 설정 여부. { available }.'],
     ['POST', '/api/auth/email/request', '없음', 'JSON { email }. 6자리 코드 발송 요청. 202 + challengeId, expiresInSeconds, resendAfterSeconds.'],
     ['POST', '/api/auth/email/verify', '없음', 'JSON { email, challengeId, code }. 성공 시 회원가입용 emailVerificationToken을 반환합니다. 로그인 토큰이 아닙니다.'],
   ] },
-  { id: 'api-passkeys-mfa', title: '패스키 · MFA · QR 로그인', rows: securityAuthEndpoints.slice(3) },
-  { id: 'api-users', title: '사용자 · 프로필 · 활동 통계', rows: publicEndpoints.slice(6, 14) },
-  { id: 'api-canvases', title: '캔버스 · 미디어 · PDF · 링크 미리보기', rows: publicEndpoints.slice(14) },
+  { id: 'api-passkeys-mfa', title: '패스키 · MFA · QR 로그인', rows: securityAuthEndpoints },
+  { id: 'api-users', title: '사용자 · 프로필 · 활동 통계', rows: userEndpoints },
+  { id: 'api-canvases', title: '캔버스 · 미디어 · PDF · 링크 미리보기', rows: canvasEndpoints },
   { id: 'api-runtime', title: '실행 환경 · 터미널 · 노트북', rows: runtimeEndpoints },
   { id: 'api-github', title: 'GitHub 브랜치 연동', rows: githubEndpoints },
+  { id: 'api-irade', title: 'IRADE 워크스페이스', rows: iradeWorkspaceEndpoints },
   { id: 'api-bots', title: '봇 참여자', rows: botEndpoints },
 ];
 
@@ -95,6 +111,7 @@ const internalApiGroups = [
   { id: 'api-debug', title: '진단 API', rows: internalEndpoints.slice(4, 6) },
   { id: 'api-cpp', title: 'C++ 내부 제어 API', rows: internalEndpoints.slice(6) },
 ];
+
 
 const sqlTables = [
   ['users', 'user_id · INT IDENTITY PK', 'email NVARCHAR(255) NOT NULL; password_hash NVARCHAR(255) NULL; nickname NVARCHAR(100) NOT NULL; tag_number INT NOT NULL DEFAULT 0; role NVARCHAR(20) NOT NULL DEFAULT ROLE_USER; status NVARCHAR(20) NOT NULL DEFAULT ACTIVE; oauth_provider NVARCHAR(50) NULL; oauth_id NVARCHAR(255) NULL; orcid NVARCHAR(32) NULL; password_changed_at DATETIME2 NULL; created_at/updated_at DATETIME2 NOT NULL', '사용자 계정·프로필. email과 (nickname, tag_number)는 고유하며 OAuth2/ORCID 연동을 지원합니다.'],
@@ -105,6 +122,7 @@ const sqlTables = [
   ['user_passkeys · auth_passkey_challenges', 'credential_id · challenge_id PK', 'user_id → users; public_key_cose VARBINARY; sign_count BIGINT; challenge_hash', 'WebAuthn FIDO2 패스키 공개키 자격 증명과 등록·로그인 챌린지를 저장합니다.'],
   ['auth_email_verification · auth_qr_logins · auth_orcid_attempts', 'challenge_id / request_id PK', 'email/code_hash; request_id/secret_hash/status; browser_state_hash; expires_at', '이메일 인증 코드 챌린지, 크로스 디바이스 QR 승인 상태, ORCID 인증 세션을 관리합니다.'],
   ['user_canvas_activity', '(user_id, activity_date) PK', 'created_count, updated_count, deleted_count, canvas_ids JSON; updated_at', 'C++ 서버가 30분 주기 및 언로드 시 반영하는 일별 커밋 편집 통계를 저장합니다.'],
+  ['auth_sessions', 'id · VARCHAR(36) PK', 'user_id → users; refresh_hash VARCHAR(64) UNIQUE; previous_hash; rotated_at; client_ip; mfa_version; created_at/expires_at/revoked_at DATETIME2', '서버 측 로그인 세션입니다. access token의 sid와 연결되며 refresh 쿠키 회전, 재사용 탐지, 로그아웃·전체 로그아웃 폐기를 관리합니다.'],
   ['canvas_runtime_cleanup', 'canvas_id PK', 'pending_delete BIT; retry_count INT; last_error NVARCHAR; updated_at', '삭제된 캔버스의 VM 디스크·실행 자원을 비동기 정리하기 위한 추적 테이블입니다.'],
 ];
 
@@ -134,11 +152,14 @@ const redisDocumentFields = [
 const socketEvents = [
   ['Canvas 연결 직후', '서버 → 클라이언트', 'init_items', '권한 필터링된 아이템·그룹·권한 목록, sync_protocol/revision, rtc_canvas_connection_id와 64자리 rtc_canvas_connection_hash를 반환합니다.'],
   ['RTC 신호 연결·참여', '서버 ↔ 클라이언트', 'rtc_ready · { type: "rtc_join", canvas_connection_id, canvas_connection_hash }', 'RTC 소켓에서 rtc_ready를 받은 뒤 init_items의 ID와 해시를 함께 전송해 연결을 바인딩합니다.'],
-  ['RTC 피어 · 음성·화면공유 알림', '서버 ↔ 클라이언트 · RTC 소켓', 'rtc_peers · voice_state · voice_notice', '현재 참여자·통화 음소거·화면공유 상태를 동기화하며, 통화 참여/퇴장/화면공유 전환 시 active 참여자에게 voice_notice를 전송합니다.'],
+  ['RTC 피어 · 음성 채널·화면공유 알림', '서버 ↔ 클라이언트 · RTC 소켓', 'rtc_peers · voice_state { active, muted, screen_sharing?, channel? } · voice_notice · rtc_media_config', '참여자·음소거·화면공유 상태와 voice_channel(기본 "general")을 동기화합니다. voice_notice와 rtc_signal은 같은 음성 채널 참여자에게만 전달되며, rtc_media_config로 TURN 중계 자격 증명을 갱신합니다.'],
+  ['캔버스 채널 객체', '클라이언트 ↔ 브로커 · Canvas 소켓', 'canvas_ops: { kind: "channel", channelType: "text"|"voice"|"category", name, order, categoryId }', '텍스트·음성 채널과 카테고리를 일반 객체처럼 생성·정렬합니다. 텍스트 채널 메시지는 해당 객체의 댓글 방에 저장되어 객체 삭제 시 함께 삭제되고, 음성 채널 입장은 읽기 권한이 있는 voice 채널 객체에서만 허용됩니다.'],
   ['캔버스 연산 커밋·복구', '클라이언트 ↔ 브로커 · Canvas 소켓', '{ type: "canvas_ops", client_id, request_count, operations } → canvas_commit · canvas_watermark', '브로커 큐가 직렬 저장·재시도·중복 요청 병합을 처리해 확정 변경(canvas_commit)과 재동기화 기준(canvas_watermark)을 전달합니다.'],
   ['채팅 · 객체 댓글 · 멘션 알림', '양방향 · Canvas 소켓', 'chat · chat_history(object_id?) · mentions_get · mention_read · mentions_changed', '일반 채팅과 객체 댓글 스레드를 동일 내구성 경로로 처리하고, 멘션 발생·읽음 시 서버 소유 미읽음 알림 목록을 동기화합니다.'],
   ['항목 생성·저장·삭제', '클라이언트 → 서버 · Canvas 소켓', 'item_update · item_save · item_delete', '일반 객체(item_update)와 텍스트·포스트잇·코드 CRDT 이력(item_save, 최대 12 MiB) 및 삭제를 ACL 검사 후 저장·브로드캐스트합니다.'],
   ['코드·노트북·VM 관리·AI 실행', '클라이언트 ↔ 브로커 ↔ C++ · Canvas 소켓', '{ type: "runtime_execute", action: "execute"|"build"|"notebook"|"manage"|"agent", ... }', '일반 실행·사전 빌드·주피터 셀·VM 설정(manage)·AI 에이전트(agent)를 권한 검증 후 비동기로 처리해 runtime_output·runtime_result·agent_sessions_changed로 응답합니다.'],
+  ['AI 에이전트 · VM CLI 에이전트', '클라이언트 ↔ 브로커 ↔ C++ · Canvas 소켓', '{ type: "runtime_execute", action: "agent", operation: "run"|"status"|"sessions"|"session_get"|"session_delete"|"cli_status"|"cli_install"|"cli_uninstall", options?: { engine: "api"|"cli", cli_tool, cli_model, cli_command, ... } }', '모델 API 또는 VM에 설치한 CLI 에이전트(claude·codex·gemini·opencode·custom)로 캔버스 작업을 실행합니다. CLI 실행·상태 조회는 실행 권한, CLI 설치·제거는 실행과 쓰기 권한이 모두 필요합니다.'],
+  ['VM 작업 공간 파일', '클라이언트 ↔ 브로커 ↔ C++ · Canvas 소켓', '{ type: "workspace_files", request_id, operation: "stat"|"list"|"read"|"write"|"mkdir"|"rename"|"delete", path } → workspace_files_result · workspace_files_changed', 'VM /workspace 파일을 조회(읽기 권한)·변경(쓰기 권한)합니다. 파일 내용과 Automerge 문서는 각각 128 KiB 이하이며, 성공한 변경만 파일 내용 없이 workspace_files_changed로 방송합니다.'],
   ['실시간 커서·레이저·드로잉', '클라이언트 ↔ 브로커 ↔ 사용자', 'canvas_relay: cursor · laser · editor_presence · host_proposal · host_commit', '브로커가 인증된 같은 캔버스의 사용자에게 커서·레이저·편집 상태 및 호스트 드로잉 확정 프레임을 전달합니다.'],
   ['WebRTC P2P 통화 신호', '클라이언트 ↔ 브로커 ↔ 대상 피어 · RTC 소켓', '{ type: "rtc_signal", peer_id, action, description|candidate }', '인증된 같은 캔버스의 지정 피어 소켓에만 SDP/ICE(최대 256 KiB)를 전달하며 서버에 저장하지 않습니다.'],
   ['터미널 WebSocket 스트림', '브라우저 ↔ Spring ↔ VM · /api/terminal/ws', '{ type: "attach", ticket, cols, rows, offset } · input · resize · output', 'POST /runtime/terminal/ticket으로 발급한 일회성 IP 바인딩 티켓으로 연결해 격리 PTY 셸 입출력을 실시간 스트리밍합니다.'],
@@ -236,7 +257,7 @@ export default function DocsPage() {
       ...canvasDocumentFields.map(([field]) => schemaRowId('es', field)),
       ...redisDocumentFields.map(([path]) => schemaRowId('redis', path)),
     ];
-    const ids = ['overview', 'structure', 'public-api', ...groupIds, 'internal-api', 'websocket', 'webrtc-signaling', 'database', 'db-sql', 'db-es', 'db-redis', 'rules', ...sdkSections.map(([id]) => id), ...endpointIds, ...socketIds, ...schemaIds];
+    const ids = ['overview', 'structure', ...canvasObjectSections.map(([id]) => id), 'public-api', ...groupIds, 'internal-api', 'websocket', 'webrtc-signaling', 'database', 'db-sql', 'db-es', 'db-redis', 'rules', ...sdkSections.map(([id]) => id), ...endpointIds, ...socketIds, ...schemaIds];
     const targets = ids.map((id) => document.getElementById(id)).filter(Boolean);
     const observer = new IntersectionObserver((entries) => {
       const current = entries.filter((entry) => entry.isIntersecting)
@@ -248,13 +269,16 @@ export default function DocsPage() {
   }, []);
 
   return <main className="docs-page">
-    <header className="docs-header page-container"><FreLogBrand /><LanguageSwitcher /><nav><a href="#structure">{ui('프로젝트 구조')}</a><a href="#public-api">{ui('외부 API')}</a><a href="#internal-api">{ui('내부 API')}</a><a href="#database">{ui('DB 명세')}</a></nav><Link className="button button-outline docs-workspace-link" to="/search">{ui('워크스페이스')} <Icon name="arrow" size={15} /></Link></header>
+    <header className="docs-header page-container"><FreLogBrand /><LanguageSwitcher /><nav><a href="#structure">{ui('프로젝트 구조')}</a><a href="#canvas-objects">{ui('객체 가이드')}</a><a href="#public-api">{ui('외부 API')}</a><a href="#internal-api">{ui('내부 API')}</a><a href="#database">{ui('DB 명세')}</a></nav><Link className="button button-outline docs-workspace-link" to="/search">{ui('워크스페이스')} <Icon name="arrow" size={15} /></Link></header>
     <div className="docs-layout page-container">
       <aside className="docs-toc" aria-label={ui('문서 목차')}>
         <div className="docs-toc-heading"><span>FRELOG DOCS</span><small>REFERENCE / DIRECTORY</small></div>
         <DocsNavLink id="overview" activeSection={activeSection} onSelect={setActiveSection}>{ui('개요')}</DocsNavLink>
         <DocsNavFolder title={ui('프로젝트')}>
           <DocsNavLink id="structure" activeSection={activeSection} onSelect={setActiveSection}>{ui('구조와 역할')}</DocsNavLink>
+        </DocsNavFolder>
+        <DocsNavFolder title={ui('캔버스 객체 가이드')}>
+          {canvasObjectSections.map(([id, title]) => <DocsNavLink key={id} id={id} kind="GUIDE" activeSection={activeSection} onSelect={setActiveSection}>{ui(title)}</DocsNavLink>)}
         </DocsNavFolder>
         <DocsNavFolder title={ui('API 레퍼런스')}>
           <DocsNavFolder title={ui('외부 공개 REST')} nested>
@@ -304,6 +328,7 @@ export default function DocsPage() {
           <pre className="docs-tree"><code>{projectTree.map((line) => ui(line)).join('\n')}</code></pre>
           <div className="docs-role-grid"><div><span>FRONTEND</span><h3>{ui('한 화면에서 함께 만들기')}</h3><p>{ui('PixiJS와 공간 B-tree로 대용량 벡터와 객체를 최적화 렌더링하며, 커서·레이저·멘션·Automerge 편집은 Phoenix 브로커로 동기화하고, 텍스트·코드는 Ctrl + S, 포스트잇은 자동 저장합니다.')}</p></div><div><span>WALL · BROKER</span><h3>{ui('게이트웨이와 실시간 중계')}</h3><p>{ui('project-agora-Wall의 Nginx가 HTTPS/WSS 관문과 정적 배포를 담당하고, Elixir/Phoenix 브로커가 직렬 커밋(canvas_ops), 멘션, 통화 상태·알림 및 VM 실행 이벤트를 중계합니다.')}</p></div><div><span>BACKEND · AGENT</span><h3>{ui('인증·권한과 실행·AI 조정')}</h3><p>{ui('Spring Boot가 계정(OAuth·Passkey·MFA·QR)·권한·미디어·GitHub·터미널 티켓을 관리하고, C++ 서버와 AI 에이전트가 영속 저장·코드 실행·AI 세션을 담당합니다.')}</p></div></div>
         </section>
+        <CanvasObjectsDocs />
         <section className="docs-section" id="public-api"><SectionTitle eyebrow="02 / CLIENT API" title={ui('외부에 공개된 API')}>{ui('브라우저에서 사용하는 HTTPS API입니다. 보호된 API에는 access token을 Bearer 헤더로 전달합니다.')}</SectionTitle><div className="docs-callout"><Icon name="lock" size={18} /><p><strong>{ui('인증 헤더')}</strong><code>Authorization: Bearer &lt;accessToken&gt;</code> · <code>POST /api/auth/me</code>{` ${ui('는 본문에')} `}<code>{'{ token }'}</code>{ui('을 받습니다. 사용자 목록 조회는 비인증 경로입니다. 캔버스 접속 토큰은 로그인 JWT와 별개이며 WebSocket에만 사용합니다.')}</p></div><div className="docs-api-groups">{publicApiGroups.map((group, index) => <section className="docs-api-group" id={group.id} key={group.id}><div className="docs-subsection-heading"><span>REST / {String(index + 1).padStart(2, '0')}</span><h3>{ui(group.title)}</h3></div><EndpointTable rows={group.rows} /></section>)}</div><div className="docs-note"><strong>{ui('UserResponse 참고')}</strong><p><code>last_login_at</code>{` ${ui('은 로그인 시각이')} `}<code>user_sessions</code>{` ${ui('로 이동해 현재 응답에서')} `}<code>null</code>{` ${ui('입니다. 비밀번호 변경 시각은 호환성을 위해')} `}<code>password_chaged_at</code>{` ${ui('표기와')} `}<code>password_changed_at</code>{` ${ui('필드를 함께 반환합니다.')}`}</p></div><div className="docs-note"><strong>{ui('이미지 · 미디어 · PDF 응답 참고')}</strong><p>{ui('캔버스 대표 이미지, 업로드 미디어, PDF 문서는 모두 Bearer JWT 인증이 필요합니다. 브라우저의 일반')} <code>&lt;img&gt;</code> {ui('요청에는 인증 헤더를 실을 수 없으므로 앱이 토큰을 포함해 가져와 렌더링합니다.')}</p></div><div className="docs-payload-card"><div><span className="section-kicker">CANVAS ACCESS FLOW</span><h3>{ui('캔버스 접속 순서')}</h3><p>{ui('REST에서 로그인·비밀번호를 확인한 다음, 전용 접속 토큰으로 두 WebSocket을 엽니다. 참여 여부는 WebSocket에서 다시 확인합니다.')}</p></div><pre><code>{'POST /api/canvases/42/access\nAuthorization: Bearer <accessToken>\n\n{ "password": "optional" }\n→ { "server_id": 5, "ws_port": "8002",\n    "canvas_access_token": "<canvas-jwt>" }\n\nWSS /wss/port/8002/canvas/42?token=<canvas_access_token>\nWSS /wss/port/8002/rtc/canvas/42?token=<canvas_access_token>'}</code></pre></div><div className="docs-note"><strong>{ui('캔버스 설정 변경')}</strong><p>{ui('비활성 캔버스는 REST PATCH로 변경합니다. 활성 캔버스의 REST 변경은 409 CANVAS_006으로 거절되므로 WebSocket 설정 이벤트를 사용합니다. 다른 캔버스에 활성 접속 중이면 /access가 409 CANVAS_003을 반환합니다.')}</p></div></section>
         <PythonSdkDocs />
         <section className="docs-section" id="internal-api"><SectionTitle eyebrow="03 / PRIVATE OPERATIONS" title={ui('내부·운영 전용 API')}>{ui('운영 상태와 서버 제어용 경로입니다. 관리자 전용 Spring API와 내부 C++·브로커 경로를 지정된 인증 범위에 맞춰 사용하세요.')}</SectionTitle><div className="docs-callout warning"><Icon name="lock" size={18} /><p><strong>{ui('접근 범위')}</strong> {ui('서버·저장소 할당과 DB 주소,')} <code>/api/test/cpp-canvas-count</code>{ui('는 ROLE_ADMIN이 필요합니다.')} <code>/api/test/cpp-active-canvases</code>{ui('만 로그인 사용자에게 허용됩니다.')} <code>/internal/*</code> {ui('및 C++ REST(:8000)는 Wall Nginx에서 외부 공개를 차단하며 내부 서비스 간 통신에만 사용합니다.')}</p></div><div className="docs-api-groups">{internalApiGroups.map((group, index) => <section className="docs-api-group" id={group.id} key={group.id}><div className="docs-subsection-heading"><span>PRIVATE / {String(index + 1).padStart(2, '0')}</span><h3>{ui(group.title)}</h3></div><EndpointTable rows={group.rows} internal /></section>)}</div><div className="docs-note"><strong>{ui('네트워크 경계')}</strong><p>{ui('브라우저용 WebSocket은 Wall Nginx의')} <code>/wss/port/:wsPort/canvas/:canvasId</code>, <code>/wss/port/:wsPort/rtc/canvas/:canvasId</code> {ui('및')} <code>/api/terminal/ws</code>{ui('를 사용합니다. 내부 REST 제어 API, DB·Redis 포트는 외부에 직접 열지 않습니다.')}</p></div></section>
@@ -328,7 +353,7 @@ export default function DocsPage() {
           <section className="docs-db-subsection" id="db-sql">
             <div className="docs-subsection-heading"><span>SQL SERVER / DDL</span><h3>{ui('관계형 테이블과 제약')}</h3></div>
             <div className="docs-table-scroll"><table className="docs-api-table docs-schema-table"><thead><tr><th>{ui('테이블')}</th><th>{ui('키')}</th><th>{ui('주요 컬럼·관계')}</th><th>{ui('역할')}</th></tr></thead><tbody>{sqlTables.map(([table, key, columns, purpose]) => <tr id={schemaRowId('sql', table)} key={table}><td><code>{table}</code></td><td><code>{key}</code></td><td>{columns}</td><td>{ui(purpose)}</td></tr>)}</tbody></table></div>
-            <p className="docs-db-caption">{ui('관계 요약:')} <code>users 1—1 user_sessions</code> · <code>canvas_info N—1 redis_server/cpp_server</code> · <code>user_mfa/user_passkeys/user_canvas_activity → users.user_id</code>{ui('. user_id는 내부 PK이며 외부 공개 식별자가 아닙니다.')}</p>
+            <p className="docs-db-caption">{ui('관계 요약:')} <code>users 1—1 user_sessions</code> · <code>canvas_info N—1 redis_server/cpp_server</code> · <code>auth_sessions/user_mfa/user_passkeys/user_canvas_activity → users.user_id</code>{ui('. user_id는 내부 PK이며 외부 공개 식별자가 아닙니다.')}</p>
           </section>
           <section className="docs-db-subsection" id="db-es">
             <div className="docs-subsection-heading"><span>ELASTICSEARCH / DOCUMENT</span><h3>{ui('캔버스 문서 인덱스')}</h3></div>

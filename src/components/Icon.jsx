@@ -63,6 +63,9 @@ const paths = {
   video: <><rect x="2.5" y="5.5" width="14" height="13" rx="2"/><path d="m16.5 10 5-3v10l-5-3Z"/></>,
   paperclip: <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>,
   network: <><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.3 10.9 15.7 7.1M8.3 13.1l7.4 3.8"/></>,
+  inbox: <><path d="M4 13V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7"/><path d="M4 13h4.5l1.8 2.5h3.4L15.5 13H20v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5Z"/><path d="M12 7v5m-2.5-2.5L12 12l2.5-2.5"/></>,
+  router: <><circle cx="5" cy="12" r="2.2"/><circle cx="19" cy="6" r="2.2"/><circle cx="19" cy="12" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="M7.2 12H16.8M11 12c1.5 0 2.2-6 5.8-6M11 12c1.5 0 2.2 6 5.8 6"/></>,
+  outputCard: <><rect x="3.5" y="4" width="17" height="16" rx="2.5"/><path d="M7.5 9h9M7.5 13h6"/><path d="m14.5 16.5 2-2-2-2"/></>,
 };
 
 export default function Icon({ name, size = 20, strokeWidth = 1.8, className = '' }) {

@@ -156,12 +156,20 @@
   to { stroke-dashoffset: 28; }
 }
 
+/* stroke-dashoffset cannot run on the compositor: every animation frame repaints
+   and re-layerizes on the main thread (~0.15ms per connector per frame). Stepping
+   at ~30 updates/s halves that cost; the dash moves ~1px per step at 1x speed. */
 .connector-flow-forward .connector-visible-stroke {
-  animation: connectorFlowForward var(--connector-flow-duration, 1.2s) linear infinite;
+  animation: connectorFlowForward var(--connector-flow-duration, 1.2s) steps(var(--connector-flow-steps, 36)) infinite;
 }
 
 .connector-flow-reverse .connector-visible-stroke {
-  animation: connectorFlowReverse var(--connector-flow-duration, 1.2s) linear infinite;
+  animation: connectorFlowReverse var(--connector-flow-duration, 1.2s) steps(var(--connector-flow-steps, 36)) infinite;
+}
+
+/* Off-screen flow connectors stay paused (flowVisibility.js). */
+.connector-advanced-svg[data-flow-offscreen] .connector-visible-stroke {
+  animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -821,35 +829,42 @@
 .canvas-stage .canvas-object.code-object.has-styled-stroke .scalable-object-content {
   border-color: transparent !important;
 }
-.canvas-stage .canvas-object.code-object.has-custom-typography,
-.canvas-stage .canvas-object.code-object.has-custom-typography .scalable-object-content,
-.canvas-stage .canvas-object.code-object.has-custom-typography .code-snippet-header,
-.canvas-stage .canvas-object.code-object.has-custom-typography .code-file-heading > strong,
-.canvas-stage .canvas-object.code-object.has-custom-typography .code-filename-input,
-.canvas-stage .canvas-object.code-object.has-custom-typography .code-language-badge,
-.canvas-stage .canvas-object.code-object.has-custom-typography .code-language-badge > span,
-.canvas-stage .canvas-object.code-object.has-custom-typography .code-language-select,
-.canvas-stage .canvas-object.code-object.has-custom-typography .code-copy-button,
-.canvas-stage .canvas-object.code-object.has-custom-typography .code-copy-button > span,
-.canvas-stage .canvas-object.code-object.has-custom-typography .code-snippet-filename,
-.canvas-stage .canvas-object.code-object.has-custom-typography .code-snippet-lang,
-.canvas-stage .canvas-object.code-object.has-custom-typography .unified-content-body,
-.canvas-stage .canvas-object.code-object.has-custom-typography pre.syntax-code-preview,
-.canvas-stage .canvas-object.code-object.has-custom-typography .code-object-foot,
-.canvas-stage .canvas-object.code-object.has-custom-typography .code-object-foot > span,
-.canvas-stage .canvas-object.code-object.has-custom-typography .html-object-content > header,
-.canvas-stage .canvas-object.code-object.has-custom-typography .html-object-content > header > strong,
-.canvas-stage .canvas-object.code-object.has-custom-typography .html-object-content > header > span,
-.canvas-stage .canvas-object.code-object.has-custom-typography .html-object-content > header > button {
+.canvas-stage .canvas-object.code-object.has-typo-color,
+.canvas-stage .canvas-object.code-object.has-typo-color .scalable-object-content,
+.canvas-stage .canvas-object.code-object.has-typo-color .code-snippet-header,
+.canvas-stage .canvas-object.code-object.has-typo-color .code-file-heading > strong,
+.canvas-stage .canvas-object.code-object.has-typo-color .code-filename-input,
+.canvas-stage .canvas-object.code-object.has-typo-color .code-language-badge,
+.canvas-stage .canvas-object.code-object.has-typo-color .code-language-badge > span,
+.canvas-stage .canvas-object.code-object.has-typo-color .code-language-select,
+.canvas-stage .canvas-object.code-object.has-typo-color .code-copy-button,
+.canvas-stage .canvas-object.code-object.has-typo-color .code-copy-button > span,
+.canvas-stage .canvas-object.code-object.has-typo-color .code-snippet-filename,
+.canvas-stage .canvas-object.code-object.has-typo-color .code-snippet-lang,
+.canvas-stage .canvas-object.code-object.has-typo-color .unified-content-body,
+.canvas-stage .canvas-object.code-object.has-typo-color pre.syntax-code-preview,
+.canvas-stage .canvas-object.code-object.has-typo-color .code-object-foot,
+.canvas-stage .canvas-object.code-object.has-typo-color .code-object-foot > span,
+.canvas-stage .canvas-object.code-object.has-typo-color .html-object-content > header,
+.canvas-stage .canvas-object.code-object.has-typo-color .html-object-content > header > strong,
+.canvas-stage .canvas-object.code-object.has-typo-color .html-object-content > header > span,
+.canvas-stage .canvas-object.code-object.has-typo-color .html-object-content > header > button {
   color: var(--text-color, inherit) !important;
 }
-.canvas-stage .canvas-object.code-object.has-custom-typography .syntax-code-preview {
+.canvas-stage .canvas-object.code-object.has-typo-color .syntax-code-preview {
   --code-plain: var(--text-color, #dce6f5);
   --code-keyword: color-mix(in srgb, var(--text-color, #c99bff) 55%, #7c3aed);
   --code-string: color-mix(in srgb, var(--text-color, #a8d99b) 50%, #15803d);
   --code-number: color-mix(in srgb, var(--text-color, #f2bd88) 50%, #b45309);
   --code-type: color-mix(in srgb, var(--text-color, #73d5d0) 50%, #0e7490);
   --code-function: color-mix(in srgb, var(--text-color, #8ec5ff) 60%, #2563eb);
+}
+/* The code body sets its own font shorthand; let explicit typography reach it. */
+.canvas-stage .canvas-object.code-object.has-custom-typography pre.syntax-code-preview {
+  font-family: var(--typo-font-family, var(--mono));
+  font-weight: inherit;
+  letter-spacing: inherit;
+  line-height: var(--typo-line-height, 21px);
 }
 .canvas-stage .canvas-object.code-object.has-styled-radius .html-object-content {
   border-radius: inherit;
@@ -885,13 +900,13 @@
 .canvas-stage .canvas-object.blueprint-object.has-styled-stroke {
   border-color: transparent !important;
 }
-.canvas-stage .canvas-object.terminal-object.has-custom-typography .canvas-terminal,
-.canvas-stage .canvas-object.terminal-object.has-custom-typography .canvas-terminal :is(header, strong, span, footer, .canvas-terminal-empty),
-.canvas-stage .canvas-object.notebook-object.has-custom-typography .notebook-content,
-.canvas-stage .canvas-object.notebook-cell-object.has-custom-typography .notebook-cell-surface,
-.canvas-stage .canvas-object.notebook-cell-object.has-custom-typography .notebook-cell-toolbar :is(small, button, select),
-.canvas-stage .canvas-object.blueprint-object.has-custom-typography .blueprint-node,
-.canvas-stage .canvas-object.blueprint-object.has-custom-typography .blueprint-node :is(p, strong, span, pre, footer) {
+.canvas-stage .canvas-object.terminal-object.has-typo-color .canvas-terminal,
+.canvas-stage .canvas-object.terminal-object.has-typo-color .canvas-terminal :is(header, strong, span, footer, .canvas-terminal-empty),
+.canvas-stage .canvas-object.notebook-object.has-typo-color .notebook-content,
+.canvas-stage .canvas-object.notebook-cell-object.has-typo-color .notebook-cell-surface,
+.canvas-stage .canvas-object.notebook-cell-object.has-typo-color .notebook-cell-toolbar :is(small, button, select),
+.canvas-stage .canvas-object.blueprint-object.has-typo-color .blueprint-node,
+.canvas-stage .canvas-object.blueprint-object.has-typo-color .blueprint-node :is(p, strong, span, pre, footer) {
   color: var(--text-color, inherit) !important;
 }
 
@@ -904,13 +919,13 @@
 .canvas-stage .sticky-note-object.has-styled-stroke .scalable-object-content {
   border-color: transparent !important;
 }
-.canvas-stage .sticky-note-object.has-custom-typography,
-.canvas-stage .sticky-note-object.has-custom-typography .scalable-object-content,
-.canvas-stage .sticky-note-object.has-custom-typography .sticky-note-head,
-.canvas-stage .sticky-note-object.has-custom-typography .sticky-note-content .simple-markdown,
-.canvas-stage .sticky-note-object.has-custom-typography .sticky-note-content .simple-markdown :is(p, h2, h3, h4, li, blockquote, span, strong, em),
-.canvas-stage .sticky-note-object.has-custom-typography textarea,
-.canvas-stage .sticky-note-object.has-custom-typography .sticky-note-empty {
+.canvas-stage .sticky-note-object.has-typo-color,
+.canvas-stage .sticky-note-object.has-typo-color .scalable-object-content,
+.canvas-stage .sticky-note-object.has-typo-color .sticky-note-head,
+.canvas-stage .sticky-note-object.has-typo-color .sticky-note-content .simple-markdown,
+.canvas-stage .sticky-note-object.has-typo-color .sticky-note-content .simple-markdown :is(p, h2, h3, h4, li, blockquote, span, strong, em),
+.canvas-stage .sticky-note-object.has-typo-color textarea,
+.canvas-stage .sticky-note-object.has-typo-color .sticky-note-empty {
   color: var(--text-color, inherit) !important;
 }
 
@@ -934,11 +949,14 @@
 .canvas-stage .canvas-table-object.has-styled-fills .canvas-data-table td {
   border-color: color-mix(in srgb, var(--text-color, currentColor) 18%, transparent) !important;
 }
-.canvas-stage .canvas-table-object.has-custom-typography,
-.canvas-stage .canvas-table-object.has-custom-typography .scalable-object-content,
-.canvas-stage .canvas-table-object.has-custom-typography .table-markdown-content,
-.canvas-stage .canvas-table-object.has-custom-typography .canvas-data-table :is(th, td, caption) {
+.canvas-stage .canvas-table-object.has-typo-color,
+.canvas-stage .canvas-table-object.has-typo-color .scalable-object-content,
+.canvas-stage .canvas-table-object.has-typo-color .table-markdown-content,
+.canvas-stage .canvas-table-object.has-typo-color .canvas-data-table :is(th, td, caption) {
   color: var(--text-color, inherit) !important;
+}
+.canvas-stage .canvas-table-object.has-custom-typography .canvas-data-table :is(th, td, caption) {
+  text-align: inherit;
 }
 
 /* Charts, values, questions, links, pdfs, projects, user-groups */
@@ -987,30 +1005,30 @@
   background: color-mix(in srgb, var(--text-color, currentColor) 16%, transparent) !important;
   color: var(--text-color, inherit) !important;
 }
-.canvas-stage .canvas-chart-object.has-custom-typography .chart-card,
-.canvas-stage .canvas-chart-object.has-custom-typography .chart-card :is(header, strong, span, text, tspan),
-.canvas-stage .canvas-value-frame.has-custom-typography .canvas-value-object,
-.canvas-stage .canvas-value-frame.has-custom-typography .canvas-value-object :is(header, strong, span, output, label),
-.canvas-stage .canvas-question-object.has-custom-typography .question-card,
-.canvas-stage .canvas-question-object.has-custom-typography .question-card :is(header, strong, span, p, label, legend),
-.canvas-stage .media-link-object.has-custom-typography .shared-media-header,
-.canvas-stage .media-link-object.has-custom-typography .shared-link-copy strong,
-.canvas-stage .media-link-object.has-custom-typography .shared-link-copy small,
-.canvas-stage .media-link-object.has-custom-typography .shared-link-plain,
-.canvas-stage .media-link-object.has-custom-typography .shared-link-plain > a,
-.canvas-stage .media-link-object.has-custom-typography .link-preview-summary,
-.canvas-stage .media-link-object.has-custom-typography .link-preview-summary strong,
-.canvas-stage .media-link-object.has-custom-typography .link-preview-summary span,
-.canvas-stage .media-link-object.has-custom-typography .shared-media-invalid,
-.canvas-stage .pdf-object.has-custom-typography .pdf-document,
-.canvas-stage .pdf-object.has-custom-typography :is(.pdf-document-heading, .pdf-document-heading strong, .pdf-status, .pdf-status button, .pdf-document-actions, .pdf-document-actions button, .pdf-document-actions span),
-.canvas-stage .canvas-project-frame.has-custom-typography .project-object,
-.canvas-stage .canvas-project-frame.has-custom-typography .project-header :is(input, span, button),
-.canvas-stage .canvas-project-frame.has-custom-typography .project-tabs button,
-.canvas-stage .canvas-project-frame.has-custom-typography .project-toolbar :is(input, select, button),
-.canvas-stage .canvas-project-frame.has-custom-typography .project-kanban h4,
-.canvas-stage .canvas-project-frame.has-custom-typography .project-empty,
-.canvas-stage .canvas-object-user-group.has-custom-typography .user-group-content :is(h3, strong, small) {
+.canvas-stage .canvas-chart-object.has-typo-color .chart-card,
+.canvas-stage .canvas-chart-object.has-typo-color .chart-card :is(header, strong, span, text, tspan),
+.canvas-stage .canvas-value-frame.has-typo-color .canvas-value-object,
+.canvas-stage .canvas-value-frame.has-typo-color .canvas-value-object :is(header, strong, span, output, label),
+.canvas-stage .canvas-question-object.has-typo-color .question-card,
+.canvas-stage .canvas-question-object.has-typo-color .question-card :is(header, strong, span, p, label, legend),
+.canvas-stage .media-link-object.has-typo-color .shared-media-header,
+.canvas-stage .media-link-object.has-typo-color .shared-link-copy strong,
+.canvas-stage .media-link-object.has-typo-color .shared-link-copy small,
+.canvas-stage .media-link-object.has-typo-color .shared-link-plain,
+.canvas-stage .media-link-object.has-typo-color .shared-link-plain > a,
+.canvas-stage .media-link-object.has-typo-color .link-preview-summary,
+.canvas-stage .media-link-object.has-typo-color .link-preview-summary strong,
+.canvas-stage .media-link-object.has-typo-color .link-preview-summary span,
+.canvas-stage .media-link-object.has-typo-color .shared-media-invalid,
+.canvas-stage .pdf-object.has-typo-color .pdf-document,
+.canvas-stage .pdf-object.has-typo-color :is(.pdf-document-heading, .pdf-document-heading strong, .pdf-status, .pdf-status button, .pdf-document-actions, .pdf-document-actions button, .pdf-document-actions span),
+.canvas-stage .canvas-project-frame.has-typo-color .project-object,
+.canvas-stage .canvas-project-frame.has-typo-color .project-header :is(input, span, button),
+.canvas-stage .canvas-project-frame.has-typo-color .project-tabs button,
+.canvas-stage .canvas-project-frame.has-typo-color .project-toolbar :is(input, select, button),
+.canvas-stage .canvas-project-frame.has-typo-color .project-kanban h4,
+.canvas-stage .canvas-project-frame.has-typo-color .project-empty,
+.canvas-stage .canvas-object-user-group.has-typo-color .user-group-content :is(h3, strong, small) {
   color: var(--text-color, inherit) !important;
 }
 .canvas-stage .canvas-object.pdf-object.has-styled-fills .pdf-page-view {

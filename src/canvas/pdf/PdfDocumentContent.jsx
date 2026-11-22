@@ -86,7 +86,7 @@ export default function PdfDocumentContent({ item, token, interactive, canChange
       <button disabled={!interactive || !canChangePage || !pdf || pageNumber <= 1} onClick={() => onPageChange?.(pageNumber-1)} aria-label={ui("PDF 이전 페이지")}>‹</button>
       <span>{pageNumber} / {pdf?.numPages || '—'}</span>
       <button disabled={!interactive || !canChangePage || !pdf || pageNumber >= pdf.numPages} onClick={() => onPageChange?.(pageNumber+1)} aria-label={ui("PDF 다음 페이지")}>›</button>
-      <button className="pdf-download" disabled={!interactive || !pdf} onClick={download}>{ui("원본 저장")}</button>
+      <button className="pdf-download" disabled={!interactive} onClick={download}>{ui("원본 저장")}</button>
     </div>
   </div>;
 }

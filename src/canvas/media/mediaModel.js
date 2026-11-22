@@ -2,6 +2,8 @@ import { parseYoutube } from '../../media/youtube.js';
 
 export const isGif= value=>/\.gif(?:$|[?#])/i.test(value||'');
 export const mediaFileType=file=>file?.type==='image/gif'||isGif(file?.name)?'gif':file?.type?.startsWith('video/')||/\.(mp4|m4v|mov|webm|ogv)$/i.test(file?.name||'')?'video':null;
+export const canvasImageFile = file => /^image\/(png|jpeg|webp|bmp|avif)$/i.test(file?.type || '')
+  || /\.(png|jpe?g|webp|bmp|avif)$/i.test(file?.name || '');
 export function mediaPosition(state,duration,loop,now=Date.now()){
  const time=Math.max(0,(state?.time||0)+(state&&!state.paused?Math.max(0,now-state.updatedAt)/1000:0));
  return duration>0?(loop?time%duration:Math.min(time,duration)):time;

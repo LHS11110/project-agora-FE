@@ -17,15 +17,19 @@ export default function ConnectorLabel({ item, geometry, offsetX, offsetY }) {
   const point = midpoint(geometry.curvePoints);
   const style = readObjectStyle(item);
   const ls = style.connector?.labelStyle || {};
+  const typo = style.typography?.explicit ? style.typography : null;
+  const labelColor = ls.color || typo?.textColor;
   const labelCss = {
     left: point.x - offsetX,
     top: point.y - offsetY,
     ...(ls.background ? { background: ls.background } : {}),
-    ...(ls.color ? { color: ls.color } : {}),
+    ...(labelColor ? { color: labelColor } : {}),
     ...(ls.borderColor ? { borderColor: ls.borderColor } : {}),
     ...(ls.pill === false ? { borderRadius: '4px' } : { borderRadius: '999px' }),
-    ...(style.typography?.explicit && style.typography.fontFamily ? { fontFamily: style.typography.fontFamily } : {}),
-    ...(style.typography?.explicit && style.typography.fontWeight !== 400 ? { fontWeight: style.typography.fontWeight } : {}),
+    ...(typo?.fontFamily ? { fontFamily: typo.fontFamily } : {}),
+    ...(typo && typo.fontWeight !== 400 ? { fontWeight: typo.fontWeight } : {}),
+    ...(typo?.letterSpacing ? { letterSpacing: `${typo.letterSpacing}px` } : {}),
+    ...(typo ? { lineHeight: typo.lineHeight, textAlign: typo.textAlign } : {}),
   };
   return <div className="connector-name-label" style={labelCss}><RenderedContent value={item.label} mode={item.labelMode || 'markdown'} /></div>;
 }

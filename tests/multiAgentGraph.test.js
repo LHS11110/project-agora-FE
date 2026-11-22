@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  createAgentInputItem,
   createAgentNodeItem,
+  createAgentOutputItem,
+  createAgentRouterItem,
   createOrchestratorItem,
   writeAgentEdgePatch,
 } from '../src/canvas/agents/agentCanvasModel.js';
@@ -9,13 +12,24 @@ import {
   extractCanvasObjectData,
   inferEdgeChannel,
   inspectAgentConnections,
+  resolveFlowFromNode,
   resolveMultiAgentGraph,
   resolveSingleAgentGraph,
 } from '../src/canvas/agents/multiAgentGraph.js';
 
 function edge(from, to, extra = {}) {
   const base = { kind: 'connector', from, to };
-  if (extra.channel || extra.delivery || extra.enabled !== undefined || extra.label !== undefined) {
+  if (
+    extra.channel ||
+    extra.delivery ||
+    extra.enabled !== undefined ||
+    extra.label !== undefined ||
+    extra.routeFormats !== undefined ||
+    extra.routeKeywords !== undefined ||
+    extra.routeDescription !== undefined ||
+    extra.routeDefault !== undefined ||
+    extra.routePriority !== undefined
+  ) {
     Object.assign(base, writeAgentEdgePatch(base, extra));
   }
   return base;
@@ -101,4 +115,79 @@ test('resolveMultiAgentGraph computes waves, rejects cycles in graph mode, and s
   assert.equal(collab.feedbackEdges.length, 1);
   assert.equal(collab.feedbackEdges[0].from, 'c');
   assert.equal(collab.feedbackEdges[0].to, 'a');
+});
+
+test('extractCanvasObjectData detects multimodal formats and resolves Input -> Orchestrator -> Router -> Agents -> Output graph', () => {
+  const imageData = extractCanvasObjectData('img-1', { kind: 'image', alt: '차트 이미지', url: 'https://example.com/chart.png' });
+  assert.equal(imageData.formatType, 'image');
+
+  const audioLinkData = extractCanvasObjectData('aud-1', { kind: 'link', url: 'https://example.com/meeting.mp3', title: '회의 녹음' });
+  assert.equal(audioLinkData.formatType, 'audio');
+
+  const videoLinkData = extractCanvasObjectData('vid-1', { kind: 'link', url: 'https://example.com/demo.mp4', title: '데모 영상' });
+  assert.equal(videoLinkData.formatType, 'video');
+
+  const pdfLinkData = extractCanvasObjectData('pdf-1', { kind: 'link', url: 'https://example.com/spec.pdf', title: '명세서' });
+  assert.equal(pdfLinkData.formatType, 'pdf');
+
+  const items = {
+    input: createAgentInputItem({ title: '입력 카드', inputType: 'pdf', text: 'PDF 요약 부탁', x: 0.1, y: 0.2 }),
+    orch: createOrchestratorItem({ mode: 'supervisor', x: 0.25, y: 0.2 }),
+    router: createAgentRouterItem({ title: '포맷 라우터', routingMode: 'format', x: 0.4, y: 0.2 }),
+    pdfAgent: createAgentNodeItem({ title: 'PDF 분석가', x: 0.6, y: 0.1 }),
+    imgAgent: createAgentNodeItem({ title: '이미지 분석가', x: 0.6, y: 0.3 }),
+    leadAgent: createAgentNodeItem({ title: '총괄 에이전트', x: 0.8, y: 0.2 }),
+    output: createAgentOutputItem({ title: '응답 카드', x: 0.95, y: 0.2 }),
+    cIn: edge('input', 'orch', { channel: 'input' }),
+    cOrch: edge('orch', 'router'),
+    cPdf: edge('router', 'pdfAgent', { channel: 'route', routeFormats: ['pdf'] }),
+    cImg: edge('router', 'imgAgent', { channel: 'route', routeFormats: ['image'] }),
+    cPipe1: edge('pdfAgent', 'leadAgent'),
+    cPipe2: edge('imgAgent', 'leadAgent'),
+    cSup: edge('orch', 'leadAgent', { channel: 'supervisor' }),
+    cOut: edge('leadAgent', 'output', { channel: 'output' }),
+  };
+
+  assert.equal(extractCanvasObjectData('input', items.input).formatType, 'pdf');
+  assert.equal(extractCanvasObjectData('router', items.router).typeLabel, '라우터(format)');
+  assert.equal(extractCanvasObjectData('output', items.output).typeLabel, '출력 객체');
+
+  const jsonInputItem = createAgentInputItem({ title: 'JSON 입력', inputType: 'auto', text: '{"type":"invoice","amount":42}' });
+  assert.equal(extractCanvasObjectData('json-in', jsonInputItem).formatType, 'json');
+  const jsonCodeItem = { kind: 'text', renderMode: 'code', language: 'json', filename: 'payload.json', text: '{"ok":true}' };
+  assert.equal(extractCanvasObjectData('json-code', jsonCodeItem).formatType, 'json');
+
+  const graph = resolveMultiAgentGraph(items, 'orch');
+  assert.equal(graph.supervisorAgentId, 'leadAgent');
+  assert.deepEqual(graph.incomingInputIds, ['input']);
+  assert.deepEqual(graph.routerIds, ['router']);
+  assert.deepEqual(graph.outputIds, ['output']);
+  assert.ok(graph.flowWaves.length >= 2);
+
+  const fromInput = resolveFlowFromNode(items, 'input');
+  assert.equal(fromInput.startKind, 'input');
+  assert.deepEqual(fromInput.orchestratorIds, ['orch']);
+
+  const directItems = {
+    input: createAgentInputItem({ title: '직결 입력', inputType: 'pdf', text: '직결 요청', x: 0.1, y: 0.2 }),
+    router: createAgentRouterItem({ title: '직결 라우터', routingMode: 'format', x: 0.3, y: 0.2 }),
+    pdfAgent: createAgentNodeItem({ title: 'PDF 분석가', x: 0.5, y: 0.2 }),
+    c1: edge('input', 'router', { channel: 'input' }),
+    c2: edge('router', 'pdfAgent', { channel: 'route', routeFormats: ['pdf'] }),
+  };
+  const directFlow = resolveFlowFromNode(directItems, 'input');
+  assert.equal(directFlow.startKind, 'input');
+  assert.deepEqual(directFlow.orchestratorIds, []);
+  assert.ok(directFlow.routerIds.includes('router'));
+  assert.ok(directFlow.agentIds.includes('pdfAgent'));
+
+  const fromRouter = resolveFlowFromNode(items, 'router');
+  assert.equal(fromRouter.startKind, 'router');
+  assert.deepEqual(fromRouter.routerIds, ['router']);
+  assert.ok(fromRouter.agentIds.includes('pdfAgent'));
+  assert.ok(fromRouter.agentIds.includes('imgAgent'));
+
+  const conn = inspectAgentConnections(items, 'router');
+  assert.equal(conn.downstreamAgents.length, 2);
+  assert.equal(conn.outgoing.length, 2);
 });

@@ -651,7 +651,10 @@ export function buildDomSurfaceStyle(item = {}) {
   }
   if (style.typography?.explicit) {
     const t = style.typography;
-    if (t.fontFamily) inline.fontFamily = t.fontFamily;
+    if (t.fontFamily) {
+      inline.fontFamily = t.fontFamily;
+      inline['--typo-font-family'] = t.fontFamily;
+    }
     if (t.fontWeight && t.fontWeight !== 400) inline.fontWeight = t.fontWeight;
     if (t.lineHeight) inline['--typo-line-height'] = String(t.lineHeight);
     if (t.letterSpacing) inline.letterSpacing = `${t.letterSpacing}px`;
@@ -679,7 +682,10 @@ export function buildDomSurfaceStyle(item = {}) {
       const shadowBox = buildBoxShadowString(style);
       if (shadowBox !== undefined) inline['--object-shadow-box'] = shadowBox;
     }
-    if (!useBackdropBoxShadowOnly) {
+    // Vector shapes blur inside AdvancedShapeSurface (outline-clipped, blur-budgeted);
+    // a host backdrop would add an unbudgeted, rectangular second blur pass.
+    const isVectorShape = item.kind === 'shape' && !item.runtimeRole;
+    if (!useBackdropBoxShadowOnly && !isVectorShape) {
       const backdrop = buildBackdropFilterString(style);
       if (backdrop) {
         inline.backdropFilter = backdrop;

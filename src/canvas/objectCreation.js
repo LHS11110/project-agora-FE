@@ -11,14 +11,20 @@ import { newQuestion } from './questions/questionData.js';
 import { newChartData } from './charts/chartData.js';
 import { createTableData } from '../components/tableModel.js';
 import { DEFAULT_SHAPE_ARROW_BEND } from '../components/shapeArrowGeometry.js';
-import { createAgentNodeItem, createOrchestratorItem } from './agents/agentCanvasModel.js';
+import {
+  createAgentInputItem,
+  createAgentNodeItem,
+  createAgentOutputItem,
+  createAgentRouterItem,
+  createOrchestratorItem,
+} from './agents/agentCanvasModel.js';
 
 export const DRAG_CREATE_THRESHOLD_PX = 6;
 
 export const BOX_CREATION_TOOLS = new Set([
   'link', 'user-group', 'table', 'frame', 'project', 'question', 'chart',
   'timer', 'continuous-value', 'discrete-value', 'notebook', 'terminal', 'executor',
-  'execution-output', 'agent-node', 'agent-orchestrator', 'html', 'css', 'js', 'shape', 'text', 'markdown',
+  'execution-output', 'agent-input', 'agent-router', 'agent-node', 'agent-mock', 'agent-orchestrator', 'agent-output', 'html', 'css', 'js', 'shape', 'text', 'markdown',
   'math', 'code', 'note',
 ]);
 
@@ -150,11 +156,21 @@ export function buildCreatedObject(tool, placement, context = {}) {
   } else if (tool === 'continuous-value' || tool === 'discrete-value') {
     const base = createValue(tool === 'continuous-value' ? 'real' : 'integer');
     item = { ...base, ...box(base.width, base.height), permission };
-  } else if (tool === 'agent-node') {
-    const base = createAgentNodeItem({ permission });
+  } else if (tool === 'agent-input') {
+    const base = createAgentInputItem({ permission });
+    item = { ...base, ...box(base.width, base.height), permission };
+  } else if (tool === 'agent-router') {
+    const base = createAgentRouterItem({ permission });
+    item = { ...base, ...box(base.width, base.height), permission };
+  } else if (tool === 'agent-node' || tool === 'agent-mock') {
+    const overrides = tool === 'agent-mock' ? { title: ui('모형 에이전트'), engine: 'mock' } : {};
+    const base = createAgentNodeItem({ permission, ...overrides });
     item = { ...base, ...box(base.width, base.height), permission };
   } else if (tool === 'agent-orchestrator') {
     const base = createOrchestratorItem({ permission });
+    item = { ...base, ...box(base.width, base.height), permission };
+  } else if (tool === 'agent-output') {
+    const base = createAgentOutputItem({ permission });
     item = { ...base, ...box(base.width, base.height), permission };
   } else if (tool === 'notebook' || tool === 'terminal' || tool === 'executor' || tool === 'execution-output') {
     const defaults = tool === 'notebook'

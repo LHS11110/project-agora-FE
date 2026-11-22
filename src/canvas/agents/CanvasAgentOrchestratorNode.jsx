@@ -7,6 +7,7 @@ import {
   MULTI_AGENT_TEMPLATES,
   ORCHESTRATION_MODES,
   readAgentNodeConfig,
+  readAgentRouterConfig,
   readOrchestratorConfig,
   writeOrchestratorPatch,
 } from './agentCanvasModel.js';
@@ -58,6 +59,8 @@ export default function CanvasAgentOrchestratorNode({
   const teamLog = config.lastRun?.log || [];
 
   const goalInputs = connections.incoming.filter(e => e.edgeConfig.enabled);
+  const connectedRouters = resolved.graph?.routerIds || [];
+  const connectedOutputs = resolved.graph?.outputIds || [];
   const accent = item.color || '#7055d6';
 
   return (
@@ -76,6 +79,22 @@ export default function CanvasAgentOrchestratorNode({
             {resolved.graph ? ` · ${ui('{count}개 에이전트', { count: resolved.graph.agentIds.length })}` : ''}
           </small>
         </div>
+        {!readOnly && store?.startConnectorFrom && (
+          <button
+            type="button"
+            className="agent-header-connect-btn"
+            data-object-action="agent"
+            title={ui('연결 객체로 라우터·에이전트 연결')}
+            onPointerDown={e => e.stopPropagation()}
+            onClick={e => {
+              e.stopPropagation();
+              store.startConnectorFrom(id);
+            }}
+          >
+            <Icon name="connect" size={12} />
+            <span>{ui('연결')}</span>
+          </button>
+        )}
         <span className={`agent-status-pill is-${statusKey}`}>
           {running
             ? (state?.round ? `R${state.round}/${config.mode === 'graph' ? 1 : config.maxRounds}` : ui('실행 중…'))
@@ -112,7 +131,7 @@ export default function CanvasAgentOrchestratorNode({
         {tab === 'orchestra' && (
           <div className="agent-tab-panel">
             <label className="agent-field-label" htmlFor={`${fieldId}-goal`}>
-              <span>{ui('공동 목표 · 오케스트레이션 지시')}</span>
+              <span>{ui('공동 목표 · 오케스트레이션 지시 (선택)')}</span>
               <textarea
                 id={`${fieldId}-goal`}
                 name="orchestrator-goal"
@@ -121,7 +140,7 @@ export default function CanvasAgentOrchestratorNode({
                 maxLength={4000}
                 readOnly={readOnly}
                 value={goalDraft}
-                placeholder={ui('팀 에이전트가 함께 달성할 공통 목표나 작업 맥락을 적어주세요…')}
+                placeholder={ui('입력 객체를 연결하거나 팀 공통 지시사항을 입력하세요…')}
                 onFocus={() => { goalFocusedRef.current = true; }}
                 onBlur={() => {
                   goalFocusedRef.current = false;
@@ -137,7 +156,7 @@ export default function CanvasAgentOrchestratorNode({
 
             {goalInputs.length > 0 && (
               <div className="agent-io-block">
-                <span className="agent-io-heading">{ui('입력 자료 ({count})', { count: goalInputs.length })}</span>
+                <span className="agent-io-heading">{ui('연결된 입력 ({count})', { count: goalInputs.length })}</span>
                 <div className="agent-chip-list">
                   {goalInputs.map(entry => (
                     <button
@@ -155,29 +174,58 @@ export default function CanvasAgentOrchestratorNode({
               </div>
             )}
 
+            {connectedRouters.length > 0 && (
+              <div className="agent-io-block">
+                <span className="agent-io-heading">{ui('연결된 라우터 ({count})', { count: connectedRouters.length })}</span>
+                <div className="agent-chip-list">
+                  {connectedRouters.map(rid => {
+                    const router = allItems?.[rid];
+                    const rCfg = readAgentRouterConfig(router);
+                    return (
+                      <button
+                        key={rid}
+                        type="button"
+                        className="agent-chip-btn is-router"
+                        data-object-action="agent"
+                        onClick={() => store?.focusCanvasObject?.(rid)}
+                      >
+                        <em>{ui(rCfg.routingMode === 'format' ? '포맷' : rCfg.routingMode === 'intelligent' ? '지능형' : '하이브리드')}</em>
+                        <span>{router?.title || ui('라우터 객체')}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {resolved.graph ? (
               <div className="agent-topology-box">
-                <span className="agent-io-heading">{ui('팀 협업 그래프 ({waves}단계)', { waves: resolved.graph.waves.length })}</span>
+                <span className="agent-io-heading">{ui('연결 그래프 ({waves}단계)', { waves: resolved.graph.flowWaves.length })}</span>
                 <div className="agent-wave-list">
-                  {resolved.graph.waves.map((wave, waveIndex) => (
+                  {resolved.graph.flowWaves.map((wave, waveIndex) => (
                     <div key={waveIndex} className="agent-wave-row">
                       <span className="agent-wave-badge">W{waveIndex + 1}</span>
                       <div className="agent-chip-list">
-                        {wave.map(agentId => {
-                          const agent = allItems?.[agentId];
-                          const cfg = readAgentNodeConfig(agent);
-                          const isSup = resolved.graph.supervisorAgentId === agentId;
+                        {wave.map(nodeId => {
+                          const node = allItems?.[nodeId];
+                          const isRouter = connectedRouters.includes(nodeId);
+                          const isAgent = resolved.graph.agentIds.includes(nodeId);
+                          const isSup = isAgent && resolved.graph.supervisorAgentId === nodeId;
+                          const label = isAgent
+                            ? (node?.title || readAgentNodeConfig(node).role)
+                            : (node?.title || ui(isRouter ? '라우터 객체' : '입력 객체'));
                           return (
                             <button
-                              key={agentId}
+                              key={nodeId}
                               type="button"
-                              className="agent-chip-btn is-team"
+                              className={`agent-chip-btn ${isRouter ? 'is-router' : 'is-team'}`}
                               data-object-action="agent"
-                              style={{ '--chip-accent': agent?.color || '#6d5ce7' }}
-                              onClick={() => store?.focusCanvasObject?.(agentId)}
+                              style={{ '--chip-accent': node?.color || '#6d5ce7' }}
+                              onClick={() => store?.focusCanvasObject?.(nodeId)}
                             >
                               {isSup && <em>{ui('감독')}</em>}
-                              <span>{agent?.title || cfg.role}</span>
+                              {isRouter && <em>{ui('라우터')}</em>}
+                              <span>{label}</span>
                             </button>
                           );
                         })}
@@ -185,6 +233,22 @@ export default function CanvasAgentOrchestratorNode({
                     </div>
                   ))}
                 </div>
+                {connectedOutputs.length > 0 && (
+                  <div className="agent-chip-list">
+                    {connectedOutputs.map(oid => (
+                      <button
+                        key={oid}
+                        type="button"
+                        className="agent-chip-btn is-outbound"
+                        data-object-action="agent"
+                        onClick={() => store?.focusCanvasObject?.(oid)}
+                      >
+                        <em>{ui('출력')}</em>
+                        <span>{allItems?.[oid]?.title || ui('출력 객체')}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {resolved.graph.feedbackEdges.length > 0 && (
                   <small className="agent-feedback-note">
                     {ui('피드백 루프 {count}개 연결됨', { count: resolved.graph.feedbackEdges.length })}
@@ -194,6 +258,16 @@ export default function CanvasAgentOrchestratorNode({
             ) : (
               <div className="agent-template-starter">
                 <p className="agent-empty-hint">{resolved.error}</p>
+                {!readOnly && store?.startConnectorFrom && (
+                  <button
+                    type="button"
+                    className="agent-mini-link"
+                    data-object-action="agent"
+                    onClick={() => store.startConnectorFrom(id)}
+                  >
+                    {ui('연결 객체로 라우터·에이전트 연결')}
+                  </button>
+                )}
                 {!readOnly && store?.createTemplate && (
                   <div className="agent-template-buttons">
                     <strong>{ui('빠른 멀티 에이전트 팀 배치')}</strong>

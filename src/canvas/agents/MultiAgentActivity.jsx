@@ -24,7 +24,13 @@ export default function MultiAgentActivity({ store, onFocusObject }) {
 
   const elapsed = Math.max(0, Math.floor(((activity.endedAt || now) - activity.startedAt) / 1000));
   const heading = running
-    ? (activity.kind === 'orchestrator' ? ui('멀티 에이전트 협업 중') : ui('AI 에이전트 실행 중'))
+    ? (activity.kind === 'orchestrator'
+      ? ui('멀티 에이전트 협업 중')
+      : activity.kind === 'router'
+        ? ui('라우팅 판단 중')
+        : activity.kind === 'input'
+          ? ui('입력 파이프라인 실행 중')
+          : ui('AI 에이전트 실행 중'))
     : activity.status === 'error'
       ? ui('에이전트 작업 실패')
       : ui('에이전트 작업 완료');

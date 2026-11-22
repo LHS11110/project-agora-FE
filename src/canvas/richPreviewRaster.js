@@ -3,9 +3,14 @@ import { contentSource } from './content/contentPresentation.js';
 import { objectCornerRadius } from './objectCorners.js';
 import { hasAdvancedStyle, readObjectStyle } from './styling/objectStyleModel.js';
 import {
+  isAgentInputItem,
   isAgentNodeItem,
   isAgentOrchestratorItem,
+  isAgentOutputItem,
+  isAgentRouterItem,
+  readAgentInputConfig,
   readAgentNodeConfig,
+  readAgentRouterConfig,
   readOrchestratorConfig,
 } from './agents/agentCanvasModel.js';
 
@@ -71,6 +76,11 @@ function drawRoundedFillAndStroke(ctx, w, h, radius, src, palette) {
         ctx.fillStyle = grad;
       } else if (layer.type === 'radial' && Array.isArray(layer.stops) && layer.stops.length) {
         const grad = ctx.createRadialGradient(w * 0.5, h * 0.5, 0, w * 0.5, h * 0.5, Math.max(w, h) * 0.65);
+        for (const stop of layer.stops) grad.addColorStop(Math.max(0, Math.min(1, (stop.pos ?? 0) / 100)), stop.color || '#ffffff');
+        ctx.fillStyle = grad;
+      } else if (layer.type === 'conic' && Array.isArray(layer.stops) && layer.stops.length && typeof ctx.createConicGradient === 'function') {
+        // CSS conic gradients start at 12 o'clock; canvas starts at 3 o'clock.
+        const grad = ctx.createConicGradient((((layer.angle ?? 0) - 90) * Math.PI) / 180, w * 0.5, h * 0.5);
         for (const stop of layer.stops) grad.addColorStop(Math.max(0, Math.min(1, (stop.pos ?? 0) / 100)), stop.color || '#ffffff');
         ctx.fillStyle = grad;
       } else {
@@ -469,6 +479,26 @@ export function drawRichOverview(ctx, item, world, textAppearance = {}, imagePre
     const cfg = readOrchestratorConfig(src);
     const top = drawHeadingBar(ctx, 'ORCH', src.title || '오케스트레이터', w, pad, src.color || palette.accent, ink, palette.muted, fontFamily);
     drawTextLines(ctx, cfg.goal || src.text || cfg.mode || '', pad, top, w - pad * 2, h - top - pad, 9, 12, fontFamily, palette.muted);
+    return;
+  }
+
+  if (isAgentInputItem(src)) {
+    const cfg = readAgentInputConfig(src);
+    const top = drawHeadingBar(ctx, 'INPUT', src.title || '입력 객체', w, pad, src.color || '#2563eb', ink, palette.muted, fontFamily);
+    drawTextLines(ctx, src.text || (cfg.attachments.length ? `${cfg.attachments.length}개 첨부` : cfg.inputType), pad, top, w - pad * 2, h - top - pad, 9, 12, fontFamily, palette.muted);
+    return;
+  }
+
+  if (isAgentRouterItem(src)) {
+    const cfg = readAgentRouterConfig(src);
+    const top = drawHeadingBar(ctx, 'ROUTER', src.title || '라우터 객체', w, pad, src.color || '#d97706', ink, palette.muted, fontFamily);
+    drawTextLines(ctx, cfg.lastDecision?.reason || cfg.routingMode || '', pad, top, w - pad * 2, h - top - pad, 9, 12, fontFamily, palette.muted);
+    return;
+  }
+
+  if (isAgentOutputItem(src)) {
+    const top = drawHeadingBar(ctx, 'OUTPUT', src.title || '출력 객체', w, pad, src.color || '#0f766e', ink, palette.muted, fontFamily);
+    drawTextLines(ctx, src.text || '', pad, top, w - pad * 2, h - top - pad, 9, 12, fontFamily, palette.muted);
     return;
   }
 

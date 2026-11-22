@@ -8,7 +8,9 @@ export function installCanvasTransport(options){
   (async()=>{for(let attempt=0;;attempt++){
    if(active!==entry)throw Error('캔버스 연결이 변경되었습니다.');
    try{return await options.request(task.request);}catch(error){
-    if(error.code!=='RUNTIME_BUSY'||attempt>=5)throw error;
+    const repeatable = ['upload_chunk', 'upload_finish'].includes(task.request.operation);
+    const transient = ['CANVAS_SERVICE_UNAVAILABLE', 'RUNTIME_RESPONSE_TIMEOUT'].includes(error.code);
+    if (!(error.code === 'RUNTIME_BUSY' && attempt < 5) && !(repeatable && transient && attempt < 2)) throw error;
     await new Promise(resolve=>setTimeout(resolve,Math.min(100*2**attempt,1600)));
    }
   }})().then(task.resolve,task.reject).finally(()=>{entry.running--;pump();});
@@ -26,14 +28,14 @@ function target(path){
  if(url.origin!==active.origin)return null;
  const prefix=`/api/canvases/${encodeURIComponent(active.canvasId)}`;
  if(url.pathname===prefix||url.pathname.startsWith(prefix+'/'))return {entry:active,path:url.pathname.slice(prefix.length)};
- const linked=url.pathname.match(/^\/api\/canvases\/([1-9][0-9]*)(\/(?:media|pdfs)\/[^?]+|\/image)$/);
+ const linked=url.pathname.match(/^\/api\/canvases\/([1-9][0-9]*)(\/(?:media|pdfs|notebooks)\/[^?]+|\/image)$/);
  if(linked)return {entry:active,path:`/linked-resource/${linked[1]}${linked[2]}`};
  if(url.pathname==='/api/link-preview')return {entry:active,path:'/link-preview'};
  if(url.pathname.startsWith('/api/users/profiles/'))return {entry:active,path:url.pathname.slice('/api/users'.length)};
  if(/^\/api\/users\/profile-images\/[1-9][0-9]*$/.test(url.pathname))return {entry:active,path:url.pathname.slice('/api/users'.length)};
  return null;
 }
-const resourcePath=path=>/^\/(media|pdfs|profile-images|linked-resource)\//.test(path)||path==='/image';
+const resourcePath=path=>/^\/(media|pdfs|notebooks|profile-images|linked-resource)\//.test(path)||path==='/image';
 const encode=bytes=>{let text='';for(let at=0;at<bytes.length;at+=8192)text+=String.fromCharCode(...bytes.subarray(at,at+8192));return btoa(text);};
 const decode=text=>Uint8Array.from(atob(text),c=>c.charCodeAt(0));
 const abort=signal=>{if(signal?.aborted)throw new DOMException('The request was aborted','AbortError');};
@@ -57,15 +59,27 @@ export function canvasApiRequest(path,options){
   if(options.body instanceof FormData){
    const files=[...options.body.entries()].filter(([,file])=>file instanceof Blob);
    if(files.length!==[...options.body.keys()].length)throw Error('지원하지 않는 파일 업로드 형식입니다.');
+   const checkUpload = () => {
+    abort(options.signal);
+    if (options.canContinue?.() === false) throw new DOMException('The request was aborted', 'AbortError');
+   };
+   checkUpload();
    const started=await entry.request({operation:'upload_begin',path:relative,files:files.map(([field,file])=>({field,name:file.name||'upload',type:file.type,size:file.size}))});
-   if(typeof started.uploadId!=='string'||!Number.isInteger(started.chunkSize)||started.chunkSize<=0||started.chunkSize>96*1024)throw Error('업로드 세션 응답이 올바르지 않습니다.');
+   if(typeof started?.uploadId!=='string'||!Number.isInteger(started.chunkSize)||started.chunkSize<=0||started.chunkSize>96*1024)throw Error('업로드 세션 응답이 올바르지 않습니다.');
    try{
+    const total = files.reduce((size, [, file]) => size + file.size, 0);
+    let transferred = 0;
     for(let index=0;index<files.length;index++){
      const file=files[index][1];for(let offset=0;offset<file.size;offset+=started.chunkSize){
+      checkUpload();
       const bytes=new Uint8Array(await file.slice(offset,offset+started.chunkSize).arrayBuffer());
+      checkUpload();
       await entry.request({operation:'upload_chunk',path:relative,uploadId:started.uploadId,index,offset,data:encode(bytes)});
+      transferred += bytes.length;
+      options.onUploadProgress?.(transferred, total);
      }
     }
+    checkUpload();
     return await entry.request({operation:'upload_finish',path:relative,uploadId:started.uploadId});
    }catch(error){entry.request({operation:'upload_cancel',path:relative,uploadId:started.uploadId}).catch(()=>{});throw error;}
   }
@@ -81,12 +95,33 @@ export async function canvasFetch(input,options={}){
  }
  const destination=target(raw);
  if(!destination||!resourcePath(destination.path)||options.method&&options.method!=='GET')return fetch(input,options);
- const {entry,path}=destination;const authorization=new Headers(options.headers||{}).get('Authorization');if(authorization&&!(authorization.startsWith('Bearer ')&&sameSession(authorization.slice(7),entry.token)))throw Error('캔버스 인증 정보가 변경되었습니다.');let offset=0,size=null,type,version;const chunks=[];
- do{
-  abort(options.signal);const part=await entry.request({operation:'resource',path,offset,...(version?{version}:{})});abort(options.signal);
+ const {entry,path}=destination;
+ const authorization=new Headers(options.headers||{}).get('Authorization');
+ if(authorization&&!(authorization.startsWith('Bearer ')&&sameSession(authorization.slice(7),entry.token)))throw Error('캔버스 인증 정보가 변경되었습니다.');
+
+ let offset=0, size=null, version, cancelled=false;
+ const readPart=async()=>{
+  abort(options.signal);
+  const part=await entry.request({operation:'resource',path,offset,...(version?{version}:{})});
+  abort(options.signal);
   const bytes=decode(part.data);
-  if(part.offset!==offset||!Number.isSafeInteger(part.size)||part.size<0||part.size>100*1024*1024||size!==null&&part.size!==size||offset+bytes.length>part.size||version!==undefined&&part.version!==version||bytes.length===0&&offset<part.size)throw Error('리소스 전송 상태가 올바르지 않습니다.');
-  size=part.size;type=part.type;version=part.version;chunks.push(bytes);offset+=bytes.length;
- }while(offset<size);
- return new Response(new Blob(chunks,{type}),{status:200,headers:{'Content-Type':type,'Content-Length':String(size),'Cache-Control':'no-store'}});
+  if(part.offset!==offset||!Number.isSafeInteger(part.size)||part.size<0||size!==null&&part.size!==size||bytes.length>part.size-offset||version!==undefined&&part.version!==version||bytes.length===0&&offset<part.size)throw Error('리소스 전송 상태가 올바르지 않습니다.');
+  size=part.size;version=part.version;offset+=bytes.length;
+  return {bytes,type:part.type};
+ };
+ const first=await readPart();
+ const stream=new ReadableStream({
+  start(controller){
+   if(first.bytes.length)controller.enqueue(first.bytes);
+   if(offset===size)controller.close();
+  },
+  async pull(controller){
+   const {bytes}=await readPart();
+   if(cancelled)return;
+   controller.enqueue(bytes);
+   if(offset===size)controller.close();
+  },
+  cancel(){cancelled=true;},
+ });
+ return new Response(stream,{status:200,headers:{'Content-Type':first.type,'Content-Length':String(size),'Cache-Control':'no-store'}});
 }

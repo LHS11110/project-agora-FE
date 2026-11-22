@@ -1,17 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildMultiAgentTemplate,
+  createAgentInputItem,
   createAgentNodeItem,
+  createAgentOutputItem,
+  createAgentRouterItem,
   createOrchestratorItem,
   readAgentNodeConfig,
+  readAgentOutputConfig,
+  readAgentRouterConfig,
   readOrchestratorConfig,
   writeAgentEdgePatch,
+  writeAgentInputPatch,
 } from '../src/canvas/agents/agentCanvasModel.js';
 import {
   compileAgentPrompt,
   parseCollaborationDirectives,
 } from '../src/canvas/agents/agentPromptBuilder.js';
 import {
+  runFromInputNode,
+  runFromRouterNode,
   runMultiAgentOrchestration,
   runSingleAgent,
 } from '../src/canvas/agents/runMultiAgentGraph.js';
@@ -19,11 +28,168 @@ import { createMultiAgentStore } from '../src/canvas/agents/multiAgentStore.js';
 
 function edge(from, to, extra = {}) {
   const base = { kind: 'connector', from, to };
-  if (extra.channel || extra.delivery || extra.enabled !== undefined || extra.label !== undefined) {
+  if (
+    extra.channel ||
+    extra.delivery ||
+    extra.enabled !== undefined ||
+    extra.label !== undefined ||
+    extra.routeFormats !== undefined ||
+    extra.routeKeywords !== undefined ||
+    extra.routeDescription !== undefined ||
+    extra.routeDefault !== undefined ||
+    extra.routePriority !== undefined
+  ) {
     Object.assign(base, writeAgentEdgePatch(base, extra));
   }
   return base;
 }
+
+test('canvas mock template routes input, skips the other branch and persists output through the store', async () => {
+  let nextId = 0;
+  let externalCalls = 0;
+  let { changes: items } = buildMultiAgentTemplate(
+    'mock-routing', 'orch', createOrchestratorItem(), 'default', () => `node-${++nextId}`,
+  );
+  const idFor = title => Object.keys(items).find(id => items[id].title === title);
+  const store = createMultiAgentStore({
+    getItems: () => items,
+    executeAgent: async () => { externalCalls++; throw new Error('Unexpected model call'); },
+    resolveApiKey: () => { externalCalls++; throw new Error('Unexpected credential lookup'); },
+    saveAgentItem: (id, patch) => { items = { ...items, [id]: { ...items[id], ...patch } }; },
+  });
+  const result = await store.runInput(idFor('테스트 입력'));
+  assert.equal(result?.answer, '텍스트 경로 실행 완료');
+  assert.equal(items[idFor('테스트 출력')].text, '텍스트 경로 실행 완료');
+  assert.deepEqual(readAgentRouterConfig(items[idFor('테스트 라우터')]).lastDecision.selectedTargetIds, [idFor('텍스트 모형')]);
+  assert.equal(store.getNodeState(idFor('이미지 모형')).status, 'skipped');
+  const inputId = idFor('테스트 입력');
+  items[inputId] = { ...items[inputId], ...writeAgentInputPatch(items[inputId], { inputType: 'image' }) };
+  const imageResult = await store.runRouter(idFor('테스트 라우터'));
+  assert.equal(imageResult?.answer, '이미지 경로 실행 완료');
+  assert.equal(items[idFor('테스트 출력')].runtimeResults.length, 2);
+  assert.equal(store.getNodeState(idFor('텍스트 모형')).status, 'skipped');
+  assert.equal(externalCalls, 0);
+});
+
+test('mock agents reject mixed teams before any session or credential request', async () => {
+  let externalCalls = 0;
+  const items = {
+    orch: createOrchestratorItem(),
+    mock: createAgentNodeItem({ engine: 'mock' }),
+    real: createAgentNodeItem(),
+    first: edge('orch', 'mock'),
+    second: edge('mock', 'real'),
+  };
+  await assert.rejects(runMultiAgentOrchestration({
+    items,
+    orchestratorId: 'orch',
+    executeAgent: async () => { externalCalls++; },
+    resolveApiKey: () => { externalCalls++; },
+  }), /모형 에이전트만/);
+  assert.equal(externalCalls, 0);
+});
+
+test('an unselected router does not start its branch in either graph entry point', async () => {
+  const items = {
+    input: createAgentInputItem({ text: 'Sample text' }),
+    root: createAgentRouterItem({ routingMode: 'format', fallbackPolicy: 'skip' }),
+    unselected: createAgentRouterItem({ routingMode: 'format', fallbackPolicy: 'first' }),
+    picked: createAgentNodeItem({ engine: 'mock', mockResponse: 'selected' }),
+    other: createAgentNodeItem({ engine: 'mock', mockResponse: 'unselected' }),
+    first: edge('input', 'root'),
+    selected: edge('root', 'picked', { channel: 'route', routeFormats: ['text'] }),
+    ignored: edge('root', 'unselected', { channel: 'route', routeFormats: ['image'] }),
+    downstream: edge('unselected', 'other', { channel: 'route', routeFormats: ['image'] }),
+  };
+  for (const withOrchestrator of [false, true]) {
+    const events = [];
+    const scenario = withOrchestrator
+      ? { ...items, orch: createOrchestratorItem({ mode: 'graph' }), first: edge('input', 'orch'), entry: edge('orch', 'root') }
+      : items;
+    await runFromInputNode({ items: scenario, inputId: 'input', onEvent: event => events.push(event) });
+    assert.deepEqual(events.filter(event => event.type === 'router_start').map(event => event.routerId), ['root']);
+    assert.deepEqual(events.filter(event => event.type === 'agent_start').map(event => event.agentId), ['picked']);
+
+    const imageEvents = [];
+    const imageItems = {
+      ...scenario,
+      input: createAgentInputItem({ text: 'Sample image', inputType: 'image' }),
+      unselected: createAgentRouterItem({ routingMode: 'format', fallbackPolicy: 'skip' }),
+    };
+    await runFromInputNode({ items: imageItems, inputId: 'input', onEvent: event => imageEvents.push(event) });
+    assert.deepEqual(imageEvents.filter(event => event.type === 'router_start').map(event => event.routerId), ['root', 'unselected']);
+    assert.deepEqual(imageEvents.filter(event => event.type === 'agent_start').map(event => event.agentId), ['other']);
+  }
+});
+
+test('local mock responses drive collaborative revisions and supervisor delegation', async () => {
+  const mock = (title, mockResponse, mockFollowup) => createAgentNodeItem({ title, engine: 'mock', mockResponse, mockFollowup });
+  const collab = {
+    orch: createOrchestratorItem({ mode: 'collaborative', maxRounds: 3 }),
+    dev: mock('Developer', 'First draft', 'Revised draft'),
+    rev: mock('Reviewer', 'Needs changes\n[REVISE: dev] Please revise', 'Approved revision\n[APPROVED]'),
+    e1: edge('orch', 'dev'),
+    e2: edge('dev', 'rev'),
+    e3: edge('rev', 'dev', { channel: 'feedback' }),
+  };
+  const supervisor = {
+    orch: createOrchestratorItem({ mode: 'supervisor', maxRounds: 2, supervisorAgentId: 'lead' }),
+    lead: mock('Lead', 'Assign work\n[DELEGATE: worker] Draft the report', 'Final report\n[DONE]'),
+    worker: mock('Worker', 'Worker report'),
+    other: mock('Other', 'Unexpected response'),
+    e1: edge('orch', 'lead'),
+    e2: edge('lead', 'worker'),
+    e3: edge('lead', 'other'),
+  };
+  let externalCalls = 0;
+  const run = items => runMultiAgentOrchestration({
+    items, orchestratorId: 'orch',
+    executeAgent: async () => { externalCalls++; throw new Error('Unexpected model call'); },
+  });
+  const revised = await run(collab);
+  assert.deepEqual(revised.runSummary.log.map(entry => [entry.agentId, entry.round]), [['dev', 1], ['rev', 1], ['dev', 2], ['rev', 2]]);
+  assert.equal(revised.answer, 'Approved revision');
+  assert.equal(revised.runSummary.converged, true);
+  const delegated = await run(supervisor);
+  assert.deepEqual(delegated.runSummary.log.map(entry => entry.agentId), ['lead', 'worker', 'lead']);
+  assert.equal(delegated.answer, 'Final report');
+  assert.equal(externalCalls, 0);
+});
+
+test('mock collaboration respects delegation and early-stop settings', async () => {
+  const items = {
+    orch: createOrchestratorItem({ mode: 'collaborative', maxRounds: 3, consensusStop: false }),
+    a: createAgentNodeItem({ engine: 'mock', canDelegate: false, mockResponse: 'Draft\n[ASK: b] Request' }),
+    b: createAgentNodeItem({ engine: 'mock', mockResponse: 'Approved\n[APPROVED]' }),
+    e1: edge('orch', 'a'),
+    e2: edge('a', 'b'),
+  };
+  const result = await runMultiAgentOrchestration({ items, orchestratorId: 'orch' });
+  assert.equal(result.runSummary.roundsCompleted, 3);
+  assert.equal(result.runSummary.log.length, 6);
+  assert.ok(result.runSummary.log.every(entry => entry.directives.length === 0));
+});
+
+test('an intelligent router in a mock flow applies its configured fallback locally', async () => {
+  const items = {
+    router: createAgentRouterItem({ routingMode: 'intelligent', fallbackPolicy: 'first' }),
+    mock: createAgentNodeItem({ engine: 'mock', mockResponse: 'Fallback result' }),
+    e: edge('router', 'mock'),
+  };
+  let externalCalls = 0;
+  const events = [];
+  const result = await runFromRouterNode({
+    items, routerId: 'router',
+    executeAgent: async () => { externalCalls++; },
+    resolveApiKey: () => { externalCalls++; },
+    onEvent: event => events.push(event),
+  });
+  const decision = events.find(event => event.type === 'router_decision').decision;
+  assert.equal(decision.fallbackUsed, true);
+  assert.deepEqual(decision.selectedTargetIds, ['mock']);
+  assert.equal(result.answer, 'Fallback result');
+  assert.equal(externalCalls, 0);
+});
 
 test('compileAgentPrompt respects edge delivery modes and enforces prompt char budget', () => {
   const agent = createAgentNodeItem({ title: '분석가', role: '분석', systemPrompt: '핵심만 답하세요.' });
@@ -255,4 +421,231 @@ test('createMultiAgentStore persists node updates, updates activity, and support
   assert.equal(readOrchestratorConfig(items.orch).lastRun.status, 'stopped');
   store.dismissActivity();
   assert.equal(store.getActivity(), null);
+});
+
+test('runMultiAgentOrchestration branches through Input -> Orchestrator -> Router -> Agents -> AgentOutput and skips unselected targets', async () => {
+  const items = {
+    input: createAgentInputItem({
+      title: '입력',
+      inputType: 'auto',
+      text: '이 PDF 계약서 핵심만 정리해줘',
+      attachments: [{ id: 'att-pdf', name: 'contract.pdf', mimeType: 'application/pdf', formatType: 'pdf' }],
+      x: 0.1,
+      y: 0.2,
+    }),
+    orch: createOrchestratorItem({ mode: 'graph', x: 0.25, y: 0.2 }),
+    router: createAgentRouterItem({ title: '포맷 분기', routingMode: 'format', x: 0.4, y: 0.2 }),
+    imgAgent: createAgentNodeItem({ title: '이미지 분석가', x: 0.6, y: 0.1 }),
+    pdfAgent: createAgentNodeItem({ title: 'PDF 분석가', x: 0.6, y: 0.25 }),
+    audAgent: createAgentNodeItem({ title: '오디오 분석가', x: 0.6, y: 0.4 }),
+    output: createAgentOutputItem({ title: '최종 출력', x: 0.85, y: 0.25 }),
+    cIn: edge('input', 'orch', { channel: 'input' }),
+    cOrch: edge('orch', 'router'),
+    cImg: edge('router', 'imgAgent', { channel: 'route', routeFormats: ['image'] }),
+    cPdf: edge('router', 'pdfAgent', { channel: 'route', routeFormats: ['pdf'] }),
+    cAud: edge('router', 'audAgent', { channel: 'route', routeFormats: ['audio'] }),
+    cOut1: edge('imgAgent', 'output', { channel: 'output' }),
+    cOut2: edge('pdfAgent', 'output', { channel: 'output' }),
+    cOut3: edge('audAgent', 'output', { channel: 'output' }),
+  };
+
+  const calledAgents = [];
+  const events = [];
+  const deliveries = [];
+
+  await runMultiAgentOrchestration({
+    items,
+    orchestratorId: 'orch',
+    executeAgent: async payload => {
+      if (payload.operation === 'run') {
+        calledAgents.push(payload.message);
+        return { answer: '계약서 핵심: 납기 30일, 위약금 없음' };
+      }
+      return {};
+    },
+    resolveApiKey: () => '',
+    onEvent: ev => events.push(ev),
+    onDeliver: d => deliveries.push(d),
+  });
+
+  assert.equal(calledAgents.length, 1);
+  assert.match(calledAgents[0], /contract\.pdf/);
+
+  const skippedIds = events
+    .filter(e => e.type === 'agent_skipped')
+    .map(e => e.agentId)
+    .sort();
+  assert.deepEqual(skippedIds, ['audAgent', 'imgAgent']);
+
+  const routerDelivery = deliveries.find(d => d.type === 'router');
+  assert.ok(routerDelivery);
+  assert.deepEqual(routerDelivery.decision.selectedTargetIds, ['pdfAgent']);
+
+  const outDelivery = deliveries.find(d => d.type === 'agent_output');
+  assert.ok(outDelivery);
+  assert.equal(outDelivery.targetId, 'output');
+  assert.match(outDelivery.text, /계약서 핵심/);
+  assert.equal(outDelivery.meta.sourceName, 'PDF 분석가');
+
+  // Verify direct execution from Input node and Router node as well.
+  let routerRan = 0;
+  await runFromInputNode({
+    items,
+    inputId: 'input',
+    executeAgent: async payload => {
+      if (payload.operation === 'run') routerRan += 1;
+      return { answer: '입력 시작 실행 응답' };
+    },
+    resolveApiKey: () => '',
+    onDeliver: () => {},
+  });
+  assert.equal(routerRan, 1);
+
+  let fromRouterCalls = 0;
+  await runFromRouterNode({
+    items,
+    routerId: 'router',
+    executeAgent: async payload => {
+      if (payload.operation === 'run') fromRouterCalls += 1;
+      return { answer: '라우터 시작 실행 응답' };
+    },
+    resolveApiKey: () => '',
+    onDeliver: () => {},
+  });
+  assert.equal(fromRouterCalls, 1);
+});
+
+test('createMultiAgentStore runInput and runRouter persist runtimeResults on AgentOutput without writing runtimeState on output role', async () => {
+  const items = {
+    input: createAgentInputItem({ title: '입력', inputType: 'text', text: '최신 AI 트렌드 요약', x: 0.1, y: 0.2 }),
+    router: createAgentRouterItem({ title: '지능형 라우터', routingMode: 'intelligent', x: 0.3, y: 0.2 }),
+    writer: createAgentNodeItem({ title: '작성 에이전트', role: 'writer', x: 0.55, y: 0.15 }),
+    reviewer: createAgentNodeItem({ title: '검토 에이전트', role: 'reviewer', x: 0.55, y: 0.35 }),
+    output: createAgentOutputItem({ title: '결과 카드', x: 0.8, y: 0.2 }),
+    c1: edge('input', 'router', { channel: 'input' }),
+    c2: edge('router', 'writer', { channel: 'route', routeFormats: ['text'] }),
+    c3: edge('router', 'reviewer', { channel: 'route', routeFormats: ['code'] }),
+    c4: edge('writer', 'output', { channel: 'output' }),
+    c5: edge('reviewer', 'output', { channel: 'output' }),
+  };
+
+  const stateWrites = [];
+  const store = createMultiAgentStore({
+    getItems: () => items,
+    patchItem: (id, patch) => {
+      items[id] = { ...items[id], ...patch };
+    },
+    saveAgentItem: async (id, patch) => {
+      items[id] = { ...items[id], ...patch };
+    },
+    saveState: async (id, state) => {
+      stateWrites.push({ id, role: items[id]?.runtimeRole, status: state.status });
+    },
+    executeAgent: async payload => {
+      if (payload.operation !== 'run') return {};
+      if (payload.message.includes('[라우터 지시사항]')) {
+        return { answer: '{"targets":["writer"],"reason":"텍스트 요약 작업"}' };
+      }
+      return { answer: 'AI 에이전트 오케스트레이션 최종 요약' };
+    },
+    resolveApiKey: () => '',
+  });
+
+  await store.runInput('input');
+  assert.equal(store.isRunning(), false);
+  assert.equal(stateWrites.some(w => w.id === 'output'), false);
+  assert.equal(readAgentRouterConfig(items.router).lastDecision.modeUsed, 'intelligent');
+  assert.deepEqual(readAgentRouterConfig(items.router).lastDecision.selectedTargetIds, ['writer']);
+  assert.equal(items.output.text, 'AI 에이전트 오케스트레이션 최종 요약');
+  assert.equal(items.output.runtimeResults.length, 1);
+  assert.equal(readAgentOutputConfig(items.output).lastMeta.sourceId, 'writer');
+
+  await store.runRouter('router');
+  assert.equal(items.output.runtimeResults.length, 2);
+});
+
+test('runMultiAgentOrchestration routes JSON input payloads through JSON rule router end-to-end', async () => {
+  const items = {
+    input: createAgentInputItem({
+      title: '주문 JSON 입력',
+      inputType: 'auto',
+      text: '{"type":"billing","invoiceId":"INV-900","priority":3}',
+      x: 0.1,
+      y: 0.2,
+    }),
+    orch: createOrchestratorItem({ mode: 'graph', x: 0.25, y: 0.2 }),
+    router: createAgentRouterItem({
+      title: 'JSON 규칙 라우터',
+      routingMode: 'json',
+      jsonRules: JSON.stringify({
+        match: 'first',
+        rules: [
+          {
+            name: '결제 요청 분기',
+            all: [
+              { path: 'type', op: 'equals', value: 'billing' },
+              { path: 'priority', op: 'gte', value: 2 },
+            ],
+            targets: ['billingAgent'],
+          },
+          {
+            name: '일반 문의 분기',
+            path: 'type',
+            op: 'equals',
+            value: 'general',
+            targets: ['generalAgent'],
+          },
+        ],
+      }),
+      x: 0.4,
+      y: 0.2,
+    }),
+    billingAgent: createAgentNodeItem({ title: '결제 처리 에이전트', x: 0.65, y: 0.1 }),
+    generalAgent: createAgentNodeItem({ title: '일반 상담 에이전트', x: 0.65, y: 0.35 }),
+    output: createAgentOutputItem({ title: '응답 출력', x: 0.88, y: 0.2 }),
+    cIn: edge('input', 'orch', { channel: 'input' }),
+    cOrch: edge('orch', 'router'),
+    cBill: edge('router', 'billingAgent', { channel: 'route' }),
+    cGen: edge('router', 'generalAgent', { channel: 'route' }),
+    cOut1: edge('billingAgent', 'output', { channel: 'output' }),
+    cOut2: edge('generalAgent', 'output', { channel: 'output' }),
+  };
+
+  const generalStatuses = [];
+  const calledMessages = [];
+  const store = createMultiAgentStore({
+    getItems: () => items,
+    patchItem: (id, patch) => {
+      items[id] = { ...items[id], ...patch };
+    },
+    saveAgentItem: async (id, patch) => {
+      items[id] = { ...items[id], ...patch };
+    },
+    saveState: async () => {},
+    executeAgent: async payload => {
+      if (payload.operation !== 'run') return {};
+      calledMessages.push(payload.message);
+      return { answer: '청구서 INV-900 결제 처리 완료' };
+    },
+    resolveApiKey: () => '',
+  });
+
+  const unsub = store.subscribeNode('generalAgent', () => {
+    const st = store.getNodeState('generalAgent');
+    if (st?.status) generalStatuses.push(st.status);
+  });
+  try {
+    await store.runOrchestrator('orch');
+  } finally {
+    unsub();
+  }
+
+  assert.equal(calledMessages.length, 1);
+  assert.match(calledMessages[0], /INV-900/);
+  assert.equal(generalStatuses.includes('skipped'), true);
+  assert.equal(readAgentRouterConfig(items.router).lastDecision.modeUsed, 'json');
+  assert.deepEqual(readAgentRouterConfig(items.router).lastDecision.selectedTargetIds, ['billingAgent']);
+  assert.equal(items.output.text, '청구서 INV-900 결제 처리 완료');
+  assert.equal(items.output.runtimeResults.length, 1);
+  assert.equal(items.generalAgent.text, '');
 });

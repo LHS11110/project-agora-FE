@@ -11,9 +11,13 @@ import {
 } from './agentCanvasModel.js';
 import { inspectAgentConnections } from './multiAgentGraph.js';
 import { useAgentNodeState } from './useAgentNodeState.js';
+import MockAgentResponseFields from './MockAgentResponseFields.jsx';
 import './canvas-multi-agent.css';
 
 const CHANNEL_BADGES = {
+  input: '입력',
+  route: '라우팅',
+  supervisor: '감독',
   prompt: '프롬프트',
   data: '데이터',
   context: '컨텍스트',
@@ -54,23 +58,25 @@ export default function CanvasAgentNode({
   };
 
   const running = Boolean(state?.running);
-  const statusKey = running ? 'running' : state?.error || state?.failed ? 'error' : state?.completed || config.lastMeta?.status === 'success' ? 'success' : state?.status === 'queued' ? 'queued' : 'idle';
+  const statusKey = running ? 'running' : state?.error || state?.failed ? 'error' : state?.status === 'skipped' ? 'skipped' : state?.completed || config.lastMeta?.status === 'success' ? 'success' : state?.status === 'queued' ? 'queued' : 'idle';
   const statusText = running
     ? ui('작업 중…')
     : statusKey === 'queued'
       ? ui('대기')
-      : statusKey === 'error'
-        ? ui('오류')
-        : statusKey === 'success'
-          ? ui('완료')
-          : ui('준비');
+      : statusKey === 'skipped'
+        ? ui('건너뜀')
+        : statusKey === 'error'
+          ? ui('오류')
+          : statusKey === 'success'
+            ? ui('완료')
+            : ui('준비');
 
-  const engineLabel = config.engine === 'cli'
+  const engineLabel = config.engine === 'mock' ? ui('모형 에이전트') : config.engine === 'cli'
     ? `CLI · ${CLI_TOOLS.find(t => t.id === config.cli_tool)?.label || config.cli_tool}`
     : 'EXAONE API';
 
-  const inputItems = [...connections.promptInputs, ...connections.dataInputs, ...connections.upstreamAgents, ...connections.feedbackAgents];
-  const outputItems = [...connections.downstreamAgents, ...connections.feedbackTargets, ...connections.outputSinks];
+  const inputItems = [...connections.inputNodes, ...connections.routerNodes, ...connections.promptInputs, ...connections.dataInputs, ...connections.upstreamAgents, ...connections.feedbackAgents];
+  const outputItems = [...connections.outgoingRouters, ...connections.downstreamAgents, ...connections.feedbackTargets, ...connections.outputSinks];
   const accent = item.color || '#6d5ce7';
 
   return (
@@ -86,6 +92,22 @@ export default function CanvasAgentNode({
           <strong>{item.title || ui('AI 에이전트')}</strong>
           <small>{config.role} · {engineLabel}</small>
         </div>
+        {!readOnly && store?.startConnectorFrom && (
+          <button
+            type="button"
+            className="agent-header-connect-btn"
+            data-object-action="agent"
+            title={ui('연결 객체로 다른 노드에 연결')}
+            onPointerDown={e => e.stopPropagation()}
+            onClick={e => {
+              e.stopPropagation();
+              store.startConnectorFrom(id);
+            }}
+          >
+            <Icon name="connect" size={12} />
+            <span>{ui('연결')}</span>
+          </button>
+        )}
         <span className={`agent-status-pill is-${statusKey}`}>{statusText}</span>
       </header>
 
@@ -263,8 +285,12 @@ export default function CanvasAgentNode({
               >
                 <option value="api">{ui('EXAONE 2.5 API')}</option>
                 <option value="cli">{ui('VM CLI 에이전트')}</option>
+                <option value="mock">{ui('모형 에이전트')}</option>
               </select>
             </label>
+            {config.engine === 'mock' && (
+              <MockAgentResponseFields config={config} onChange={commitPatch} readOnly={readOnly} />
+            )}
             {config.engine === 'cli' && (
               <label htmlFor={`${fieldId}-cli-tool`}>
                 <span>{ui('CLI 도구')}</span>
@@ -281,14 +307,14 @@ export default function CanvasAgentNode({
                 </select>
               </label>
             )}
-            <button
+            {config.engine !== 'mock' && <button
               type="button"
               className="agent-mini-link"
               data-object-action="agent"
               onClick={() => store?.openAgentPanel?.()}
             >
               {ui('API 키 · CLI 설치 설정 열기')}
-            </button>
+            </button>}
           </div>
         )}
       </div>

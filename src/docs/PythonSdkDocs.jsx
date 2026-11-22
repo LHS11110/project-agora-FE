@@ -7,6 +7,7 @@ export const sdkSections = [
   ['sdk-auth','사용자 인증과 MFA'],
   ['sdk-bots','봇 참여자'],
   ['sdk-objects','객체 생성·편집·삭제'],
+  ['sdk-presence','일반 사용자처럼 실시간 참여'],
   ['sdk-sync','실시간 동기화와 오류 처리'],
 ];
 export const botEndpoints = [

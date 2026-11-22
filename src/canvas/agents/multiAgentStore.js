@@ -1,11 +1,25 @@
 import {
+  isAgentInputItem,
   isAgentNodeItem,
   isAgentOrchestratorItem,
+  isAgentOutputItem,
+  isAgentRouterItem,
+  isAgentRunnableItem,
+  readAgentOutputConfig,
+  writeAgentInputPatch,
   writeAgentNodePatch,
+  writeAgentOutputPatch,
+  writeAgentRouterPatch,
   writeOrchestratorPatch,
 } from './agentCanvasModel.js';
-import { resolveMultiAgentGraph } from './multiAgentGraph.js';
-import { runMultiAgentOrchestration, runSingleAgent } from './runMultiAgentGraph.js';
+import { formatTypeLabel } from './agentRouter.js';
+import { resolveFlowFromNode, resolveMultiAgentGraph } from './multiAgentGraph.js';
+import {
+  runFromInputNode,
+  runFromRouterNode,
+  runMultiAgentOrchestration,
+  runSingleAgent,
+} from './runMultiAgentGraph.js';
 
 const REMOTE_RUNNING_TTL_MS = 120_000;
 
@@ -38,7 +52,9 @@ export function createMultiAgentStore({
   const emitNode = (id, state, { persist = true } = {}) => {
     const key = String(id);
     nodeStates.set(key, state);
-    if (persist && saveState && !disposed) {
+    const targetItem = getItems()[key];
+    // Never write runtimeState to runtimeRole: 'output' items (rejected by BE schema).
+    if (persist && saveState && !disposed && (!targetItem || isAgentRunnableItem(targetItem))) {
       const status = ['running', 'queued', 'success', 'error', 'skipped'].includes(state?.status)
         ? state.status
         : state?.running ? 'running' : 'success';
@@ -61,7 +77,7 @@ export function createMultiAgentStore({
     return Boolean(remote?.running && Number.isFinite(remote.updatedAt) && Date.now() - remote.updatedAt < REMOTE_RUNNING_TTL_MS);
   };
 
-  const deliverHandler = (rootId) => async (delivery) => {
+  const deliverHandler = () => async (delivery) => {
     if (disposed) return;
     const currentItems = getItems();
     const targetItem = currentItems[delivery.targetId];
@@ -85,13 +101,50 @@ export function createMultiAgentStore({
       return;
     }
 
-    // Verify the connector still exists before writing to external canvas objects.
+    if (delivery.type === 'router' && isAgentRouterItem(targetItem)) {
+      const patch = writeAgentRouterPatch(targetItem, {
+        lastDecision: delivery.decision,
+      });
+      if (patch) saveAgentItem?.(delivery.targetId, patch);
+      return;
+    }
+
+    if (delivery.type === 'agent_input' && isAgentInputItem(targetItem)) {
+      const patch = writeAgentInputPatch(targetItem, {
+        lastSubmittedAt: delivery.updatedAt || Date.now(),
+      });
+      if (patch) saveAgentItem?.(delivery.targetId, patch);
+      return;
+    }
+
+    // Verify the connector still exists before writing to downstream output/canvas objects.
     const stillConnected = Object.values(currentItems).some(
       edge => edge?.kind === 'connector'
         && String(edge.from) === String(delivery.sourceId)
         && String(edge.to) === String(delivery.targetId),
     );
     if (!stillConnected) return;
+
+    if (delivery.type === 'agent_output' && isAgentOutputItem(targetItem)) {
+      const cfg = readAgentOutputConfig(targetItem);
+      const prev = outputHistory.get(delivery.targetId) || targetItem.runtimeResults || [];
+      const records = cfg.appendHistory !== false ? [...prev, delivery.record] : [delivery.record];
+      while (records.length > 32 || new TextEncoder().encode(JSON.stringify(records)).length > 524288) {
+        records.shift();
+      }
+      outputHistory.set(delivery.targetId, records);
+      const patch = writeAgentOutputPatch(targetItem, {
+        text: delivery.text,
+        lastMeta: delivery.meta,
+        runtimeResults: records,
+      });
+      if (saveAgentItem && patch) {
+        saveAgentItem(delivery.targetId, patch);
+      } else {
+        saveOutput?.(delivery.targetId, records);
+      }
+      return;
+    }
 
     if (delivery.type === 'value') {
       saveValue?.(delivery.targetId, delivery.valuePatch);
@@ -111,6 +164,168 @@ export function createMultiAgentStore({
   const finishRun = () => {
     activeRun = null;
     onBusyChange?.(false);
+  };
+
+  const handleFlowEvent = ({ rootId, trackedRunnables, isMultiStep = true }) => (event) => {
+    if (event.type === 'input_ready') {
+      emitNode(event.inputId, { running: false, status: 'success', completed: true, updatedAt: Date.now() });
+    } else if (event.type === 'router_start') {
+      emitNode(event.routerId, {
+        running: true,
+        status: 'running',
+        phase: 'agent',
+        detail: '라우팅 판단 중…',
+        runId: event.runId,
+        updatedAt: Date.now(),
+      });
+      if (isMultiStep) {
+        emitActivity({
+          ...activity,
+          currentAgentId: event.routerId,
+          currentAgentName: event.routerName,
+          progress: `${event.routerName} 라우팅 분석 중…`,
+          entries: [
+            ...(activity?.entries || []),
+            { agentId: event.routerId, agentName: event.routerName, round: event.round || 1, status: 'running' },
+          ],
+        });
+      }
+    } else if (event.type === 'router_progress') {
+      const prev = nodeStates.get(event.routerId) || {};
+      emitNode(event.routerId, { ...prev, detail: event.progress, updatedAt: Date.now() }, { persist: false });
+      emitActivity({ ...activity, progress: event.progress });
+    } else if (event.type === 'router_decision') {
+      const d = event.decision;
+      const summary = `${(d?.selectedTargetNames || []).join(', ') || '대상 없음'} (${(d?.detectedFormats || []).map(formatTypeLabel).join(', ')})`;
+      emitNode(event.routerId, {
+        running: false,
+        status: d?.selectedTargetIds?.length ? 'success' : 'skipped',
+        completed: Boolean(d?.selectedTargetIds?.length),
+        detail: d?.reason || summary,
+        runId: event.runId,
+        updatedAt: Date.now(),
+      });
+      if (isMultiStep) {
+        emitActivity({
+          ...activity,
+          entries: (activity?.entries || []).map((entry, idx, arr) =>
+            idx === arr.length - 1 && entry.agentId === event.routerId && entry.status === 'running'
+              ? { ...entry, status: d?.selectedTargetIds?.length ? 'success' : 'skipped', summary }
+              : entry,
+          ),
+        });
+      }
+    } else if (event.type === 'agent_skipped' || event.type === 'router_skipped') {
+      emitNode(event.agentId || event.routerId, {
+        running: false,
+        status: 'skipped',
+        completed: false,
+        failed: false,
+        detail: event.reason || '건너뜀',
+        runId: event.runId,
+        updatedAt: Date.now(),
+      });
+    } else if (event.type === 'agent_start') {
+      emitNode(event.agentId, {
+        running: true,
+        status: 'running',
+        phase: 'agent',
+        round: event.round,
+        detail: `라운드 ${event.round}/${event.maxRounds} 실행 중`,
+        runId: event.runId,
+        updatedAt: Date.now(),
+      });
+      if (rootId && rootId !== event.agentId) {
+        emitNode(rootId, {
+          running: true,
+          status: 'running',
+          phase: 'agent',
+          round: event.round,
+          detail: `${event.agentName} (R${event.round}/${event.maxRounds})`,
+          runId: event.runId,
+          updatedAt: Date.now(),
+        }, { persist: false });
+      }
+      emitActivity({
+        ...activity,
+        currentAgentId: event.agentId,
+        currentAgentName: event.agentName,
+        round: event.round,
+        maxRounds: event.maxRounds,
+        progress: `${event.agentName} 작업 시작…`,
+        entries: [
+          ...(activity?.entries || []),
+          { agentId: event.agentId, agentName: event.agentName, round: event.round, status: 'running' },
+        ],
+      });
+    } else if (event.type === 'agent_progress') {
+      const prev = nodeStates.get(event.agentId) || {};
+      emitNode(event.agentId, { ...prev, running: true, status: 'running', detail: event.progress, updatedAt: Date.now() }, { persist: false });
+      emitActivity({ ...activity, progress: event.progress });
+    } else if (event.type === 'agent_complete') {
+      emitNode(event.agentId, {
+        running: false,
+        status: 'success',
+        completed: true,
+        failed: false,
+        round: event.round,
+        runId: event.runId,
+        updatedAt: Date.now(),
+      });
+      emitActivity({
+        ...activity,
+        entries: (activity?.entries || []).map((entry, idx, arr) =>
+          idx === arr.length - 1 && entry.agentId === event.agentId && entry.status === 'running'
+            ? { ...entry, status: 'success', summary: event.summary, directives: event.directives, approved: event.approved, done: event.done }
+            : entry,
+        ),
+      });
+    } else if (event.type === 'agent_error') {
+      emitNode(event.agentId, {
+        running: false,
+        status: 'error',
+        failed: true,
+        round: event.round,
+        error: event.error,
+        runId: event.runId,
+        updatedAt: Date.now(),
+      });
+      emitActivity({
+        ...activity,
+        entries: (activity?.entries || []).map((entry, idx, arr) =>
+          idx === arr.length - 1 && entry.agentId === event.agentId && entry.status === 'running'
+            ? { ...entry, status: 'error', summary: event.error }
+            : entry,
+        ),
+      });
+    } else if (event.type === 'complete') {
+      for (const nid of trackedRunnables || []) {
+        const st = nodeStates.get(nid);
+        if (st?.status === 'queued') {
+          emitNode(nid, { running: false, status: 'skipped', updatedAt: Date.now() });
+        }
+      }
+      const failed = event.status !== 'success';
+      if (rootId) {
+        emitNode(rootId, {
+          running: false,
+          status: failed ? 'error' : 'success',
+          completed: !failed,
+          failed,
+          ...(event.error ? { error: event.error } : {}),
+          runId: event.runId,
+          updatedAt: Date.now(),
+        });
+      }
+      emitActivity({
+        ...activity,
+        status: failed ? 'error' : 'success',
+        endedAt: Date.now(),
+        converged: event.converged,
+        roundsCompleted: event.roundsCompleted,
+        ...(event.error ? { error: event.error } : {}),
+      });
+    }
   };
 
   return {
@@ -198,31 +413,16 @@ export function createMultiAgentStore({
       });
 
       try {
-        const result = await runSingleAgent({
+        return await runSingleAgent({
           items,
           agentId: id,
           executeAgent,
           resolveApiKey,
           getAnchor,
           signal: controller.signal,
-          onDeliver: deliverHandler(id),
-          onEvent: (event) => {
-            if (event.type === 'agent_progress') {
-              const prev = nodeStates.get(id) || {};
-              emitNode(id, { ...prev, running: true, status: 'running', detail: event.progress, updatedAt: Date.now() }, { persist: false });
-              emitActivity({ ...activity, progress: event.progress });
-            } else if (event.type === 'agent_complete') {
-              emitNode(id, { running: false, status: 'success', completed: true, failed: false, runId: event.runId, updatedAt: Date.now() });
-              emitActivity({
-                ...activity,
-                status: 'success',
-                endedAt: Date.now(),
-                entries: [{ agentId: id, agentName: event.agentName, round: 1, status: 'success', summary: event.summary }],
-              });
-            }
-          },
+          onDeliver: deliverHandler(),
+          onEvent: handleFlowEvent({ rootId: id, trackedRunnables: [id], isMultiStep: false }),
         });
-        return result;
       } catch (error) {
         const msg = error?.message || '에이전트 실행에 실패했습니다.';
         emitNode(id, { running: false, status: 'error', failed: true, error: msg, updatedAt: Date.now() });
@@ -258,13 +458,14 @@ export function createMultiAgentStore({
 
       const controller = new AbortController();
       const startedAt = Date.now();
-      const trackedIds = [rootId, ...resolved.agentIds];
+      const trackedRunnables = [...(resolved.routerIds || []), ...resolved.agentIds];
+      const trackedIds = [rootId, ...(resolved.incomingInputIds || []), ...(resolved.inputIds || []), ...trackedRunnables];
       activeRun = { rootId, controller, nodeIds: trackedIds };
       onBusyChange?.(true);
 
       emitNode(rootId, { running: true, status: 'running', phase: 'agent', detail: `${resolved.agentIds.length}개 에이전트 시작`, updatedAt: startedAt });
-      for (const agentId of resolved.agentIds) {
-        emitNode(agentId, { running: false, status: 'queued', phase: 'agent', updatedAt: startedAt });
+      for (const nid of trackedRunnables) {
+        emitNode(nid, { running: false, status: 'queued', phase: 'agent', updatedAt: startedAt });
       }
       emitActivity({
         id: rootId,
@@ -279,121 +480,22 @@ export function createMultiAgentStore({
       });
 
       try {
-        const result = await runMultiAgentOrchestration({
+        return await runMultiAgentOrchestration({
           items,
           orchestratorId: rootId,
           executeAgent,
           resolveApiKey,
           getAnchor,
           signal: controller.signal,
-          onDeliver: deliverHandler(rootId),
-          onEvent: (event) => {
-            if (event.type === 'agent_start') {
-              emitNode(event.agentId, {
-                running: true,
-                status: 'running',
-                phase: 'agent',
-                round: event.round,
-                detail: `라운드 ${event.round}/${event.maxRounds} 실행 중`,
-                runId: event.runId,
-                updatedAt: Date.now(),
-              });
-              emitNode(rootId, {
-                running: true,
-                status: 'running',
-                phase: 'agent',
-                round: event.round,
-                detail: `${event.agentName} (R${event.round}/${event.maxRounds})`,
-                runId: event.runId,
-                updatedAt: Date.now(),
-              }, { persist: false });
-              emitActivity({
-                ...activity,
-                currentAgentId: event.agentId,
-                currentAgentName: event.agentName,
-                round: event.round,
-                maxRounds: event.maxRounds,
-                progress: `${event.agentName} 작업 시작…`,
-                entries: [
-                  ...(activity?.entries || []),
-                  { agentId: event.agentId, agentName: event.agentName, round: event.round, status: 'running' },
-                ],
-              });
-            } else if (event.type === 'agent_progress') {
-              const prev = nodeStates.get(event.agentId) || {};
-              emitNode(event.agentId, { ...prev, detail: event.progress, updatedAt: Date.now() }, { persist: false });
-              emitActivity({ ...activity, progress: event.progress });
-            } else if (event.type === 'agent_complete') {
-              emitNode(event.agentId, {
-                running: false,
-                status: 'success',
-                completed: true,
-                failed: false,
-                round: event.round,
-                runId: event.runId,
-                updatedAt: Date.now(),
-              });
-              emitActivity({
-                ...activity,
-                entries: (activity?.entries || []).map((entry, idx, arr) =>
-                  idx === arr.length - 1 && entry.agentId === event.agentId && entry.status === 'running'
-                    ? { ...entry, status: 'success', summary: event.summary, directives: event.directives, approved: event.approved, done: event.done }
-                    : entry,
-                ),
-              });
-            } else if (event.type === 'agent_error') {
-              emitNode(event.agentId, {
-                running: false,
-                status: 'error',
-                failed: true,
-                round: event.round,
-                error: event.error,
-                runId: event.runId,
-                updatedAt: Date.now(),
-              });
-              emitActivity({
-                ...activity,
-                entries: (activity?.entries || []).map((entry, idx, arr) =>
-                  idx === arr.length - 1 && entry.agentId === event.agentId && entry.status === 'running'
-                    ? { ...entry, status: 'error', summary: event.error }
-                    : entry,
-                ),
-              });
-            } else if (event.type === 'complete') {
-              for (const agentId of resolved.agentIds) {
-                const st = nodeStates.get(agentId);
-                if (st?.status === 'queued') {
-                  emitNode(agentId, { running: false, status: 'skipped', updatedAt: Date.now() });
-                }
-              }
-              const failed = event.status !== 'success';
-              emitNode(rootId, {
-                running: false,
-                status: failed ? 'error' : 'success',
-                completed: !failed,
-                failed,
-                ...(event.error ? { error: event.error } : {}),
-                runId: event.runId,
-                updatedAt: Date.now(),
-              });
-              emitActivity({
-                ...activity,
-                status: failed ? 'error' : 'success',
-                endedAt: Date.now(),
-                converged: event.converged,
-                roundsCompleted: event.roundsCompleted,
-                ...(event.error ? { error: event.error } : {}),
-              });
-            }
-          },
+          onDeliver: deliverHandler(),
+          onEvent: handleFlowEvent({ rootId, trackedRunnables, isMultiStep: true }),
         });
-        return result;
       } catch (error) {
         const msg = error?.message || '멀티 에이전트 실행에 실패했습니다.';
-        for (const agentId of resolved.agentIds) {
-          const st = nodeStates.get(agentId);
+        for (const nid of trackedRunnables) {
+          const st = nodeStates.get(nid);
           if (st?.status === 'queued' || st?.running) {
-            emitNode(agentId, {
+            emitNode(nid, {
               running: false,
               status: st?.running ? 'error' : 'skipped',
               failed: Boolean(st?.running),
@@ -403,6 +505,144 @@ export function createMultiAgentStore({
           }
         }
         emitNode(rootId, { running: false, status: 'error', failed: true, error: msg, updatedAt: Date.now() });
+        emitActivity({ ...activity, status: 'error', error: msg, endedAt: Date.now() });
+        return null;
+      } finally {
+        finishRun();
+      }
+    },
+    async runInput(inputId) {
+      const id = String(inputId);
+      const items = getItems();
+      const item = items[id];
+      if (activeRun || disposed || !isAgentInputItem(item) || isRemoteActive(item)) return null;
+
+      let flow;
+      try {
+        flow = resolveFlowFromNode(items, id);
+      } catch (error) {
+        emitNode(id, { running: false, status: 'error', failed: true, error: error.message, updatedAt: Date.now() });
+        return null;
+      }
+
+      if (flow.orchestratorIds.length) {
+        return this.runOrchestrator(flow.orchestratorIds[0]);
+      }
+
+      const controller = new AbortController();
+      const startedAt = Date.now();
+      const trackedRunnables = [...flow.routerIds, ...flow.agentIds];
+      activeRun = { rootId: id, controller, nodeIds: [id, ...trackedRunnables] };
+      onBusyChange?.(true);
+
+      emitNode(id, { running: true, status: 'running', phase: 'agent', detail: '입력 전송 중…', updatedAt: startedAt });
+      for (const nid of trackedRunnables) {
+        emitNode(nid, { running: false, status: 'queued', phase: 'agent', updatedAt: startedAt });
+      }
+      emitActivity({
+        id,
+        kind: 'input',
+        title: item.title || '입력 객체',
+        status: 'running',
+        startedAt,
+        round: 1,
+        maxRounds: 1,
+        entries: [],
+      });
+
+      try {
+        return await runFromInputNode({
+          items,
+          inputId: id,
+          executeAgent,
+          resolveApiKey,
+          getAnchor,
+          signal: controller.signal,
+          onDeliver: deliverHandler(),
+          onEvent: handleFlowEvent({ rootId: id, trackedRunnables, isMultiStep: true }),
+        });
+      } catch (error) {
+        const msg = error?.message || '입력 객체 실행에 실패했습니다.';
+        for (const nid of trackedRunnables) {
+          const st = nodeStates.get(nid);
+          if (st?.status === 'queued' || st?.running) {
+            emitNode(nid, {
+              running: false,
+              status: st?.running ? 'error' : 'skipped',
+              failed: Boolean(st?.running),
+              ...(st?.running ? { error: msg } : {}),
+              updatedAt: Date.now(),
+            });
+          }
+        }
+        emitNode(id, { running: false, status: 'error', failed: true, error: msg, updatedAt: Date.now() });
+        emitActivity({ ...activity, status: 'error', error: msg, endedAt: Date.now() });
+        return null;
+      } finally {
+        finishRun();
+      }
+    },
+    async runRouter(routerId) {
+      const id = String(routerId);
+      const items = getItems();
+      const item = items[id];
+      if (activeRun || disposed || !isAgentRouterItem(item) || isRemoteActive(item)) return null;
+
+      let flow;
+      try {
+        flow = resolveFlowFromNode(items, id);
+      } catch (error) {
+        emitNode(id, { running: false, status: 'error', failed: true, error: error.message, updatedAt: Date.now() });
+        return null;
+      }
+
+      const controller = new AbortController();
+      const startedAt = Date.now();
+      const trackedRunnables = [...flow.routerIds.filter(rid => rid !== id), ...flow.agentIds];
+      activeRun = { rootId: id, controller, nodeIds: [id, ...trackedRunnables] };
+      onBusyChange?.(true);
+
+      emitNode(id, { running: true, status: 'running', phase: 'agent', detail: '라우팅 분석 중…', updatedAt: startedAt });
+      for (const nid of trackedRunnables) {
+        emitNode(nid, { running: false, status: 'queued', phase: 'agent', updatedAt: startedAt });
+      }
+      emitActivity({
+        id,
+        kind: 'router',
+        title: item.title || '라우터 객체',
+        status: 'running',
+        startedAt,
+        round: 1,
+        maxRounds: 1,
+        entries: [],
+      });
+
+      try {
+        return await runFromRouterNode({
+          items,
+          routerId: id,
+          executeAgent,
+          resolveApiKey,
+          getAnchor,
+          signal: controller.signal,
+          onDeliver: deliverHandler(),
+          onEvent: handleFlowEvent({ rootId: id, trackedRunnables, isMultiStep: true }),
+        });
+      } catch (error) {
+        const msg = error?.message || '라우터 실행에 실패했습니다.';
+        for (const nid of trackedRunnables) {
+          const st = nodeStates.get(nid);
+          if (st?.status === 'queued' || st?.running) {
+            emitNode(nid, {
+              running: false,
+              status: st?.running ? 'error' : 'skipped',
+              failed: Boolean(st?.running),
+              ...(st?.running ? { error: msg } : {}),
+              updatedAt: Date.now(),
+            });
+          }
+        }
+        emitNode(id, { running: false, status: 'error', failed: true, error: msg, updatedAt: Date.now() });
         emitActivity({ ...activity, status: 'error', error: msg, endedAt: Date.now() });
         return null;
       } finally {

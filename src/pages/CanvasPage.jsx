@@ -14,7 +14,7 @@ import { PORTFOLIO_ID, newPortfolio, defaultAnimation, hasAnimation, validAnimat
 import PortfolioViewer from '../canvas/portfolio/PortfolioViewer.jsx';
 import { PresentationContext } from '../canvas/portfolio/presentationContext.js';
 import { useMediaUpload } from '../canvas/media/useMediaUpload.js';
-import { mediaFileType } from '../canvas/media/mediaModel.js';
+import { canvasImageFile, mediaFileType } from '../canvas/media/mediaModel.js';
 import { ProjectContext, createProjectStore } from '../canvas/projects/projectStore.js';
 import { validProject, validateProjectLinks, newIssue, removeProject } from '../canvas/projects/projectModel.js';
 import { useCanvasPasswordPrompt } from '../canvas/useCanvasPasswordPrompt.js';
@@ -25,6 +25,7 @@ import '../canvas/graphics-quality.css';
 import { runtimeStateTtl } from '../canvas/runtime/useObjectRuntimeState.js';
 import { notebookCellItem, notebookCellObjectId, NOTEBOOK_LIMIT, validNotebookCells } from '../canvas/notebook/notebookData.js';
 import { api } from '../api/client.js';
+import { fetchNotebookFile, uploadNotebookFile } from '../canvas/notebook/notebookFile.js';
 import { canvasPasswordGrantKey, readCanvasPasswordGrant } from '../canvas/canvasAccess.js';
 import { activeGridInterval, BASE_GRID_INTERVAL, gridInterval, snapNewItem } from '../canvas/gridPlacement.js';
 import { creationGroupPermission, deriveUserCapabilitiesFromSettings, normalizeObjectGroups } from '../canvas/permissions/creationGroups.js';
@@ -53,7 +54,8 @@ import { overviewScale } from '../canvas/sceneRepresentation.js';
 import { useCanvasCamera } from '../canvas/useCanvasCamera.js';
 import { isRasterContent as isRasterText } from '../canvas/plainTextRaster.js';
 import { buildDepthLayers, itemDepth } from '../canvas/itemDepth.js';
-import { hitTestFrameBorder, hitTestVector } from '../canvas/vectorHitTest.js';
+import { hitTestFrameBorder, hitTestVector, needsVectorDom } from '../canvas/vectorHitTest.js';
+import { buildDepthRenderGroups } from '../canvas/depthRenderGroups.js';
 import { renderWindow, containsViewport } from '../canvas/renderWindow.js';
 import { handleObjectDoubleClick } from '../canvas/objectDoubleClick.js';
 import StableSpatialQuery from '../canvas/StableSpatialQuery.js';
@@ -1583,6 +1585,13 @@ function CanvasWorkspace() {
       return { ...layer, vectors: nextVectors, inkItems: nextInkItems };
     });
   }, [sceneModel.depthLayers, styledDomIds, visibilityDomIds, pendingEntrance]);
+  // Consecutive depths without ink or persistent DOM share one vector renderer
+  // (see depthRenderGroups.js); selection-only DOM never splits a group.
+  const renderGroupCacheRef = useRef(null); if (!renderGroupCacheRef.current) renderGroupCacheRef.current = new Map();
+  const renderGroups = useMemo(() => {
+    const persistent = new Set([...liveContentIds, ...styledDomIds, ...visibilityDomIds, ...(pendingEntrance || [])].map(String));
+    return buildDepthRenderGroups(depthLayers, (id, item) => persistent.has(id) || needsVectorDom(id, item, EMPTY_ID_SET, null, null, boardSize, representationScale, 'high'), renderGroupCacheRef.current);
+  }, [depthLayers, liveContentIds, styledDomIds, visibilityDomIds, pendingEntrance, boardSize, representationScale]);
   const blurBudgetRef = useRef(null);
   const blurBudgetIds = useMemo(() => {
     if (!styledDomIds.size) { blurBudgetRef.current = null; return null; }
@@ -1852,16 +1861,21 @@ function CanvasWorkspace() {
       const file = event.target.files?.[0]; event.target.value = '';
       if (!file) return;
       if (mediaFileType(file)) return uploadMedia({ target: { files: [file], value: '' } }, options);
-      if (!file.type.startsWith('image/')) { setToast('이미지 파일만 올릴 수 있어요.'); return; }
-      if (file.size > 2 * 1024 * 1024) { setToast('이미지는 2MB 이하로 올려주세요.'); return; }
+      if (!canvasImageFile(file)) { setToast('PNG·JPG·WebP·BMP·AVIF 이미지를 선택해주세요.'); return; }
       try {
-        const src = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
+        const body = new FormData();
+        body.append('file', file);
+        const resource = await api(`/api/canvases/${encodeURIComponent(canvasId)}/media`, {
+          method: 'POST', body, token, requireCanvasTransport: true, canContinue: options.canInsert,
+        });
+        if (resource?.mediaType !== 'image' || !resource.url) throw Error(ui('이미지 파일만 올릴 수 있어요.'));
+        const src = resource.url;
         const id = createId();
         if (options.canInsert?.() === false) return;
         const position = options.position ? { x: options.position.x - .15, y: options.position.y - .1 } : centeredItemPosition(0.3, 0.2);
         if (!addItem(id, { kind: 'image', src, filename: file.name, ...position, width: 0.3, permission })) { setToast('실시간 서버에 연결된 뒤 이미지를 공유할 수 있어요.'); return; }
         setActiveTool('select'); selectItems([id]); return id;
-      } catch { setToast('이미지를 읽지 못했습니다.'); }
+      } catch (error) { if (error.name !== 'AbortError') setToast(error.message || '이미지를 읽지 못했습니다.'); }
     };
     const uploadChatMedia = async (file) => {
       const check = validateChatMediaFile(file);
@@ -2126,6 +2140,7 @@ function CanvasWorkspace() {
       permission, pointerPosition, canvasSnapshotLoadedRef: hostReadyRef, addItem, addItems, deleteItem, deleteItems, saveCollaborativeItem,
       pasteBackpressure: () => hostSessionRef.current.queuedBytes > 2 * 1024 * 1024 || hostSessionRef.current.pendingOperations.length > 1024,
       canPaste: canWriteCanvas, uploadMedia, uploadImage, uploadPdf, uploadSheet,
+      uploadNotebookFile: (file, options) => uploadNotebookFile(file, { canvasId, token, ...options }),
       isInteracting: () => Boolean(dragRef.current || panRef.current || drawingRef.current || selectionRef.current || eraserRef.current),
       selectItems, setActiveTool, setConnectionStartId, setToast, blocked: clipboardBlocked
     });
@@ -2156,7 +2171,7 @@ function CanvasWorkspace() {
         if (index < 0 || target < 0 || target >= current.length) return false;
         next = current.slice();[next[index], next[target]] = [next[target], next[index]];
       } else if (!['migrate', 'clear-results'].includes(action?.type)) return false;
-      const rootNext = { ...root, groupId: String(id), height: .18, notebookCellIds: [] }; delete rootNext.notebookCells; delete rootNext.notebookResults;
+      const rootNext = { ...root, ...(action.type === 'replace' ? action.source : undefined), groupId: String(id), height: .18, notebookCellIds: [] }; delete rootNext.notebookCells; delete rootNext.notebookResults;
       const changes = { [String(id)]: rootNext }, keep = new Set();
       for (let index = 0; index < next.length; index++) {
         const entry = next[index], cell = entry.cell; let objectId = entry.objectId;
@@ -2173,6 +2188,21 @@ function CanvasWorkspace() {
       const removed = [...new Set([...oldIds, ...current.filter(entry => entry.item).map(entry => entry.objectId)])].filter(objectId => objectId && !keep.has(objectId));
       return patchItems(changes, removed, { history: !['migrate', 'clear-results'].includes(action.type) });
     };
+    runtimeStore.importNotebookFile = async (id, file, signal) => {
+      const canContinue = () => {
+        const current = itemsRef.current[id];
+        return !signal?.aborted && hostSessionRef.current.editable && current?.runtimeRole === 'notebook' && !current.locked && canWriteItem(current);
+      };
+      if (!canContinue()) throw Error(ui('노트북 셀 변경을 저장하지 못했습니다.'));
+      const { src, filename, notebookCells } = await uploadNotebookFile(file, { canvasId, token, canContinue });
+      if (!canContinue()) return;
+      const accepted = notebookCells
+        ? runtimeStore.notebookStructure(id, { type: 'replace', cells: notebookCells, source: { src, filename } })
+        : patchItems({ [id]: { ...itemsRef.current[id], src, filename } });
+      if (!accepted) throw Error(ui('노트북 셀 변경을 저장하지 못했습니다.'));
+      return { editable: Boolean(notebookCells) };
+    };
+    runtimeStore.fetchNotebookFile = src => fetchNotebookFile(src, token);
     runtimeStore.notebook = async (id, { operation, code, cellId, cellObjectId }) => {
       const previous = itemsRef.current[id]; if (!previous || previous.runtimeRole !== 'notebook' || !canExecuteItem(previous)) throw Error(ui('이 그룹에는 실행 권한이 없습니다.'));
       if (operation === 'prepare' && (!canWriteCanvas || !canWriteItem(previous))) throw Error(ui('이 그룹에는 실행 환경을 변경할 권한이 없습니다.'));
@@ -2234,6 +2264,14 @@ function CanvasWorkspace() {
     };
     multiAgentStore.focusCanvasObject = focusCanvasObject;
     multiAgentStore.openAgentPanel = () => setShowAgent(true);
+    multiAgentStore.patchConnector = (connectorId, patch) => updateTableItem(connectorId, patch);
+    multiAgentStore.startConnectorFrom = (sourceId) => {
+      if (!hostSessionRef.current.editable || !canWriteCanvas) return;
+      finishEditing(editingId);
+      setActiveTool('connect');
+      setConnectionStartId(String(sourceId));
+      setToast('도착 오브젝트를 선택해 연결을 완성하세요.');
+    };
     multiAgentStore.createTemplate = (orchestratorId, templateId) => {
       const root = itemsRef.current[String(orchestratorId)];
       if (!root || !isAgentOrchestratorItem(root) || !hostSessionRef.current.editable || !canWriteItem(root) || isObjectLocked(root)) return false;
@@ -2662,8 +2700,8 @@ function CanvasWorkspace() {
               <CanvasWatchOverlay watch={watch} />
               <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true">{(showXAxis || showYAxis) && <CanvasAxisTicks boardRef={boardRef} camera={camera} showXAxis={showXAxis} showYAxis={showYAxis} />}{showXAxis && <span className="coordinate-x" />}{showYAxis && <span className="coordinate-y" />}{(showXAxis || showYAxis) && <i className="coordinate-origin">0</i>}</div>
               <BlurBudgetContext.Provider value={blurBudgetIds}><div className="canvas-scene" ref={sceneRef} style={sceneStyle}>
-                {depthLayers.map((layer, index) => <div className="canvas-depth-layer" key={layer.depth} data-depth={layer.depth} style={{ position: 'absolute', inset: 0, zIndex: index + 1, pointerEvents: 'none' }}>
-                  <Suspense fallback={null}><VectorLayer token={token} style={vectorLayerStyle} worldSize={boardSize} items={layer.vectors} referenceItems={items} routingRevision={spatialIndex.stats.boundsCalculated} inkItems={layer.inkItems} previewStrokes={layer.depth === 0 ? remoteDrawingStrokes : undefined} camera={camera} onReady={layer.depth === 0 ? uiActions.onVectorDraftReady : undefined} onDragReady={getVectorDragCallback(layer.depth)} /></Suspense>
+                {renderGroups.map((layer, index) => <div className="canvas-depth-layer" key={layer.key} data-depth={layer.depths.at(-1)} style={{ position: 'absolute', inset: 0, zIndex: index + 1, pointerEvents: 'none' }}>
+                  <Suspense fallback={null}><VectorLayer token={token} style={vectorLayerStyle} worldSize={boardSize} items={layer.vectors} referenceItems={items} routingRevision={spatialIndex.stats.boundsCalculated} inkItems={layer.inkItems} previewStrokes={layer.hasDepthZero ? remoteDrawingStrokes : undefined} camera={camera} onReady={layer.hasDepthZero ? uiActions.onVectorDraftReady : undefined} onDragReady={getVectorDragCallback(layer.key)} /></Suspense>
                   <div className="canvas-world-layer" style={worldLayerStyle}><PresentationContext.Provider value={portfolioViewing}><VisibilityContext.Provider value={visibilityContextValue}><Suspense fallback={null}><CanvasLayerObjects pendingEntrance={pendingEntrance} objects={layer.domObjects} allItems={items} domSelection={domSelection} editingId={editingId} connectionStartId={connectionStartId} world={boardSize} scale={representationScale} token={token} runtimeStore={runtimeStore} multiAgentStore={multiAgentStore} selected={selectedObjectIdSet} singleSelection={hasSingleSelection} activeTool={activeTool} dirtyItems={dirtyItems} editorsByItem={editorsByItem} actions={objectActions} access={capabilities} canWriteItem={uiActions.canWriteItem} canExecuteItem={canExecuteItem} /></Suspense></VisibilityContext.Provider></PresentationContext.Provider></div>
                 </div>)}
                 <div className="canvas-world-layer" style={worldLayerOverlayStyle}>
