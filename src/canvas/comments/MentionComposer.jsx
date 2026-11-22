@@ -1,5 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { ui } from '../../i18n/locale.js';
+import { useUiLocale } from '../../i18n/useUiLocale.js';
 import { mentionSuggestions, mentionToken } from './mentions.js';
 
 export default function MentionComposer({
@@ -15,6 +16,7 @@ export default function MentionComposer({
   leadingAction = null,
   topSlot = null,
 }) {
+  useUiLocale();
   const fieldId = useId();
   const input = useRef(null);
   const pendingPosition = useRef(null);

@@ -60,6 +60,7 @@ import { renderWindow, containsViewport } from '../canvas/renderWindow.js';
 import { handleObjectDoubleClick } from '../canvas/objectDoubleClick.js';
 import StableSpatialQuery from '../canvas/StableSpatialQuery.js';
 import { useSheetUpload } from '../canvas/sheets/useSheetUpload.js';
+import { useCanvasFileUploads } from '../canvas/useCanvasFileUploads.js';
 import { usePdfUpload } from '../canvas/pdf/usePdfUpload.js';
 import { useCanvasBackground } from '../canvas/background/useCanvasBackground.js';
 import { useParticipantProfiles } from '../canvas/useParticipantProfiles.js';
@@ -487,6 +488,11 @@ function CanvasWorkspace() {
   const canvasSettingsRef = useRef(null); canvasSettingsRef.current = settings;
   useEffect(() => () => { for (const request of settingsRequestsRef.current.values()) { clearTimeout(request.timer); request.reject(new Error('캔버스 연결이 종료되었습니다.')); } settingsRequestsRef.current.clear(); }, []);
   const [toast, setToast] = useState('');
+  const { beginUpload: trackUpload, uploads: fileUploads } = useCanvasFileUploads(canvasId);
+  const beginUpload = name => {
+    setToast('');
+    return trackUpload(name);
+  };
   const { beginObjectMove, previewObjectMove, finishObjectMove, undo, undoCount, items, setItems, patchItems, moveItems, flushMoves, committedItemsRef, status: hostStatus, sessionRef: hostSessionRef, receiveServerItems, receiveServerEvent } = useServerCanvas({
     accessRef, itemsRef, peerMeshRef, wsRef, rtcWsRef, collaborativeDocsRef, collaborativeBaseDocsRef, setToast, setDirtyItems, reconnectRequestRef, onItemsPublished: (draft, ids) => { webAssetStore.update(draft, ids); projectStore.update(draft, ids); frameStore.update(draft, ids); }, onCommittedItems: (committed, ids) => animationStore.update(committed, ids),
   });
@@ -1851,31 +1857,37 @@ function CanvasWorkspace() {
         setActiveTool('select');
         selectItems([id]);
       } else {
-        setToast('연결이 복구되면 사용자 그룹을 다시 추가해주세요.');
+        setToast(ui('연결이 복구되면 사용자 그룹을 다시 추가해주세요.'));
       }
     }, [canWriteCanvas, centeredItemPosition, user, permission, addItem, setActiveTool, selectItems, setToast]);
     const uploadSheet = useSheetUpload({ canvasId, permission, addItem, centeredItemPosition, createId, setActiveTool, selectItems, setToast });
-    const uploadPdf = usePdfUpload({ canvasId, token, permission, addItem, centeredItemPosition, createId, setActiveTool, selectItems, setToast });
+    const uploadPdf = usePdfUpload({ canvasId, token, permission, addItem, centeredItemPosition, createId, setActiveTool, selectItems, setToast, beginUpload });
     const uploadMedia = useMediaUpload({ canvasId, token, permission, addItem, centeredItemPosition, createId, setActiveTool, selectItems, setToast });
     const uploadImage = async (event, options = {}) => {
       const file = event.target.files?.[0]; event.target.value = '';
       if (!file) return;
       if (mediaFileType(file)) return uploadMedia({ target: { files: [file], value: '' } }, options);
-      if (!canvasImageFile(file)) { setToast('PNG·JPG·WebP·BMP·AVIF 이미지를 선택해주세요.'); return; }
+      const reportError = options.onError ?? setToast;
+      if (!canvasImageFile(file)) { reportError('PNG·JPG·WebP·BMP·AVIF 이미지를 선택해주세요.'); return; }
+      const upload = beginUpload(file.name);
       try {
         const body = new FormData();
         body.append('file', file);
         const resource = await api(`/api/canvases/${encodeURIComponent(canvasId)}/media`, {
-          method: 'POST', body, token, requireCanvasTransport: true, canContinue: options.canInsert,
+          method: 'POST', body, token, requireCanvasTransport: true, canContinue: options.canInsert, onUploadProgress: upload.onUploadProgress,
         });
         if (resource?.mediaType !== 'image' || !resource.url) throw Error(ui('이미지 파일만 올릴 수 있어요.'));
         const src = resource.url;
         const id = createId();
         if (options.canInsert?.() === false) return;
         const position = options.position ? { x: options.position.x - .15, y: options.position.y - .1 } : centeredItemPosition(0.3, 0.2);
-        if (!addItem(id, { kind: 'image', src, filename: file.name, ...position, width: 0.3, permission })) { setToast('실시간 서버에 연결된 뒤 이미지를 공유할 수 있어요.'); return; }
-        setActiveTool('select'); selectItems([id]); return id;
-      } catch (error) { if (error.name !== 'AbortError') setToast(error.message || '이미지를 읽지 못했습니다.'); }
+        if (!addItem(id, { kind: 'image', src, filename: file.name, ...position, width: 0.3, permission })) { reportError('실시간 서버에 연결된 뒤 이미지를 공유할 수 있어요.'); return; }
+        setActiveTool('select'); selectItems([id]);
+        if (!options.onError) setToast('이미지를 캔버스에 추가했습니다.');
+        return id;
+      } catch (error) {
+        if (error.name !== 'AbortError') reportError(error.message || '이미지를 업로드하지 못했습니다.');
+      } finally { upload.finish(); }
     };
     const uploadChatMedia = async (file) => {
       const check = validateChatMediaFile(file);
@@ -2270,7 +2282,7 @@ function CanvasWorkspace() {
       finishEditing(editingId);
       setActiveTool('connect');
       setConnectionStartId(String(sourceId));
-      setToast('도착 오브젝트를 선택해 연결을 완성하세요.');
+      setToast(ui('도착 오브젝트를 선택해 연결을 완성하세요.'));
     };
     multiAgentStore.createTemplate = (orchestratorId, templateId) => {
       const root = itemsRef.current[String(orchestratorId)];
@@ -2835,6 +2847,13 @@ function CanvasWorkspace() {
           <ScreenShareViewer voice={voice} /><ResizablePanel {...panelLayout.handle('chat')} title={ui('채팅 · 통화')} callActive={voice.state.active}><CanvasChatPanel token={token} voice={voice} tab={communicationTab} onTabChange={uiActions.onChatTabChange} canWrite={canUseCanvas(capabilities, 'write')} chatHistoryLoading={chatHistoryLoading} connection={connection} hasOlderMessages={hasOlderMessages} loadOlderMessages={uiActions.loadOlderMessages} message={message} messages={messages} setMessage={uiActions.setMessage} submitMessage={uiActions.submitMessage} chatMessageTotal={chatMessageTotal} participants={mentionParticipants} highlight={chatHighlight} onHighlightExpired={uiActions.onChatHighlightExpired} onHighlightVisible={uiActions.onChatHighlightVisible} channels={channelControls} onUploadChatMedia={uiActions.onUploadChatMedia} /></ResizablePanel>
         </div>}
         {passwordPrompt.prompt && <CanvasPasswordDialog prompt={passwordPrompt.prompt} theme={theme} />}
+        {fileUploads.length > 0 && <div className="toast-message canvas-file-upload-status" role="status">
+          <span className="runtime-spinner" aria-hidden="true" />
+          <span className="canvas-file-upload-name" title={fileUploads[0].name}>{fileUploads[0].name}</span>
+          <span>{fileUploads[0].percent === 100 ? ui('캔버스에 추가하는 중…') : ui('파일을 업로드하는 중…')}</span>
+          {fileUploads[0].percent != null && fileUploads[0].percent < 100 && <span aria-hidden="true">{fileUploads[0].percent}%</span>}
+          {fileUploads.length > 1 && <span>{ui('외 {count}개', { count: fileUploads.length - 1 })}</span>}
+        </div>}
         {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{ui(toast)}</div>}
         {comments.activeId && <ObjectCommentsPanel token={token} comments={comments} participants={mentionParticipants} connection={connection} />}
         <MentionNotifications notifications={comments.notifications} onJump={jumpToMention} onDismiss={comments.dismiss} channelName={id => textChannels.find(channel => channel.id === id)?.name} />

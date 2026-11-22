@@ -1,4 +1,6 @@
 import CameraIdleTask from './CameraIdleTask.js';
+// Styles the .canvas-grid-surface tile that apply() moves with the camera.
+import './canvas-grid.css';
 import { shouldCommitCamera } from './cameraCommitSchedule.js';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, startTransition } from 'react';
 import { applyGridProjection, gridProjection } from './gridProjection.js';
@@ -57,28 +59,30 @@ export function useCanvasCamera(boardRef, sceneRef) {
     for (let i = 0; i < worldLayers.length; i++) {
       if (worldLayers[i].style.transform !== transform) worldLayers[i].style.transform = transform;
     }
-    if (!structureChanged && !viewChanged && !settlingGrid && !settleNotify && last.gx === gx && last.gy === gy && last.layers === worldLayers.length && last.axisChildren === axisChildren) return;
-    const grid = refs.grid?.isConnected ? refs.grid : (refs.grid = stage.querySelector('.canvas-grid-surface'));
+    const grid = refs.grid?.parentElement === stage ? refs.grid : stage.querySelector('.canvas-grid-surface');
+    const gridChanged = refs.grid !== grid || stageChanged;
+    refs.grid = grid;
+    if (!structureChanged && !gridChanged && !viewChanged && !settlingGrid && !settleNotify && last.gx === gx && last.gy === gy && last.layers === worldLayers.length && last.axisChildren === axisChildren) return;
     if (grid) {
-      const proj = gridProjection(camera, { x: gx, y: gy });
-      const gridSpec = `${proj.coarse ? 1 : 0}:${proj.spacingX}:${proj.spacingY}`;
+      const interval = { x: gx, y: gy };
+      const proj = gridProjection(camera, interval);
+      const gridSpec = `${proj.spacingX}:${proj.spacingY}`;
       const gridTileKey = `${gx}:${gy}`;
-      if (!proj.coarse && (last.gridSpec === gridSpec || (gridZooming && last.gridTileKey === gridTileKey))) {
+      const reuseDenseTile = !proj.coarse && gridZooming && last.gridTileKey === gridTileKey;
+      if (!gridChanged && (last.gridSpec === gridSpec || reuseDenseTile)) {
         if (last.gridTransform !== proj.transform) {
           grid.style.transform = proj.transform;
           last.gridTransform = proj.transform;
         }
-        if (gridZooming && last.gridSpec !== gridSpec) last.gridPending = true;
-      } else if (proj.coarse && last.gridSpec === gridSpec) {
-        const bgPos = `${proj.x + 48}px ${proj.y + 48}px`;
-        if (last.gridBgPos !== bgPos) {
-          grid.style.backgroundPosition = bgPos;
-          last.gridBgPos = bgPos;
+        if (last.gridBgPos !== proj.backgroundPosition) {
+          grid.style.backgroundPosition = proj.backgroundPosition;
+          last.gridBgPos = proj.backgroundPosition;
         }
+        if (reuseDenseTile && last.gridSpec !== gridSpec) last.gridPending = true;
       } else {
-        applyGridProjection(grid, camera, { x: gx, y: gy });
+        applyGridProjection(grid, camera, interval, proj);
         last.gridTransform = proj.transform;
-        last.gridBgPos = proj.coarse ? `${proj.x + 48}px ${proj.y + 48}px` : '0 0';
+        last.gridBgPos = proj.backgroundPosition;
         last.gridTileKey = proj.coarse ? '' : gridTileKey;
         last.gridSpec = gridSpec;
         last.gridPending = false;

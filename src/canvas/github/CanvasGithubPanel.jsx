@@ -4,7 +4,8 @@ import {stable} from '../asCode/manifest.js';
 import CanvasRepositoryPreview from './CanvasRepositoryPreview.jsx';
 import CanvasCommitGraph from './CanvasCommitGraph.jsx';
 import {useEffect,useId,useMemo,useRef,useState} from 'react';
-import {ui} from '../../i18n/locale.js';
+import {intlLocale,ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 import {canvasSnapshot,githubCanvasClient,normalizeRepositoryIdentity} from './githubCanvas.js';
 import './canvas-github.css';
 import GithubGroupPermissions from './GithubGroupPermissions.jsx';
@@ -15,6 +16,7 @@ import {syncBranchCanvas} from './canvasBranchSync.js';
 import {useAuth} from '../../state/AuthContext.jsx';
 import {api as request} from '../../api/client.js';
 export default function CanvasGithubPanel({api,canvasId,onLoad,active=true}){
+ const locale=useUiLocale();
  const fieldId=useId();
  const {token:agoraToken,user}=useAuth();
  const [config,setConfig]=useState(()=>{try{return {...{owner:'',repo:'',branch:'',path:`canvases/${canvasId}.canvas.json`},...JSON.parse(localStorage.getItem(`frelog.github.canvas.${canvasId}`)||'{}')};}catch{return {owner:'',repo:'',branch:'',path:`canvases/${canvasId}.canvas.json`};}});
@@ -110,7 +112,7 @@ export default function CanvasGithubPanel({api,canvasId,onLoad,active=true}){
   </nav>
   <div ref={feedback} className="canvas-github-feedback" aria-atomic="true">
    {busy?<p role="status">{ui('GitHub 요청 중…')}</p>:connection?<p className="canvas-github-connected">{ui('연결됨')} · {connection.target.owner}/{connection.target.repo} · {connection.target.branch}</p>:<small>{ui('아직 저장소에 연결되지 않았습니다.')}</small>}
-   {status&&<p role="status">{status}</p>}{error&&<p role="alert" className="canvas-as-code-error">{ui(error)}</p>}
+   {status&&<p role="status">{ui(status)}</p>}{error&&<p role="alert" className="canvas-as-code-error">{ui(error)}</p>}
    {commitSha&&connection&&/^[a-f\d]{40,64}$/i.test(commitSha)&&<a href={`https://github.com/${encodeURIComponent(connection.target.owner)}/${encodeURIComponent(connection.target.repo)}/commit/${commitSha}`} target="_blank" rel="noreferrer">{ui('GitHub에서 커밋 보기')}</a>}
   </div>
   <section id="version-panel-connection" role="tabpanel" aria-labelledby="version-tab-connection" hidden={tab!=='connection'}>
@@ -122,7 +124,7 @@ export default function CanvasGithubPanel({api,canvasId,onLoad,active=true}){
     <small>{ui('예: github.com/octocat/Hello-World → GitHub 소유자 octocat · 저장소 Hello-World')}</small>
     <small>{ui('대상 저장소의 Contents 읽기·쓰기 권한이 있는 Fine-grained 토큰을 사용하세요. 토큰은 이 출처의 브라우저 저장소에 24시간 암호화하여 보관합니다.')}</small>
     {!allowed('manage')&&<p>{ui('저장소 설정은 관리자만 변경할 수 있습니다. 연결된 저장소를 불러와 작업하세요.')}</p>}
-    {tokenNotice&&<small>{ui(tokenNotice)}{tokenExpiry?' · '+new Date(tokenExpiry).toLocaleString():''}</small>}
+    {tokenNotice&&<small>{ui(tokenNotice)}{tokenExpiry?' · '+new Date(tokenExpiry).toLocaleString(intlLocale(locale)):''}</small>}
     <button type="button" onClick={forgetToken}>{ui('저장된 GitHub 토큰 삭제')}</button>
     <details className="canvas-github-advanced"><summary>{ui('고급 연결 설정')}</summary><div className="canvas-github-fields">{[['branch','브랜치'],['path','파일 경로']].map(([field,label])=><label key={field}>{ui(label)}<input id={`${fieldId}-${field}`} name={`github-${field}`} value={config[field]} disabled={!allowed('manage')} onChange={e=>update(field,e.target.value)} placeholder={field==='branch'?ui('기본 브랜치'):undefined}/></label>)}</div></details>
     <button type="button" className="canvas-github-save" onClick={connect} aria-busy={busy}>{ui(busy?'GitHub 요청 중…':allowed('manage')?'저장소 연결 · 새로고침':'연결된 저장소 불러오기')}</button>

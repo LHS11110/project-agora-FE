@@ -1,7 +1,7 @@
 import { useId, useMemo, useState } from 'react';
 import Icon from '../../components/Icon.jsx';
 import MarkdownText from '../../components/MarkdownText.jsx';
-import { ui } from '../../i18n/locale.js';
+import { intlLocale, ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
 import {
   OUTPUT_DISPLAY_MODES,
@@ -34,7 +34,7 @@ export default function CanvasAgentOutputNode({
   readOnly = false,
   onChange,
 }) {
-  useUiLocale();
+  const locale = useUiLocale();
   const fieldId = useId();
   const config = useMemo(() => readAgentOutputConfig(item), [item]);
   const connections = useMemo(() => inspectAgentConnections(allItems || {}, id), [allItems, id]);
@@ -177,7 +177,7 @@ export default function CanvasAgentOutputNode({
                   <li key={`${entry.runId}-${entry.createdAt}-${idx}`}>
                     <div className="agent-collab-meta">
                       <strong>{entry.codeId}</strong>
-                      <span>{new Date(entry.createdAt).toLocaleTimeString()}</span>
+                      <span>{new Date(entry.createdAt).toLocaleTimeString(intlLocale(locale))}</span>
                     </div>
                     <pre className="agent-output-pre">{entry.error || entry.output}</pre>
                   </li>

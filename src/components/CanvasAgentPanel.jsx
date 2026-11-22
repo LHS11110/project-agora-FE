@@ -19,7 +19,7 @@ import {
   saveAgentKey,
   saveCliAgentKey,
 } from './agentCredentials.js';
-import { ui } from '../i18n/locale.js';
+import { intlLocale, ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
 import './canvas-agent.css';
 import MarkdownText from './MarkdownText.jsx';
@@ -35,7 +35,7 @@ function windowRemaining(entry, key, observed, now) {
 }
 
 function LimitCard({ telemetry, now, onRefresh, refreshing, personal }) {
-  useUiLocale();
+  const locale = useUiLocale();
   const data = telemetry?.limits || {}, observed = telemetry?.limits_observed_at;
   const retry = Math.max(0, Math.ceil((telemetry?.retry_at || 0) - now));
   return (
@@ -52,7 +52,7 @@ function LimitCard({ telemetry, now, onRefresh, refreshing, personal }) {
         >
           ↻
         </button>
-        <span>{observed ? ui('{time} 응답 기준', { time: new Date(observed * 1000).toLocaleTimeString('ko-KR') }) : ui('첫 응답 후 표시')}</span>
+        <span>{observed ? ui('{time} 응답 기준', { time: new Date(observed * 1000).toLocaleTimeString(intlLocale(locale)) }) : ui('첫 응답 후 표시')}</span>
       </div>
       <div className="canvas-agent-limit-grid">
         {[['second', '초당'], ['minute', '분당'], ['day', '일일']].map(([key, label]) => (
@@ -204,7 +204,7 @@ function CliStatusCard({
 }
 
 export default function CanvasAgentPanel({ open, onClose, request, selectedIds, anchor, canvasId, onBusyChange, theme = 'light' }) {
-  useUiLocale();
+  const locale = useUiLocale();
   const fieldId = useId();
   const [optimistic, setOptimistic] = useState(null);
   const [prompt, setPrompt] = useState('');
@@ -751,7 +751,7 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
                           aria-label={ui('응답 토큰 상한')}
                         >
                           {[512, 1024, 2048, 4096, 8192, 16384, 32768].map(value => (
-                            <option key={value} value={value}>{value.toLocaleString()}</option>
+                            <option key={value} value={value}>{value.toLocaleString(intlLocale(locale))}</option>
                           ))}
                         </select>
                       </label>
@@ -851,7 +851,7 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
                     <span>{`CLI · ${message.options.cli_tool || 'claude'}`}</span>
                   )}
                   {message.role === 'user' && message.options?.engine !== 'cli' && message.options?.reasoning_effort && (
-                    <span>{ui(({ low: '낮은 추론', high: '높은 추론', max: '최대 추론' }))[message.options.reasoning_effort]}</span>
+                    <span>{ui({ low: '낮은 추론', high: '높은 추론', max: '최대 추론' }[message.options.reasoning_effort])}</span>
                   )}
                 </div>
               </article>

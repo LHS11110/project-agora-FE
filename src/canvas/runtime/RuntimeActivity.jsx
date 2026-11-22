@@ -1,8 +1,10 @@
 import {useEffect, useState, useSyncExternalStore} from 'react';
 import {ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 import './runtime-activity.css';
 
 export default function RuntimeActivity({store,onFocusCode}) {
+  useUiLocale();
   const activity=useSyncExternalStore(store.subscribeActivity,store.getActivity,()=>null);
   const [now,setNow]=useState(Date.now());
   const running=activity?.status==='running';

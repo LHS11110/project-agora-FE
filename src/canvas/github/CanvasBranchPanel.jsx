@@ -3,12 +3,14 @@ import {api as request} from '../../api/client.js';
 import {useAuth} from '../../state/AuthContext.jsx';
 import {useNavigate} from '../../routing.jsx';
 import {ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 import {syncBranchCanvas} from './canvasBranchSync.js';
 import {stable} from '../asCode/manifest.js';
 import {canvasPasswordGrantKey,readCanvasPasswordGrant,saveCanvasPasswordGrant} from '../canvasAccess.js';
 import {canvasSnapshot} from './githubCanvas.js';
 
 export default function CanvasBranchPanel({canvasId,api,connection,work,onConnected,onContext,context:projectContext,authorize,caps={}}){
+ useUiLocale();
  const fieldId=useId();
  const {token,user}=useAuth(),navigate=useNavigate();
  const [context,setContext]=useState(projectContext),[branches,setBranches]=useState([]),[selected,setSelected]=useState(''),[name,setName]=useState(''),[status,setStatus]=useState('');

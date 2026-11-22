@@ -47,13 +47,14 @@ export default function EditableTable({ item, onChange, enabled = true, editingA
           {columns.map((_, columnIndex) => {
             const value = String(row?.[columnIndex] ?? '');
             const isEditing = enabled && editingActive && editingCell?.kind === 'cell' && editingCell.rowIndex === rowIndex && editingCell.columnIndex === columnIndex;
-            return <td key={`cell-${rowIndex}-${columnIndex}`} onDoubleClick={() => beginEditing({ kind: 'cell', rowIndex, columnIndex })} title={ui("두 번 클릭해 Markdown 셀 편집")}>
+            return <td key={`cell-${rowIndex}-${columnIndex}`} className={!value ? 'table-empty-cell' : undefined} onDoubleClick={() => beginEditing({ kind: 'cell', rowIndex, columnIndex })} title={ui("두 번 클릭해 Markdown 셀 편집")}>
               {isEditing
                 ? <textarea id={`${tableId}-cell-${rowIndex}-${columnIndex}`} name={`table-cell-${rowIndex}-${columnIndex}`} autoFocus aria-label={ui("{v0}행 {v1}열", {
   v0: rowIndex + 1,
   v1: columnIndex + 1
 })} value={value} placeholder={ui("Markdown 텍스트")} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => changeCell(rowIndex, columnIndex, event.target.value)} onBlur={finishEditing} onKeyDown={(event) => { if (event.key === 'Escape' || (event.key === 'Enter' && (event.ctrlKey || event.metaKey))) { event.preventDefault(); finishEditing(); } }} />
-                : <div className="table-markdown-content">{value ? <MarkdownText source={value} /> : <span className="table-cell-placeholder">{ui("두 번 클릭해 작성")}</span>}</div>}
+                : value ? <div className="table-markdown-content"><MarkdownText source={value} /></div>
+                : enabled ? <span className="table-cell-placeholder">{ui("두 번 클릭해 작성")}</span> : null}
             </td>;
           })}
         </tr>)}

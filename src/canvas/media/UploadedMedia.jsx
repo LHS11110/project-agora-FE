@@ -2,10 +2,12 @@ import {canvasFetch} from '../../api/client.js';
 import {useEffect,useId,useRef,useState} from 'react';
 import {apiUrl} from '../../api/client.js';
 import {ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 import {mediaPosition} from './mediaModel.js';
 import './media.css';
 import { bearer } from '../../state/authSession.js';
 export default function UploadedMedia({item,token,selected=false,interactive,writable,onChange}){
+ useUiLocale();
  const fieldId=useId();
  const video=useRef(null),surface=useRef(null),worker=useRef(null),pending=useRef(false),requested=useRef(0),sent=useRef(0),generation=useRef(0),applying=useRef(false),latest=useRef(null),actor=useRef(crypto.randomUUID());
  const [source,setSource]=useState(''),[ready,setReady]=useState(false),[duration,setDuration]=useState(0),[position,setPosition]=useState(0),[error,setError]=useState(''),[blocked,setBlocked]=useState(false);

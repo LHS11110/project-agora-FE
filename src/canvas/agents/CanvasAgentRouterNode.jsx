@@ -340,7 +340,7 @@ export default function CanvasAgentRouterNode({
                   }}
                 />
                 {!jsonSpec.valid && jsonSpec.error && (
-                  <small className="agent-error-line">{jsonSpec.error}</small>
+                  <small className="agent-error-line">{ui(jsonSpec.error)}</small>
                 )}
               </div>
             )}

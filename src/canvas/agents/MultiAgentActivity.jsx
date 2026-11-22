@@ -55,9 +55,9 @@ export default function MultiAgentActivity({ store, onFocusObject }) {
           <div className="multi-agent-active-agent">{activity.currentAgentName}</div>
         )}
         {running && activity.progress && (
-          <small className="multi-agent-activity-progress">{activity.progress}</small>
+          <small className="multi-agent-activity-progress">{ui(activity.progress)}</small>
         )}
-        {activity.error && <small className="multi-agent-activity-error">{activity.error}</small>}
+        {activity.error && <small className="multi-agent-activity-error">{ui(activity.error)}</small>}
 
         {Boolean(activity.entries?.length) && (
           <ol className="multi-agent-step-list">

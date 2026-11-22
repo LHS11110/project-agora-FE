@@ -1,4 +1,5 @@
 import {useEffect,useRef} from 'react';
+import {ui} from '../../i18n/locale.js';
 export function useSheetUpload(options){
  const latest=useRef(options),generation=useRef(0),worker=useRef(null),busy=useRef(false),cancel=useRef(null);latest.current=options;
  useEffect(()=>{generation.current++;return()=>{generation.current++;cancel.current?.();cancel.current=null;worker.current?.terminate();worker.current=null;busy.current=false;};},[options.canvasId]);
@@ -27,7 +28,7 @@ export function useSheetUpload(options){
     if(!c.addItem(id,{...item,x:start.x+(index%3)*.6,y:start.y+Math.floor(index/3)*.48,permission:latest.current.permission}))throw new Error('표를 추가하지 못했습니다. 연결 상태와 권한을 확인해주세요.');
     ids.push(id);await new Promise(resolve=>setTimeout(resolve,32));
    }
-   if(valid()){c.setActiveTool('select');c.selectItems(ids);c.setToast(`데이터 시트를 표 ${ids.length}개로 가져왔습니다. 첫 행은 열 이름으로 사용합니다.`);}
+   if(valid()){c.setActiveTool('select');c.selectItems(ids);c.setToast(ui('데이터 시트를 표 {count}개로 가져왔습니다. 첫 행은 열 이름으로 사용합니다.', { count: ids.length }));}
    return ids[0];
   }catch(error){if(valid())c.setToast(error.message);}
   finally{clearTimeout(timer);instance?.terminate();if(worker.current===instance){worker.current=null;cancel.current=null;}if(generation.current===current)busy.current=false;}

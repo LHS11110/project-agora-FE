@@ -210,9 +210,9 @@ export default function CanvasAgentNode({
         {tab === 'output' && (
           <div className="agent-tab-panel">
             {(running || state?.detail) && (
-              <p className="agent-progress-line" role="status">{state?.detail || ui('에이전트 응답을 기다리는 중…')}</p>
+              <p className="agent-progress-line" role="status">{state?.detail ? ui(state.detail) : ui('에이전트 응답을 기다리는 중…')}</p>
             )}
-            {state?.error && <p className="agent-error-line" role="alert">{state.error}</p>}
+            {state?.error && <p className="agent-error-line" role="alert">{ui(state.error)}</p>}
             {item.text ? (
               <div className="agent-output-markdown">
                 <MarkdownText source={item.text} />

@@ -1,0 +1,6 @@
+/* Static stand-in for a native <select> inside canvas objects (CanvasSelect.jsx).
+   Component styles target it next to their `select` rules; this only adds the
+   select-like layout and caret. */
+.canvas-select-proxy{display:inline-flex;align-items:center;justify-content:space-between;gap:6px;min-width:0;max-width:100%;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.canvas-select-proxy::after{content:'';flex:none;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid currentColor;opacity:.65}
+.canvas-select-proxy:disabled{cursor:default}

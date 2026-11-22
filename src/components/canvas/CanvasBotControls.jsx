@@ -2,8 +2,10 @@ import {managementError} from '../../canvas/permissions/managementError.js';
 import {useEffect,useId,useState} from 'react';
 import {api} from '../../api/client.js';
 import {ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 import '../../canvas/permissions/canvas-access-management.css';
 export default function CanvasBotControls({canvasId,token,settings,pending,onRequest}){
+ useUiLocale();
  const fieldId=useId();
  const [bots,setBots]=useState([]),[name,setName]=useState(''),[group,setGroup]=useState(settings?.initial_group||'default'),[busy,setBusy]=useState(false),[error,setError]=useState(''),[secret,setSecret]=useState(null),[visible,setVisible]=useState(false),[copied,setCopied]=useState(false),[confirm,setConfirm]=useState(null);
  const root='/api/canvases/'+canvasId+'/bots';

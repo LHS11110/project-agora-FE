@@ -1,8 +1,10 @@
 import {memo,useEffect,useState,useMemo} from 'react';
 import {staticMarkupPreview,staticPreviewQueue} from './staticPreviewQueue.js';
 import {ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 import './static-preview.css';
 const StaticMarkupPreview=memo(function StaticMarkupPreview({source,revision='',label='HTML',onActivate,fontSize}){
+ useUiLocale();
  const key=useMemo(()=>JSON.stringify([source,revision]),[source,revision]);
  const [ready,setReady]=useState(()=>{const value=staticPreviewQueue.cache.get(key);return value?{source,revision,value}:null;});
  useEffect(()=>{return staticPreviewQueue.request(key,()=>staticMarkupPreview(source),value=>setReady(previous=>previous?.source===source&&previous.revision===revision&&previous.value===value?previous:{source,revision,value}));},[source,revision,key]);

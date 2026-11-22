@@ -7,6 +7,8 @@ import { Agent } from 'node:https';
 import { extname, resolve, sep } from 'node:path';
 
 function manualChunk(id) {
+  if (id.endsWith('/src/i18n/en.js')) return 'i18n-en';
+  if (id.endsWith('/src/i18n/canvasMessages.js')) return 'i18n-canvas';
   const monacoRoot = '/node_modules/monaco-editor/esm/vs/';
   const monacoIndex = id.indexOf(monacoRoot);
   if (monacoIndex >= 0) {

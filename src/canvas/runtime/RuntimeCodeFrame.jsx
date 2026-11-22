@@ -2,10 +2,12 @@ import {useObjectRuntimeState} from './useObjectRuntimeState.js';
 import {cloneElement,useCallback,useEffect,useState,useSyncExternalStore} from 'react';
 import {contentSource} from '../content/contentPresentation.js';
 import {ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 import './runtime-code-frame.css';
 
 /** Subscribe only the affected code block; never rerender the canvas per step. */
 export default function RuntimeCodeFrame({id,item,store,children}) {
+  useUiLocale();
   const state=useObjectRuntimeState(id,item,store);
   const [expanded,setExpanded]=useState(false);
   const current=state&&state.source===contentSource(item)&&state.language===(item.language||'javascript');

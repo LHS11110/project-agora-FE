@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { ui } from '../../i18n/locale.js';
+import { useUiLocale } from '../../i18n/useUiLocale.js';
 import Icon from '../../components/Icon.jsx';
 import { normalizeCanvasColor } from '../useCanvasPalette.js';
 import './text-selection-color.css';
@@ -12,6 +13,7 @@ const palette = [
 ];
 
 export default function TextSelectionColorPopover({ owner, inputRef, anchor, selectedText, activeColor, mixed, onChoose, onClose }) {
+  useUiLocale();
   const headingId = useId(), hintId = useId(), card = useRef(null);
   const [hex, setHex] = useState(activeColor || '#7558d9');
   const [position, setPosition] = useState(null);

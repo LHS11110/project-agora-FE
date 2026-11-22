@@ -2,6 +2,7 @@ import ItemSubset from '../../canvas/ItemSubset.js';
 import { useId, useMemo, useRef } from 'react';
 import Icon from '../Icon.jsx';
 import { ui } from '../../i18n/locale.js';
+import { useUiLocale } from '../../i18n/useUiLocale.js';
 import '../../canvas/runtimeEn.js';
 import { isHideableObject, readObjectVisibility } from '../../canvas/styling/objectStyleModel.js';
 import { getObjectRevealPhase } from '../../canvas/portfolio/animationReveal.js';
@@ -47,6 +48,7 @@ export function ObjectVisibilityControls({
   onToggleRevealAfterAnimation,
   onRevealAfterAnimation,
 }) {
+  useUiLocale();
   const fieldId = useId();
   const hideableIds = ids.filter((id) => isHideableObject(items[id]));
   if (!hideableIds.length) return null;
@@ -152,6 +154,7 @@ export function HiddenObjectsManager({
   onUnhideAll,
   onRevealAllAfterAnimation,
 }) {
+  useUiLocale();
   const subset = useRef(null);
   if (!subset.current) subset.current = new ItemSubset(item => isHideableObject(item) && readObjectVisibility(item).hidden);
   const candidates = subset.current.update(items);

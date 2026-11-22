@@ -1,6 +1,6 @@
 import { useId, useMemo } from 'react';
 import { CLI_TOOLS } from '../../components/agentPreferences.js';
-import { ui } from '../../i18n/locale.js';
+import { intlLocale, ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
 import {
   AGENT_ACCENT_COLORS,
@@ -637,7 +637,7 @@ export function AgentNodeInspector({
   onPatchConnector,
   onNavigateObject,
 }) {
-  useUiLocale();
+  const locale = useUiLocale();
   const fieldId = useId();
   const config = useMemo(() => readAgentNodeConfig(item), [item]);
   const connections = useMemo(() => inspectAgentConnections(items || {}, id), [items, id]);
@@ -795,7 +795,7 @@ export function AgentNodeInspector({
               onChange={e => update({ max_tokens: Number(e.target.value) })}
             >
               {[1024, 2048, 4096, 8192, 16384, 32768].map(val => (
-                <option key={val} value={val}>{val.toLocaleString()}</option>
+                <option key={val} value={val}>{val.toLocaleString(intlLocale(locale))}</option>
               ))}
             </select>
           </label>

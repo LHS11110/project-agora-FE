@@ -14,7 +14,6 @@
 }
 .canvas-app-page .canvas-stage {background-color:#f5f5f8;}
 .canvas-app-page[data-theme="dark"] .canvas-stage {background-color:#15161f;}
-.canvas-app-page .canvas-grid-surface {background-image:radial-gradient(circle at center,var(--stage-dot) 1px,transparent 1.5px);}
 .canvas-app-page .canvas-topbar {
   top:16px;left:16px;right:16px;height:58px;padding:0;border:0;background:transparent!important;
   box-shadow:none!important;pointer-events:none;
@@ -643,4 +642,23 @@ body .app-shell.is-canvas-shell .app-sidebar>.brand-lockup>.frelog-wordmark{disp
   stroke: var(--studio-accent, #4d7058);
   stroke-width: 1.5;
   stroke-dasharray: 4 3;
+}
+
+.toast-message.canvas-file-upload-status {
+  bottom: 76px;
+  font-size: 12px;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.canvas-file-upload-name {
+  min-width: 0;
+  max-width: 15em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.canvas-file-upload-status .runtime-spinner {
+  flex-shrink: 0;
+  border-color: #fff5;
+  border-top-color: #fff;
 }

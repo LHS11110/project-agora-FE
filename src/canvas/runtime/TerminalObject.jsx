@@ -3,11 +3,13 @@ import {Terminal} from '@xterm/xterm';
 import {FitAddon} from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import {ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 import './terminal.css';
 import {objectFontSize,MIN_OBJECT_FONT_SIZE,MAX_OBJECT_FONT_SIZE} from '../objectSize.js';
 import {correctTerminalCoordinates} from './terminalCoordinates.js';
 
 export default function TerminalObject({id,item,store,selected,canExecute}) {
+ useUiLocale();
  const root=useRef(null),session=useRef(null),latest=useRef({store,selected,canExecute});latest.current={store,selected,canExecute};
  const [state,setState]=useState('disconnected'),[error,setError]=useState('');
  const fontSize=Math.max(MIN_OBJECT_FONT_SIZE,Math.min(MAX_OBJECT_FONT_SIZE,objectFontSize(item)));

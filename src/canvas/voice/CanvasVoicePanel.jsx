@@ -3,6 +3,7 @@ import {useEffect,useId,useMemo,useRef,useSyncExternalStore} from 'react';
 import CanvasVoiceCall from './CanvasVoiceCall.js';
 import { playSoundCue } from '../audio/soundEffects.js';
 import {ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 import './voice.css';
 const errors={VOICE_MIC_DENIED:'마이크 접근을 허용해 주세요.',VOICE_MIC_FAILED:'마이크를 사용할 수 없습니다.',VOICE_RELAY_UNAVAILABLE:'미디어 중계 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.',VOICE_CONNECTION_FAILED:'음성 연결을 복구하지 못했습니다. 다시 시도해 주세요.',VOICE_RECONNECT_TIMEOUT:'연결 복구 시간이 초과되어 통화를 종료했습니다. 다시 참여해 주세요.',VOICE_PLAY_BLOCKED:'소리를 재생하려면 클릭해 주세요.',VOICE_SCREEN_AUDIO_FAILED:'화면 공유 오디오를 전송하지 못했습니다. 화면 공유를 다시 시작해주세요.',VOICE_SCREEN_FAILED:'화면 공유를 시작할 수 없습니다.'};
 function VoiceMeter({call,peerId,muted=false,children,self=false}){
@@ -31,6 +32,7 @@ export function useCanvasVoiceCall(canvasId,send,identity){
  return useMemo(()=>({call,ref,state}),[call,state]);
 }
 export default function CanvasVoicePanel({voice,channelName}){
+ useUiLocale();
  const fieldId=useId();
  const {call,state}=voice,count=state.participants.length+(state.active?1:0);
  return <section className={`canvas-voice${state.active?' is-active':''}`} aria-label={ui('음성 통화')} onKeyDown={event=>event.stopPropagation()}>

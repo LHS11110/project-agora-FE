@@ -1,8 +1,10 @@
 import NotebookCodeInput from './NotebookCodeInput.jsx';
+import CanvasSelect from '../content/CanvasSelect.jsx';
 import {useEffect,useId,useState} from 'react';
 import {objectFontSize,objectBaseFontSize} from '../objectSize.js';
 import MarkdownText from '../../components/MarkdownText.jsx';
 import {ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 import {notebookHtml} from './notebookData.js';
 import {createId} from '../canvasIds.js';
 
@@ -10,6 +12,7 @@ import Output from './NotebookOutput.jsx';
 export {default as NotebookOutput} from './NotebookOutput.jsx';
 
 export default function NotebookCellObject({id,item,notebook,notebookSiblings=[],notebookOrder=0,notebookCellCount=0,store,selected,readOnly,canExecute,onChange}){
+ useUiLocale();
  const fieldId=useId();
  const [editingMarkdown,setEditingMarkdown]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
  const cell=item.notebookCell||{id:'',cellType:'code',source:''},result=item.notebookResult||{};
@@ -37,7 +40,7 @@ export default function NotebookCellObject({id,item,notebook,notebookSiblings=[]
  const outputPanel=hasOutput?<div className="notebook-outputs">{result.outputs?.map((output,index)=><Output ownerId={id} key={index} output={output} fontSize={13*factor}/>)}{result.truncated&&<small>{ui('출력 일부가 생략되었습니다.')}</small>}{result.error&&<p role="alert">{result.error}</p>}</div>:null;
  return <section className={`notebook-cell-surface${running?' is-running':''}`} data-object-action onPointerDown={event=>{if(selected)event.stopPropagation();}} onWheel={event=>{if(selected)event.stopPropagation();}} onKeyDown={event=>{event.stopPropagation();if(event.shiftKey&&event.key==='Enter'&&!event.nativeEvent.isComposing&&event.keyCode!==229&&event.target.dataset.cellId){event.preventDefault();void run();}}}>
   <article className={`notebook-cell${cell.cellType==='markdown'?' is-markdown':''}${editingMarkdown?' is-editing':''}${busy||running?' is-running':''}`} data-status={result.exitCode===undefined?undefined:result.exitCode?'error':'success'}>
-   <div className="notebook-cell-toolbar"><small>{cell.cellType==='code'?`In [${result.executionCount??' '}]`:`${notebookOrder||'·'}`}</small><select id={`${fieldId}-type`} name="notebook-cell-type" aria-label={ui('셀 유형')} disabled={!writable||disabled} value={cell.cellType} onChange={event=>patch({cellType:event.target.value})}><option value="code">Code</option><option value="markdown">Markdown</option></select><button aria-label={ui('위로 이동')} title={ui('위로 이동')} disabled={!writable||disabled||notebookOrder<=1} onClick={()=>structure('move',{direction:-1})}>↑</button><button aria-label={ui('아래로 이동')} title={ui('아래로 이동')} disabled={!writable||disabled||notebookOrder>=notebookCellCount} onClick={()=>structure('move',{direction:1})}>↓</button><button className="notebook-run-button" aria-label={ui('셀 실행')} title={ui('셀 실행')} disabled={!canExecute||disabled||cell.cellType!=='code'} onClick={()=>void run()}>▶</button><button aria-label={ui('셀 삭제')} title={ui('셀 삭제')} disabled={!writable||disabled} onClick={()=>structure('delete')}>×</button></div>
+   <div className="notebook-cell-toolbar"><small>{cell.cellType==='code'?`In [${result.executionCount??' '}]`:`${notebookOrder||'·'}`}</small><CanvasSelect id={`${fieldId}-type`} name="notebook-cell-type" aria-label={ui('셀 유형')} disabled={!writable||disabled} value={cell.cellType} onChange={event=>patch({cellType:event.target.value})}><option value="code">Code</option><option value="markdown">Markdown</option></CanvasSelect><button aria-label={ui('위로 이동')} title={ui('위로 이동')} disabled={!writable||disabled||notebookOrder<=1} onClick={()=>structure('move',{direction:-1})}>↑</button><button aria-label={ui('아래로 이동')} title={ui('아래로 이동')} disabled={!writable||disabled||notebookOrder>=notebookCellCount} onClick={()=>structure('move',{direction:1})}>↓</button><button className="notebook-run-button" aria-label={ui('셀 실행')} title={ui('셀 실행')} disabled={!canExecute||disabled||cell.cellType!=='code'} onClick={()=>void run()}>▶</button><button aria-label={ui('셀 삭제')} title={ui('셀 삭제')} disabled={!writable||disabled} onClick={()=>structure('delete')}>×</button></div>
    {cell.cellType==='code'&&<NotebookCodeInput cell={cell} index={notebookOrder} editable={writable&&!disabled} onChange={source=>patch({source})} onRun={()=>void run()} factor={factor}/>}
    {editingMarkdown&&<textarea id={`${fieldId}-markdown`} name="notebook-cell-markdown" autoFocus={cell.cellType==='markdown'} onBlur={()=>{if(cell.cellType==='markdown')setEditingMarkdown(false);}} data-cell-id={cell.id} aria-label={`${ui('노트북 셀')} ${notebookOrder||''}`} spellCheck={false} readOnly={!writable||disabled} value={cell.source} onChange={event=>patch({source:event.target.value})} style={{minHeight:Math.min(320,Math.max(76,cell.source.split('\n').length*19+20))*factor}}/>}
    {cell.cellType==='markdown'?markdownPanel:outputPanel}

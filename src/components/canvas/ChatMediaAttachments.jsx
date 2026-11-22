@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { apiUrl, canvasFetch } from '../../api/client.js';
 import { CHAT_VIDEO_LIMIT } from '../../canvas/chat/chatMedia.js';
 import { ui } from '../../i18n/locale.js';
+import { useUiLocale } from '../../i18n/useUiLocale.js';
 import { bearer } from '../../state/authSession.js';
 import {
   acquireAuthenticatedImage,
@@ -12,6 +13,7 @@ import {
 import Icon from '../Icon.jsx';
 
 function ChatImageAttachment({ attachment, token, onOpenLightbox }) {
+  useUiLocale();
   const cached = attachment.internal ? peekAuthenticatedImage(attachment.url, token) : null;
   const [src, setSrc] = useState(() => (attachment.internal ? (cached?.src || '') : attachment.url));
   const [error, setError] = useState(false);
@@ -89,6 +91,7 @@ function ChatImageAttachment({ attachment, token, onOpenLightbox }) {
 }
 
 function ChatVideoAttachment({ attachment, token }) {
+  useUiLocale();
   const [src, setSrc] = useState(() => (attachment.internal ? '' : attachment.url));
   const [error, setError] = useState(false);
 
@@ -164,6 +167,7 @@ function ChatVideoAttachment({ attachment, token }) {
 }
 
 function ChatMediaLightbox({ item, onClose }) {
+  useUiLocale();
   useEffect(() => {
     const onKeyDown = event => {
       if (event.key === 'Escape') {
@@ -214,6 +218,7 @@ function ChatMediaLightbox({ item, onClose }) {
 }
 
 const ChatMediaAttachments = memo(function ChatMediaAttachments({ attachments, token }) {
+  useUiLocale();
   const [lightbox, setLightbox] = useState(null);
   if (!attachments?.length) return null;
 

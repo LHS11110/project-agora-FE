@@ -1,3 +1,4 @@
+import { getLocale, ui } from '../i18n/locale.js';
 import { CHART_COLORS, chartDataset, chartNumber } from './charts/chartData.js';
 import { contentSource } from './content/contentPresentation.js';
 import { objectCornerRadius } from './objectCorners.js';
@@ -328,7 +329,7 @@ function drawHeadingBar(ctx, badge, title, w, pad, accent, ink, muted, fontFamil
 
 export function richPreviewSignature(item = {}) {
   const kind = item.runtimeRole ? `runtime:${item.runtimeRole}` : item.kind;
-  const parts = [kind, item.brush || '', item.format || '', item.color || '', item.fill || '', item.cornerStyle || ''];
+  const parts = [getLocale(), kind, item.brush || '', item.format || '', item.color || '', item.fill || '', item.cornerStyle || ''];
   if (kind === 'note') parts.push(item.text || '');
   else if (kind === 'table') parts.push(item.filename || '', (item.columns || []).join(','), (item.rows || []).slice(0, 5).map((r) => (r || []).slice(0, 5).join(',')).join(';'));
   else if (kind === 'chart') parts.push(item.chartType || '', item.chartTitle || item.title || '', (item.columns || []).join(','), (item.rows || []).slice(0, 8).map((r) => (r || []).join(',')).join(';'));
@@ -369,7 +370,7 @@ export function drawRichOverview(ctx, item, world, textAppearance = {}, imagePre
       ctx.restore();
     }
     const text = String(src.text || '').replace(/^#+\s*/gm, '');
-    drawTextLines(ctx, text || '메모', pad, pad + 4, w - pad * 2 - 8, h - pad * 2 - 4, 11, 15, fontFamily, ink);
+    drawTextLines(ctx, text || ui('메모'), pad, pad + 4, w - pad * 2 - 8, h - pad * 2 - 4, 11, 15, fontFamily, ink);
     return;
   }
 
@@ -404,7 +405,7 @@ export function drawRichOverview(ctx, item, world, textAppearance = {}, imagePre
   }
 
   if (kind === 'pdf') {
-    const label = `${src.filename || src.title || '문서'} · p.${Math.max(1, Number(src.pdfPage) || 1)}`;
+    const label = `${src.filename || src.title || ui('문서')} · p.${Math.max(1, Number(src.pdfPage) || 1)}`;
     const top = drawHeadingBar(ctx, 'PDF', label, w, pad, '#c25148', ink, palette.muted, fontFamily);
     ctx.save();
     ctx.fillStyle = palette.border;
@@ -416,10 +417,10 @@ export function drawRichOverview(ctx, item, world, textAppearance = {}, imagePre
   }
 
   if (kind === 'question') {
-    const kicker = src.questionType === 'choice' ? '객관식' : '주관식';
+    const kicker = src.questionType === 'choice' ? ui('객관식') : ui('주관식');
     const top = drawHeadingBar(ctx, kicker, '', w, pad, palette.accent, ink, palette.muted, fontFamily);
     const promptH = Math.max(14, (h - top - pad) * 0.45);
-    drawTextLines(ctx, src.questionPrompt || '문제', pad, top, w - pad * 2, promptH, 10, 13, fontFamily, ink);
+    drawTextLines(ctx, src.questionPrompt || ui('문제'), pad, top, w - pad * 2, promptH, 10, 13, fontFamily, ink);
     const opts = Array.isArray(src.questionOptions) ? src.questionOptions : [];
     const optText = opts.slice(0, 3).map((opt) => `○ ${opt}`).join('\n');
     if (optText) drawTextLines(ctx, optText, pad, top + promptH + 2, w - pad * 2, h - top - promptH - pad - 2, 9, 12, fontFamily, palette.muted);
@@ -428,7 +429,7 @@ export function drawRichOverview(ctx, item, world, textAppearance = {}, imagePre
 
   if (kind === 'value') {
     const valStr = src.valueType === 'discrete' ? String(src.valueText || src.valueOptions?.[0] || '') : String(src.valueNumber ?? 0);
-    const top = drawHeadingBar(ctx, valStr, src.title || '값', w, pad, palette.accent, ink, palette.muted, fontFamily);
+    const top = drawHeadingBar(ctx, valStr, src.title || ui('값'), w, pad, palette.accent, ink, palette.muted, fontFamily);
     const barY = Math.min(h - pad - 4, top + (h - top - pad) * 0.45);
     const min = Number(src.valueMin) || 0;
     const max = Number(src.valueMax) || 100;
@@ -441,7 +442,7 @@ export function drawRichOverview(ctx, item, world, textAppearance = {}, imagePre
   }
 
   if (kind === 'project') {
-    const top = drawHeadingBar(ctx, 'BOARD', src.title || '프로젝트', w, pad, palette.accent, ink, palette.muted, fontFamily);
+    const top = drawHeadingBar(ctx, 'BOARD', src.title || ui('프로젝트'), w, pad, palette.accent, ink, palette.muted, fontFamily);
     const colW = Math.max(6, (w - pad * 2 - 8) / 3);
     const colH = Math.max(6, h - top - pad);
     for (let i = 0; i < 3; i++) {
@@ -457,8 +458,8 @@ export function drawRichOverview(ctx, item, world, textAppearance = {}, imagePre
   }
 
   if (kind === 'user-group') {
-    const top = drawHeadingBar(ctx, 'GROUP', src.groupTitle || src.title || '그룹', w, pad, palette.accent, ink, palette.muted, fontFamily);
-    drawTextLines(ctx, `${Array.isArray(src.members) ? `${src.members.length}명` : ''}`, pad, top, w - pad * 2, h - top - pad, 9, 12, fontFamily, palette.muted);
+    const top = drawHeadingBar(ctx, 'GROUP', src.groupTitle || src.title || ui('그룹'), w, pad, palette.accent, ink, palette.muted, fontFamily);
+    drawTextLines(ctx, `${Array.isArray(src.members) ? ui('{count}명', { count: src.members.length }) : ''}`, pad, top, w - pad * 2, h - top - pad, 9, 12, fontFamily, palette.muted);
     return;
   }
 
@@ -470,34 +471,34 @@ export function drawRichOverview(ctx, item, world, textAppearance = {}, imagePre
 
   if (isAgentNodeItem(src)) {
     const cfg = readAgentNodeConfig(src);
-    const top = drawHeadingBar(ctx, 'AGENT', src.title || cfg.role || '에이전트', w, pad, src.color || palette.accent, ink, palette.muted, fontFamily);
+    const top = drawHeadingBar(ctx, 'AGENT', src.title || cfg.role || ui('에이전트'), w, pad, src.color || palette.accent, ink, palette.muted, fontFamily);
     drawTextLines(ctx, src.text || cfg.systemPrompt || cfg.role || '', pad, top, w - pad * 2, h - top - pad, 9, 12, fontFamily, palette.muted);
     return;
   }
 
   if (isAgentOrchestratorItem(src)) {
     const cfg = readOrchestratorConfig(src);
-    const top = drawHeadingBar(ctx, 'ORCH', src.title || '오케스트레이터', w, pad, src.color || palette.accent, ink, palette.muted, fontFamily);
+    const top = drawHeadingBar(ctx, 'ORCH', src.title || ui('오케스트레이터'), w, pad, src.color || palette.accent, ink, palette.muted, fontFamily);
     drawTextLines(ctx, cfg.goal || src.text || cfg.mode || '', pad, top, w - pad * 2, h - top - pad, 9, 12, fontFamily, palette.muted);
     return;
   }
 
   if (isAgentInputItem(src)) {
     const cfg = readAgentInputConfig(src);
-    const top = drawHeadingBar(ctx, 'INPUT', src.title || '입력 객체', w, pad, src.color || '#2563eb', ink, palette.muted, fontFamily);
-    drawTextLines(ctx, src.text || (cfg.attachments.length ? `${cfg.attachments.length}개 첨부` : cfg.inputType), pad, top, w - pad * 2, h - top - pad, 9, 12, fontFamily, palette.muted);
+    const top = drawHeadingBar(ctx, 'INPUT', src.title || ui('입력 객체'), w, pad, src.color || '#2563eb', ink, palette.muted, fontFamily);
+    drawTextLines(ctx, src.text || (cfg.attachments.length ? ui('첨부 {count}개', { count: cfg.attachments.length }) : cfg.inputType), pad, top, w - pad * 2, h - top - pad, 9, 12, fontFamily, palette.muted);
     return;
   }
 
   if (isAgentRouterItem(src)) {
     const cfg = readAgentRouterConfig(src);
-    const top = drawHeadingBar(ctx, 'ROUTER', src.title || '라우터 객체', w, pad, src.color || '#d97706', ink, palette.muted, fontFamily);
+    const top = drawHeadingBar(ctx, 'ROUTER', src.title || ui('라우터 객체'), w, pad, src.color || '#d97706', ink, palette.muted, fontFamily);
     drawTextLines(ctx, cfg.lastDecision?.reason || cfg.routingMode || '', pad, top, w - pad * 2, h - top - pad, 9, 12, fontFamily, palette.muted);
     return;
   }
 
   if (isAgentOutputItem(src)) {
-    const top = drawHeadingBar(ctx, 'OUTPUT', src.title || '출력 객체', w, pad, src.color || '#0f766e', ink, palette.muted, fontFamily);
+    const top = drawHeadingBar(ctx, 'OUTPUT', src.title || ui('출력 객체'), w, pad, src.color || '#0f766e', ink, palette.muted, fontFamily);
     drawTextLines(ctx, src.text || '', pad, top, w - pad * 2, h - top - pad, 9, 12, fontFamily, palette.muted);
     return;
   }

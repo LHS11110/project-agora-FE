@@ -9,7 +9,7 @@ import {
   parseChatMessageMedia,
   validateChatMediaFile,
 } from '../../canvas/chat/chatMedia.js';
-import { ui } from '../../i18n/locale.js';
+import { intlLocale, ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
 import Icon from '../Icon.jsx';
 import MarkdownText from '../MarkdownText.jsx';
@@ -396,7 +396,7 @@ const CanvasChatPanel = memo(function CanvasChatPanel({
                   <div className="chat-entry-meta">
                     <strong>{entry.sender}</strong>
                     <time>
-                      {entry.time.toLocaleTimeString(locale === 'en' ? 'en-US' : 'ko-KR', {
+                      {entry.time.toLocaleTimeString(intlLocale(locale), {
                         hour: '2-digit',
                         minute: '2-digit',
                       })}

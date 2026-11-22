@@ -2,9 +2,11 @@ import {useEffect,useRef,useState} from 'react';
 import CanvasManagementDialog from './CanvasManagementDialog.jsx';
 import Icon from '../Icon.jsx';
 import {ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 import './canvas-password-dialog.css';
 
 export default function CanvasPasswordDialog({prompt,theme}){
+ useUiLocale();
  const [password,setPassword]=useState(''),input=useRef(null);
  useEffect(()=>{input.current?.focus();},[]);
  const cancel=()=>prompt.finish(null);

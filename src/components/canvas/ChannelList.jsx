@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ui } from '../../i18n/locale.js';
+import { useUiLocale } from '../../i18n/useUiLocale.js';
 import {
   CHANNEL_NAME_LIMIT,
   canRemoveChannelGroup,
@@ -34,6 +35,7 @@ function ChannelNameForm({
   onSubmit,
   onCancel,
 }) {
+  useUiLocale();
   const [value, setValue] = useState(initial);
   const [channelType, setChannelType] = useState(initialType);
   const [categoryId, setCategoryId] = useState(initialCategoryId || '');
@@ -242,6 +244,7 @@ export default function ChannelList({
   onMoveChannel,
   onReorderCategory,
 }) {
+  useUiLocale();
   const [editing, setEditing] = useState(null);
   const [collapsed, setCollapsed] = useState(() => new Set());
   const [dragging, setDragging] = useState(null);

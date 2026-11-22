@@ -257,7 +257,7 @@ export default function CanvasAgentOrchestratorNode({
               </div>
             ) : (
               <div className="agent-template-starter">
-                <p className="agent-empty-hint">{resolved.error}</p>
+                <p className="agent-empty-hint">{ui(resolved.error)}</p>
                 {!readOnly && store?.startConnectorFrom && (
                   <button
                     type="button"
@@ -286,8 +286,8 @@ export default function CanvasAgentOrchestratorNode({
               </div>
             )}
 
-            {state?.error && <p className="agent-error-line" role="alert">{state.error}</p>}
-            {running && state?.detail && <p className="agent-progress-line" role="status">{state.detail}</p>}
+            {state?.error && <p className="agent-error-line" role="alert">{ui(state.error)}</p>}
+            {running && state?.detail && <p className="agent-progress-line" role="status">{ui(state.detail)}</p>}
           </div>
         )}
 

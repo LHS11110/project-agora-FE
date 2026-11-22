@@ -1,9 +1,11 @@
 import {useEffect,useId,useRef,useState} from 'react';
 import {ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 import {createValue,displayedValue,validValue,valueDefinition} from './valueData.js';
 import './value-object.css';
 const labels={real:'실수 값',integer:'정수 값',button:'버튼 값',select:'선택 값',text:'입력 값'};
 export default function ValueObject({id,item,readOnly,onChange}){
+ useUiLocale();
  const fieldId=useId();
  const [settings,setSettings]=useState(false),[draft,setDraft]=useState(null),[error,setError]=useState(''),[number,setNumber]=useState(String(item.valueNumber));
  const queued=useRef(null),frame=useRef(null),current=useRef({item,readOnly,onChange});current.current={item,readOnly,onChange};

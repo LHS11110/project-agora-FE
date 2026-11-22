@@ -48,7 +48,7 @@ export function useObjectClipboard(options) {
         .filter((id) => !c.deleteItem(id));
     c.selectItems(remaining);
     c.setConnectionStartId(null);
-    c.setToast(remaining.length ? '일부 객체를 잘라내지 못했습니다. 연결 상태와 권한을 확인해주세요.' : `${ids.length}개 객체를 잘라냈습니다.${localOnly ? ' 브라우저 내부 클립보드를 사용합니다. 붙여넣기 버튼을 눌러주세요.' : ''}`);
+    c.setToast(remaining.length ? '일부 객체를 잘라내지 못했습니다. 연결 상태와 권한을 확인해주세요.' : ui('{count}개 객체를 잘라냈습니다.', { count: ids.length }) + (localOnly ? ' ' + ui('브라우저 내부 클립보드를 사용합니다. 붙여넣기 버튼을 눌러주세요.') : ''));
   };
   const pasteText = async text => {
     const c=latest.current;if(c.blocked||c.isInteracting?.()||!c.canvasSnapshotLoadedRef.current||pending.current)return;
@@ -86,7 +86,8 @@ export function useObjectClipboard(options) {
       const objects = await resolveExternalClipboardObjects(content);
       if (!canInsert()) return;
       if (objects.length > 32) throw new Error('한 번에 최대 32개 자료를 붙여넣을 수 있습니다.');
-      const ids = []; let skipped = 0, notebookError='';
+      const ids = []; let skipped = 0, firstError = '';
+      const onError = message => { firstError ||= message; };
       for (const [index, definition] of objects.entries()) {
         if (!canInsert()) break;
         const position = {x:point.x+index*.025,y:point.y+index*.04};
@@ -106,7 +107,7 @@ export function useObjectClipboard(options) {
             const value={kind:'shape',shapeType:'rectangle',runtimeRole:'notebook',x:position.x-.24,y:position.y-.34,width:.48,height:.65,permission:c.permission,...notebook};
             if(!c.addItems([{id,item:value}])){skipped++;continue;}
           } else if (definition.file && ['media','image','pdf','sheet'].includes(definition.fileType)) {
-            id = await (definition.fileType === 'media' ? c.uploadMedia : definition.fileType === 'image' ? c.uploadImage : definition.fileType === 'sheet' ? c.uploadSheet : c.uploadPdf)?.({target:{files:[definition.file],value:''}}, {position,canInsert});
+            id = await (definition.fileType === 'media' ? c.uploadMedia : definition.fileType === 'image' ? c.uploadImage : definition.fileType === 'sheet' ? c.uploadSheet : c.uploadPdf)?.({target:{files:[definition.file],value:''}}, {position,canInsert,onError});
           } else {
             let item = definition;
             if (definition.file) {
@@ -121,11 +122,13 @@ export function useObjectClipboard(options) {
             if (isCollaborativeItem(value)) c.saveCollaborativeItem(id,{silent:true});
           }
           if (id) ids.push(id); else skipped++;
-        } catch (error) { skipped++; if(canInsert()){if(definition.fileType==='notebook'||definition.notebookDocument)notebookError ||= error.message;c.setToast(error.message);} }
+        } catch (error) { skipped++; if (canInsert()) onError(error.message); }
       }
       if (!canInsert()) return;
       if (ids.length) { c.setActiveTool('select'); c.selectItems(ids); c.setConnectionStartId(null); board.focus({preventScroll:true}); }
-      c.setToast(notebookError || (ids.length ? ui('자료 {count}개를 객체로 붙여넣었습니다.',{count:ids.length}) + (skipped ? ' '+ui('일부 자료는 형식이나 크기 제한으로 제외했습니다.') : '') : '붙여넣을 자료가 없거나 지원하지 않는 형식입니다. 이미지·동영상·PDF·CSV·XLSX·IPYNB·텍스트·HTTPS 링크를 사용해주세요.'));
+      c.setToast(ids.length
+        ? ui('캔버스에 자료 {count}개를 추가했습니다.', { count: ids.length }) + (skipped ? ' ' + ui('일부 자료를 추가하지 못했습니다.') : '')
+        : firstError || '붙여넣을 자료가 없거나 지원하지 않는 형식입니다. 이미지·동영상·PDF·CSV·XLSX·IPYNB·텍스트·HTTPS 링크를 사용해주세요.');
     } catch (error) { if(canInsert())c.setToast(error.message); }
     finally { if(generation.current === turn){pending.current = false;setBusy(false);} }
   };
@@ -143,7 +146,7 @@ export function useObjectClipboard(options) {
       copyCache.current=cacheCopy(result);rememberObjects(result.text,!system);
       latest.current.boardRef.current?.focus({preventScroll:true});
       if(cut)cutOriginals(result,!system);
-      else latest.current.setToast(`${Object.keys(result.originals).length}개 객체를 복사했습니다.${system?'':' 브라우저 내부 클립보드를 사용합니다. 붙여넣기 버튼을 눌러주세요.'}`);
+      else latest.current.setToast(ui('{count}개 객체를 복사했습니다.', { count: Object.keys(result.originals).length }) + (system ? '' : ' ' + ui('브라우저 내부 클립보드를 사용합니다. 붙여넣기 버튼을 눌러주세요.')));
     }catch(error){if(generation.current===turn)latest.current.setToast(error.message);}
     finally{if(generation.current===turn){pending.current=false;setBusy(false);}}
   };
@@ -192,7 +195,7 @@ export function useObjectClipboard(options) {
           if(event.clipboardData&&(cached||quickCopy(snapshot))){
             const result=cached?{...snapshot,text:cached.text}:serializeCopyObjects(snapshot);
             event.clipboardData.setData('text/plain',result.text);copyCache.current=cacheCopy(result);rememberObjects(result.text);
-            if(cut)a.cutOriginals(result);else c.setToast(`${Object.keys(result.originals).length}개 객체를 복사했습니다.`);
+            if(cut)a.cutOriginals(result);else c.setToast(ui('{count}개 객체를 복사했습니다.', { count: Object.keys(result.originals).length }));
           }else void a.copy(cut,snapshot);
         }
       } catch (error) { event.preventDefault(); c.setToast(error.message); }

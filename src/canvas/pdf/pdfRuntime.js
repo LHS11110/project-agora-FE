@@ -10,6 +10,41 @@ export function loadCanvasPdf(src, token) {
   if (!/^\/api\/canvases\/\d+\/pdfs\/[0-9a-f-]{36}$/.test(src || '')) throw new Error('PDF 파일 주소가 올바르지 않습니다.');
   return getDocument({ ...options, url: apiUrl(src), httpHeaders: token ? { Authorization: bearer(token) } : {}, disableAutoFetch: true, disableStream: true });
 }
+// Scrolling a PDF out of the render window unmounts it; remounting used to
+// download, parse and render the document again. Parsed documents are shared by
+// reference and kept briefly after the last user leaves.
+const IDLE_DOCUMENT_MS = 30_000, MAX_IDLE_DOCUMENTS = 8;
+const documents = new Map();
+const destroyEntry = (key, entry) => { clearTimeout(entry.timer); if (documents.get(key) === entry) documents.delete(key); void entry.task.destroy(); };
+export function acquireCanvasPdf(src, token) {
+  const key = `${src}\n${token || ''}`;
+  let entry = documents.get(key);
+  if (!entry) {
+    const task = loadCanvasPdf(src, token);
+    entry = { task, promise: task.promise, refs: 0, timer: 0 };
+    documents.set(key, entry);
+    entry.promise.catch(() => { if (documents.get(key) === entry) documents.delete(key); });
+  }
+  clearTimeout(entry.timer); entry.timer = 0; entry.refs++;
+  // Refresh insertion order so idle eviction drops the least recently used first.
+  documents.delete(key); documents.set(key, entry);
+  let released = false;
+  return {
+    promise: entry.promise,
+    release() {
+      if (released) return; released = true;
+      if (--entry.refs > 0) return;
+      entry.timer = setTimeout(() => { if (!entry.refs) destroyEntry(key, entry); }, IDLE_DOCUMENT_MS);
+      const idle = [...documents].filter(([, value]) => !value.refs);
+      for (const [idleKey, value] of idle.slice(0, Math.max(0, idle.length - MAX_IDLE_DOCUMENTS))) destroyEntry(idleKey, value);
+    },
+  };
+}
+/** Drops a cached document so a retry fetches it again. */
+export function forgetCanvasPdf(src, token) {
+  const key = `${src}\n${token || ''}`, entry = documents.get(key);
+  if (entry && !entry.refs) destroyEntry(key, entry); else if (entry) documents.delete(key);
+}
 export function pdfErrorMessage(error) {
   if (error?.name === 'PasswordException') return '암호로 잠긴 PDF입니다. 암호를 해제한 파일을 업로드해주세요.';
   return error?.message || 'PDF를 읽지 못했습니다.';

@@ -1,10 +1,12 @@
 import {useObjectRuntimeState} from './useObjectRuntimeState.js';
 import { useCallback, useSyncExternalStore } from 'react';
 import { ui } from '../../i18n/locale.js';
+import { useUiLocale } from '../../i18n/useUiLocale.js';
 import Icon from '../../components/Icon.jsx';
 import './blueprint.css';
 
 export default function BlueprintNode({ id, item, store, selected = false, canExecute = true, canReset = true }) {
+  useUiLocale();
   const state=useObjectRuntimeState(id,item,store);
   const executor = item.runtimeRole === 'executor';
   return <div className={`blueprint-node blueprint-${item.runtimeRole}${state?.running?' is-running':''}`} aria-busy={Boolean(state?.running)}>

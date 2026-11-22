@@ -1,7 +1,9 @@
 import { ui } from '../../i18n/locale.js';
+import { useUiLocale } from '../../i18n/useUiLocale.js';
 import './comments.css';
 
 export default function MentionNotifications({ notifications, onJump, onDismiss, channelName }) {
+  useUiLocale();
   if (!notifications.length) return null;
   return <aside className="mention-notifications" aria-label={ui('멘션 알림')} aria-live="polite">
     {notifications.map(note => <div className="mention-notification" key={note.key}>

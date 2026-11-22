@@ -1,3 +1,4 @@
+import { getLocale } from '../i18n/locale.js';
 import {hasRenderedAnimation} from './portfolio/portfolioModel.js';
 import { isDrawableCanvasItem } from './drawableItems.js';
 import { itemSnapshot,changeItems,changedItemIds } from './itemSnapshots.js';
@@ -31,7 +32,7 @@ function mergeTuples(existing,added){
 export default class SceneViewModel {
   constructor(){this.entries=null;this.items=null;this.layers=new Map();this.byId=new Map();this.hitOrder=new Map();this.sorted=[];this.connectorIds=new Set();this.revision=0;this.representations=new Map();this.stats={resets:0,appends:0,updates:0,reasons:{}};}
   update(entries,items,world,scale,domIds,selected,routingRevision=0,index=null,quality='high'){
-    const qualityChanged=this.quality!==quality;this.quality=quality;
+    const locale=getLocale(),qualityChanged=this.quality!==quality||this.locale!==locale;this.quality=quality;this.locale=locale;
     const selectionKey=[...selected].join('|'),domKey=[...domIds].join('|');
     const sameDisplay=!qualityChanged&&this.width===world.width&&this.height===world.height&&this.scale===scale;
     const appearanceDirty=new Set();for(const [before,after] of [[this.selected||new Set(),selected],[this.domIds||new Set(),domIds]]){for(const id of before)if(!after.has(id))appearanceDirty.add(id);for(const id of after)if(!before.has(id))appearanceDirty.add(id);}
@@ -132,7 +133,7 @@ export default class SceneViewModel {
     if(sortedFrom.length){const from=Math.min(...sortedFrom);for(let i=from;i<this.sorted.length;i++){const id=this.sorted[i][0],entry=this.byId.get(id);if(entry)entry.sortIndex=i;this.hitOrder.set(id,i);}}
   }
   representation(id,item,domIds,selected,world,scale){
-    const proxyTier=overviewProxyTier(item,world,scale,this.quality),worldKey=world.width+':'+world.height,dom=domIds.has(String(id)),selection=selected.has(String(id)),old=this.representations.get(id);
+    const proxyTier=overviewProxyTier(item,world,scale,this.quality),locale=getLocale(),worldKey=world.width+':'+world.height+':'+locale,dom=domIds.has(String(id)),selection=selected.has(String(id)),old=this.representations.get(id);
     if(old&&old.item===item&&old.proxyTier===proxyTier&&old.worldKey===worldKey&&old.dom===dom&&old.selection===selection)return old.result;
     if(hasRenderedAnimation(item)){const result={vector:null};this.representations.set(id,{item,proxyTier,worldKey,dom,selection,result});return result;}
     if(item.kind==='stroke'){

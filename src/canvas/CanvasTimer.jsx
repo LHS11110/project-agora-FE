@@ -1,11 +1,13 @@
 import { useEffect, useId, useState } from 'react';
 import Icon from '../components/Icon.jsx';
 import { ui } from '../i18n/locale.js';
+import { useUiLocale } from '../i18n/useUiLocale.js';
 
 export const initialTimer = { timerDuration: 300, timerRemaining: 300000, timerDeadline: 0 };
 const PRESET_MINUTES = [1, 3, 5, 10, 15, 30];
 
 export default function Timer({ state, onChange }) {
+  useUiLocale();
   const id = useId();
   const { timerDuration, timerRemaining, timerDeadline } = state;
   const [now, setNow] = useState(Date.now);

@@ -1,10 +1,12 @@
 import { useLayoutEffect, useRef } from 'react';
 import { ui } from '../i18n/locale.js';
+import { useUiLocale } from '../i18n/useUiLocale.js';
 import AuthenticatedImage from '../components/AuthenticatedImage.jsx';
 import Icon from '../components/Icon.jsx';
 
 /** Give the image its real contained size so rounding also works with letterboxing. */
 export default function CanvasImageContent({ item, token }) {
+  useUiLocale();
   const media = useRef(null);
   const fit = () => {
     const box = media.current, image = box?.querySelector('img');
@@ -21,6 +23,9 @@ export default function CanvasImageContent({ item, token }) {
   }, [Boolean(item.height)]);
   const fallback = text => <div className="image-object-fallback"><Icon name="image" size={19} /><span>{ui(text)}</span></div>;
   return <div className="image-object-surface"><div ref={media} className="image-object-media">
-    <AuthenticatedImage src={item.src} token={token} alt={item.filename || ui('공유된 이미지')} onLoad={fit} fallback={fallback('이미지를 표시할 수 없어요')} loadingFallback={fallback('이미지를 불러오는 중…')} />
+    <AuthenticatedImage src={item.src} token={token} alt={item.filename || ui('공유된 이미지')} onLoad={fit} fallback={fallback('이미지를 표시할 수 없어요')} loadingFallback={<div className="image-object-fallback" role="status">
+      <span className="runtime-spinner" aria-hidden="true" />
+      <span>{ui('이미지를 불러오는 중…')}</span>
+    </div>} />
   </div></div>;
 }

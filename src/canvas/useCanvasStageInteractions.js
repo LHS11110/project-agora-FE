@@ -457,7 +457,7 @@ export function useCanvasStageInteractions(options) {
       stage.setPointerCapture?.(event.pointerId);
       return;
     }
-    if (activeTool === 'connect') { setToast('연결할 오브젝트 두 개를 차례로 선택하세요.'); return; }
+    if (activeTool === 'connect') { setToast(ui('연결할 오브젝트 두 개를 차례로 선택하세요.')); return; }
     if (activeTool === 'laser') {
       event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);

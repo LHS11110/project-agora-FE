@@ -1,7 +1,9 @@
 import {useEffect,useId,useState} from 'react';
 import {ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 const actions=[['commit','커밋'],['push','푸시'],['pr','PR 생성'],['create_branch','브랜치 생성'],['switch_branch','브랜치 이동']];
 export default function GithubGroupPermissions({context,onSave,busy}){
+ useUiLocale();
  const fieldId=useId();
  const [policy,setPolicy]=useState(context?.project?.permissions||{});
  useEffect(()=>setPolicy(context?.project?.permissions||{}),[context?.project?.permissions]);

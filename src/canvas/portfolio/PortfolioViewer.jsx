@@ -1,9 +1,11 @@
 import {useEffect,useState} from 'react';
 import {ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 // Status-only presentation bar. Space advances; every other key is swallowed so
 // viewers can only run code, play media and enter values by clicking objects.
 const typing=target=>target?.closest?.('input,textarea,select,[contenteditable=true],.canvas-code-editor,.monaco-editor');
 export default function PortfolioViewer({portfolio,index,onExit,onAdvance,sending=false,busyUntil=0,step=0,totalSteps=0,remainingFrames=0,canAdvance=true,locked=false}){
+  useUiLocale();
   const pages=portfolio.portfolioPages||[],page=pages[index],[now,setNow]=useState(Date.now());
   useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),150);return()=>clearInterval(timer);},[]);
   const busy=sending||now<busyUntil;

@@ -1,12 +1,14 @@
 import Icon from '../../components/Icon.jsx';
 import {useId,useState,useMemo} from 'react';
 import {ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 import {defaultAnimation,EFFECTS} from './portfolioModel.js';
 import {readObjectVisibility} from '../styling/objectStyleModel.js';
 import {getObjectRevealPhase} from './animationReveal.js';
 import './portfolio.css';
 const labels={none:'없음',fade:'페이드 인','slide-up':'아래에서 등장','slide-left':'옆에서 등장',zoom:'확대 등장',pulse:'맥박',float:'떠오르기',spin:'회전'};
 export default function PortfolioControls({items,selectedIds=[],canWriteItem,actions,viewing,frames=[],activeTool}){
+ useUiLocale();
  const fieldId=useId();
  const frameById=useMemo(()=>new Map(frames.map(frame=>[frame.id,frame])),[frames]);
  const [error,setError]=useState('');

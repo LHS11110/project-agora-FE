@@ -1,11 +1,13 @@
 import {memo,useMemo,useRef,useEffect} from 'react';
 import CanvasCodeEditor from '../CanvasCodeEditor.jsx';
 import {ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 import './html-object.css';
 export {htmlPreviewDocument} from './htmlPreviewDocument.js';
 import {htmlPreviewDocument} from './htmlPreviewDocument.js';
 import {useWebAssets} from './WebAssetsContext.js';
 const HtmlObject=memo(function HtmlObject({id,value,editing,onChange,onUndo,onSave,onStopEditing,onStartEditing}){
+ useUiLocale();
  const assets=useWebAssets(id);
  const codeRevision=JSON.stringify([assets.css,assets.js]);
  const frame=useRef(null),current=useRef(assets);current.current=assets;

@@ -329,7 +329,7 @@ export default function CanvasAgentInputNode({
             )}
           </div>
 
-          {state?.error && <p className="agent-error-line" role="alert">{state.error}</p>}
+          {state?.error && <p className="agent-error-line" role="alert">{ui(state.error)}</p>}
         </div>
       </div>
 

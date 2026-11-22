@@ -1,9 +1,11 @@
 import {managementError} from './managementError.js';
 import {useEffect,useId,useState} from 'react';
 import {ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 import './canvas-access-management.css';
 const handle=person=>JSON.stringify([person.nickname,person.tag_number]);
 export default function GroupManagementControls({settings,pending,onRequest}){
+ useUiLocale();
  const fieldId=useId();
  const groups=settings?.groups||{};
  const [selected,setSelected]=useState(settings?.initial_group||'default'),[name,setName]=useState(''),[renamed,setRenamed]=useState(''),[members,setMembers]=useState([]),[busy,setBusy]=useState(false),[error,setError]=useState(''),[confirmDelete,setConfirmDelete]=useState(false);

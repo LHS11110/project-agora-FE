@@ -1,6 +1,7 @@
 import {createPortal} from 'react-dom';
 import {useEffect,useId,useMemo,useState,useRef} from 'react';
 import {ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 import {createId} from '../canvasIds.js';
 import {useProjectStore} from './projectStore.js';
 import {ISSUE_TYPES,PRIORITIES,newIssue,projectIssues,statusPatch,sprintReport,closeSprint,reorderIssue,timelineModel} from './projectModel.js';
@@ -9,6 +10,7 @@ const typeLabels={Epic:'Epic',Story:'Story',Task:'Task',Bug:'Bug','Sub-task':'Su
 const priorities={critical:'긴급',high:'높음',medium:'보통',low:'낮음'};
 const editable=['title','text','projectIssueType','projectStatus','projectAssignee','projectPriority','projectStart','projectDue','projectParent','projectDependencies','projectSprint','projectPoints'];
 function ProjectDialog({children,onClose}){
+ useUiLocale();
  const root=useRef(null);
  useEffect(()=>{const previous=document.activeElement;root.current?.querySelector('input,button,select,textarea')?.focus();return()=>{if(previous?.isConnected)previous.focus();};},[]);
  return createPortal(<div ref={root} className="project-object project-dialog" data-object-action="project-dialog" role="dialog" aria-modal="true" aria-label={ui('프로젝트 편집')} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>{e.stopPropagation();if(e.key==='Escape'){e.preventDefault();onClose?.();}if(e.key==='Tab'){const nodes=[...root.current.querySelectorAll('button,input,textarea,select,[tabindex="0"]')].filter(n=>!n.disabled&&n.getClientRects().length);const first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}}} onDoubleClick={e=>e.stopPropagation()}>{children}</div>,document.body);
@@ -17,6 +19,7 @@ const today=()=>new Date().toISOString().slice(0,10);
 const projectKeyDown=event=>{const editing=event.target.closest('input,textarea,select,[contenteditable="true"]');if(editing||!['Delete','Backspace','Escape'].includes(event.key))event.stopPropagation();};
 const later=()=>new Date(Date.now()+13*86400000).toISOString().slice(0,10);
 function IssueEditor({board,boardId,issue,issues,actions,onClose,readOnly=false,initialSprint=''}){
+ useUiLocale();
  const fieldId=useId();
  const initial=useMemo(()=>issue||{...newIssue(boardId),projectSprint:initialSprint,title:ui('새 작업')},[issue?.id,boardId,initialSprint]);
  const [draft,setDraft]=useState(initial),[error,setError]=useState('');
@@ -46,16 +49,19 @@ function IssueEditor({board,boardId,issue,issues,actions,onClose,readOnly=false,
  </form>;
 }
 function WorkflowEditor({board,issues,save,onClose}){
+ useUiLocale();
  const fieldId=useId();
  const [statuses,setStatuses]=useState(board.projectConfig.statuses),[error,setError]=useState('');
  return <form className="project-editor" onSubmit={e=>{e.preventDefault();try{if(save({...board.projectConfig,statuses})===false)throw Error('설정을 저장하지 못했습니다.');onClose();}catch(err){setError(ui(err.message));}}}><header><strong>{ui('워크플로 관리')}</strong><button type="button" onClick={onClose}>×</button></header><p>{ui('승인이 필요한 상태는 관리자가 승인한 뒤 적용됩니다. To Do와 Done은 유지됩니다.')}</p>{statuses.map((s,index)=><div className="project-workflow-row" key={s.id}><input id={`${fieldId}-status-label-${s.id}`} name={`workflow-label-${s.id}`} aria-label={ui('상태 이름')} maxLength={80} required value={s.label} onChange={e=>setStatuses(statuses.map(v=>v.id===s.id?{...v,label:e.target.value}:v))}/><label><input id={`${fieldId}-status-approval-${s.id}`} name={`workflow-approval-${s.id}`} type="checkbox" checked={s.approval} onChange={e=>setStatuses(statuses.map(v=>v.id===s.id?{...v,approval:e.target.checked}:v))}/>{ui('승인')}</label><button type="button" aria-label={ui('상태 위로')} disabled={!index} onClick={()=>{const next=[...statuses];[next[index-1],next[index]]=[next[index],next[index-1]];setStatuses(next);}}>↑</button><button type="button" disabled={['todo','done'].includes(s.id)||issues.some(i=>i.projectStatus===s.id||i.projectRequestedStatus===s.id)} onClick={()=>setStatuses(statuses.filter(v=>v.id!==s.id))}>{ui('삭제')}</button></div>)}<button type="button" disabled={statuses.length>=12} onClick={()=>setStatuses([...statuses,{id:createId(),label:ui('새 상태'),approval:false}])}>{ui('상태 추가')}</button>{error&&<p role="alert">{error}</p>}<footer><button type="button" onClick={onClose}>{ui('취소')}</button><button>{ui('저장')}</button></footer></form>;
 }
 function ScheduleEditor({kind,existing,save,onClose}){
+ useUiLocale();
  const fieldId=useId();
  const [title,setTitle]=useState(existing?.title||''),[start,setStart]=useState(existing?.start||existing?.date||today()),[end,setEnd]=useState(existing?.end||later()),[goal,setGoal]=useState(existing?.goal||''),[error,setError]=useState('');
  return <form className="project-editor" onSubmit={e=>{e.preventDefault();try{const value=kind==='sprint'?{id:existing?.id||createId(),title,start,end,goal,state:existing?.state||'planned'}:{id:existing?.id||createId(),title,date:start};if(save(value)===false)throw Error('일정을 저장하지 못했습니다.');onClose();}catch(err){setError(ui(err.message));}}}><header><strong>{ui(existing?'일정 편집':kind==='sprint'?'스프린트 생성':'마일스톤 생성')}</strong><button type="button" onClick={onClose}>×</button></header><label>{ui('이름')}<input id={`${fieldId}-title`} name="schedule-title" required maxLength={160} value={title} onChange={e=>setTitle(e.target.value)}/></label><label>{ui(kind==='sprint'?'시작일':'날짜')}<input id={`${fieldId}-start`} name="schedule-start" required type="date" value={start} onChange={e=>setStart(e.target.value)}/></label>{kind==='sprint'&&<><label>{ui('종료일')}<input id={`${fieldId}-end`} name="schedule-end" required min={start} type="date" value={end} onChange={e=>setEnd(e.target.value)}/></label><label>{ui('스프린트 목표')}<textarea id={`${fieldId}-goal`} name="schedule-goal" maxLength={2000} value={goal} onChange={e=>setGoal(e.target.value)}/></label></>}{error&&<p role="alert">{error}</p>}<footer><button type="button" onClick={onClose}>{ui('취소')}</button><button>{ui(existing?'저장':'생성')}</button></footer></form>;
 }
 function Timeline({issues,milestones,fontSize=12}){
+ useUiLocale();
  const marker=useId().replace(/:/g,''),font=Math.max(8,Number(fontSize)||12),model=timelineModel(issues,milestones);
  const width=Math.min(12000,Math.max(600,model.days*Math.max(22,font*1.8))),gutter=Math.max(180,Math.ceil(font*14)),rowHeight=Math.max(38,Math.ceil(font*2.8)),labelHeight=Math.max(22,Math.ceil(font*1.8));
  const x=date=>Math.max(0,Math.min(width-12,model.offset(date)/model.days*width));
@@ -72,6 +78,7 @@ function Timeline({issues,milestones,fontSize=12}){
  </div></div>;
 }
 export default function ProjectObject({id,item,readOnly}){
+ useUiLocale();
  const fieldId=useId();
  const {records,actions}=useProjectStore();
  const [view,setView]=useState('kanban'),[editing,setEditing]=useState(null),[dialog,setDialog]=useState(''),[schedule,setSchedule]=useState(null),[limit,setLimit]=useState(200),[search,setSearch]=useState(''),[assignee,setAssignee]=useState(''),[sprintId,setSprintId]=useState(''),[error,setError]=useState('');

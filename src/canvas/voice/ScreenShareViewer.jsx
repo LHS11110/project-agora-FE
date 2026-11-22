@@ -1,9 +1,11 @@
 import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 import Icon from '../../components/Icon.jsx';
 import './voice.css';
 export default function ScreenShareViewer({voice}){
+ useUiLocale();
  const {call,state}=voice,{watchingScreen,screenVideo}=state;
  const [expanded,setExpanded]=useState(false),[position,setPosition]=useState(null),video=useRef(null),drag=useRef(null);
  const participant=state.participants.find(p=>p.peer_id===watchingScreen);

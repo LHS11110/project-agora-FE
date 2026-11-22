@@ -1,7 +1,9 @@
 import {useEffect,useId,useState} from 'react';
 import {ui} from '../../i18n/locale.js';
+import {useUiLocale} from '../../i18n/useUiLocale.js';
 import './group-permissions.css';
 export default function GroupPermissionsControls({settings,pending,onUpdate}){
+ useUiLocale();
  const fieldId=useId();
  const [policies,setPolicies]=useState(settings?.group_permissions||{});
  useEffect(()=>setPolicies(settings?.group_permissions||{}),[settings]);
