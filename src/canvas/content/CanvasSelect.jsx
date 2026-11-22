@@ -35,7 +35,7 @@ export default function CanvasSelect({ id, name, value, onChange, onBlur, disabl
     if (action === 'open') { try { node.showPicker?.(); } catch { /* Needs user activation in some browsers. */ } }
   }, [live]);
 
-  if (live && !disabled) {
+  if (live && !disabled && !rest.readOnly) {
     return <select
       {...rest}
       ref={select}
@@ -49,16 +49,18 @@ export default function CanvasSelect({ id, name, value, onChange, onBlur, disabl
     >{children}</select>;
   }
 
+  // The proxy keeps data-*/aria-*/style and pointer handlers (for example
+  // data-object-action, which stops canvas dragging); select-only props are dropped.
+  const { multiple: _multiple, size: _size, required: _required, autoComplete: _autoComplete, form: _form, readOnly, onPointerEnter, onFocus, onClick, ...proxyProps } = rest;
   return <button
+    {...proxyProps}
     type="button"
     className={`${className} canvas-select-proxy`.trim()}
-    aria-label={rest['aria-label']}
     aria-haspopup="listbox"
-    title={rest.title}
-    disabled={disabled}
-    onPointerEnter={() => setLive(true)}
-    onFocus={() => { pending.current = 'focus'; setLive(true); }}
+    disabled={disabled || readOnly}
+    onPointerEnter={event => { onPointerEnter?.(event); setLive(true); }}
+    onFocus={event => { onFocus?.(event); pending.current = 'focus'; setLive(true); }}
     // Touch has no hover: the first tap swaps in the native select and opens it.
-    onClick={() => { pending.current = 'open'; setLive(true); }}
+    onClick={event => { onClick?.(event); pending.current = 'open'; setLive(true); }}
   >{optionLabel(children, value)}</button>;
 }

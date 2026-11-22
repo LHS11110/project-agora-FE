@@ -1,4 +1,5 @@
 import { useId, useMemo, useState } from 'react';
+import CanvasSelect from '../content/CanvasSelect.jsx';
 import Icon from '../../components/Icon.jsx';
 import MarkdownText from '../../components/MarkdownText.jsx';
 import { intlLocale, ui } from '../../i18n/locale.js';
@@ -205,7 +206,7 @@ export default function CanvasAgentOutputNode({
             </label>
             <label htmlFor={`${fieldId}-display`}>
               <span>{ui('표시 형식')}</span>
-              <select
+              <CanvasSelect
                 id={`${fieldId}-display`}
                 data-object-action="agent"
                 disabled={readOnly}
@@ -215,7 +216,7 @@ export default function CanvasAgentOutputNode({
                 {OUTPUT_DISPLAY_MODES.map(mode => (
                   <option key={mode.id} value={mode.id}>{ui(mode.label)}</option>
                 ))}
-              </select>
+              </CanvasSelect>
             </label>
             <label className="agent-mini-check" htmlFor={`${fieldId}-append`}>
               <input

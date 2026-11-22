@@ -7,18 +7,23 @@ import Icon from '../components/Icon.jsx';
 /** Give the image its real contained size so rounding also works with letterboxing. */
 export default function CanvasImageContent({ item, token }) {
   useUiLocale();
-  const media = useRef(null);
+  const media = useRef(null), boxSize = useRef(null);
+  // Uses the size reported by ResizeObserver instead of reading clientWidth, which
+  // forced a synchronous layout for every image that mounted (zoom/pan remounts).
   const fit = () => {
-    const box = media.current, image = box?.querySelector('img');
-    if (!box || !image?.naturalWidth || !item.height) return;
-    const ratio = Math.min(box.clientWidth / image.naturalWidth, box.clientHeight / image.naturalHeight);
+    const box = media.current, image = box?.querySelector('img'), size = boxSize.current;
+    if (!box || !size || !image?.naturalWidth || !item.height) return;
+    const ratio = Math.min(size.width / image.naturalWidth, size.height / image.naturalHeight);
     box.style.setProperty('--image-render-width', `${image.naturalWidth * ratio}px`);
     box.style.setProperty('--image-render-height', `${image.naturalHeight * ratio}px`);
   };
   useLayoutEffect(() => {
     if (!item.height || !media.current) return undefined;
-    const observer = new ResizeObserver(fit);
-    observer.observe(media.current); fit();
+    const observer = new ResizeObserver(([entry]) => {
+      boxSize.current = { width: entry.contentRect.width, height: entry.contentRect.height };
+      fit();
+    });
+    observer.observe(media.current);
     return () => observer.disconnect();
   }, [Boolean(item.height)]);
   const fallback = text => <div className="image-object-fallback"><Icon name="image" size={19} /><span>{ui(text)}</span></div>;

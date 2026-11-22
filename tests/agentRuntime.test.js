@@ -43,40 +43,7 @@ test('agent status returns explicit missing-key readiness', async () => {
   assert.equal((await result).configured, false);
 });
 
-test('cli_status and cli_install forward cli_tool and stream progress output', async () => {
-  const pending = new Map(), outputs = [];
-  let sent;
-  const statusReq = executeCanvasCode({
-    canvasId: '1',
-    action: 'agent',
-    operation: 'cli_status',
-    sendRaw: event => { sent = event; return true; },
-    pendingRequests: pending,
-  });
-  assert.equal(sent.operation, 'cli_status');
-  settleRuntimeSocketResponse(pending, { type: 'runtime_result', request_id: sent.request_id, ok: true, result: { ready: true, engine: 'cli', tools: { claude: { installed: false } } } });
-  assert.equal((await statusReq).tools.claude.installed, false);
-
-  const installReq = executeCanvasCode(
-    {
-      canvasId: '1',
-      action: 'agent',
-      operation: 'cli_install',
-      agent: { cli_tool: 'claude' },
-      sendRaw: event => { sent = event; return true; },
-      pendingRequests: pending,
-    },
-    output => outputs.push(output),
-  );
-  assert.equal(sent.operation, 'cli_install');
-  assert.equal(sent.cli_tool, 'claude');
-  settleRuntimeSocketResponse(pending, { type: 'runtime_output', request_id: sent.request_id, output: 'installing @anthropic-ai/claude-code' });
-  settleRuntimeSocketResponse(pending, { type: 'runtime_result', request_id: sent.request_id, ok: true, result: { installed: true, tool: 'claude' } });
-  assert.equal((await installReq).installed, true);
-  assert.deepEqual(outputs, ['installing @anthropic-ai/claude-code']);
-});
-
-test('busy and cli agent errors explain the cause without losing error codes', async () => {
+test('busy errors explain the cause without losing error codes', async () => {
   const pending = new Map();
   let sent;
   const result = executeCanvasCode({
@@ -89,12 +56,4 @@ test('busy and cli agent errors explain the cause without losing error codes', a
   await assert.rejects(result, error => error.code === 'AGENT_REQUEST_BUSY' && error.message.includes('이 캔버스에서 AI 에이전트가 작업 중'));
   assert.equal(pending.size, 0);
 
-  const cliErr = executeCanvasCode({
-    action: 'agent',
-    agent: { message: 'test', options: { engine: 'cli', cli_tool: 'claude' } },
-    pendingRequests: pending,
-    sendRaw: event => { sent = event; return true; },
-  });
-  settleRuntimeSocketResponse(pending, { type: 'runtime_result', request_id: sent.request_id, ok: false, code: 'CLI_TOOL_NOT_INSTALLED' });
-  await assert.rejects(cliErr, error => error.code === 'CLI_TOOL_NOT_INSTALLED' && error.message.includes('설치되어 있지 않습니다'));
 });

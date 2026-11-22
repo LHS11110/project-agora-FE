@@ -54,26 +54,4 @@
 
 
 /* Agent execution mode switcher and VM CLI panel */
-.canvas-agent-mode-switch{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:14px 18px 0;padding:4px;border:1px solid var(--agent-line);border-radius:11px;background:var(--agent-soft)}
-.canvas-agent-panel .canvas-agent-mode-switch button{border:0;border-radius:8px;padding:6px 8px;background:transparent;color:var(--agent-muted);font-size:11px;font-weight:550;transition:background .15s,color .15s}
-.canvas-agent-panel .canvas-agent-mode-switch button[aria-selected="true"]{background:var(--agent-card);color:var(--agent-ink);box-shadow:0 1px 4px #211c3714}
-.canvas-agent-cli-card{margin:12px 18px 16px;padding:12px;border:1px solid var(--agent-line);border-radius:12px;background:var(--agent-card)}
-.canvas-agent-cli-controls{display:flex;flex-direction:column;gap:9px;margin-top:10px}
-.canvas-agent-cli-controls label{display:flex;flex-direction:column;gap:4px;font-size:10px;color:var(--agent-muted)}
-.canvas-agent-cli-controls :is(select,input[type="text"]){box-sizing:border-box;width:100%;height:32px;border:1px solid var(--agent-line);border-radius:7px;padding:5px 8px;background:var(--agent-bg);color:var(--agent-ink);font:inherit;font-size:12px}
-.canvas-agent-cli-status-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
-.canvas-agent-cli-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600;background:var(--agent-soft);color:var(--agent-muted)}
-.canvas-agent-cli-badge.is-installed{background:#29996e20;color:#24815d}
-.canvas-agent-cli-badge.is-missing{background:#c94a5a1c;color:#b24251}
-.canvas-agent-panel[data-theme="dark"] .canvas-agent-cli-badge.is-installed{color:#6cd9ad}
-.canvas-agent-panel[data-theme="dark"] .canvas-agent-cli-badge.is-missing{color:#f0949f}
-.canvas-agent-cli-auth{font-size:10px;color:var(--agent-muted);margin-right:auto}
-.canvas-agent-cli-actions{display:flex;gap:5px}
-.canvas-agent-panel .canvas-agent-cli-actions button{padding:4px 9px;font-size:10px}
-.canvas-agent-cli-log{margin:8px 0 0;padding:7px 9px;border-radius:8px;background:var(--agent-bg);border:1px solid var(--agent-line);font:10px/1.45 var(--fl-mono,monospace);color:var(--agent-muted);max-height:66px;overflow:auto;white-space:pre-wrap;word-break:break-word}
-.canvas-agent-cli-bridge{display:flex;flex-direction:column;gap:3px;margin-top:9px;padding-top:9px;border-top:1px solid var(--agent-line)}
-.canvas-agent-cli-bridge small{font-size:10px;color:var(--agent-muted);line-height:1.5}
-.canvas-agent-cli-bridge code{padding:1px 4px;border-radius:4px;background:var(--agent-soft);font-size:9px;color:var(--agent-ink)}
-.canvas-agent-cli-hint{color:#b77437!important}
 .canvas-agent-settings input[type="text"],.canvas-agent-settings input[type="password"]{box-sizing:border-box;width:100%;height:32px;border:1px solid var(--agent-line);border-radius:7px;padding:5px 8px;background:var(--agent-bg);color:var(--agent-ink);font:inherit;font-size:12px;user-select:text}
-.canvas-agent-inline-cli{margin-left:auto;padding:2px 8px;border-radius:999px;background:var(--agent-soft);color:var(--agent-ink);font-size:10px;font-weight:550}

@@ -20,7 +20,7 @@ import { memo, useLayoutEffect, useRef } from 'react';
 import { createWgpuRenderer, WgpuSceneBatcher } from './wgpu/wgpuEngine.js';
 import { createInkStrokeRenderer, hasStrokeItems } from './inkStrokeRenderer.js';
 import { CONNECTOR_METRICS_EVENT } from './connectors/objectMetrics.js';
-import { acquireGpuSlot, rasterDescriptor, rasterizeObject, rasterWorldArea, sameRasterInput } from './rasterObjectCache.js';
+import { acquireGpuSlot, rasterDescriptor, rasterizeObject, rasterWorldSize, sameRasterInput } from './rasterObjectCache.js';
 import { RasterTextureAtlas } from './textureAtlas.js';
 import SharedRasterCache from './SharedRasterCache.js';
 import { isRasterContent as isRasterText } from './plainTextRaster.js';
@@ -31,6 +31,9 @@ const EMPTY_PREVIEWS = [];
 const EMPTY_ITEMS={};
 const GPU_CULL_THRESHOLD = 4096;
 const CAMERA_RASTER_PIXEL_CAP = 262_144;
+// Matches rasterizeObject's side limit; viewport-clipped rasters may use up to 4M px.
+const MAX_RASTER_SIDE = 4096;
+const CLIPPED_RASTER_PIXEL_CAP = 4_000_000;
 
 const DepthVectorLayer = memo(function DepthVectorLayer(props) {
   useUiLocale();
@@ -556,14 +559,18 @@ const DepthVectorLayer = memo(function DepthVectorLayer(props) {
         if (rebuild) {
           if (record) {paintIndex.remove(record);damage.push(record.paintedBounds);destroyRecord(record);}
           let clip=null,objectBudget=pixelBudget;
-          // Clip only connectors that the shared budget would sample below 60% of the
-          // target; the clipped raster is budgeted by its visible area, capped at 4M px.
-          const area=item.kind==='connector'?rasterWorldArea(descriptor,referenceItems,world):0;
-          if (area && area*targetRatio*targetRatio*.36>pixelBudget) {
-            const vw=width/safeScale,vh=height/safeScale,mx=vw*.15,my=vh*.15;
+          // Clip any object the shared budget (or the 4096px side limit) would sample
+          // below 60% of the target to the viewport. Without this, a 240px text at
+          // 1600% zoom was rasterized at ~11x and stretched 16x, so glyphs and strokes
+          // blurred at max zoom. The clipped raster is budgeted by its visible area.
+          const size=rasterWorldSize(descriptor,referenceItems,world),area=size.width*size.height;
+          const vw=width/safeScale,vh=height/safeScale,mx=vw*.15,my=vh*.15;
+          const undersampled=area*targetRatio*targetRatio*.36>pixelBudget || Math.max(size.width,size.height)*targetRatio*.6>MAX_RASTER_SIDE;
+          // Non-connectors clip only when the viewport covers well under half of them;
+          // otherwise a pan would re-raster them for little sharpness gain.
+          if (area && undersampled && (item.kind==='connector' || (vw+2*mx)*(vh+2*my)<area*.5)) {
             clip={minX:Math.floor(-camera.x/safeScale-mx),minY:Math.floor(-camera.y/safeScale-my),maxX:Math.ceil((width-camera.x)/safeScale+mx),maxY:Math.ceil((height-camera.y)/safeScale+my)};
-            objectBudget=Math.max(pixelBudget,Math.min(2_000_000,area,(vw+2*mx)*(vh+2*my))*targetRatio*targetRatio);
-            objectBudget=Math.max(pixelBudget,Math.min(2_000_000,objectBudget));
+            objectBudget=Math.max(pixelBudget,Math.min(CLIPPED_RASTER_PIXEL_CAP,Math.min(area,(vw+2*mx)*(vh+2*my))*targetRatio*targetRatio));
           }
           if (cameraActive && objectBudget > CAMERA_RASTER_PIXEL_CAP) { objectBudget = CAMERA_RASTER_PIXEL_CAP; provisionalIds.add(id); }
           else provisionalIds.delete(id);

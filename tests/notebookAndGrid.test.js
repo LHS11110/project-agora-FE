@@ -28,13 +28,26 @@ test('execute-only notebook state cannot modify source or bypass content permiss
  assert.equal(isRuntimeOnlyOperation(item,{action:'patch',patch:{notebookResults:{},notebookCells:[]}}),false);
 });
 
-test('coarse grids keep a bounded surface and constant screen dot size',()=>{
- const style={setProperty(key,value){this[key]=value;}};
- applyGridProjection({style},{x:73,y:-64,scale:100},40);
- assert.equal(style.transform,'translate3d(-48px,-48px,0)');assert.ok(Math.abs(parseFloat(style.backgroundSize)-4000)<1e-8);
- assert.equal(style['--surface-dot-radius'],'1.5px');
- applyGridProjection({style},{x:0,y:0,scale:1},40);
- assert.equal(style.backgroundSize,'24px 24px');assert.ok(Math.abs(parseFloat(style['--surface-dot-radius'])*40/24-1.5)<1e-10);
+test('wide custom grids use background offsets without scaling or moving the surface', () => {
+ const style = {};
+ const coarse = gridProjection({ x: 73, y: -64, scale: 16 }, { x: 10000, y: 1 });
+ applyGridProjection({ style }, coarse);
+ assert.equal(style.transform, 'none');
+ assert.equal(style.backgroundSize, '160000px 320px');
+ assert.equal(style.backgroundPosition, '-79927px -224px');
+ assert.equal(style.width, '100%');
+
+ const regular = gridProjection({ x: 15, y: 0, scale: 1 }, 40);
+ applyGridProjection({ style }, regular);
+ assert.equal(style.backgroundSize, '40px 40px');
+ assert.equal(style.transform, 'translate3d(-5px,-20px,0)');
+ assert.equal(style.backgroundPosition, '0px 0px');
+ assert.equal(style.width, 'calc(100% + 64px)');
+
+ // The default 1px snap interval displays the original 20px grid, widening as the camera zooms in.
+ assert.equal(gridProjection({ x: 0, y: 0, scale: 1 }, { x: 1, y: 1 }).spacingX, 20);
+ assert.equal(gridProjection({ x: 0, y: 0, scale: 16 }, { x: 1, y: 1 }).spacingX, 320);
+ assert.equal(gridProjection({ x: 0, y: 0, scale: 0.1 }, { x: 1, y: 1 }).spacingX, 16);
 });
 
 test('independent horizontal and vertical grid intervals use the same world-space snap',()=>{

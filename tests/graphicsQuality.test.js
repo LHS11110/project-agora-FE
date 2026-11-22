@@ -29,6 +29,9 @@ test('raster resolution never degrades below native DPR when zoomed out and scal
   assert.equal(graphicsRasterRatio('high', 0.1, 1), 1);
   assert.equal(graphicsRasterRatio('high', 2, 1.5), 3);
   assert.ok(graphicsRasterRatio('high', 100, 4) <= UNIFIED_GRAPHICS_PROFILE.maxRasterRatio);
+  // Max zoom (1600%) samples text and strokes at native resolution instead of stretching a 4x raster.
+  assert.equal(graphicsRasterRatio('high', 16, 1), 16);
+  assert.equal(graphicsRasterRatio('high', 16, 2), 32);
   assert.equal(graphicsLodScale(1.5, 5000, 'low'), 1.5);
 });
 

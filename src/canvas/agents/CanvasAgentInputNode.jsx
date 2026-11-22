@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import CanvasSelect from '../content/CanvasSelect.jsx';
 import Icon from '../../components/Icon.jsx';
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
@@ -156,7 +157,7 @@ export default function CanvasAgentInputNode({
         <div className="agent-tab-panel">
           <div className="agent-inline-select-row">
             <label htmlFor={`${fieldId}-type`}>{ui('입력 형식')}</label>
-            <select
+            <CanvasSelect
               id={`${fieldId}-type`}
               data-object-action="agent"
               disabled={readOnly}
@@ -166,7 +167,7 @@ export default function CanvasAgentInputNode({
               {INPUT_TYPE_OPTIONS.map(opt => (
                 <option key={opt.id} value={opt.id}>{ui(opt.label)}</option>
               ))}
-            </select>
+            </CanvasSelect>
           </div>
 
           <label className="agent-field-label" htmlFor={`${fieldId}-text`}>

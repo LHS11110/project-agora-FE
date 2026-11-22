@@ -153,15 +153,15 @@ test('parseRouterDecision parses JSON, fenced JSON, and ROUTE tags while respect
   assert.deepEqual(d4.selectedRoutes, []);
 });
 
-test('evaluateAgentRouter supports format, intelligent (with CLI options), fallback, and hybrid modes', async () => {
+test('evaluateAgentRouter supports format, intelligent (API engine), fallback, and hybrid modes', async () => {
   const items = {
     input: createAgentInputItem({ inputType: 'pdf', text: 'PDF 논문 분석해줘' }),
     router: createAgentRouterItem({
       title: '지능형 라우터',
       routingMode: 'hybrid',
+      // A router saved while VM CLI agents existed still runs on the API engine.
       engine: 'cli',
       cli_tool: 'claude',
-      cli_model: 'claude-sonnet',
       fallbackPolicy: 'default_target',
       routingPrompt: '작업 성격을 보고 선택',
     }),
@@ -205,9 +205,9 @@ test('evaluateAgentRouter supports format, intelligent (with CLI options), fallb
   assert.equal(hybridIntelligent.fallbackUsed, false);
   assert.equal(hybridIntelligent.reason, '코드 리팩토링 요청');
   assert.equal(capturedPayload.api_key, 'router-api-key');
-  assert.equal(capturedPayload.options.engine, 'cli');
-  assert.equal(capturedPayload.options.cli_tool, 'claude');
-  assert.equal(capturedPayload.options.cli_model, 'claude-sonnet');
+  assert.equal(capturedPayload.options.engine, undefined);
+  assert.equal(capturedPayload.options.cli_tool, undefined);
+  assert.equal(capturedPayload.options.reasoning_effort, 'low');
 
   // Unparseable response in intelligent mode applies configured fallback policy.
   items.router = createAgentRouterItem({ routingMode: 'intelligent', fallbackPolicy: 'default_target' });

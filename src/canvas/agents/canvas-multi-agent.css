@@ -151,7 +151,7 @@
   white-space: nowrap;
 }
 
-.agent-inline-select-row select {
+.agent-inline-select-row :is(select, .canvas-select-proxy) {
   flex: 1;
   min-width: 0;
   border: 1px solid var(--agent-card-line);
@@ -492,7 +492,7 @@
 .agent-settings-mini textarea,
 .agent-settings-mini input[type="text"],
 .agent-settings-mini input[type="number"],
-.agent-settings-mini select {
+.agent-settings-mini :is(select, .canvas-select-proxy) {
   width: 100%;
   box-sizing: border-box;
   border: 1px solid var(--agent-card-line);

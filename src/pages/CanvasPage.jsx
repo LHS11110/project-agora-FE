@@ -80,7 +80,7 @@ import { createBlueprintStore } from '../canvas/runtime/blueprintStore.js';
 import { createMultiAgentStore } from '../canvas/agents/multiAgentStore.js';
 import MultiAgentActivity from '../canvas/agents/MultiAgentActivity.jsx';
 import { buildMultiAgentTemplate, isAgentCanvasObject, isAgentOrchestratorItem } from '../canvas/agents/agentCanvasModel.js';
-import { loadAgentKey, loadCliAgentKey } from '../components/agentCredentials.js';
+import { loadAgentKey } from '../components/agentCredentials.js';
 import Timer, {initialTimer} from '../canvas/CanvasTimer.jsx';
 import CanvasAgentLauncher from '../components/CanvasAgentLauncher.jsx';
 import CanvasAgentPanel from '../components/CanvasAgentPanel.jsx';
@@ -196,6 +196,9 @@ import '../canvas/panels/tablet-layout.css';
 const ZOOM_SENSITIVITY_KEY = 'agora_canvas_zoom_sensitivity';
 const STROKE_WIDTH_KEY = 'agora_canvas_stroke_width';
 const EMPTY_ID_SET = new Set();
+const DEPARTED_ENTRY_MS = 2000, MAX_DEPARTED_ENTRIES = 96;
+const VECTOR_KINDS = new Set(['shape', 'connector', 'stroke', 'text']);
+const isDomRenderedKind = item => Boolean(item.runtimeRole) || !VECTOR_KINDS.has(item.kind);
 const EMPTY_STYLE_OBJ = {};
 const automergeReady = Automerge.initializeWasm(automergeWasmUrl);
 
@@ -246,7 +249,7 @@ function CanvasWorkspace() {
   const multiAgentStore = useMemo(() => createMultiAgentStore({
     getItems: () => itemsRef.current,
     executeAgent: ({ operation, ...agent }, onOutput) => runtimeRequestRef.current({ action: 'agent', operation, agent }, onOutput),
-    resolveApiKey: config => (config?.engine === 'cli' ? loadCliAgentKey(config.cli_tool) : loadAgentKey()),
+    resolveApiKey: () => loadAgentKey(),
     getAnchor: id => getAgentAnchorRef.current(id),
     saveOutput: (id, records) => saveBlueprintOutputRef.current(id, records),
     saveValue: (id, patch) => saveBlueprintValueRef.current(id, patch),
@@ -1463,6 +1466,11 @@ function CanvasWorkspace() {
   const sceneQueryRef = useRef(null);
   if (!sceneQueryRef.current) sceneQueryRef.current = new StableSpatialQuery();
   const zoomEntriesCacheRef = useRef(null);
+  // Objects that leave the render window stay mounted briefly. A zoom that pauses
+  // (for example at the zoom limit) used to unmount heavy DOM objects (tables, PDFs,
+  // images) and rebuild them when zooming back out; see docs/benchmarks/canvas-frames-*.md.
+  const departedEntriesRef = useRef(new Map());
+  const [departedTick, setDepartedTick] = useState(0);
   const visibleEntries = useMemo(() => {
     const cached = zoomEntriesCacheRef.current;
     const b = sceneWindow.bounds;
@@ -1482,9 +1490,31 @@ function CanvasWorkspace() {
         bounds: objectBounds(item, items, boardSize.width, boardSize.height),
       }];
     }
+    const departed = departedEntriesRef.current, now = performance.now(), present = new Set(entries.map(entry => entry.id));
+    for (const entry of cached?.entries || []) {
+      // Only DOM-rendered objects are retained. Vector objects redraw from the GPU
+      // raster cache, and retaining them would drop the spatial query's incremental
+      // delta (a full scene rebuild per zoom step).
+      const item = items[entry.id];
+      if (!present.has(entry.id) && item && isDomRenderedKind(item) && !departed.has(entry.id)) departed.set(entry.id, now + DEPARTED_ENTRY_MS);
+    }
+    const kept = [];
+    for (const [id, until] of departed) {
+      if (present.has(id) || !items[id] || until <= now) { departed.delete(id); continue; }
+      kept.push({ id, item: items[id], bounds: objectBounds(items[id], items, boardSize.width, boardSize.height) });
+    }
+    while (departed.size > MAX_DEPARTED_ENTRIES) departed.delete(departed.keys().next().value);
+    if (kept.length) entries = [...entries, ...kept.slice(-MAX_DEPARTED_ENTRIES)];
     zoomEntriesCacheRef.current = { liveContentIds, items, spatialIndex, spatialRevision, editingId, width: boardSize.width, height: boardSize.height, bounds: b, entries };
     return entries;
-  }, [boardSize.height, boardSize.width, editingId, items, spatialIndex, spatialRevision, sceneWindow.key, zoomingActive, cameraMoving, camera, liveContentIds]);
+  }, [boardSize.height, boardSize.width, editingId, items, spatialIndex, spatialRevision, sceneWindow.key, zoomingActive, cameraMoving, camera, liveContentIds, departedTick]);
+  useEffect(() => {
+    const departed = departedEntriesRef.current;
+    if (!departed.size) return undefined;
+    const next = Math.min(...departed.values());
+    const timer = setTimeout(() => setDepartedTick(value => value + 1), Math.max(16, next - performance.now() + 16));
+    return () => clearTimeout(timer);
+  }, [visibleEntries]);
   useLayoutEffect(()=>{
     const stage=boardRef.current,cached=zoomEntriesCacheRef.current;
     if(stage&&cached)stage.__agoraPreparedScene={bounds:cached.bounds,world:boardSize};
@@ -2857,7 +2887,7 @@ function CanvasWorkspace() {
         {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{ui(toast)}</div>}
         {comments.activeId && <ObjectCommentsPanel token={token} comments={comments} participants={mentionParticipants} connection={connection} />}
         <MentionNotifications notifications={comments.notifications} onJump={jumpToMention} onDismiss={comments.dismiss} channelName={id => textChannels.find(channel => channel.id === id)?.name} />
-        <CanvasAgentPanel key={`${canvasId}:${user?.user_id || ''}`} theme={theme} onBusyChange={uiActions.onAgentBusyChange} open={showAgent} onClose={uiActions.onAgentClose} canvasId={canvasId} selectedIds={selectedObjectIds} anchor={showAgent ? centeredItemPosition(0, 0) : null} request={uiActions.onAgentRequest} />
+        <CanvasAgentPanel key={`${canvasId}:${user?.user_id || ''}`} theme={theme} isAdmin={Boolean(capabilities?.is_admin)} onBusyChange={uiActions.onAgentBusyChange} open={showAgent} onClose={uiActions.onAgentClose} canvasId={canvasId} selectedIds={selectedObjectIds} anchor={showAgent ? centeredItemPosition(0, 0) : null} request={uiActions.onAgentRequest} />
         {showRuntimeSettings && <RuntimeSettingsDialog request={management => executeCanvasCode({ canvasId, action: 'manage', management, sendRaw, pendingRequests: runtimeSocketRequestsRef.current })} canManage={canWriteCanvas && canUseCanvas(capabilities, 'execute')} canvasId={canvasId} token={token} user={user} initialLanguage={selectedItem?.language || 'cpp'} isRunning={() => runtimeStore.isRunning()} onClose={() => setShowRuntimeSettings(false)} />}
         {versionsOpened.current && <CanvasVersionDialog open={showVersions} api={canvasCodeApi} canvasId={canvasId} onClose={() => setShowVersions(false)} onInspect={source => { setCanvasCodeSource(source); setShowVersions(false); setShowCanvasCode(true); }} />}
         {showCanvasCode && <CanvasAsCodeDialog api={canvasCodeApi} canvasId={canvasId} initialSource={canvasCodeSource} onClose={() => setShowCanvasCode(false)} />}

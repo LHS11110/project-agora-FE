@@ -9,9 +9,19 @@
 .tutorial-page .tutorial-stage.no-grid { background-image: none; }
 
 /* Panning moves a pre-painted dot tile instead of repainting the full stage. */
-.canvas-app-page .canvas-stage:has(> .canvas-grid-surface) { background-image: none; }
-.canvas-grid-surface{position:absolute;left:0;top:0;width:calc(200% + 128px);height:calc(200% + 128px);pointer-events:none;will-change:transform;transform-origin:top left;
-  background-image:radial-gradient(ellipse var(--surface-dot-x,2px) var(--surface-dot-y,2px) at center,var(--stage-dot,#c7d1c4) 75%,transparent 100%);
-  background-size:24px 24px;background-position:0 0;
-  transform:translate3d(-50px,-50px,0)}
-.canvas-stage.no-grid .canvas-grid-surface{display:none}
+/* The stage always renders .canvas-grid-surface; a :has() check here was re-evaluated on every axis label change. */
+.canvas-app-page .canvas-stage { background-image: none; }
+.canvas-grid-surface {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* applyGridProjection widens this by one grid period, the most it is ever shifted. */
+  width: calc(100% + 32px);
+  height: calc(100% + 32px);
+  pointer-events: none;
+  will-change: transform;
+  /* Same dot as the original stage grid: 1px radius with a half-pixel soft edge. */
+  background-image: radial-gradient(circle at center, var(--stage-dot, #c7d1c4) 1px, transparent 1.5px);
+  background-size: 20px 20px;
+}
+.canvas-stage.no-grid .canvas-grid-surface { display: none; }

@@ -1,6 +1,5 @@
 import {
   AGENT_DEFAULTS,
-  CLI_TOOLS,
   modelOptions,
   normalizeAgentPreferences,
 } from '../../components/agentPreferences.js';
@@ -285,7 +284,6 @@ function sanitizeLastMeta(raw) {
   if (typeof raw.mode === 'string') entry.mode = raw.mode.slice(0, 32);
   if (Number.isInteger(raw.round) && raw.round >= 1 && raw.round <= 20) entry.round = raw.round;
   if (typeof raw.engine === 'string') entry.engine = raw.engine.slice(0, 16);
-  if (typeof raw.cli_tool === 'string') entry.cli_tool = raw.cli_tool.slice(0, 32);
   if (typeof raw.model === 'string') entry.model = raw.model.slice(0, 128);
   if (Number.isInteger(raw.directivesCount) && raw.directivesCount >= 0) entry.directivesCount = raw.directivesCount;
   if (typeof raw.error === 'string' && raw.error) entry.error = raw.error.slice(0, 500);
@@ -322,9 +320,6 @@ export function normalizeAgentNodeConfig(raw = {}) {
     engine: source.engine === 'mock' ? 'mock' : prefs.engine,
     mockResponse: typeof source.mockResponse === 'string' ? source.mockResponse.slice(0, MAX_MOCK_RESPONSE_CHARS) : '모형 응답입니다.',
     mockFollowup: typeof source.mockFollowup === 'string' ? source.mockFollowup.slice(0, MAX_MOCK_RESPONSE_CHARS) : '',
-    cli_tool: prefs.cli_tool,
-    cli_model: prefs.cli_model,
-    cli_command: prefs.cli_command,
     reasoning_effort: prefs.reasoning_effort,
     max_tokens: prefs.max_tokens,
     max_steps: prefs.max_steps,
@@ -360,7 +355,7 @@ export function writeAgentNodePatch(item, patchOrUpdater) {
   const rawPatch = typeof patchOrUpdater === 'function' ? patchOrUpdater(prevConfig, item) : patchOrUpdater;
   if (!rawPatch || typeof rawPatch !== 'object') return null;
 
-  const { title, color, text, api_key: _drop1, cli_api_key: _drop2, ...configPatch } = rawPatch;
+  const { title, color, text, api_key: _drop1, cli_api_key: _drop2, cli_tool: _drop3, cli_model: _drop4, cli_command: _drop5, ...configPatch } = rawPatch;
   const nextConfig = normalizeAgentNodeConfig({ ...prevConfig, ...configPatch });
   const format = encodeBoundedFormat(AGENT_NODE_PREFIX, nextConfig, (cfg) => ({
     ...cfg,
@@ -509,9 +504,6 @@ export function normalizeAgentRouterConfig(raw = {}) {
       : DEFAULT_ROUTER_PROMPT).slice(0, MAX_GOAL_CHARS),
     routes: sanitizeRouterRoutesMap(source.routes),
     engine: prefs.engine,
-    cli_tool: prefs.cli_tool,
-    cli_model: prefs.cli_model,
-    cli_command: prefs.cli_command,
     reasoning_effort: prefs.reasoning_effort,
     max_tokens: prefs.max_tokens,
     max_steps: prefs.max_steps,
@@ -530,7 +522,7 @@ export function writeAgentRouterPatch(item, patchOrUpdater) {
   const rawPatch = typeof patchOrUpdater === 'function' ? patchOrUpdater(prevConfig, item) : patchOrUpdater;
   if (!rawPatch || typeof rawPatch !== 'object') return null;
 
-  const { title, color, text, api_key: _drop1, cli_api_key: _drop2, ...configPatch } = rawPatch;
+  const { title, color, text, api_key: _drop1, cli_api_key: _drop2, cli_tool: _drop3, cli_model: _drop4, cli_command: _drop5, ...configPatch } = rawPatch;
   const nextConfig = normalizeAgentRouterConfig({ ...prevConfig, ...configPatch });
   const format = encodeBoundedFormat(AGENT_ROUTER_PREFIX, nextConfig, (cfg) => ({
     ...cfg,
@@ -1286,4 +1278,4 @@ export function buildMultiAgentTemplate(templateId, orchestratorId, orchestrator
   return { updatedOrchestrator, createdEntries, changes };
 }
 
-export { AGENT_DEFAULTS, CLI_TOOLS };
+export { AGENT_DEFAULTS };

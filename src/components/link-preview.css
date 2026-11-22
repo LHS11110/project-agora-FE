@@ -18,14 +18,17 @@
   text-align: left;
 }
 
+/* YouTube embeds need at least 200×200 CSS px. */
 .message-youtube-preview {
-  width: min(250px, 100%);
+  width: min(356px, 100%);
+  min-width: 200px;
 }
 
 .message-youtube-frame {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
+  min-height: 200px;
   overflow: hidden;
   border-radius: 9px;
   border: 1px solid var(--line, #dbe4da);

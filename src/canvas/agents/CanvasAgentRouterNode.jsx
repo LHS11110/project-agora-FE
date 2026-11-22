@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import CanvasSelect from '../content/CanvasSelect.jsx';
 import Icon from '../../components/Icon.jsx';
-import { CLI_TOOLS } from '../../components/agentPreferences.js';
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
 import {
@@ -29,6 +29,7 @@ export default function CanvasAgentRouterNode({
   selected = false,
   readOnly = false,
   canExecute = true,
+  isAdmin = false,
   onChange,
 }) {
   useUiLocale();
@@ -428,7 +429,7 @@ export default function CanvasAgentRouterNode({
             </label>
             <label htmlFor={`${fieldId}-fallback`}>
               <span>{ui('미일치 시 폴백 정책')}</span>
-              <select
+              <CanvasSelect
                 id={`${fieldId}-fallback`}
                 data-object-action="agent"
                 disabled={readOnly}
@@ -438,7 +439,7 @@ export default function CanvasAgentRouterNode({
                 {ROUTER_FALLBACK_POLICIES.map(pol => (
                   <option key={pol.id} value={pol.id}>{ui(pol.label)}</option>
                 ))}
-              </select>
+              </CanvasSelect>
             </label>
             <label className="agent-mini-check" htmlFor={`${fieldId}-multi-match`}>
               <input
@@ -464,35 +465,6 @@ export default function CanvasAgentRouterNode({
                   />
                   <span>{ui('지능형 모드 복수 에이전트 선택 허용')}</span>
                 </label>
-                <label htmlFor={`${fieldId}-engine`}>
-                  <span>{ui('지능형 라우터 엔진')}</span>
-                  <select
-                    id={`${fieldId}-engine`}
-                    data-object-action="agent"
-                    disabled={readOnly}
-                    value={config.engine}
-                    onChange={e => commitPatch({ engine: e.target.value })}
-                  >
-                    <option value="api">{ui('EXAONE 2.5 API')}</option>
-                    <option value="cli">{ui('VM CLI 에이전트')}</option>
-                  </select>
-                </label>
-                {config.engine === 'cli' && (
-                  <label htmlFor={`${fieldId}-cli-tool`}>
-                    <span>{ui('CLI 도구')}</span>
-                    <select
-                      id={`${fieldId}-cli-tool`}
-                      data-object-action="agent"
-                      disabled={readOnly}
-                      value={config.cli_tool}
-                      onChange={e => commitPatch({ cli_tool: e.target.value })}
-                    >
-                      {CLI_TOOLS.map(tool => (
-                        <option key={tool.id} value={tool.id}>{ui(tool.label)}</option>
-                      ))}
-                    </select>
-                  </label>
-                )}
               </>
             )}
           </div>

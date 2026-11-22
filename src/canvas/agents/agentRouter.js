@@ -1435,7 +1435,7 @@ export async function evaluateAgentRouter({
     allow_delete: false,
     options: agentModelOptions(routerConfig),
     api_key: mock ? '' : resolveApiKey?.(routerConfig) || '',
-    turn_id: globalThis.crypto?.randomUUID?.() || `${runId || 'route'}:${id}`,
+    turn_id: globalThis.crypto?.randomUUID?.() || `${runId || 'route'}-${id}`,
     ...(sessionId ? { session_id: sessionId } : {}),
   };
 
@@ -1447,8 +1447,28 @@ export async function evaluateAgentRouter({
     const res = await callAgent(payload, onOutput);
     answer = String(res?.answer ?? res?.output ?? res?.message ?? '');
   } else if (typeof executeAgent === 'function') {
-    const res = await executeAgent(payload, onOutput);
-    answer = String(res?.answer ?? res?.output ?? res?.message ?? '');
+    const makeAbortError = () => {
+      const abortErr = new Error('라우팅 작업이 중지되었습니다.');
+      abortErr.name = 'AbortError';
+      abortErr.code = 'AGENT_ABORTED';
+      return abortErr;
+    };
+    if (signal?.aborted) throw makeAbortError();
+    let onAbort = null;
+    try {
+      const reqPromise = Promise.resolve(executeAgent(payload, onOutput));
+      reqPromise.catch(() => {});
+      const res = await new Promise((resolve, reject) => {
+        onAbort = () => {
+          reject(makeAbortError());
+        };
+        signal?.addEventListener?.('abort', onAbort, { once: true });
+        reqPromise.then(resolve, reject);
+      });
+      answer = String(res?.answer ?? res?.output ?? res?.message ?? '');
+    } finally {
+      if (onAbort) signal?.removeEventListener?.('abort', onAbort);
+    }
   } else {
     throw new Error('지능형 라우팅을 실행할 에이전트 연결이 없습니다.');
   }

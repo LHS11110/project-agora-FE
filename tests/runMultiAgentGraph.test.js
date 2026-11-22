@@ -293,7 +293,7 @@ test('runMultiAgentOrchestration runs collaborative feedback rounds and converge
   const items = {
     orch: createOrchestratorItem({ mode: 'collaborative', maxRounds: 3, goal: '안전한 파서를 작성하세요.' }),
     dev: createAgentNodeItem({ title: '구현자', systemPrompt: '코드를 작성하세요.', x: 0.3, y: 0.1 }),
-    rev: createAgentNodeItem({ title: '리뷰어', engine: 'cli', cli_tool: 'claude', systemPrompt: '검토하세요.', x: 0.5, y: 0.1 }),
+    rev: createAgentNodeItem({ title: '리뷰어', systemPrompt: '검토하세요.', x: 0.5, y: 0.1 }),
     out: { kind: 'shape', runtimeRole: 'output', x: 0.7, y: 0.1 },
     e1: edge('orch', 'dev'),
     e2: edge('dev', 'rev'),
@@ -308,11 +308,11 @@ test('runMultiAgentOrchestration runs collaborative feedback rounds and converge
   const result = await runMultiAgentOrchestration({
     items,
     orchestratorId: 'orch',
-    resolveApiKey: cfg => (cfg.engine === 'cli' ? 'cli-key' : 'api-key'),
+    resolveApiKey: () => 'api-key',
     executeAgent: async (payload) => {
       if (payload.operation === 'sessions') return { draft: { id: 'collab-sess' } };
       calls.push(payload);
-      if (payload.options.engine === 'cli') {
+      if (payload.message.includes('객체 ID: rev')) {
         revCalls++;
         if (revCalls === 1) {
           return {
@@ -337,7 +337,7 @@ test('runMultiAgentOrchestration runs collaborative feedback rounds and converge
   assert.equal(result.runSummary.converged, true);
   assert.equal(calls.length, 4);
   assert.equal(calls[0].api_key, 'api-key');
-  assert.equal(calls[1].api_key, 'cli-key');
+  assert.equal(calls[1].api_key, 'api-key');
   assert.match(result.answer, /완벽합니다/);
   assert.equal(deliveries.some(d => d.type === 'orchestrator' && d.runSummary.roundsCompleted === 2), true);
   assert.equal(deliveries.some(d => d.type === 'output' && d.targetId === 'out' && d.record.output.includes('완벽합니다')), true);
@@ -648,4 +648,62 @@ test('runMultiAgentOrchestration routes JSON input payloads through JSON rule ro
   assert.equal(items.output.text, '청구서 INV-900 결제 처리 완료');
   assert.equal(items.output.runtimeResults.length, 1);
   assert.equal(items.generalAgent.text, '');
+});
+
+test('agent abort rejects without CLI cancel requests, and busy errors retry', async () => {
+  // (a) A node saved with the removed VM CLI engine runs on the API engine; abort sends no cli_cancel.
+  const items = {
+    agent: createAgentNodeItem({ engine: 'cli', cli_tool: 'claude', systemPrompt: 'test' }),
+  };
+  const seen = [];
+  const controller = new AbortController();
+  let runResolve;
+  const runPromise = runSingleAgent({
+    items,
+    agentId: 'agent',
+    resolveApiKey: () => '',
+    signal: controller.signal,
+    executeAgent: (payload) => {
+      seen.push(payload);
+      if (payload.operation === 'run') {
+        return new Promise((resolve) => {
+          runResolve = resolve;
+          queueMicrotask(() => controller.abort());
+        });
+      }
+      return Promise.resolve({});
+    },
+  });
+  await assert.rejects(runPromise, (err) => err?.code === 'AGENT_ABORTED');
+  const runReq = seen.find((p) => p.operation === 'run');
+  assert.ok(runReq, 'expected run payload');
+  assert.equal(seen.some((p) => p.operation === 'cli_cancel'), false);
+  assert.equal(runReq.options.engine, undefined);
+  assert.equal(runReq.options.cli_tool, undefined);
+  runResolve?.({ answer: 'late' });
+
+  // (b) AGENT_BUSY and RUNTIME_BUSY errors trigger retries cleanly
+  let attempt = 0;
+  const busyRes = await runSingleAgent({
+    items,
+    agentId: 'agent',
+    resolveApiKey: () => '',
+    executeAgent: async (payload) => {
+      if (payload.operation !== 'run') return {};
+      attempt += 1;
+      if (attempt === 1) {
+        const err = new Error('busy');
+        err.code = 'AGENT_BUSY';
+        throw err;
+      }
+      if (attempt === 2) {
+        const err = new Error('runtime busy');
+        err.code = 'RUNTIME_BUSY';
+        throw err;
+      }
+      return { answer: 'recovered after busy retries' };
+    },
+  });
+  assert.equal(attempt, 3);
+  assert.equal(busyRes.answer, 'recovered after busy retries');
 });

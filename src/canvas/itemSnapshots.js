@@ -15,11 +15,13 @@ function wrap(state){
 }
 export function itemSnapshot(items){
   if(states.has(items))return items;
-  const state={buckets:Array.from({length:BUCKETS},()=>Object.create(null)),chunks:[],size:0,keys:null,parent:null,changes:null,depths:new Map()};
+  // Buckets are created on first write: each depth layer owns empty snapshots, and
+  // 1024 eager bucket objects per snapshot added ~46 MB with 240 distinct depths.
+  const state={buckets:new Array(BUCKETS),chunks:[],size:0,keys:null,parent:null,changes:null,depths:new Map()};
   for(const [id,value] of Object.entries(items || {})){
     if(value?.kind)state.depths.set(depth(value),(state.depths.get(depth(value))||0)+1);
     const index=state.size++;if(index%CHUNK===0)state.chunks.push([]);
-    state.chunks.at(-1).push(id);state.buckets[hash(id)][id]={value,index};
+    state.chunks.at(-1).push(id);(state.buckets[hash(id)] ||= Object.create(null))[id]={value,index};
   }
   return wrap(state);
 }

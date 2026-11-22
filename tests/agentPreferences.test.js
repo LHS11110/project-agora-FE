@@ -33,35 +33,17 @@ test('valid reasoning and token budgets survive normalization; context flags sta
   assert.equal(modelOptions(value).includeHistory, undefined);
 });
 
-test('cli mode preferences validate cli_tool, cli_model, and single-line cli_command', () => {
-  const cli = normalizeAgentPreferences({
-    engine: 'cli',
-    cli_tool: 'codex',
-    cli_model: 'gpt-5-codex',
-    cli_command: 'echo ignored',
-    max_steps: 6,
-  });
-  assert.deepEqual(modelOptions(cli), {
-    engine: 'cli',
-    cli_tool: 'codex',
-    max_steps: 6,
-    cli_model: 'gpt-5-codex',
-  });
-
-  const custom = normalizeAgentPreferences({
+test('saved VM CLI preferences fall back to the API engine and never send CLI options', () => {
+  const legacy = normalizeAgentPreferences({
     engine: 'cli',
     cli_tool: 'custom',
-    cli_command: 'agora-canvas list && echo done',
+    cli_model: 'some-model',
+    cli_command: 'agora-canvas list',
+    max_steps: 6,
   });
-  assert.equal(modelOptions(custom).cli_command, 'agora-canvas list && echo done');
-
-  const sanitized = normalizeAgentPreferences({
-    engine: 'cli',
-    cli_tool: 'unknown-tool',
-    cli_model: 'bad\nmodel',
-    cli_command: 'line1\nline2',
-  });
-  assert.equal(sanitized.cli_tool, 'claude');
-  assert.equal(sanitized.cli_model, '');
-  assert.equal(sanitized.cli_command, '');
+  assert.equal(legacy.engine, 'api');
+  assert.equal(legacy.max_steps, 6);
+  const options = modelOptions(legacy);
+  for (const name of ['engine', 'cli_tool', 'cli_model', 'cli_command', 'locale', 'api_key']) assert.equal(options[name], undefined, name);
+  assert.deepEqual(Object.keys(options).sort(), ['max_steps', 'max_tokens', 'reasoning_effort', 'temperature', 'top_p']);
 });

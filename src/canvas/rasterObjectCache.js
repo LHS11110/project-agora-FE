@@ -182,8 +182,8 @@ export function acquireGpuSlot() {
   return () => { if (!released) { released = true; gpuUsers--; } };
 }
 
-/** World-pixel area of an object's full raster bounds. */
-export function rasterWorldArea(descriptor, referenceItems, world) {
+/** World-pixel width and height of an object's full raster bounds. */
+export function rasterWorldSize(descriptor, referenceItems, world) {
   const b = objectBounds(descriptor.local, referenceItems, world.width, world.height);
-  return Math.max(0, (b.maxX-b.minX)*world.width) * Math.max(0, (b.maxY-b.minY)*world.height);
+  return { width: Math.max(0, (b.maxX-b.minX)*world.width), height: Math.max(0, (b.maxY-b.minY)*world.height) };
 }

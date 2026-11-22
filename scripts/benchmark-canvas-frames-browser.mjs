@@ -157,6 +157,7 @@ const SCENARIOS = {
   'markdown-8': { label: '마크다운 텍스트 8개', items: () => gridOfKinds(['markdown'], 8) },
   'value-select-8': { label: '선택형 값 객체 8개 (기본 select 사용)', items: () => gridOfKinds(['value'], 8) },
   'mixed-all': { label: '위 객체 종류 9가지 × 8개 혼합', items: () => gridOfKinds(['image', 'pdf', 'code', 'drawing', 'table', 'notebook', 'youtube', 'markdown', 'value'], 8) },
+  'mixed-no-select': { label: '혼합에서 값 객체(select)만 제외한 8가지 × 8개', items: () => gridOfKinds(['image', 'pdf', 'code', 'drawing', 'table', 'notebook', 'youtube', 'markdown'], 8) },
 };
 const selected = (process.env.SCENARIOS || Object.keys(SCENARIOS).join(',')).split(',');
 for (const name of selected) if (!SCENARIOS[name]) throw new Error(`Unknown scenario ${name}`);

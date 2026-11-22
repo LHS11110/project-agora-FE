@@ -341,6 +341,23 @@ export default function GlobalYoutubePlayer() {
     return () => window.removeEventListener('message', receive);
   }, [handleTrackEnded, hydrateTracksMeta]);
 
+  // YouTube's embed policies require content to play in a visible player. Pause when
+  // the panel folds into the launcher or a modal dialog hides it (see the CSS rule
+  // that hides the panel under [aria-modal="true"]).
+  useEffect(() => {
+    if (!playing) return undefined;
+    if (!open) {
+      command('pauseVideo');
+      return undefined;
+    }
+    const pauseWhenHidden = () => {
+      if (document.querySelector('[aria-modal="true"]')) command('pauseVideo');
+    };
+    pauseWhenHidden();
+    const timer = setInterval(pauseWhenHidden, 500);
+    return () => clearInterval(timer);
+  }, [open, playing, command]);
+
   useEffect(() => {
     const update = () => {
       if (!canvas) {
@@ -952,9 +969,9 @@ export default function GlobalYoutubePlayer() {
             key={pendingPlaylistAppend?.nonce}
             className="youtube-playlist-probe"
             title={ui('플레이어 정보')}
+            width="100%"
+            height="200"
             src={probeSrc}
-            tabIndex={-1}
-            aria-hidden="true"
             onLoad={() => {
               const sendProbe = (payload) =>
                 probeFrame.current?.contentWindow?.postMessage(

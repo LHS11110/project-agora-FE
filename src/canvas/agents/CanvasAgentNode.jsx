@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import CanvasSelect from '../content/CanvasSelect.jsx';
 import Icon from '../../components/Icon.jsx';
 import MarkdownText from '../../components/MarkdownText.jsx';
-import { CLI_TOOLS } from '../../components/agentPreferences.js';
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
 import {
@@ -35,6 +35,7 @@ export default function CanvasAgentNode({
   selected = false,
   readOnly = false,
   canExecute = true,
+  isAdmin = false,
   onChange,
 }) {
   useUiLocale();
@@ -71,9 +72,7 @@ export default function CanvasAgentNode({
             ? ui('완료')
             : ui('준비');
 
-  const engineLabel = config.engine === 'mock' ? ui('모형 에이전트') : config.engine === 'cli'
-    ? `CLI · ${CLI_TOOLS.find(t => t.id === config.cli_tool)?.label || config.cli_tool}`
-    : 'EXAONE API';
+  const engineLabel = config.engine === 'mock' ? ui('모형 에이전트') : 'EXAONE API';
 
   const inputItems = [...connections.inputNodes, ...connections.routerNodes, ...connections.promptInputs, ...connections.dataInputs, ...connections.upstreamAgents, ...connections.feedbackAgents];
   const outputItems = [...connections.outgoingRouters, ...connections.downstreamAgents, ...connections.feedbackTargets, ...connections.outputSinks];
@@ -239,7 +238,7 @@ export default function CanvasAgentNode({
             </label>
             <label htmlFor={`${fieldId}-preset`}>
               <span>{ui('역할 프리셋')}</span>
-              <select
+              <CanvasSelect
                 id={`${fieldId}-preset`}
                 data-object-action="agent"
                 disabled={readOnly}
@@ -260,7 +259,7 @@ export default function CanvasAgentNode({
                 {AGENT_ROLE_PRESETS.map(p => (
                   <option key={p.id} value={p.id}>{ui(p.label)}</option>
                 ))}
-              </select>
+              </CanvasSelect>
             </label>
             <label htmlFor={`${fieldId}-role`}>
               <span>{ui('역할 설명')}</span>
@@ -276,7 +275,7 @@ export default function CanvasAgentNode({
             </label>
             <label htmlFor={`${fieldId}-engine`}>
               <span>{ui('실행 엔진')}</span>
-              <select
+              <CanvasSelect
                 id={`${fieldId}-engine`}
                 data-object-action="agent"
                 disabled={readOnly}
@@ -284,28 +283,11 @@ export default function CanvasAgentNode({
                 onChange={e => commitPatch({ engine: e.target.value })}
               >
                 <option value="api">{ui('EXAONE 2.5 API')}</option>
-                <option value="cli">{ui('VM CLI 에이전트')}</option>
                 <option value="mock">{ui('모형 에이전트')}</option>
-              </select>
+              </CanvasSelect>
             </label>
             {config.engine === 'mock' && (
               <MockAgentResponseFields config={config} onChange={commitPatch} readOnly={readOnly} />
-            )}
-            {config.engine === 'cli' && (
-              <label htmlFor={`${fieldId}-cli-tool`}>
-                <span>{ui('CLI 도구')}</span>
-                <select
-                  id={`${fieldId}-cli-tool`}
-                  data-object-action="agent"
-                  disabled={readOnly}
-                  value={config.cli_tool}
-                  onChange={e => commitPatch({ cli_tool: e.target.value })}
-                >
-                  {CLI_TOOLS.map(tool => (
-                    <option key={tool.id} value={tool.id}>{ui(tool.label)}</option>
-                  ))}
-                </select>
-              </label>
             )}
             {config.engine !== 'mock' && <button
               type="button"
@@ -313,7 +295,7 @@ export default function CanvasAgentNode({
               data-object-action="agent"
               onClick={() => store?.openAgentPanel?.()}
             >
-              {ui('API 키 · CLI 설치 설정 열기')}
+              {ui('에이전트 설정')}
             </button>}
           </div>
         )}

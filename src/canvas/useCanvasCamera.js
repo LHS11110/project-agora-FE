@@ -14,7 +14,7 @@ export function useCanvasCamera(boardRef, sceneRef) {
   const work = useRef({
     frame: 0, idle: null, detailScale: 1, observer: null, size: null,
     refs: { stage: null, grid: null, axes: null, coordX: null, coordY: null, coordOrigin: null, laser: null, laserMissing: false, minimapRect: null, minimapMissing: false, zoom: null },
-    last: { x: NaN, y: NaN, scale: NaN, width: 0, height: 0, gx: 0, gy: 0, layers: 0, axisChildren: 0, stageChildCount: -1, gridSpec: '', gridTileKey: '', gridTransform: '', gridBgPos: '', gridPending: false, wasActive: false, zoomText: '', coordXTr: '', coordYTr: '', coordOriginShown: null, coordOriginTr: '' },
+    last: { x: NaN, y: NaN, scale: NaN, width: 0, height: 0, gx: 0, gy: 0, layers: 0, axisChildren: 0, stageChildCount: -1, gridSpec: '', gridTransform: '', gridBgPos: '', wasActive: false, zoomText: '', coordXTr: '', coordYTr: '', coordOriginShown: null, coordOriginTr: '' },
   });
   const commit = useCallback((settled = false) => {
     committed.current = { ...current.current };
@@ -50,8 +50,6 @@ export function useCanvasCamera(boardRef, sceneRef) {
     const axes = refs.axes?.isConnected ? refs.axes : (refs.axes = stage.querySelector('.coordinate-plane'));
     const axisChildren = axes ? axes.childElementCount : 0;
     const stageActive = stage.classList.contains('camera-moving') || stage.classList.contains('camera-zooming');
-    const gridZooming = stage.classList.contains('camera-zooming');
-    const settlingGrid = !gridZooming && last.gridPending;
     const settleNotify = !stageActive && last.wasActive;
     const camMoved = last.x !== camera.x || last.y !== camera.y || last.scale !== camera.scale;
     const viewChanged = camMoved || last.width !== width || last.height !== height;
@@ -62,14 +60,12 @@ export function useCanvasCamera(boardRef, sceneRef) {
     const grid = refs.grid?.parentElement === stage ? refs.grid : stage.querySelector('.canvas-grid-surface');
     const gridChanged = refs.grid !== grid || stageChanged;
     refs.grid = grid;
-    if (!structureChanged && !gridChanged && !viewChanged && !settlingGrid && !settleNotify && last.gx === gx && last.gy === gy && last.layers === worldLayers.length && last.axisChildren === axisChildren) return;
+    if (!structureChanged && !gridChanged && !viewChanged && !settleNotify && last.gx === gx && last.gy === gy && last.layers === worldLayers.length && last.axisChildren === axisChildren) return;
     if (grid) {
       const interval = { x: gx, y: gy };
       const proj = gridProjection(camera, interval);
       const gridSpec = `${proj.spacingX}:${proj.spacingY}`;
-      const gridTileKey = `${gx}:${gy}`;
-      const reuseDenseTile = !proj.coarse && gridZooming && last.gridTileKey === gridTileKey;
-      if (!gridChanged && (last.gridSpec === gridSpec || reuseDenseTile)) {
+      if (!gridChanged && last.gridSpec === gridSpec) {
         if (last.gridTransform !== proj.transform) {
           grid.style.transform = proj.transform;
           last.gridTransform = proj.transform;
@@ -78,14 +74,11 @@ export function useCanvasCamera(boardRef, sceneRef) {
           grid.style.backgroundPosition = proj.backgroundPosition;
           last.gridBgPos = proj.backgroundPosition;
         }
-        if (reuseDenseTile && last.gridSpec !== gridSpec) last.gridPending = true;
       } else {
-        applyGridProjection(grid, camera, interval, proj);
+        applyGridProjection(grid, proj);
         last.gridTransform = proj.transform;
         last.gridBgPos = proj.backgroundPosition;
-        last.gridTileKey = proj.coarse ? '' : gridTileKey;
         last.gridSpec = gridSpec;
-        last.gridPending = false;
       }
     }
     if (axes) {

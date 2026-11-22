@@ -168,13 +168,19 @@ test('opaque rectangle fills share geometry without recoloring outlines or shado
   for(const patch of [{strokeEnabled:true},{shadowEnabled:true},{visualStyle:'sketch'},{__selectionOutline:true},{fill:'transparent'},{fill:'#12345680'},{shapeType:'arrow'},{width:undefined},{height:0}])assert.equal(flatRectangleTint({...item,...patch}),null);
 });
 
-test('composited dot tiles preserve the world origin and cover the viewport throughout zoom bands',()=>{
-  for(const scale of [.0001,.1,.7,1,1.35,2,1000])for(const x of [-2000,-11,0,125]){
-    const p=gridProjection({x,y:x/2,scale});
-    assert.ok(p.spacing>=12-1e-8 && p.spacing<=24+1e-8);
-    const factor=p.spacing/24,origin=12*factor+p.x-p.spacing*2;
-    assert.ok(Math.abs((origin-x)/p.spacing-Math.round((origin-x)/p.spacing))<1e-8);
-    assert.ok((1800*2+128)*factor+p.x-p.spacing*2>=1800);
+test('composited dot tiles cover the viewport and stay anchored through maximum zoom', () => {
+  for (const scale of [.1, .7, 1, 1.35, 2, 15.99, 16]) {
+    for (const x of [-2000, -11, 0, 125]) {
+      const p = gridProjection({ x, y: x / 2, scale }, { x: 1, y: 3 });
+      for (const [offset, origin, spacing] of [[p.x, x, p.spacingX], [p.y, x / 2, p.spacingY]]) {
+        // Original display rule: >=12px on screen, a multiple of the 20 world-px step.
+        assert.ok(spacing >= 12 && spacing <= 512);
+        const periods = (offset + spacing / 2 - origin) / spacing;
+        assert.ok(Math.abs(periods - Math.round(periods)) < 1e-8);
+        assert.ok(offset <= 0 && offset > -spacing);
+      }
+      assert.equal(p.transform, `translate3d(${p.x}px,${p.y}px,0)`);
+    }
   }
 });
 

@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import CanvasSelect from '../content/CanvasSelect.jsx';
 import Icon from '../../components/Icon.jsx';
 import MarkdownText from '../../components/MarkdownText.jsx';
 import { ui } from '../../i18n/locale.js';
@@ -339,7 +340,7 @@ export default function CanvasAgentOrchestratorNode({
             </label>
             <label htmlFor={`${fieldId}-mode`}>
               <span>{ui('오케스트레이션 방식')}</span>
-              <select
+              <CanvasSelect
                 id={`${fieldId}-mode`}
                 data-object-action="agent"
                 disabled={readOnly}
@@ -349,7 +350,7 @@ export default function CanvasAgentOrchestratorNode({
                 {ORCHESTRATION_MODES.map(mode => (
                   <option key={mode.id} value={mode.id}>{ui(mode.label)}</option>
                 ))}
-              </select>
+              </CanvasSelect>
             </label>
             {config.mode !== 'graph' && (
               <label htmlFor={`${fieldId}-rounds`}>
@@ -373,7 +374,7 @@ export default function CanvasAgentOrchestratorNode({
             {config.mode === 'supervisor' && resolved.graph?.agentIds?.length > 0 && (
               <label htmlFor={`${fieldId}-supervisor`}>
                 <span>{ui('감독 에이전트')}</span>
-                <select
+                <CanvasSelect
                   id={`${fieldId}-supervisor`}
                   data-object-action="agent"
                   disabled={readOnly}
@@ -385,7 +386,7 @@ export default function CanvasAgentOrchestratorNode({
                       {allItems?.[agentId]?.title || readAgentNodeConfig(allItems?.[agentId]).role}
                     </option>
                   ))}
-                </select>
+                </CanvasSelect>
               </label>
             )}
             <label className="agent-mini-check" htmlFor={`${fieldId}-shared`}>

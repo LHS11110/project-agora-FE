@@ -2,7 +2,7 @@
 
 All routes render a single player outside `Routes` in `App.jsx`. Navigation and folding preserve the same iframe; explicit Stop removes it. Playback is local to the current browser tab and is not broadcast to canvas participants. Reloading the page ends playback.
 
-Open the music button, paste a video link, and press Open. Drag the header to reposition; drag the bottom corner or use its arrow keys to resize. Compact listening view retains the official visible YouTube embed. No audio extraction or hidden audio stream is implemented.
+Open the music button, paste a video link, and press Open. Drag the header to reposition; drag the bottom corner or use its arrow keys to resize. Compact listening view retains the official visible YouTube embed (at least 200 px tall). No audio extraction or hidden audio stream is implemented. Playback pauses when the panel folds into the launcher or a modal dialog hides it, so content never plays from an invisible player. Reading a playlist for the queue shows its official player inside the panel until the list is read; it is never a hidden frame.
 
 The app does not force native YouTube captions on. Native captions, if enabled by the viewer or YouTube preferences, remain inside the official player. The official iframe API does not expose caption cue text, so external captions use a user supplied SRT or VTT file. These cues follow player time and render at viewport bottom center. Canvas routes reserve space above the quick dock. The launcher scans visible dock, panel, minimap and viewport controls to find an unoccupied position and updates after layout changes. Files are parsed locally as plain text, limited to 2 MB, and never uploaded. Caption source markup is stripped and React escapes text.
 

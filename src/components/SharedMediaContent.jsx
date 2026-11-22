@@ -167,16 +167,39 @@ function SharedVideoPlayer({ item, media, interactive, writable, onChange }) {
   );
 }
 
+// YouTube embeds must play in a visible player at least 200×200 CSS px. A canvas
+// object can be zoomed below that or panned off screen while playing, so the live
+// player returns to the thumbnail in either case.
+const YOUTUBE_MIN_PLAYER_PX=200;
+function youtubePlayerVisible(element){
+ const rect=element?.getBoundingClientRect();
+ if(!rect)return false;
+ const onScreen=rect.right>0&&rect.bottom>0&&rect.left<window.innerWidth&&rect.top<window.innerHeight;
+ return onScreen&&rect.width>=YOUTUBE_MIN_PLAYER_PX&&rect.height>=YOUTUBE_MIN_PLAYER_PX;
+}
 function YoutubeObject({item,media,interactive,playbackKey}){
  const live=useLiveContent(playbackKey||item.id,`youtube:${media.url}`);
  const src=useMemo(()=>youtubeEmbedSrc(media.embedUrl,media.url),[media.embedUrl,media.url]);
+ const preview=useRef(null),[tooSmall,setTooSmall]=useState(false);
+ const {active,deactivate}=live;
+ useEffect(()=>{
+  if(!active)return undefined;
+  const check=()=>{if(!youtubePlayerVisible(preview.current))deactivate();};
+  const timer=setInterval(check,1000);
+  return()=>clearInterval(timer);
+ },[active,deactivate]);
+ const start=event=>{
+  event.stopPropagation();
+  if(!youtubePlayerVisible(preview.current)){setTooSmall(true);return;}
+  setTooSmall(false);live.activate();
+ };
  return <div className="shared-playback shared-youtube-independent" data-object-action={interactive?'playback':undefined}>
-  <div className="shared-media-preview">{live.active?<>
+  <div className="shared-media-preview" ref={preview}>{live.active?<>
    <iframe className="shared-video-player" src={`${src}&autoplay=1`} title={item.title||media.defaultTitle} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; compute-pressure" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen onPointerDown={event=>event.stopPropagation()}/>
    <button className="youtube-live-close" data-object-action onPointerDown={event=>event.stopPropagation()} onClick={live.deactivate}>{ui('플레이어 닫기')}</button>
   </>:<div className="youtube-static-preview">
    <img src={`https://i.ytimg.com/vi/${media.videoId||new URL(media.embedUrl).pathname.split('/').pop()}/hqdefault.jpg`} alt="" loading="lazy" decoding="async"/>
-   <strong>{item.title||media.defaultTitle}</strong><button type="button" data-object-action aria-label={ui('YouTube 재생')} onPointerDown={event=>event.stopPropagation()} onClick={event=>{event.stopPropagation();live.activate();}}>▶</button><small>YouTube</small>
+   <strong>{item.title||media.defaultTitle}</strong><button type="button" data-object-action aria-label={ui('YouTube 재생')} onPointerDown={event=>event.stopPropagation()} onClick={start}>▶</button><small>{tooSmall?ui('플레이어가 200×200px 이상 보이도록 확대한 뒤 재생해주세요.'):'YouTube'}</small>
   </div>}</div>
  </div>;
 }

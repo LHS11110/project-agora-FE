@@ -1,5 +1,4 @@
 import { useId, useMemo } from 'react';
-import { CLI_TOOLS } from '../../components/agentPreferences.js';
 import { intlLocale, ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
 import {
@@ -305,7 +304,7 @@ export function AgentInputInspector({ id, item, items, store, onPatchItem, onNav
   );
 }
 
-export function AgentRouterInspector({ id, item, items, store, onPatchItem, onPatchConnector, onNavigateObject }) {
+export function AgentRouterInspector({ id, item, items, store, isAdmin = false, onPatchItem, onPatchConnector, onNavigateObject }) {
   useUiLocale();
   const fieldId = useId();
   const config = useMemo(() => readAgentRouterConfig(item), [item]);
@@ -391,31 +390,6 @@ export function AgentRouterInspector({ id, item, items, store, onPatchItem, onPa
               onChange={e => update({ routingPrompt: e.target.value })}
             />
           </label>
-          <label className="agent-inspector-field" htmlFor={`${fieldId}-engine`}>
-            <span>{ui('지능형 라우터 엔진')}</span>
-            <select
-              id={`${fieldId}-engine`}
-              value={config.engine}
-              onChange={e => update({ engine: e.target.value })}
-            >
-              <option value="api">{ui('EXAONE 2.5 API')}</option>
-              <option value="cli">{ui('VM CLI 에이전트')}</option>
-            </select>
-          </label>
-          {config.engine === 'cli' && (
-            <label className="agent-inspector-field" htmlFor={`${fieldId}-cli-tool`}>
-              <span>{ui('CLI 도구')}</span>
-              <select
-                id={`${fieldId}-cli-tool`}
-                value={config.cli_tool}
-                onChange={e => update({ cli_tool: e.target.value })}
-              >
-                {CLI_TOOLS.map(tool => (
-                  <option key={tool.id} value={tool.id}>{ui(tool.label)}</option>
-                ))}
-              </select>
-            </label>
-          )}
         </>
       )}
 
@@ -633,6 +607,7 @@ export function AgentNodeInspector({
   item,
   items,
   store,
+  isAdmin = false,
   onPatchAgent,
   onPatchConnector,
   onNavigateObject,
@@ -728,51 +703,12 @@ export function AgentNodeInspector({
           onChange={e => update({ engine: e.target.value })}
         >
           <option value="api">{ui('EXAONE 2.5 API')}</option>
-          <option value="cli">{ui('VM CLI 에이전트')}</option>
           <option value="mock">{ui('모형 에이전트')}</option>
         </select>
       </label>
 
       {config.engine === 'mock' ? (
         <MockAgentResponseFields config={config} onChange={update} className="agent-inspector-field" />
-      ) : config.engine === 'cli' ? (
-        <>
-          <label className="agent-inspector-field" htmlFor={`${fieldId}-cli-tool`}>
-            <span>{ui('CLI 도구')}</span>
-            <select
-              id={`${fieldId}-cli-tool`}
-              value={config.cli_tool}
-              onChange={e => update({ cli_tool: e.target.value })}
-            >
-              {CLI_TOOLS.map(tool => (
-                <option key={tool.id} value={tool.id}>{ui(tool.label)}</option>
-              ))}
-            </select>
-          </label>
-          <label className="agent-inspector-field" htmlFor={`${fieldId}-cli-model`}>
-            <span>{ui('CLI 모델 지정 (선택)')}</span>
-            <input
-              id={`${fieldId}-cli-model`}
-              type="text"
-              maxLength={128}
-              value={config.cli_model}
-              placeholder={ui('기본 모델 사용')}
-              onChange={e => update({ cli_model: e.target.value })}
-            />
-          </label>
-          {config.cli_tool === 'custom' && (
-            <label className="agent-inspector-field" htmlFor={`${fieldId}-cli-command`}>
-              <span>{ui('실행 명령어')}</span>
-              <input
-                id={`${fieldId}-cli-command`}
-                type="text"
-                maxLength={512}
-                value={config.cli_command}
-                onChange={e => update({ cli_command: e.target.value })}
-              />
-            </label>
-          )}
-        </>
       ) : (
         <div className="agent-inspector-grid">
           <label className="agent-inspector-field" htmlFor={`${fieldId}-reasoning`}>
@@ -927,7 +863,7 @@ export function AgentNodeInspector({
         className="inspector-secondary-action"
         onClick={() => store?.openAgentPanel?.()}
       >
-        <span>{ui('API 키 · CLI 설치 설정 열기')}</span>
+        <span>{ui('에이전트 설정')}</span>
       </button>
     </section>
   );

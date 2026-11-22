@@ -904,7 +904,7 @@
 .canvas-stage .canvas-object.terminal-object.has-typo-color .canvas-terminal :is(header, strong, span, footer, .canvas-terminal-empty),
 .canvas-stage .canvas-object.notebook-object.has-typo-color .notebook-content,
 .canvas-stage .canvas-object.notebook-cell-object.has-typo-color .notebook-cell-surface,
-.canvas-stage .canvas-object.notebook-cell-object.has-typo-color .notebook-cell-toolbar :is(small, button, select),
+.canvas-stage .canvas-object.notebook-cell-object.has-typo-color .notebook-cell-toolbar :is(small, button, select, .canvas-select-proxy),
 .canvas-stage .canvas-object.blueprint-object.has-typo-color .blueprint-node,
 .canvas-stage .canvas-object.blueprint-object.has-typo-color .blueprint-node :is(p, strong, span, pre, footer) {
   color: var(--text-color, inherit) !important;
@@ -995,7 +995,7 @@
 .canvas-stage .canvas-project-frame.has-styled-fills .project-tabs,
 .canvas-stage .canvas-project-frame.has-styled-fills .project-tabs button,
 .canvas-stage .canvas-project-frame.has-styled-fills .project-toolbar,
-.canvas-stage .canvas-project-frame.has-styled-fills .project-toolbar :is(input, select, button),
+.canvas-stage .canvas-project-frame.has-styled-fills .project-toolbar :is(input, select, .canvas-select-proxy, button),
 .canvas-stage .canvas-project-frame.has-styled-fills .project-kanban > section {
   background: color-mix(in srgb, var(--text-color, currentColor) 10%, transparent) !important;
   border-color: color-mix(in srgb, var(--text-color, currentColor) 22%, transparent) !important;
@@ -1025,7 +1025,7 @@
 .canvas-stage .canvas-project-frame.has-typo-color .project-object,
 .canvas-stage .canvas-project-frame.has-typo-color .project-header :is(input, span, button),
 .canvas-stage .canvas-project-frame.has-typo-color .project-tabs button,
-.canvas-stage .canvas-project-frame.has-typo-color .project-toolbar :is(input, select, button),
+.canvas-stage .canvas-project-frame.has-typo-color .project-toolbar :is(input, select, .canvas-select-proxy, button),
 .canvas-stage .canvas-project-frame.has-typo-color .project-kanban h4,
 .canvas-stage .canvas-project-frame.has-typo-color .project-empty,
 .canvas-stage .canvas-object-user-group.has-typo-color .user-group-content :is(h3, strong, small) {

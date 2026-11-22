@@ -200,9 +200,10 @@ test('agent input, router, and output items conform to backend field whitelist a
   };
   const routerCfg = readAgentRouterConfig(routerPatched);
   assert.equal(routerCfg.routingMode, 'intelligent');
-  assert.equal(routerCfg.engine, 'cli');
-  assert.equal(routerCfg.cli_tool, 'codex');
-  assert.equal(routerCfg.cli_model, 'gpt-5-codex');
+  // VM CLI agents were removed: saved CLI options fall back to the API engine and are dropped.
+  assert.equal(routerCfg.engine, 'api');
+  assert.equal(routerCfg.cli_tool, undefined);
+  assert.equal(routerCfg.cli_model, undefined);
   assert.equal(routerCfg.api_key, undefined);
   assert.equal(routerCfg.cli_api_key, undefined);
   assert.equal(routerPatched.format.includes('sk-must-not-persist'), false);

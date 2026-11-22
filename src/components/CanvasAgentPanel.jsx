@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { AgentMark } from './CanvasAgentLauncher.jsx';
 import {
   AGENT_DEFAULTS,
-  CLI_TOOLS,
   loadAgentPreferences,
   modelOptions,
   saveAgentPreferences,
@@ -14,10 +13,8 @@ import AgentSessionPicker from './AgentSessionPicker.jsx';
 import useAgentSessions from './useAgentSessions.js';
 import {
   loadAgentKey,
-  loadCliAgentKey,
   normalizeAgentKey,
   saveAgentKey,
-  saveCliAgentKey,
 } from './agentCredentials.js';
 import { intlLocale, ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
@@ -71,139 +68,7 @@ function LimitCard({ telemetry, now, onRefresh, refreshing, personal }) {
   );
 }
 
-function CliStatusCard({
-  fieldId,
-  preferences,
-  selectedTool,
-  cliStatus,
-  loading,
-  installing,
-  installLog,
-  hasPersonalKey,
-  busy,
-  onSelectTool,
-  onChangeCommand,
-  onRefresh,
-  onInstall,
-  onUninstall,
-}) {
-  useUiLocale();
-  const toolInfo = cliStatus?.tools?.[preferences.cli_tool] || null;
-  const installed = preferences.cli_tool === 'custom' ? true : toolInfo?.installed === true;
-  const notInstalled = preferences.cli_tool !== 'custom' && toolInfo?.installed === false;
-  const hasAuth = Boolean(hasPersonalKey || toolInfo?.has_auth_files);
-
-  return (
-    <section className="canvas-agent-cli-card" aria-label={ui('VM CLI 에이전트 상태')}>
-      <div className="canvas-agent-section-title">
-        <strong>{ui('VM CLI 에이전트')}</strong>
-        <button
-          type="button"
-          className="canvas-agent-quota-refresh"
-          aria-label={ui('VM CLI 상태 새로고침')}
-          title={ui('VM 안의 CLI 도구 설치 및 인증 파일 상태를 확인합니다')}
-          disabled={loading || installing || busy}
-          onClick={onRefresh}
-        >
-          ↻
-        </button>
-        <span>{loading ? ui('확인 중…') : ui('격리 VM 실행')}</span>
-      </div>
-
-      <div className="canvas-agent-cli-controls">
-        <label htmlFor={`${fieldId}-cli-tool`}>
-          <span>{ui('CLI 도구')}</span>
-          <select
-            id={`${fieldId}-cli-tool`}
-            name="agent-cli-tool"
-            aria-label={ui('CLI 도구')}
-            value={preferences.cli_tool}
-            disabled={busy || installing}
-            onChange={e => onSelectTool(e.target.value)}
-          >
-            {CLI_TOOLS.map(tool => (
-              <option key={tool.id} value={tool.id}>{ui(tool.label)}</option>
-            ))}
-          </select>
-        </label>
-
-        {preferences.cli_tool === 'custom' ? (
-          <div className="canvas-agent-cli-custom-row">
-            <label htmlFor={`${fieldId}-cli-command`}>
-              <span>{ui('실행 명령어')}</span>
-              <input
-                id={`${fieldId}-cli-command`}
-                name="agent-cli-command"
-                type="text"
-                aria-label={ui('사용자 지정 CLI 명령어')}
-                value={preferences.cli_command}
-                maxLength={512}
-                disabled={busy || installing}
-                placeholder={ui('예: claude -p --permission-mode bypassPermissions')}
-                onChange={e => onChangeCommand(e.target.value)}
-              />
-            </label>
-          </div>
-        ) : (
-          <div className="canvas-agent-cli-status-row">
-            <span className={`canvas-agent-cli-badge${installed ? ' is-installed' : notInstalled ? ' is-missing' : ''}`}>
-              {installed
-                ? `${ui('설치됨')}${toolInfo?.version ? ` v${toolInfo.version}` : ''}`
-                : notInstalled
-                  ? ui('미설치')
-                  : ui('상태 확인 전')}
-            </span>
-            <span className="canvas-agent-cli-auth">
-              {hasPersonalKey
-                ? ui('개인 API 키 사용')
-                : toolInfo?.has_auth_files
-                  ? ui('VM 로그인 파일 감지됨')
-                  : ui('터미널 로그인 또는 API 키 필요')}
-            </span>
-            <div className="canvas-agent-cli-actions">
-              <button
-                type="button"
-                disabled={busy || installing || loading}
-                onClick={onInstall}
-              >
-                {installing ? ui('설치 중…') : installed ? ui('업데이트') : ui('VM에 설치')}
-              </button>
-              {installed && (
-                <button
-                  type="button"
-                  disabled={busy || installing || loading}
-                  onClick={onUninstall}
-                >
-                  {ui('제거')}
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {installLog && <p className="canvas-agent-cli-log" role="status">{installLog}</p>}
-
-      <div className="canvas-agent-cli-bridge">
-        <small>
-          {ui('캔버스 브릿지')}: <code>agora-canvas</code> · <code>agora-canvas-mcp</code>
-        </small>
-        <small>
-          {selectedTool.packageName
-            ? ui('캔버스 터미널 객체에서도 CLI 로그인({tool}) 및 agora-canvas를 실행할 수 있습니다.', { tool: selectedTool.id })
-            : ui('입력한 셸 명령은 VM /workspace에서 실행되며 stdin으로 프롬프트, agora-canvas로 캔버스 도구를 전달받습니다.')}
-        </small>
-        {!hasAuth && preferences.cli_tool !== 'custom' && installed && (
-          <small className="canvas-agent-cli-hint">
-            {ui('에이전트 설정에서 {env} 키를 입력하거나 캔버스 터미널에서 로그인하세요.', { env: selectedTool.keyEnv })}
-          </small>
-        )}
-      </div>
-    </section>
-  );
-}
-
-export default function CanvasAgentPanel({ open, onClose, request, selectedIds, anchor, canvasId, onBusyChange, theme = 'light' }) {
+export default function CanvasAgentPanel({ open, onClose, request, selectedIds, anchor, canvasId, onBusyChange, theme = 'light', isAdmin = false }) {
   const locale = useUiLocale();
   const fieldId = useId();
   const [optimistic, setOptimistic] = useState(null);
@@ -219,17 +84,12 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
   const [refreshing, setRefreshing] = useState(false);
   const [personalKey, setPersonalKey] = useState(loadAgentKey);
   const [keyDraft, setKeyDraft] = useState(loadAgentKey);
-  const [cliStatus, setCliStatus] = useState(null);
-  const [cliStatusLoading, setCliStatusLoading] = useState(false);
-  const [cliInstalling, setCliInstalling] = useState(false);
-  const [cliInstallLog, setCliInstallLog] = useState('');
-  const [cliPersonalKey, setCliPersonalKey] = useState(() => loadCliAgentKey(loadAgentPreferences().cli_tool));
-  const [cliKeyDraft, setCliKeyDraft] = useState(() => loadCliAgentKey(loadAgentPreferences().cli_tool));
   const [recovery, setRecovery] = useState(null);
   const [startedAt, setStartedAt] = useState(null);
 
   const requestRef = useRef(request);
   requestRef.current = request;
+  const activeTurnRef = useRef(null);
   const bottom = useRef(null), bodyRef = useRef(null), followLatest = useRef(true);
   const conversation = useAgentSessions({ canvasId, open, requestRef });
   const inputDrafts = useRef(new Map());
@@ -243,19 +103,10 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
   const visibleSessions = [...new Map([...(session && session.status !== 'draft' ? [session] : []), ...conversation.sessions].map(value => [value.id, value])).values()];
   const runningRef = useRef(null);
 
-  const isCli = preferences.engine === 'cli';
-  const selectedCliTool = CLI_TOOLS.find(tool => tool.id === preferences.cli_tool) || CLI_TOOLS[0];
-
   useEffect(() => {
     setPrompt(inputDrafts.current.get(conversation.activeId) || '');
     setError('');
   }, [conversation.activeId]);
-
-  useEffect(() => {
-    const saved = loadCliAgentKey(preferences.cli_tool);
-    setCliPersonalKey(saved);
-    setCliKeyDraft(saved);
-  }, [preferences.cli_tool]);
 
   function editPrompt(value) {
     inputDrafts.current.set(conversation.activeRef.current, value);
@@ -270,40 +121,19 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
     else setPrompt(value);
   }
 
-  useEffect(() => { onBusyChange?.(working || cliInstalling); }, [working, cliInstalling, onBusyChange]);
+  useEffect(() => { onBusyChange?.(working); }, [working, onBusyChange]);
   useEffect(() => { saveAgentPreferences(preferences); }, [preferences]);
-
-  const refreshCliStatus = useCallback(async () => {
-    setCliStatusLoading(true);
-    try {
-      const value = await requestRef.current({ operation: 'cli_status' });
-      setCliStatus(value);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setCliStatusLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     if (!open) return undefined;
     let live = true;
-    if (!busy && !cliInstalling) {
-      if (isCli) {
-        setCliStatusLoading(true);
-        requestRef.current({ operation: 'cli_status' })
-          .then(value => { if (live) setCliStatus(value); })
-          .catch(e => { if (live) setError(e.message); })
-          .finally(() => { if (live) setCliStatusLoading(false); });
-      } else {
-        requestRef.current({ operation: 'status', api_key: personalKey })
-          .then(value => { if (live) setStatus(value); })
-          .catch(e => { if (live) setError(e.message); });
-      }
+    if (!busy) {
+      requestRef.current({ operation: 'status', api_key: personalKey })
+        .then(value => { if (live) setStatus(value); })
+        .catch(e => { if (live) setError(e.message); });
     }
     const timer = setInterval(() => setNow(Date.now() / 1000), 1000);
     return () => { live = false; clearInterval(timer); };
-  }, [open, canvasId, personalKey, isCli]);
+  }, [open, canvasId, personalKey]);
 
   useEffect(() => { followLatest.current = true; }, [conversation.activeId]);
   useEffect(() => {
@@ -335,18 +165,6 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
     setError('');
   }
 
-  function applyCliKey(value) {
-    const normalized = normalizeAgentKey(value);
-    if (value.trim() && !normalized) {
-      setError(ui('API 키 형식을 확인해주세요. 공백·줄바꿈 없이 입력해주세요.'));
-      return;
-    }
-    saveCliAgentKey(preferences.cli_tool, normalized);
-    setCliPersonalKey(normalized);
-    setCliKeyDraft(normalized);
-    setError('');
-  }
-
   async function refreshStatus() {
     setRefreshing(true);
     try {
@@ -355,29 +173,6 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
       setError(e.message);
     } finally {
       setRefreshing(false);
-    }
-  }
-
-  async function runCliPackageAction(op) {
-    if (busy || cliInstalling || preferences.cli_tool === 'custom') return;
-    setCliInstalling(true);
-    setError('');
-    setCliInstallLog(op === 'cli_install' ? ui('VM에 CLI 도구를 설치하고 있습니다…') : ui('VM에서 CLI 도구를 제거하고 있습니다…'));
-    try {
-      const res = await requestRef.current(
-        { operation: op, cli_tool: preferences.cli_tool },
-        line => {
-          const trimmed = String(line || '').trim();
-          if (trimmed) setCliInstallLog(trimmed);
-        },
-      );
-      if (res?.status) setCliStatus(res.status);
-      else await refreshCliStatus();
-      setCliInstallLog('');
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setCliInstalling(false);
     }
   }
 
@@ -403,6 +198,7 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
       setProgress('');
       setOptimistic(null);
       runningRef.current = null;
+      activeTurnRef.current = null;
       setStartedAt(null);
     };
     const check = async () => {
@@ -436,17 +232,12 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
     };
   }, [recovery, conversation.metadata, conversation.reload, canvasId]);
 
-  const cliNotReady = isCli && (
-    (preferences.cli_tool === 'custom' && !preferences.cli_command.trim())
-    || (preferences.cli_tool !== 'custom' && cliStatus?.tools?.[preferences.cli_tool]?.installed === false)
-  );
   const blocked = busy
-    || cliInstalling
     || !prompt.trim()
     || !canContinue
     || session?.status === 'running'
-    || (!isCli && (status?.configured === false || (status?.telemetry?.retry_at || 0) > now))
-    || cliNotReady;
+    || status?.configured === false
+    || (status?.telemetry?.retry_at || 0) > now;
 
   async function submit(event) {
     event.preventDefault();
@@ -457,6 +248,7 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
     setPrompt('');
     setOptimistic({ id: turnId, turn_id: turnId, session_id: sessionId, role: 'user', content: text, status: 'running', created_at: Date.now() });
     runningRef.current = sessionId;
+    activeTurnRef.current = { turnId };
     followLatest.current = true;
     setBusy(true);
     setStartedAt(Date.now());
@@ -471,15 +263,15 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
           include_history: preferences.includeHistory,
           allow_delete: allowDelete,
           options: modelOptions(preferences),
-          api_key: isCli ? cliPersonalKey : personalKey,
+          api_key: personalKey,
           session_id: sessionId,
           turn_id: turnId,
         },
         line => setProgress(line.trim()),
       );
-      if (!isCli) applyTelemetry(result.telemetry);
+      applyTelemetry(result.telemetry);
     } catch (e) {
-      if (!isCli) applyTelemetry(e.payload?.result?.telemetry);
+      applyTelemetry(e.payload?.result?.telemetry);
       inputDrafts.current.set(sessionId, original);
       if (isAgentConnectionError(e)) {
         recovering = true;
@@ -496,6 +288,7 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
         setProgress('');
         setOptimistic(null);
         runningRef.current = null;
+        activeTurnRef.current = null;
         setStartedAt(null);
       }
     }
@@ -509,7 +302,7 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
       <section
         id="canvas-agent-panel"
         data-theme={theme}
-        className={`canvas-agent-panel${working || cliInstalling ? ' is-working' : ''}`}
+        className={`canvas-agent-panel${working ? ' is-working' : ''}`}
         role="dialog"
         aria-modal="false"
         aria-labelledby="canvas-agent-title"
@@ -522,9 +315,7 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
             <span>
               {working
                 ? ui('캔버스에서 작업 중 · {seconds}초', { seconds: elapsed })
-                : isCli
-                  ? ui('VM CLI · {tool}로 캔버스를 직접 편집합니다', { tool: ui(selectedCliTool.label) })
-                  : ui('EXAONE · 아이디어를 함께 만드는 공간')}
+                : ui('EXAONE · 아이디어를 함께 만드는 공간')}
             </span>
           </div>
           <button
@@ -589,47 +380,7 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
             <p className="canvas-agent-reconnecting" role="status">{ui('연결을 복구하고 있습니다. 대화와 입력 내용은 유지됩니다.')}</p>
           )}
 
-          <div className="canvas-agent-mode-switch" role="tablist" aria-label={ui('에이전트 실행 방식')}>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={!isCli}
-              disabled={working || cliInstalling}
-              onClick={() => { setError(''); update('engine', 'api'); }}
-            >
-              {ui('EXAONE 2.5 API')}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={isCli}
-              disabled={working || cliInstalling}
-              onClick={() => { setError(''); update('engine', 'cli'); }}
-            >
-              {ui('VM CLI 에이전트')}
-            </button>
-          </div>
-
-          {isCli ? (
-            <CliStatusCard
-              fieldId={fieldId}
-              preferences={preferences}
-              selectedTool={selectedCliTool}
-              cliStatus={cliStatus}
-              loading={cliStatusLoading}
-              installing={cliInstalling}
-              installLog={cliInstallLog}
-              hasPersonalKey={Boolean(cliPersonalKey)}
-              busy={busy}
-              onSelectTool={tool => { setError(''); update('cli_tool', tool); }}
-              onChangeCommand={cmd => update('cli_command', cmd)}
-              onRefresh={refreshCliStatus}
-              onInstall={() => void runCliPackageAction('cli_install')}
-              onUninstall={() => void runCliPackageAction('cli_uninstall')}
-            />
-          ) : (
-            <LimitCard telemetry={status?.telemetry} now={now} onRefresh={refreshStatus} refreshing={refreshing || busy} personal={Boolean(personalKey)} />
-          )}
+          <LimitCard telemetry={status?.telemetry} now={now} onRefresh={refreshStatus} refreshing={refreshing || busy} personal={Boolean(personalKey)} />
 
           {settingsOpen && (
             <section className="canvas-agent-settings" aria-label={ui('에이전트 설정')}>
@@ -637,14 +388,11 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
                 <strong>{ui('작업 설정')}</strong>
                 <button
                   type="button"
-                  disabled={busy || cliInstalling}
+                  disabled={busy}
                   onClick={() => {
                     setPreferences({
                       ...AGENT_DEFAULTS,
-                      engine: preferences.engine,
-                      cli_tool: 'claude',
-                      cli_model: '',
-                      cli_command: '',
+                      engine: 'api',
                       includeHistory: true,
                       attachSelection: true,
                     });
@@ -654,68 +402,9 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
                   {ui('기본값 복원')}
                 </button>
               </div>
-              <fieldset disabled={busy || cliInstalling}>
+              <fieldset disabled={busy}>
                 <legend>{ui('모델 설정')}</legend>
 
-                {isCli ? (
-                  <>
-                    <section className="canvas-agent-credentials">
-                      <label htmlFor={`${fieldId}-cli-api-key`}>
-                        {ui('{tool} API 키 (선택)', { tool: ui(selectedCliTool.label) })}
-                        <input
-                          id={`${fieldId}-cli-api-key`}
-                          name="agent-cli-api-key"
-                          type="password"
-                          aria-label={ui('CLI API 키')}
-                          value={cliKeyDraft}
-                          autoComplete="off"
-                          autoCapitalize="none"
-                          spellCheck={false}
-                          maxLength={4096}
-                          placeholder={`${selectedCliTool.keyEnv} (${ui('선택 · 터미널 로그인 시 생략')})`}
-                          onChange={e => setCliKeyDraft(e.target.value)}
-                        />
-                      </label>
-                      <div className="canvas-agent-key-actions">
-                        <span>{cliPersonalKey ? ui('개인 CLI 키 사용 중') : ui('VM 터미널 로그인 또는 미설정')}</span>
-                        <button type="button" disabled={busy || !cliKeyDraft.trim()} onClick={() => applyCliKey(cliKeyDraft)}>{ui('키 적용')}</button>
-                        <button type="button" disabled={busy || !cliPersonalKey} onClick={() => applyCliKey('')}>{ui('키 지우기')}</button>
-                      </div>
-                      <small>{ui('선택 사항입니다. 캔버스 터미널에서 OAuth 로그인한 경우 비워두세요. 키는 현재 탭에만 보관합니다.')}</small>
-                    </section>
-                    <div className="canvas-agent-settings-grid">
-                      <label htmlFor={`${fieldId}-cli-model`}>
-                        {ui('CLI 모델 지정 (선택)')}
-                        <input
-                          id={`${fieldId}-cli-model`}
-                          name="agent-cli-model"
-                          type="text"
-                          aria-label={ui('CLI 모델 지정')}
-                          value={preferences.cli_model}
-                          maxLength={128}
-                          placeholder={ui('기본 모델 사용')}
-                          onChange={e => update('cli_model', e.target.value)}
-                        />
-                      </label>
-                      <label htmlFor={`${fieldId}-max-steps`}>
-                        {ui('최대 작업 단계')}
-                        <input
-                          id={`${fieldId}-max-steps`}
-                          name="agent-max-steps"
-                          type="number"
-                          aria-label={ui('최대 작업 단계')}
-                          min="1"
-                          max="12"
-                          step="1"
-                          value={preferences.max_steps}
-                          onChange={e => { if (e.target.value && e.target.validity.valid) update('max_steps', Number(e.target.value)); }}
-                        />
-                      </label>
-                    </div>
-                    <small>{ui('CLI 도구 설치 및 실행에는 실행 환경의 VM 리소스 표준(2 GiB) 이상을 권장합니다.')}</small>
-                  </>
-                ) : (
-                  <>
                     <section className="canvas-agent-credentials">
                       <label htmlFor={`${fieldId}-api-key`}>
                         {ui('EXAONE 2.5 API 키')}
@@ -785,8 +474,6 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
                       </label>
                       <small>{ui('권장값: Temperature 1 · Top P 0.95')}</small>
                     </details>
-                  </>
-                )}
 
                 <label className="canvas-agent-check" htmlFor={`${fieldId}-attach-selection`}>
                   <input id={`${fieldId}-attach-selection`} name="agent-attach-selection" type="checkbox" checked={preferences.attachSelection} onChange={e => update('attachSelection', e.target.checked)} />
@@ -818,9 +505,7 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
                   ))}
                 </div>
                 <small>
-                  {isCli
-                    ? ui('요청과 캔버스 요약은 VM 안의 CLI 에이전트로 전달되며, agora-canvas/MCP 도구 호출 결과는 현재 사용자 권한으로 저장됩니다.')
-                    : ui('요청과 도구로 읽은 객체 내용은 모델 제공 서비스에 전달됩니다. 변경은 현재 사용자의 권한으로 저장되고 공유됩니다.')}
+                  {ui('요청과 도구로 읽은 객체 내용은 모델 제공 서비스에 전달됩니다. 변경은 현재 사용자의 권한으로 저장되고 공유됩니다.')}
                 </small>
               </div>
             )}
@@ -847,10 +532,7 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
                 </div>
                 <div className="canvas-agent-message-meta">
                   <AgentTime value={message.created_at} clock />
-                  {message.role === 'user' && message.options?.engine === 'cli' && (
-                    <span>{`CLI · ${message.options.cli_tool || 'claude'}`}</span>
-                  )}
-                  {message.role === 'user' && message.options?.engine !== 'cli' && message.options?.reasoning_effort && (
+                  {message.role === 'user' && message.options?.reasoning_effort && (
                     <span>{ui({ low: '낮은 추론', high: '높은 추론', max: '최대 추론' }[message.options.reasoning_effort])}</span>
                   )}
                 </div>
@@ -870,7 +552,7 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
             {session?.status === 'interrupted' && (
               <p className="canvas-agent-error">{ui('이전 작업의 연결이 종료되었습니다. 이미 반영된 변경을 확인한 뒤 다시 요청해주세요.')}</p>
             )}
-            {!isCli && status?.configured === false && (
+            {status?.configured === false && (
               <p className="canvas-agent-error">{ui('API 키가 설정되지 않았습니다. 에이전트 설정에서 개인 EXAONE API 키를 입력해주세요.')}</p>
             )}
             <div ref={bottom} />
@@ -884,7 +566,6 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
                 ? ui('선택 객체 {count}개 첨부', { count: Math.min(selectedIds.length, 20) })
                 : ui('선택한 객체 첨부 없음')}
             </span>
-            {!isCli ? (
               <label className="canvas-agent-inline-reasoning" htmlFor={`${fieldId}-reasoning-effort`}>
                 {ui('추론 수준')}
                 <select
@@ -901,20 +582,15 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
                   <option value="max">{ui('최대 · 정확성 우선')}</option>
                 </select>
               </label>
-            ) : (
-              <span className="canvas-agent-inline-cli">{ui(selectedCliTool.label)}</span>
-            )}
           </div>
           <textarea
             id={`${fieldId}-prompt`}
             name="agent-prompt"
             aria-label={ui('에이전트에게 요청')}
-            placeholder={isCli
-              ? ui('{tool}에게 캔버스 작업을 요청해보세요…', { tool: ui(selectedCliTool.label) })
-              : ui('아이디어를 적어보세요…')}
+            placeholder={ui('아이디어를 적어보세요…')}
             value={prompt}
             maxLength={8000}
-            disabled={busy || cliInstalling || !canContinue}
+            disabled={busy || !canContinue}
             onChange={e => editPrompt(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
@@ -925,11 +601,9 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
           />
           <footer>
             <span>
-              {isCli
-                ? `VM CLI · ${ui(selectedCliTool.label)} · Ctrl + Enter`
-                : `${status?.model || 'k-exaone_v2.5'} · Ctrl + Enter`}
+              {`${status?.model || 'k-exaone_v2.5'} · Ctrl + Enter`}
             </span>
-            <button type="submit" disabled={blocked}>
+              <button type="submit" disabled={blocked}>
               {busy ? ui('작업 중…') : ui('보내기')}
               <span aria-hidden="true"> ↗</span>
             </button>

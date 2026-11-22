@@ -3,6 +3,8 @@ import { axisTickLayout } from './axisTicks.js';
 import './canvas-axis-ticks.css';
 const NS = 'http://www.w3.org/2000/svg';
 
+const AXIS_SVG_SETTLE_DELAY_MS = 180;
+
 function createTickNode(horizontal) {
   const node = document.createElementNS(NS, 'g');
   const line = document.createElementNS(NS, 'line');
@@ -255,7 +257,7 @@ const CanvasAxisTicks = memo(function CanvasAxisTicks({ boardRef, camera, showXA
   useEffect(() => {
     const stage = boardRef.current; if (!stage) return undefined;
     let width = stage.clientWidth, height = stage.clientHeight, last = '', lastSvg = '', lastW = -1, lastH = -1, lastStep = null;
-    let svgHidden = false, cachedThemeKey = '', cachedColors = null;
+    let svgHidden = false, cachedThemeKey = '', cachedColors = null, lastMotionAt = -Infinity, settleTimer = 0;
     const canvasState = { ctxX: null, ctxY: null, trX: '', trY: '', cacheX: null, cacheY: null, visX: false, visY: false, sprites: new Map() };
     // The label halo must match the canvas behind it: a white halo on the tinted stage
     // showed as blotches that clipped grid dots ("·100'") next to every label.
@@ -282,7 +284,19 @@ const CanvasAxisTicks = memo(function CanvasAxisTicks({ boardRef, camera, showXA
     };
     const update = (event) => {
       const c = latest.current;
-      const settled = event?.detail ? Boolean(event.detail.settled) : !(stage.classList.contains('camera-moving') || stage.classList.contains('camera-zooming'));
+      let settled = event?.detail ? Boolean(event.detail.settled) : !(stage.classList.contains('camera-moving') || stage.classList.contains('camera-zooming'));
+      // Wheel zoom settles between steps. Rebuilding the SVG labels on each of those
+      // settles added/removed text nodes (layout + :has() style invalidation) every
+      // step, so the canvas strip stays until the camera has been quiet briefly.
+      const now = performance.now();
+      let deferred = false;
+      if (!settled) lastMotionAt = now;
+      else if (!event?.quietSettle && now - lastMotionAt < AXIS_SVG_SETTLE_DELAY_MS) {
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(() => update({ detail: { settled: true }, quietSettle: true }), AXIS_SVG_SETTLE_DELAY_MS - (now - lastMotionAt));
+        settled = false;
+        deferred = true;
+      }
       const key = `${c.camera.x}|${c.camera.y}|${c.camera.scale}|${width}|${height}|${c.showXAxis}|${c.showYAxis}|${settled ? 1 : 0}`;
       if (key === last) return; last = key;
       const layout = axisTickLayout(c.camera, { width, height });
@@ -291,7 +305,7 @@ const CanvasAxisTicks = memo(function CanvasAxisTicks({ boardRef, camera, showXA
         const colors = readColors();
         syncStripVisibility(fastX.current, 'visX', canvasState, Boolean(c.showXAxis));
         syncStripVisibility(fastY.current, 'visY', canvasState, Boolean(c.showYAxis));
-        const zooming = stage.classList.contains('camera-zooming');
+        const zooming = deferred || stage.classList.contains('camera-zooming');
         if (c.showXAxis) drawFastStrip(fastX.current, 'ctxX', 'trX', 'cacheX', canvasState, c.camera, layout.displayY ?? layout.originY, width, height, true, colors, zooming);
         if (c.showYAxis) drawFastStrip(fastY.current, 'ctxY', 'trY', 'cacheY', canvasState, c.camera, layout.displayX ?? layout.originX, width, height, false, colors, zooming);
         return;
@@ -316,7 +330,7 @@ const CanvasAxisTicks = memo(function CanvasAxisTicks({ boardRef, camera, showXA
     };
     draw.current = update; stage.addEventListener('agora-camera', update);
     const observer = new ResizeObserver(([entry]) => { width = entry.contentRect.width; height = entry.contentRect.height; update(); }); observer.observe(stage); update();
-    return () => { observer.disconnect(); stage.removeEventListener('agora-camera', update); draw.current = null; };
+    return () => { clearTimeout(settleTimer); observer.disconnect(); stage.removeEventListener('agora-camera', update); draw.current = null; };
   }, [boardRef]);
   useLayoutEffect(() => { draw.current?.(); }, [camera, showXAxis, showYAxis]);
   return (

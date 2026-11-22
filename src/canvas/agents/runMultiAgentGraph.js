@@ -25,7 +25,7 @@ import {
 } from './multiAgentGraph.js';
 
 const RETRY_DELAYS_MS = [1200, 2500, 4000];
-const RETRYABLE_BUSY_CODES = new Set(['AGENT_REQUEST_BUSY', 'AGENT_STATUS_BUSY']);
+const RETRYABLE_BUSY_CODES = new Set(['AGENT_REQUEST_BUSY', 'AGENT_STATUS_BUSY', 'AGENT_BUSY', 'RUNTIME_BUSY']);
 
 function makeAbortError() {
   const error = new Error('멀티 에이전트 작업이 중지되었습니다.');
@@ -89,9 +89,22 @@ async function callAgentWithRetry({ executeAgent, payload, onOutput, signal }) {
   if (signal?.aborted) throw makeAbortError();
   for (let attempt = 0; ; attempt++) {
     if (signal?.aborted) throw makeAbortError();
+    let onAbort = null;
     try {
-      const result = await executeAgent(payload, line => {
+      const reqPromise = Promise.resolve(executeAgent(payload, line => {
         if (!signal?.aborted) onOutput?.(String(line || ''));
+      }));
+      reqPromise.catch(() => {});
+      const result = await new Promise((resolve, reject) => {
+        if (signal?.aborted) {
+          reject(makeAbortError());
+          return;
+        }
+        onAbort = () => {
+          reject(makeAbortError());
+        };
+        signal?.addEventListener?.('abort', onAbort, { once: true });
+        reqPromise.then(resolve, reject);
       });
       if (signal?.aborted) throw makeAbortError();
       const answer = String(result?.answer ?? result?.output ?? result?.message ?? '');
@@ -102,6 +115,8 @@ async function callAgentWithRetry({ executeAgent, payload, onOutput, signal }) {
         throw error;
       }
       await abortableWait(RETRY_DELAYS_MS[attempt], signal);
+    } finally {
+      if (onAbort) signal?.removeEventListener?.('abort', onAbort);
     }
   }
 }
@@ -280,7 +295,7 @@ export async function runSingleAgent({
         allow_delete: Boolean(graph.config.allow_delete),
         options: agentModelOptions(graph.config),
         api_key: execution.mock ? '' : resolveApiKey?.(graph.config) || '',
-        turn_id: globalThis.crypto?.randomUUID?.() || `${runId}:1`,
+        turn_id: globalThis.crypto?.randomUUID?.() || `${runId}-1`,
         ...(sessionId ? { session_id: sessionId } : {}),
       },
       onOutput: progress => onEvent({ type: 'agent_progress', runId, agentId, agentName: name, progress }),
@@ -301,8 +316,7 @@ export async function runSingleAgent({
         mode: 'single',
         round: 1,
         engine: graph.config.engine,
-        cli_tool: graph.config.cli_tool,
-        model: raw?.model || graph.config.cli_model || '',
+        model: raw?.model || '',
       },
     });
     if (graph.config.writeToOutputs !== false) {
@@ -585,7 +599,7 @@ export async function runMultiAgentOrchestration({
           allow_delete: Boolean(agentConfig.allow_delete),
           options: agentModelOptions(agentConfig),
           api_key: execution.mock ? '' : resolveApiKey?.(agentConfig) || '',
-          turn_id: globalThis.crypto?.randomUUID?.() || `${runId}:${round}:${agentId}`,
+          turn_id: globalThis.crypto?.randomUUID?.() || `${runId}-${round}-${agentId}`,
           ...(sessionId ? { session_id: sessionId } : {}),
         },
         onOutput: progress => onEvent({ type: 'agent_progress', runId, agentId, agentName, round, progress }),
@@ -645,8 +659,7 @@ export async function runMultiAgentOrchestration({
           mode: config.mode,
           round,
           engine: agentConfig.engine,
-          cli_tool: agentConfig.cli_tool,
-          model: raw?.model || agentConfig.cli_model || '',
+          model: raw?.model || '',
           directivesCount: routedDirectives.length,
         },
       });
@@ -1197,7 +1210,7 @@ async function runResolvedFlow({
                 allow_delete: Boolean(agentConfig.allow_delete),
                 options: agentModelOptions(agentConfig),
                 api_key: execution.mock ? '' : resolveApiKey?.(agentConfig) || '',
-                turn_id: globalThis.crypto?.randomUUID?.() || `${runId}:${nodeId}`,
+                turn_id: globalThis.crypto?.randomUUID?.() || `${runId}-${nodeId}`,
                 ...(sessionId ? { session_id: sessionId } : {}),
               },
               onOutput: progress => onEvent({ type: 'agent_progress', runId, agentId: nodeId, agentName, round: 1, progress }),
@@ -1221,8 +1234,7 @@ async function runResolvedFlow({
                 mode: startKind,
                 round: 1,
                 engine: agentConfig.engine,
-                cli_tool: agentConfig.cli_tool,
-                model: raw?.model || agentConfig.cli_model || '',
+                model: raw?.model || '',
               },
             });
             if (agentConfig.writeToOutputs !== false) {
