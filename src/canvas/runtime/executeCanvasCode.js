@@ -14,7 +14,7 @@ export async function executeCanvasCode({ canvasId, token, user, objectId, noteb
     ...(action === 'manage' ? {management} : action === 'reset' ? {management:{action:'reset'}} : {}),
     ...(action === 'notebook' ? {operation:operation||'execute'} : {}),
     ...(action==='service'?{service}:{}),
-    ...(action==='agent'?{operation:operation||'run',message:String(agent?.message||''),selected_ids:agent?.selected_ids||[],history:agent?.history||[],anchor:agent?.anchor,allow_delete:agent?.allow_delete===true,options:agent?.options||{},api_key:typeof agent?.api_key==='string'?agent.api_key:'',session_id:agent?.session_id,turn_id:agent?.turn_id,include_history:agent?.include_history!==false,offset:agent?.offset,before:agent?.before,limit:agent?.limit}:{}),
+    ...(action==='agent'?{operation:operation||'run',message:String(agent?.message||''),anchor:agent?.anchor,options:agent?.options||{},consent_version:agent?.consent_version,session_id:agent?.session_id,turn_id:agent?.turn_id,offset:agent?.offset,before:agent?.before,limit:agent?.limit}:{}),
     object_id: String(objectId || ''),
     code: String(code || ''),
     ...(action === 'notebook'

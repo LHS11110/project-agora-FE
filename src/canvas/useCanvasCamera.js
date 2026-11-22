@@ -4,7 +4,8 @@ import './canvas-grid.css';
 import { shouldCommitCamera } from './cameraCommitSchedule.js';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, startTransition } from 'react';
 import { applyGridProjection, gridProjection } from './gridProjection.js';
-import { CANVAS_SPACE, clampCanvasScale, formatCanvasZoom } from './canvasSpace.js';
+import { axisOrigin } from './axisTicks.js';
+import { clampCanvasScale, formatCanvasZoom } from './canvasSpace.js';
 
 // Camera motion is a compositor update. React refreshes scene membership at
 // viewport coverage changes, without a fixed refresh interval.
@@ -87,8 +88,7 @@ export function useCanvasCamera(boardRef, sceneRef) {
       const coordY = hadY ? refs.coordY : (refs.coordY = axes.querySelector('.coordinate-y'));
       const coordOrigin = hadOrigin ? refs.coordOrigin : (refs.coordOrigin = axes.querySelector('.coordinate-origin'));
       if (viewChanged || (coordX && !hadX) || (coordY && !hadY) || (coordOrigin && !hadOrigin)) {
-        const x = CANVAS_SPACE.width * camera.scale / 2 + camera.x, y = CANVAS_SPACE.height * camera.scale / 2 + camera.y;
-        const displayX = Math.max(8, Math.min(Math.max(8, width - 8), x)), displayY = Math.max(8, Math.min(Math.max(8, height - 8), y));
+        const { originX: x, originY: y, displayX, displayY } = axisOrigin(camera, width, height);
         const nextXArrow = x <= width ? '1' : '0', nextYArrow = y >= 0 ? '1' : '0';
         if (coordX) {
           const xTr = `translate3d(0,${displayY}px,0)`;

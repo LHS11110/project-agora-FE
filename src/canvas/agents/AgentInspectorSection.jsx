@@ -1,7 +1,7 @@
 import { useId, useMemo } from 'react';
 import { intlLocale, ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
-import { AGENT_PROVIDERS, agentProvider, normalizeAgentModel } from '../../components/agentPreferences.js';
+import { agentProvider } from '../../components/agentPreferences.js';
 import {
   AGENT_ACCENT_COLORS,
   AGENT_ROLE_PRESETS,
@@ -710,34 +710,13 @@ export function AgentNodeInspector({
 
       {config.engine !== 'mock' && (
         <div className="agent-inspector-grid">
-          <label className="agent-inspector-field" htmlFor={`${fieldId}-provider`}>
-            <span>{ui('모델 제공 서비스')}</span>
-            <select
-              id={`${fieldId}-provider`}
-              value={agentProvider(config.provider).id}
-              onChange={e => update({ provider: e.target.value, model: '' })}
-            >
-              {AGENT_PROVIDERS.map(entry => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
-            </select>
-          </label>
           <label className="agent-inspector-field" htmlFor={`${fieldId}-model`}>
-            <span>{ui('모델')}</span>
-            {/* Committed on blur: each keystroke would otherwise patch the shared canvas object. */}
-            <input
-              key={`${config.provider}:${config.model}`}
-              id={`${fieldId}-model`}
-              type="text"
-              list={`${fieldId}-model-options`}
-              maxLength={128}
-              autoComplete="off"
-              spellCheck={false}
-              defaultValue={config.model}
-              placeholder={agentProvider(config.provider).defaultModel || ui('서버 기본 모델')}
-              onBlur={e => { const model = normalizeAgentModel(e.target.value); if (model !== config.model) update({ model }); }}
-            />
-            <datalist id={`${fieldId}-model-options`}>
-              {agentProvider(config.provider).models.map(model => <option key={model} value={model} />)}
-            </datalist>
+            <span>{ui('Claude 모델')}</span>
+            <select id={`${fieldId}-model`} name="agent-model" aria-label={ui('Claude 모델')} value={config.model} onChange={e => update({ model: e.target.value })}>
+              <option value="">{agentProvider(config.provider).defaultModel}</option>
+              {agentProvider(config.provider).models.filter(model => model !== agentProvider(config.provider).defaultModel)
+                .map(model => <option key={model} value={model}>{model}</option>)}
+            </select>
           </label>
         </div>
       )}
@@ -815,16 +794,6 @@ export function AgentNodeInspector({
         />
         <span>{ui('다른 에이전트에게 핸드오프·피드백 전송 허용')}</span>
       </label>
-      {config.engine !== 'mock' && <label className="agent-inspector-check" htmlFor={`${fieldId}-delete`}>
-        <input
-          id={`${fieldId}-delete`}
-          type="checkbox"
-          checked={config.allow_delete}
-          onChange={e => update({ allow_delete: e.target.checked })}
-        />
-        <span>{ui('캔버스 객체 삭제 도구 허용')}</span>
-      </label>}
-
       {store?.startConnectorFrom && (
         <button
           type="button"

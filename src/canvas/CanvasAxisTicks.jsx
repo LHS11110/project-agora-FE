@@ -1,4 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useRef } from 'react';
+import { MIN_CANVAS_SCALE } from './canvasSpace.js';
 import { axisTickLayout } from './axisTicks.js';
 import './canvas-axis-ticks.css';
 const NS = 'http://www.w3.org/2000/svg';
@@ -28,7 +29,19 @@ function createTickNode(horizontal) {
   return node;
 }
 
-function paint(group, rows, origin, size, horizontal) {
+function labelPosition(position, origin, size, horizontal) {
+  if (horizontal) return { x: position, y: origin + (origin > size - 30 ? -8 : 15), align: 0.5 };
+  const left = origin > size - 100;
+  return { x: origin + (left ? -8 : 8), y: position + 3, align: left ? 1 : 0 };
+}
+
+function labelCovered(position, width, covered) {
+  if (!covered) return false;
+  const left = position.x - width * position.align;
+  return covered(left - 3, position.y - 12, left + width + 3, position.y + 4);
+}
+
+function paint(group, rows, origin, size, horizontal, covered, measureLabel) {
   const children = group.children;
   const rowKeys = new Set();
   for (let i = 0; i < rows.length; i++) rowKeys.add(String(rows[i].value));
@@ -73,6 +86,7 @@ function paint(group, rows, origin, size, horizontal) {
       if (node._tx !== textX) { text.setAttribute('x', textX); node._tx = textX; }
       if (node._anchor !== textAnchor) { text.setAttribute('text-anchor', textAnchor); node._anchor = textAnchor; }
     }
+    text.style.visibility = covered && labelCovered(labelPosition(row.position, origin, size, horizontal), measureLabel(row.label), covered) ? 'hidden' : '';
     if (node._label !== row.label) {
       text.textContent = row.label;
       node._label = row.label;
@@ -128,7 +142,7 @@ function syncStripVisibility(el, stateKey, state, visible) {
   }
 }
 
-function drawFastStrip(canvas, ctxKey, trKey, cacheKey, state, camera, origin, viewportWidth, viewportHeight, horizontal, colors, trimEdges = false) {
+function drawFastStrip(canvas, ctxKey, trKey, cacheKey, state, camera, origin, viewportWidth, viewportHeight, horizontal, colors, trimEdges = false, covered) {
   if (!canvas || !viewportWidth || !viewportHeight) return;
   const dpr = Math.min(2, globalThis.devicePixelRatio || 1);
   const left = !horizontal && origin > viewportWidth - 100;
@@ -143,7 +157,7 @@ function drawFastStrip(canvas, ctxKey, trKey, cacheKey, state, camera, origin, v
   // Reuse the overscanned strip canvas during pure panning by translating only.
   const cached = state[cacheKey];
   if (
-    cached
+    cached && !covered
     && cached.dpr === dpr
     && cached.vw === viewportWidth
     && cached.vh === viewportHeight
@@ -214,7 +228,7 @@ function drawFastStrip(canvas, ctxKey, trKey, cacheKey, state, camera, origin, v
     textFlip,
     colors,
     step: visibleStep,
-    trimmed: trimEdges,
+    trimmed: trimEdges || Boolean(covered),
     localOrigin,
     panOrigin: horizontal ? camera.x : camera.y,
   };
@@ -241,6 +255,8 @@ function drawFastStrip(canvas, ctxKey, trKey, cacheKey, state, camera, origin, v
     const row = rows[i];
     const sprite = getTickSprite(state, row.label, colors, dpr);
     if (!sprite) continue;
+    const position = row.position - STRIP_OVERSCAN;
+    if (labelCovered(labelPosition(position, origin, horizontal ? viewportHeight : viewportWidth, horizontal), sprite.tw, covered)) continue;
     const dx = horizontal
       ? Math.round(row.position - sprite.w * 0.5)
       : Math.round(left ? localOrigin + textX - 3 - sprite.tw : localOrigin + textX - 3);
@@ -251,12 +267,12 @@ function drawFastStrip(canvas, ctxKey, trKey, cacheKey, state, camera, origin, v
   }
 }
 
-const CanvasAxisTicks = memo(function CanvasAxisTicks({ boardRef, camera, showXAxis, showYAxis }) {
+const CanvasAxisTicks = memo(function CanvasAxisTicks({ boardRef, camera, showXAxis, showYAxis, isLabelCovered }) {
   const svg = useRef(null), fastX = useRef(null), fastY = useRef(null), xGroup = useRef(null), yGroup = useRef(null), draw = useRef(null), latest = useRef(null);
-  latest.current = { camera, showXAxis, showYAxis };
+  latest.current = { camera, showXAxis, showYAxis, isLabelCovered };
   useEffect(() => {
     const stage = boardRef.current; if (!stage) return undefined;
-    let width = stage.clientWidth, height = stage.clientHeight, last = '', lastSvg = '', lastW = -1, lastH = -1, lastStep = null;
+    let width = stage.clientWidth, height = stage.clientHeight, last = '', lastSvg = '', lastW = -1, lastH = -1, lastStep = null, lastCoverage, lastSvgCoverage;
     let svgHidden = false, cachedThemeKey = '', cachedColors = null, lastMotionAt = -Infinity, settleTimer = 0;
     const canvasState = { ctxX: null, ctxY: null, trX: '', trY: '', cacheX: null, cacheY: null, visX: false, visY: false, sprites: new Map() };
     // The label halo must match the canvas behind it: a white halo on the tinted stage
@@ -298,24 +314,31 @@ const CanvasAxisTicks = memo(function CanvasAxisTicks({ boardRef, camera, showXA
         deferred = true;
       }
       const key = `${c.camera.x}|${c.camera.y}|${c.camera.scale}|${width}|${height}|${c.showXAxis}|${c.showYAxis}|${settled ? 1 : 0}`;
-      if (key === last) return; last = key;
+      const coverage = c.camera.scale <= MIN_CANVAS_SCALE ? c.isLabelCovered : undefined;
+      if (key === last && coverage === lastCoverage) return;
+      last = key; lastCoverage = coverage;
+      const covered = coverage && ((...box) => coverage(c.camera, ...box));
       const layout = axisTickLayout(c.camera, { width, height });
+      const zero = svg.current.parentElement.querySelector('.coordinate-origin');
+      if (zero) zero.style.visibility = covered?.(layout.originX + 3, layout.originY + 2, layout.originX + 15, layout.originY + 18) ? 'hidden' : '';
       if (!settled && (fastX.current || fastY.current)) {
         if (!svgHidden) { svg.current.style.visibility = 'hidden'; svgHidden = true; }
         const colors = readColors();
         syncStripVisibility(fastX.current, 'visX', canvasState, Boolean(c.showXAxis));
         syncStripVisibility(fastY.current, 'visY', canvasState, Boolean(c.showYAxis));
         const zooming = deferred || stage.classList.contains('camera-zooming');
-        if (c.showXAxis) drawFastStrip(fastX.current, 'ctxX', 'trX', 'cacheX', canvasState, c.camera, layout.displayY ?? layout.originY, width, height, true, colors, zooming);
-        if (c.showYAxis) drawFastStrip(fastY.current, 'ctxY', 'trY', 'cacheY', canvasState, c.camera, layout.displayX ?? layout.originX, width, height, false, colors, zooming);
+        if (c.showXAxis) drawFastStrip(fastX.current, 'ctxX', 'trX', 'cacheX', canvasState, c.camera, layout.displayY ?? layout.originY, width, height, true, colors, zooming, covered);
+        if (c.showYAxis) drawFastStrip(fastY.current, 'ctxY', 'trY', 'cacheY', canvasState, c.camera, layout.displayX ?? layout.originX, width, height, false, colors, zooming, covered);
         return;
       }
-      readColors();
+      const colors = readColors();
+      const measureLabel = label => getTickSprite(canvasState, label, colors, Math.min(2, globalThis.devicePixelRatio || 1))?.tw ?? label.length * 7;
       syncStripVisibility(fastX.current, 'visX', canvasState, false);
       syncStripVisibility(fastY.current, 'visY', canvasState, false);
       if (svgHidden) { svg.current.style.visibility = ''; svgHidden = false; }
       const svgKey = `${c.camera.x}|${c.camera.y}|${c.camera.scale}|${width}|${height}|${c.showXAxis}|${c.showYAxis}`;
-      if (svgKey === lastSvg) return; lastSvg = svgKey;
+      if (svgKey === lastSvg && coverage === lastSvgCoverage) return;
+      lastSvg = svgKey; lastSvgCoverage = coverage;
       if (lastW !== width || lastH !== height) {
         lastW = width; lastH = height;
         svg.current.setAttribute('viewBox', `0 0 ${Math.max(1, width)} ${Math.max(1, height)}`);
@@ -325,14 +348,14 @@ const CanvasAxisTicks = memo(function CanvasAxisTicks({ boardRef, camera, showXA
         lastStep = nextStep;
         svg.current.setAttribute('data-step', nextStep);
       }
-      paint(xGroup.current, c.showXAxis ? layout.x : [], layout.displayY ?? layout.originY, height, true);
-      paint(yGroup.current, c.showYAxis ? layout.y : [], layout.displayX ?? layout.originX, width, false);
+      paint(xGroup.current, c.showXAxis ? layout.x : [], layout.displayY ?? layout.originY, height, true, covered, measureLabel);
+      paint(yGroup.current, c.showYAxis ? layout.y : [], layout.displayX ?? layout.originX, width, false, covered, measureLabel);
     };
     draw.current = update; stage.addEventListener('agora-camera', update);
     const observer = new ResizeObserver(([entry]) => { width = entry.contentRect.width; height = entry.contentRect.height; update(); }); observer.observe(stage); update();
     return () => { clearTimeout(settleTimer); observer.disconnect(); stage.removeEventListener('agora-camera', update); draw.current = null; };
   }, [boardRef]);
-  useLayoutEffect(() => { draw.current?.(); }, [camera, showXAxis, showYAxis]);
+  useLayoutEffect(() => { draw.current?.(); }, [camera, showXAxis, showYAxis, isLabelCovered]);
   return (
     <>
       <canvas className="canvas-axis-ticks-fast canvas-axis-ticks-fast--x" ref={fastX} aria-hidden="true" style={{ visibility: 'hidden' }} />

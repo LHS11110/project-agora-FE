@@ -93,7 +93,7 @@ async function callAgentWithRetry({ executeAgent, payload, onOutput, signal }) {
     try {
       const reqPromise = Promise.resolve(executeAgent(payload, line => {
         if (!signal?.aborted) onOutput?.(String(line || ''));
-      }));
+      }, signal));
       reqPromise.catch(() => {});
       const result = await new Promise((resolve, reject) => {
         if (signal?.aborted) {
@@ -242,7 +242,6 @@ export async function runSingleAgent({
   items,
   agentId,
   executeAgent,
-  resolveApiKey,
   getAnchor,
   signal,
   onEvent = () => {},
@@ -294,7 +293,6 @@ export async function runSingleAgent({
         include_history: false,
         allow_delete: Boolean(graph.config.allow_delete),
         options: agentModelOptions(graph.config),
-        api_key: execution.mock ? '' : resolveApiKey?.(graph.config) || '',
         turn_id: globalThis.crypto?.randomUUID?.() || `${runId}-1`,
         ...(sessionId ? { session_id: sessionId } : {}),
       },
@@ -346,7 +344,6 @@ export async function runMultiAgentOrchestration({
   items,
   orchestratorId,
   executeAgent,
-  resolveApiKey,
   getAnchor,
   signal,
   onEvent = () => {},
@@ -440,7 +437,6 @@ export async function runMultiAgentOrchestration({
       inputEnvelope: envelope,
       mock: execution.mock,
       executeAgent,
-      resolveApiKey,
       getAnchor,
       callAgent: (payload, onOutput) => callAgentWithRetry({ executeAgent, payload, onOutput, signal }),
       signal,
@@ -598,7 +594,6 @@ export async function runMultiAgentOrchestration({
           include_history: false,
           allow_delete: Boolean(agentConfig.allow_delete),
           options: agentModelOptions(agentConfig),
-          api_key: execution.mock ? '' : resolveApiKey?.(agentConfig) || '',
           turn_id: globalThis.crypto?.randomUUID?.() || `${runId}-${round}-${agentId}`,
           ...(sessionId ? { session_id: sessionId } : {}),
         },
@@ -1023,7 +1018,6 @@ async function runResolvedFlow({
   items,
   flow,
   executeAgent,
-  resolveApiKey,
   getAnchor,
   signal,
   onEvent = () => {},
@@ -1087,7 +1081,6 @@ async function runResolvedFlow({
             inputEnvelope: envelope,
             mock: execution.mock,
             executeAgent,
-            resolveApiKey,
             getAnchor,
             callAgent: (payload, onOutput) => callAgentWithRetry({ executeAgent, payload, onOutput, signal }),
             signal,
@@ -1209,7 +1202,6 @@ async function runResolvedFlow({
                 include_history: false,
                 allow_delete: Boolean(agentConfig.allow_delete),
                 options: agentModelOptions(agentConfig),
-                api_key: execution.mock ? '' : resolveApiKey?.(agentConfig) || '',
                 turn_id: globalThis.crypto?.randomUUID?.() || `${runId}-${nodeId}`,
                 ...(sessionId ? { session_id: sessionId } : {}),
               },
@@ -1287,7 +1279,6 @@ export async function runFromInputNode({
   items,
   inputId,
   executeAgent,
-  resolveApiKey,
   getAnchor,
   signal,
   onEvent = () => {},
@@ -1299,7 +1290,6 @@ export async function runFromInputNode({
       items,
       orchestratorId: flow.orchestratorIds[0],
       executeAgent,
-      resolveApiKey,
       getAnchor,
       signal,
       onEvent,
@@ -1313,7 +1303,6 @@ export async function runFromInputNode({
     items,
     flow,
     executeAgent,
-    resolveApiKey,
     getAnchor,
     signal,
     onEvent,
@@ -1325,7 +1314,6 @@ export async function runFromRouterNode({
   items,
   routerId,
   executeAgent,
-  resolveApiKey,
   getAnchor,
   signal,
   onEvent = () => {},
@@ -1336,7 +1324,6 @@ export async function runFromRouterNode({
     items,
     flow,
     executeAgent,
-    resolveApiKey,
     getAnchor,
     signal,
     onEvent,

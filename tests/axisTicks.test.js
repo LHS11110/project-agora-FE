@@ -61,3 +61,12 @@ test('the step does not flip with sub-pixel camera positions during zoom or pan'
     assert.equal(steps.size, 1, `scale ${scale}: ${[...steps]}`);
   }
 });
+
+test('minimum zoom snaps the drawn axes without rounding world tick coordinates', () => {
+  const camera = { x: 320.4, y: 250.65, scale: 0.1 };
+  const layout = axisTickLayout(camera, { width: 800, height: 600 });
+  assert.equal(layout.displayX, 400);
+  assert.equal(layout.displayY, 301);
+  assert.equal(layout.x.find(tick => tick.value === 1000).position, 500.4);
+  assert.ok(Math.abs(layout.y.find(tick => tick.value === 1000).position - 200.65) < 1e-9);
+});

@@ -181,7 +181,6 @@ test('evaluateAgentRouter supports format, intelligent (API engine), fallback, a
       llmCalls += 1;
       return { answer: '{"targets":["codeAgent"]}' };
     },
-    resolveApiKey: () => 'test-key',
   });
   assert.equal(hybridFormatHit.modeUsed, 'format');
   assert.deepEqual(hybridFormatHit.selectedTargetIds, ['pdfAgent']);
@@ -198,13 +197,12 @@ test('evaluateAgentRouter supports format, intelligent (API engine), fallback, a
       capturedPayload = payload;
       return { answer: '```json\n{"targets":["codeAgent"],"reason":"코드 리팩토링 요청"}\n```' };
     },
-    resolveApiKey: () => 'router-api-key',
   });
   assert.equal(hybridIntelligent.modeUsed, 'intelligent');
   assert.deepEqual(hybridIntelligent.selectedTargetIds, ['codeAgent']);
   assert.equal(hybridIntelligent.fallbackUsed, false);
   assert.equal(hybridIntelligent.reason, '코드 리팩토링 요청');
-  assert.equal(capturedPayload.api_key, 'router-api-key');
+  assert.equal(capturedPayload.api_key, undefined);
   assert.equal(capturedPayload.options.engine, undefined);
   assert.equal(capturedPayload.options.cli_tool, undefined);
   assert.equal(capturedPayload.options.reasoning_effort, 'low');
@@ -216,7 +214,6 @@ test('evaluateAgentRouter supports format, intelligent (API engine), fallback, a
     routerId: 'router',
     inputEnvelope: collectInputEnvelope(items, 'router'),
     executeAgent: async () => ({ answer: 'invalid non-json response' }),
-    resolveApiKey: () => '',
   });
   assert.equal(fallbackRes.modeUsed, 'intelligent');
   assert.equal(fallbackRes.fallbackUsed, true);
@@ -345,7 +342,6 @@ test('evaluateJsonRouting and evaluateAgentRouter handle json, format (json), an
     items,
     routerId: 'router',
     inputEnvelope: collectInputEnvelope(items, 'router'),
-    resolveApiKey: () => '',
   });
   assert.equal(jsonRes.modeUsed, 'json');
   assert.equal(jsonRes.fallbackUsed, false);
@@ -358,7 +354,6 @@ test('evaluateJsonRouting and evaluateAgentRouter handle json, format (json), an
     items,
     routerId: 'router',
     inputEnvelope: collectInputEnvelope(items, 'router'),
-    resolveApiKey: () => '',
   });
   assert.equal(edgeJsonRes.modeUsed, 'json');
   assert.deepEqual(edgeJsonRes.selectedTargetIds, ['audioAgent']);
@@ -375,7 +370,6 @@ test('evaluateJsonRouting and evaluateAgentRouter handle json, format (json), an
     items,
     routerId: 'router',
     inputEnvelope: collectInputEnvelope(items, 'router'),
-    resolveApiKey: () => '',
   });
   assert.equal(jsonFallback.modeUsed, 'json');
   assert.equal(jsonFallback.fallbackUsed, true);
@@ -396,7 +390,6 @@ test('evaluateJsonRouting and evaluateAgentRouter handle json, format (json), an
       llmCalls += 1;
       return { answer: '{"targets":["generalAgent"]}' };
     },
-    resolveApiKey: () => '',
   });
   assert.equal(hybridJsonHit.modeUsed, 'json');
   assert.deepEqual(hybridJsonHit.selectedTargetIds, ['audioAgent']);
@@ -414,7 +407,6 @@ test('evaluateJsonRouting and evaluateAgentRouter handle json, format (json), an
       seenPrompt = payload.message;
       return { answer: '{"targets":["generalAgent"],"reason":"로드맵 논의"}' };
     },
-    resolveApiKey: () => '',
   });
   assert.equal(hybridLlmFallback.modeUsed, 'intelligent');
   assert.deepEqual(hybridLlmFallback.selectedTargetIds, ['generalAgent']);

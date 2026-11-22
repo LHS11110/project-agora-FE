@@ -11,7 +11,7 @@ test('agent request uses existing websocket and routes streamed output and final
     {
       canvasId: '1',
       action: 'agent',
-      agent: { message: '코드를 작성해줘', selected_ids: ['code-a'], anchor: { x: 1, y: 2 }, history: [], allow_delete: false },
+      agent: { message: '코드를 작성해줘', selected_ids: ['code-a'], anchor: { x: 1, y: 2 }, history: [{ role: 'user', content: 'old prompt' }], allow_delete: true, api_key: 'legacy-key', consent_version: 'claude-prompt-v1' },
       pendingRequests: pending,
       sendRaw: event => { sent = event; return true; },
     },
@@ -19,9 +19,11 @@ test('agent request uses existing websocket and routes streamed output and final
   );
   assert.equal(sent.type, 'runtime_execute');
   assert.equal(sent.action, 'agent');
-  assert.deepEqual(sent.selected_ids, ['code-a']);
+  assert.equal(sent.consent_version, 'claude-prompt-v1');
+  for (const field of ['selected_ids', 'history', 'allow_delete', 'api_key']) {
+    assert.equal(Object.hasOwn(sent, field), false);
+  }
   assert.equal(sent.operation, 'run');
-  assert.equal(sent.allow_delete, false);
   assert.equal(sent.token, undefined);
   settleRuntimeSocketResponse(pending, { type: 'runtime_output', request_id: sent.request_id, output: '생성 중' });
   settleRuntimeSocketResponse(pending, { type: 'runtime_result', request_id: sent.request_id, ok: true, result: { answer: '완료' } });

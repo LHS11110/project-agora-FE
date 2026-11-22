@@ -27,6 +27,14 @@ function ticks(origin, length, scale, step, direction) {
   }
   return result;
 }
+export function axisOrigin(camera, width, height, space = CANVAS_SPACE) {
+  const originX = space.width * camera.scale / 2 + camera.x;
+  const originY = space.height * camera.scale / 2 + camera.y;
+  // Align the one-pixel lines and both tick renderers to the same screen pixels.
+  const pin = (origin, length) => Math.round(Math.max(8, Math.min(Math.max(8, length - 8), origin)));
+  return { originX, originY, displayX: pin(originX, width), displayY: pin(originY, height) };
+}
+
 /**
  * Bounded by the viewport, independent of scene object count or world extent.
  * `forcedStep` lets an overscanned strip reuse the visible viewport's step, so the
@@ -35,7 +43,8 @@ function ticks(origin, length, scale, step, direction) {
 export function axisTickLayout(camera, viewport, space = CANVAS_SPACE, forcedStep = null) {
   const {scale,x,y} = camera;
   const width = Math.max(0, viewport.width), height = Math.max(0, viewport.height);
-  const originX = space.width * scale / 2 + x, originY = space.height * scale / 2 + y;
+  const origin = axisOrigin(camera, width, height, space);
+  const { originX, originY } = origin;
   if (!(scale > 0) || ![scale,x,y,width,height].every(Number.isFinite)) return {step:null,x:[],y:[],originX,originY};
   let step = niceAxisStep(80 / scale);
   if (!step || !Number.isFinite(step)) return {step:null,x:[],y:[],originX,originY};
@@ -46,9 +55,7 @@ export function axisTickLayout(camera, viewport, space = CANVAS_SPACE, forcedSte
   const longest = Math.max(edgeLabel(-originX / scale), edgeLabel((width - originX) / scale));
   step = forcedStep > 0 ? forcedStep : niceAxisStep(Math.max(80,Math.min(220,longest*6+20)) / scale);
   if (!step || !Number.isFinite(step)) return {step:null,x:[],y:[],originX,originY};
-  return {step,originX,originY,
-    displayX:Math.max(8,Math.min(Math.max(8,width-8),originX)),
-    displayY:Math.max(8,Math.min(Math.max(8,height-8),originY)),
+  return {step,...origin,
     x:ticks(originX,width,scale,step,1),
     y:ticks(originY,height,scale,step,-1)};
 }

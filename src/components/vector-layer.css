@@ -12,9 +12,6 @@
 .canvas-stage .coordinate-y{left:0;transform:translateX(var(--axis-origin-x));will-change:transform}
 .canvas-stage .coordinate-origin{left:5px;top:4px;transform:translate(var(--axis-origin-x),var(--axis-origin-y));will-change:transform}
 /* Apply axis opacity to the small primitives instead of an entire viewport surface. */
-/* Axes sit above the vector layer (3) and scene (4): below them, objects scattered
-   over the axis at low zoom hid the line and cut tick labels. Labels carry a halo,
-   and the plane ignores pointer input, so it never blocks object interaction. */
-.canvas-stage .coordinate-plane{opacity:1;contain:layout style;z-index:5}
+.canvas-stage .coordinate-plane{opacity:1;contain:layout style;z-index:1}
 .canvas-stage .coordinate-plane>*{opacity:.78}
 .canvas-depth-layer>.canvas-world-layer{z-index:4}

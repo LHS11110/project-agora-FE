@@ -1291,7 +1291,6 @@ export async function evaluateAgentRouter({
   inputEnvelope,
   mock = false,
   executeAgent,
-  resolveApiKey,
   getAnchor,
   callAgent,
   signal,
@@ -1434,7 +1433,6 @@ export async function evaluateAgentRouter({
     include_history: false,
     allow_delete: false,
     options: agentModelOptions(routerConfig),
-    api_key: mock ? '' : resolveApiKey?.(routerConfig) || '',
     turn_id: globalThis.crypto?.randomUUID?.() || `${runId || 'route'}-${id}`,
     ...(sessionId ? { session_id: sessionId } : {}),
   };
@@ -1456,7 +1454,7 @@ export async function evaluateAgentRouter({
     if (signal?.aborted) throw makeAbortError();
     let onAbort = null;
     try {
-      const reqPromise = Promise.resolve(executeAgent(payload, onOutput));
+      const reqPromise = Promise.resolve(executeAgent(payload, onOutput, signal));
       reqPromise.catch(() => {});
       const res = await new Promise((resolve, reject) => {
         onAbort = () => {

@@ -80,9 +80,8 @@ import { createBlueprintStore } from '../canvas/runtime/blueprintStore.js';
 import { createMultiAgentStore } from '../canvas/agents/multiAgentStore.js';
 import MultiAgentActivity from '../canvas/agents/MultiAgentActivity.jsx';
 import { buildMultiAgentTemplate, isAgentCanvasObject, isAgentOrchestratorItem } from '../canvas/agents/agentCanvasModel.js';
-import { loadAgentKey } from '../components/agentCredentials.js';
-import { agentProvider } from '../components/agentPreferences.js';
-import { requireAgentConsent } from '../components/agentConsent.js';
+import { purgeAgentKeys } from '../components/agentCredentials.js';
+import { AGENT_CONSENT_VERSION, requireAgentConsent, reviewAgentPrompt } from '../components/agentConsent.js';
 import Timer, {initialTimer} from '../canvas/CanvasTimer.jsx';
 import CanvasAgentLauncher from '../components/CanvasAgentLauncher.jsx';
 import CanvasAgentPanel from '../components/CanvasAgentPanel.jsx';
@@ -250,15 +249,21 @@ function CanvasWorkspace() {
     getItems: () => itemsRef.current,
     execute: request => runtimeRequestRef.current(request), saveOutput: (id, records) => saveBlueprintOutputRef.current(id, records), saveState: (id, state) => saveRuntimeStateRef.current(id, state),saveValue:(id,patch)=>saveBlueprintValueRef.current(id,patch)
   }), []);
+  useEffect(purgeAgentKeys, []);
   const multiAgentStore = useMemo(() => createMultiAgentStore({
     getItems: () => itemsRef.current,
-    executeAgent: async ({ operation, ...agent }, onOutput) => {
+    executeAgent: async ({ operation, ...agent }, onOutput, signal) => {
       // Graph runs need the same per-provider consent as the panel.
       requireAgentConsent(agentUserRef.current, operation, agent.options);
-      return runtimeRequestRef.current({ action: 'agent', operation, agent }, onOutput);
+      if (operation === 'run') {
+        const approved = await reviewAgentPrompt(agent.message, signal);
+        if (!approved || signal?.aborted) {
+          throw Object.assign(new Error(ui('AI 요청 전송을 취소했습니다.')), { code: 'AGENT_ABORTED' });
+        }
+        requireAgentConsent(agentUserRef.current, operation, agent.options);
+      }
+      return runtimeRequestRef.current({ action: 'agent', operation, agent: { ...agent, consent_version: AGENT_CONSENT_VERSION } }, onOutput);
     },
-    // Each agent node may name its own provider; use this tab's key for that provider.
-    resolveApiKey: config => loadAgentKey(agentProvider(config?.provider).id),
     getAnchor: id => getAgentAnchorRef.current(id),
     saveOutput: (id, records) => saveBlueprintOutputRef.current(id, records),
     saveValue: (id, patch) => saveBlueprintValueRef.current(id, patch),
@@ -1557,6 +1562,16 @@ function CanvasWorkspace() {
   if (!styleSubset.current) styleSubset.current = new ItemSubset(item => item.kind !== 'stroke' && hasAdvancedStyle(item));
   const hiddenCandidates = visibilitySubset.current.update(items);
   const styledCandidates = styleSubset.current.update(items);
+  const isAxisLabelCovered = useCallback((view, left, top, right, bottom) => {
+    const width = boardSize.width * view.scale, height = boardSize.height * view.scale;
+    return spatialIndex.query({
+      minX: (left - view.x) / width, minY: (top - view.y) / height,
+      maxX: (right - view.x) / width, maxY: (bottom - view.y) / height,
+    }).some(({ item }) => (
+      item && !['connector', 'stroke', 'frame'].includes(item.kind)
+      && !shouldOmitFromScene(item, { previewHidden: previewHiddenEffective, now: revealNow })
+    ));
+  }, [boardSize, spatialIndex, items, spatialRevision, previewHiddenEffective, revealNow]);
   const stageEntries = useMemo(() => {
     if (!hiddenCandidates.length || previewHiddenEffective) return visibleEntries;
     let omitted = false;
@@ -2700,7 +2715,7 @@ function CanvasWorkspace() {
       onAgentClose: () => setShowAgent(false),
       onAgentRequest: async ({ operation, ...agent }, onOutput) => {
         requireAgentConsent(agentUserRef.current, operation, agent.options);
-        return executeCanvasCode({ canvasId, action: 'agent', operation, agent, sendRaw, pendingRequests: runtimeSocketRequestsRef.current }, onOutput);
+        return executeCanvasCode({ canvasId, action: 'agent', operation, agent: { ...agent, consent_version: AGENT_CONSENT_VERSION }, sendRaw, pendingRequests: runtimeSocketRequestsRef.current }, onOutput);
       },
     };
     const uiActions = useMemo(() => Object.fromEntries(
@@ -2752,7 +2767,7 @@ function CanvasWorkspace() {
               <div className="stage-label"><span>FRELOG / {String(canvasId).padStart(2, '0')}</span><b>{canvas?.canvas_name || ui("공유 캔버스")}</b></div>
               <div className="canvas-grid-surface" aria-hidden="true" />
               <CanvasWatchOverlay watch={watch} />
-              <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true">{(showXAxis || showYAxis) && <CanvasAxisTicks boardRef={boardRef} camera={camera} showXAxis={showXAxis} showYAxis={showYAxis} />}{showXAxis && <span className="coordinate-x" />}{showYAxis && <span className="coordinate-y" />}{(showXAxis || showYAxis) && <i className="coordinate-origin">0</i>}</div>
+              <div className="coordinate-plane" style={coordinatePlaneStyle} aria-hidden="true">{(showXAxis || showYAxis) && <CanvasAxisTicks boardRef={boardRef} camera={camera} showXAxis={showXAxis} showYAxis={showYAxis} isLabelCovered={isAxisLabelCovered} />}{showXAxis && <span className="coordinate-x" />}{showYAxis && <span className="coordinate-y" />}{(showXAxis || showYAxis) && <i className="coordinate-origin">0</i>}</div>
               <BlurBudgetContext.Provider value={blurBudgetIds}><div className="canvas-scene" ref={sceneRef} style={sceneStyle}>
                 {renderGroups.map((layer, index) => <div className="canvas-depth-layer" key={layer.key} data-depth={layer.depths.at(-1)} style={{ position: 'absolute', inset: 0, zIndex: index + 1, pointerEvents: 'none' }}>
                   <Suspense fallback={null}><VectorLayer token={token} style={vectorLayerStyle} worldSize={boardSize} items={layer.vectors} referenceItems={items} routingRevision={spatialIndex.stats.boundsCalculated} inkItems={layer.inkItems} previewStrokes={layer.hasDepthZero ? remoteDrawingStrokes : undefined} camera={camera} onReady={layer.hasDepthZero ? uiActions.onVectorDraftReady : undefined} onDragReady={getVectorDragCallback(layer.key)} /></Suspense>

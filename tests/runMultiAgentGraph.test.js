@@ -54,7 +54,6 @@ test('canvas mock template routes input, skips the other branch and persists out
   const store = createMultiAgentStore({
     getItems: () => items,
     executeAgent: async () => { externalCalls++; throw new Error('Unexpected model call'); },
-    resolveApiKey: () => { externalCalls++; throw new Error('Unexpected credential lookup'); },
     saveAgentItem: (id, patch) => { items = { ...items, [id]: { ...items[id], ...patch } }; },
   });
   const result = await store.runInput(idFor('테스트 입력'));
@@ -84,7 +83,6 @@ test('mock agents reject mixed teams before any session or credential request', 
     items,
     orchestratorId: 'orch',
     executeAgent: async () => { externalCalls++; },
-    resolveApiKey: () => { externalCalls++; },
   }), /모형 에이전트만/);
   assert.equal(externalCalls, 0);
 });
@@ -181,7 +179,6 @@ test('an intelligent router in a mock flow applies its configured fallback local
   const result = await runFromRouterNode({
     items, routerId: 'router',
     executeAgent: async () => { externalCalls++; },
-    resolveApiKey: () => { externalCalls++; },
     onEvent: event => events.push(event),
   });
   const decision = events.find(event => event.type === 'router_decision').decision;
@@ -263,7 +260,6 @@ test('runSingleAgent retries AGENT_REQUEST_BUSY and writes to connected output, 
   const res = await runSingleAgent({
     items,
     agentId: 'a1',
-    resolveApiKey: () => 'tab-key-123',
     executeAgent: async (payload, onOutput) => {
       if (payload.operation === 'sessions') return { draft: { id: 'sess-1' } };
       attempts++;
@@ -272,7 +268,7 @@ test('runSingleAgent retries AGENT_REQUEST_BUSY and writes to connected output, 
         err.code = 'AGENT_REQUEST_BUSY';
         throw err;
       }
-      assert.equal(payload.api_key, 'tab-key-123');
+      assert.equal(payload.api_key, undefined);
       assert.equal(payload.session_id, 'sess-1');
       assert.equal(payload.include_history, false);
       onOutput('계산 중');
@@ -308,7 +304,6 @@ test('runMultiAgentOrchestration runs collaborative feedback rounds and converge
   const result = await runMultiAgentOrchestration({
     items,
     orchestratorId: 'orch',
-    resolveApiKey: () => 'api-key',
     executeAgent: async (payload) => {
       if (payload.operation === 'sessions') return { draft: { id: 'collab-sess' } };
       calls.push(payload);
@@ -336,8 +331,8 @@ test('runMultiAgentOrchestration runs collaborative feedback rounds and converge
   assert.equal(result.runSummary.roundsCompleted, 2);
   assert.equal(result.runSummary.converged, true);
   assert.equal(calls.length, 4);
-  assert.equal(calls[0].api_key, 'api-key');
-  assert.equal(calls[1].api_key, 'api-key');
+  assert.equal(calls[0].api_key, undefined);
+  assert.equal(calls[1].api_key, undefined);
   assert.match(result.answer, /완벽합니다/);
   assert.equal(deliveries.some(d => d.type === 'orchestrator' && d.runSummary.roundsCompleted === 2), true);
   assert.equal(deliveries.some(d => d.type === 'output' && d.targetId === 'out' && d.record.output.includes('완벽합니다')), true);
@@ -463,7 +458,6 @@ test('runMultiAgentOrchestration branches through Input -> Orchestrator -> Route
       }
       return {};
     },
-    resolveApiKey: () => '',
     onEvent: ev => events.push(ev),
     onDeliver: d => deliveries.push(d),
   });
@@ -496,7 +490,6 @@ test('runMultiAgentOrchestration branches through Input -> Orchestrator -> Route
       if (payload.operation === 'run') routerRan += 1;
       return { answer: '입력 시작 실행 응답' };
     },
-    resolveApiKey: () => '',
     onDeliver: () => {},
   });
   assert.equal(routerRan, 1);
@@ -509,7 +502,6 @@ test('runMultiAgentOrchestration branches through Input -> Orchestrator -> Route
       if (payload.operation === 'run') fromRouterCalls += 1;
       return { answer: '라우터 시작 실행 응답' };
     },
-    resolveApiKey: () => '',
     onDeliver: () => {},
   });
   assert.equal(fromRouterCalls, 1);
@@ -548,7 +540,6 @@ test('createMultiAgentStore runInput and runRouter persist runtimeResults on Age
       }
       return { answer: 'AI 에이전트 오케스트레이션 최종 요약' };
     },
-    resolveApiKey: () => '',
   });
 
   await store.runInput('input');
@@ -627,7 +618,6 @@ test('runMultiAgentOrchestration routes JSON input payloads through JSON rule ro
       calledMessages.push(payload.message);
       return { answer: '청구서 INV-900 결제 처리 완료' };
     },
-    resolveApiKey: () => '',
   });
 
   const unsub = store.subscribeNode('generalAgent', () => {
@@ -661,7 +651,6 @@ test('agent abort rejects without CLI cancel requests, and busy errors retry', a
   const runPromise = runSingleAgent({
     items,
     agentId: 'agent',
-    resolveApiKey: () => '',
     signal: controller.signal,
     executeAgent: (payload) => {
       seen.push(payload);
@@ -687,7 +676,6 @@ test('agent abort rejects without CLI cancel requests, and busy errors retry', a
   const busyRes = await runSingleAgent({
     items,
     agentId: 'agent',
-    resolveApiKey: () => '',
     executeAgent: async (payload) => {
       if (payload.operation !== 'run') return {};
       attempt += 1;

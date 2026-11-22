@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { clearAccessToken, currentAccessToken, endServerSession, isCurrentAccountFailure, refreshAccessToken, sameSession, setAccessToken, tokenClaims } from './authSession.js';
 import { api } from '../api/client.js';
-import {saveAgentKey} from '../components/agentCredentials.js';
+import {purgeAgentKeys} from '../components/agentCredentials.js';
 
 const AuthContext = createContext(null);
 // Removed: access tokens are no longer persisted. Cleared on startup for old sessions.
@@ -33,13 +33,13 @@ export function AuthProvider({ children }) {
   const orcidRequest = useRef(null);
 
   const clearLocal = useCallback(() => {
-    saveAgentKey('');
+    purgeAgentKeys();
     setPendingMfa(null);setPendingOAuthEnrollment(null);oauthRequest.current=null;orcidRequest.current=null;
     clearAccessToken(); storeUser(null); setToken(null); setUser(null);
   }, []);
   const adoptSession = useCallback((accessToken, nextUser) => {
     if (nextUser) {
-      if (userRef.current?.user_id !== nextUser.user_id) saveAgentKey('');
+      if (userRef.current?.user_id !== nextUser.user_id) purgeAgentKeys();
       storeUser(nextUser); setUser(nextUser);
     }
     setToken(current => current && sameSession(current, accessToken) ? current : accessToken);
@@ -48,7 +48,7 @@ export function AuthProvider({ children }) {
     if(result.oauthEnrollmentRequired){setPendingOAuthEnrollment(result);setPendingMfa(null);return result;}
     if (result.mfaRequired) { setPendingOAuthEnrollment(null); setPendingMfa({ challengeToken: result.challengeToken }); return result; }
     if (!result.accessToken || !result.user) throw new Error('로그인을 완료하지 못했습니다. 다시 시도해주세요.');
-    if(readUser()?.user_id!==result.user.user_id)saveAgentKey('');
+    if(readUser()?.user_id!==result.user.user_id)purgeAgentKeys();
     setAccessToken(result.accessToken, result.user);
     storeUser(result.user);
     setAuthError(''); setPendingOAuthEnrollment(null); setPendingMfa(null);setToken(result.accessToken);setUser(result.user);setReady(true);

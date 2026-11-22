@@ -2629,6 +2629,14 @@ const messages = {
   "무료 사용분의 입력과 출력은 Google 제품 개선에 쓰이고 사람이 검토할 수 있습니다. 유료 사용분은 개선에 쓰지 않습니다.": ["免费用量的输入和输出会用于改进 Google 产品，并可能经人工审核。付费用量不会用于改进。","無料利用分の入力と出力は Google の製品改善に使われ、人が確認する場合があります。有料利用分は改善に使われません。","Les entrées et sorties de l'usage gratuit servent à améliorer les produits Google et peuvent être examinées par des personnes. L'usage payant n'est pas utilisé pour l'amélioration."],
   "OpenRouter는 입력을 학습에 쓰지 않지만, 실제 모델 제공사의 약관에 따라 입력이 학습에 쓰일 수 있습니다.": ["OpenRouter 不会用输入进行训练，但实际模型提供商的条款可能允许将其用于训练。","OpenRouter は入力を学習に使いませんが、実際のモデル提供元の規約により学習に使われる場合があります。","OpenRouter n'entraîne pas de modèles sur les entrées, mais les conditions du fournisseur du modèle peuvent le permettre."],
   "업무·개발 목적으로만 사용하며, EEA·스위스·영국에서는 유료 결제 키만 사용합니다.": ["仅用于业务或开发目的，在欧洲经济区、瑞士和英国仅使用付费密钥。","業務・開発目的でのみ使い、EEA・スイス・英国では有料キーのみ使います。","Je l'utilise uniquement à des fins professionnelles ou de développement, et seulement avec une clé payante dans l'EEE, en Suisse ou au Royaume-Uni."],
+  "AI 요청 전송을 취소했습니다.": ["已取消发送 AI 请求。", "AI リクエストの送信を取り消しました。", "Envoi de la requête à l’IA annulé."],
+  "Claude 모델": ["Claude 模型", "Claude モデル", "Modèle Claude"],
+  "Claude에 보낼 내용 확인": ["确认将发送给 Claude 的内容", "Claude に送信する内容を確認", "Vérifier le contenu à envoyer à Claude"],
+  "전송할 권한이 있는 내용만 보내세요. 개인정보나 기밀정보가 포함된 경우 취소하세요.": ["请仅发送您有权共享的内容。如含个人或机密信息，请取消。", "共有する権限がある内容のみを送信してください。個人情報や機密情報が含まれる場合はキャンセルしてください。", "Envoyez uniquement le contenu que vous êtes autorisé à partager. Annulez si des informations personnelles ou confidentielles sont incluses."],
+  "현재 요청, 새 객체 배치 위치 및 작업 중 생성된 내용이 {provider}(미국)에 전송됩니다. 개인정보나 기밀정보를 입력하지 마세요.": ["当前请求、新对象的放置位置和任务过程中生成的数据将发送给 {provider}（美国）。请勿输入个人或机密信息。", "現在のリクエスト、新規オブジェクトの配置位置、作業中に生成されたデータは {provider}（米国）に送信されます。個人情報や機密情報を入力しないでください。", "La requête en cours, la position du nouvel objet et les données produites pendant la tâche sont envoyées à {provider} (États-Unis). Ne saisissez aucune information personnelle ou confidentielle."],
+  "데이터 보관 정책": ["数据保留政策", "データ保持ポリシー", "Politique de conservation des données"],
+  "만 18세 이상이며, {provider}의 이용약관과 이용 정책을 지키겠습니다.": ["我已满 18 岁，并会遵守 {provider} 的服务条款和使用政策。", "私は 18 歳以上で、{provider} の利用規約と利用ポリシーを遵守します。", "J’ai au moins 18 ans et je respecterai les conditions et la politique d’utilisation de {provider}."],
+  "서버에 {provider}가 설정되면 에이전트를 사용할 수 있습니다.": ["服务器配置 {provider} 后即可使用代理。", "サーバーで {provider} が設定されるとエージェントを利用できます。", "L’agent sera disponible une fois {provider} configuré sur le serveur."],
 };
 
 export default messages;
