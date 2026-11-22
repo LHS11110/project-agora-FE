@@ -83,7 +83,7 @@ function paint(group, rows, origin, size, horizontal) {
 }
 
 function getTickSprite(state, label, colors, dpr) {
-  const key = `${dpr}:${colors.font}:${colors.text}:${label}`;
+  const key = `${dpr}:${colors.font}:${colors.text}:${colors.halo}:${label}`;
   let hit = state.sprites.get(key);
   if (hit) return hit;
   if (state.sprites.size > 512) state.sprites.clear();
@@ -92,7 +92,7 @@ function getTickSprite(state, label, colors, dpr) {
   if (!sctx) return null;
   sctx.font = colors.font;
   const tw = Math.ceil(sctx.measureText(label).width);
-  const w = Math.max(4, tw + 4);
+  const w = Math.max(4, tw + 6);
   const h = 14;
   c.width = Math.max(1, Math.round(w * dpr));
   c.height = Math.max(1, Math.round(h * dpr));
@@ -100,8 +100,15 @@ function getTickSprite(state, label, colors, dpr) {
   sctx.font = colors.font;
   sctx.textAlign = 'left';
   sctx.textBaseline = 'alphabetic';
+  // Same halo as the SVG labels (canvas-axis-ticks.css) so moving and settled ticks match.
+  sctx.lineJoin = 'round';
+  sctx.lineWidth = 3;
+  sctx.strokeStyle = colors.halo;
+  sctx.globalAlpha = 0.9;
+  sctx.strokeText(label, 3, 11);
+  sctx.globalAlpha = 1;
   sctx.fillStyle = colors.text;
-  sctx.fillText(label, 2, 11);
+  sctx.fillText(label, 3, 11);
   hit = { canvas: c, w, h, tw };
   state.sprites.set(key, hit);
   return hit;
@@ -119,7 +126,7 @@ function syncStripVisibility(el, stateKey, state, visible) {
   }
 }
 
-function drawFastStrip(canvas, ctxKey, trKey, cacheKey, state, camera, origin, viewportWidth, viewportHeight, horizontal, colors) {
+function drawFastStrip(canvas, ctxKey, trKey, cacheKey, state, camera, origin, viewportWidth, viewportHeight, horizontal, colors, trimEdges = false) {
   if (!canvas || !viewportWidth || !viewportHeight) return;
   const dpr = Math.min(2, globalThis.devicePixelRatio || 1);
   const left = !horizontal && origin > viewportWidth - 100;
@@ -128,6 +135,8 @@ function drawFastStrip(canvas, ctxKey, trKey, cacheKey, state, camera, origin, v
     ? Math.round(origin - 22)
     : Math.round(left ? origin - 100 : origin - 6);
   const localOrigin = origin - stripPos;
+  // The visible viewport decides the step; the overscanned strip only extends it.
+  const visibleStep = axisTickLayout(camera, { width: viewportWidth, height: viewportHeight }).step;
 
   // Reuse the overscanned strip canvas during pure panning by translating only.
   const cached = state[cacheKey];
@@ -139,6 +148,8 @@ function drawFastStrip(canvas, ctxKey, trKey, cacheKey, state, camera, origin, v
     && cached.scale === camera.scale
     && cached.textFlip === textFlip
     && cached.colors === colors
+    && cached.step === visibleStep
+    && !cached.trimmed && !trimEdges
     && Math.abs(localOrigin - cached.localOrigin) < 0.75
   ) {
     const panDelta = horizontal ? (camera.x - cached.panOrigin) : (camera.y - cached.panOrigin);
@@ -182,8 +193,14 @@ function drawFastStrip(canvas, ctxKey, trKey, cacheKey, state, camera, origin, v
   const expandedLayout = axisTickLayout(expandedCamera, {
     width: horizontal ? cssW : viewportWidth,
     height: horizontal ? viewportHeight : cssH,
-  });
-  const rows = horizontal ? expandedLayout.x : expandedLayout.y;
+  }, undefined, visibleStep);
+  // While zooming the strip is redrawn every frame, so hide the labels the settled view
+  // hides near the viewport edges (see axisTicks.js); otherwise they pop out on settle.
+  const length = horizontal ? viewportWidth : viewportHeight;
+  const allRows = horizontal ? expandedLayout.x : expandedLayout.y;
+  const rows = trimEdges
+    ? allRows.filter(row => row.position - STRIP_OVERSCAN >= 18 && row.position - STRIP_OVERSCAN <= length - 42)
+    : allRows;
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssW, cssH);
@@ -194,6 +211,8 @@ function drawFastStrip(canvas, ctxKey, trKey, cacheKey, state, camera, origin, v
     scale: camera.scale,
     textFlip,
     colors,
+    step: visibleStep,
+    trimmed: trimEdges,
     localOrigin,
     panOrigin: horizontal ? camera.x : camera.y,
   };
@@ -222,7 +241,7 @@ function drawFastStrip(canvas, ctxKey, trKey, cacheKey, state, camera, origin, v
     if (!sprite) continue;
     const dx = horizontal
       ? Math.round(row.position - sprite.w * 0.5)
-      : Math.round(left ? localOrigin + textX - 2 - sprite.tw : localOrigin + textX - 2);
+      : Math.round(left ? localOrigin + textX - 3 - sprite.tw : localOrigin + textX - 3);
     const dy = horizontal
       ? Math.round(localOrigin + textY - 11)
       : Math.round(row.position + 3 - 11);
@@ -238,16 +257,27 @@ const CanvasAxisTicks = memo(function CanvasAxisTicks({ boardRef, camera, showXA
     let width = stage.clientWidth, height = stage.clientHeight, last = '', lastSvg = '', lastW = -1, lastH = -1, lastStep = null;
     let svgHidden = false, cachedThemeKey = '', cachedColors = null;
     const canvasState = { ctxX: null, ctxY: null, trX: '', trY: '', cacheX: null, cacheY: null, visX: false, visY: false, sprites: new Map() };
+    // The label halo must match the canvas behind it: a white halo on the tinted stage
+    // showed as blotches that clipped grid dots ("·100'") next to every label.
+    const stageBackground = () => {
+      for (let node = stage; node && node.nodeType === 1; node = node.parentElement) {
+        const color = getComputedStyle(node).backgroundColor;
+        if (color && color !== 'transparent' && !/^rgba\([^)]*,\s*0\)$/.test(color)) return color;
+      }
+      return '';
+    };
     const readColors = () => {
       const page = stage.closest('.canvas-app-page');
-      const themeKey = page?.dataset?.theme || 'light';
+      // A custom canvas color is set inline on the stage; include it so the halo follows it.
+      const themeKey = `${page?.dataset?.theme || 'light'}|${stage.style.backgroundColor}`;
       if (cachedColors && cachedThemeKey === themeKey) return cachedColors;
       cachedThemeKey = themeKey;
       const cs = getComputedStyle(svg.current);
       const ink = cs.getPropertyValue('--ink-muted').trim() || '#77798d';
-      const surf = cs.getPropertyValue('--surface').trim() || '#ffffff';
+      const halo = stageBackground() || cs.getPropertyValue('--surface').trim() || '#ffffff';
       const mono = cs.getPropertyValue('--mono').trim() || 'monospace';
-      cachedColors = { line: ink, text: ink, halo: surf, font: `10px ${mono}` };
+      svg.current.style.setProperty('--axis-label-halo', halo);
+      cachedColors = { line: ink, text: ink, halo, font: `10px ${mono}` };
       return cachedColors;
     };
     const update = (event) => {
@@ -261,10 +291,12 @@ const CanvasAxisTicks = memo(function CanvasAxisTicks({ boardRef, camera, showXA
         const colors = readColors();
         syncStripVisibility(fastX.current, 'visX', canvasState, Boolean(c.showXAxis));
         syncStripVisibility(fastY.current, 'visY', canvasState, Boolean(c.showYAxis));
-        if (c.showXAxis) drawFastStrip(fastX.current, 'ctxX', 'trX', 'cacheX', canvasState, c.camera, layout.displayY ?? layout.originY, width, height, true, colors);
-        if (c.showYAxis) drawFastStrip(fastY.current, 'ctxY', 'trY', 'cacheY', canvasState, c.camera, layout.displayX ?? layout.originX, width, height, false, colors);
+        const zooming = stage.classList.contains('camera-zooming');
+        if (c.showXAxis) drawFastStrip(fastX.current, 'ctxX', 'trX', 'cacheX', canvasState, c.camera, layout.displayY ?? layout.originY, width, height, true, colors, zooming);
+        if (c.showYAxis) drawFastStrip(fastY.current, 'ctxY', 'trY', 'cacheY', canvasState, c.camera, layout.displayX ?? layout.originX, width, height, false, colors, zooming);
         return;
       }
+      readColors();
       syncStripVisibility(fastX.current, 'visX', canvasState, false);
       syncStripVisibility(fastY.current, 'visY', canvasState, false);
       if (svgHidden) { svg.current.style.visibility = ''; svgHidden = false; }

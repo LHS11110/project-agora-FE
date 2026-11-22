@@ -29,12 +29,16 @@ export default class CanvasVoiceCall {
   return members;
  }
  /** Moves to another call channel, keeping the microphone if a call is active. */
- setChannel(channel){
+ setChannel(channel,{silent=false}={}){
   const next=typeof channel==='string'&&/^[A-Za-z0-9_-]{1,96}$/.test(channel)?channel:'general';
   if(next===this.channel)return;
   for(const id of [...this.links.keys()])this.drop(id);
   this.channel=next;
-  if(this.stream){this.announce();for(const peer of this.peers.values())this.connect(peer);}
+  if(this.stream){
+   this.clearAllHandoffs();this.clearCueState();
+   if(!silent)this.onCue?.('voice_channel_switch');
+   this.announce();for(const peer of this.peers.values())this.connect(peer);
+  }
   this.emit();
  }
  signal(event,link=null){
@@ -112,8 +116,8 @@ export default class CanvasVoiceCall {
  }
  watchScreen(id){this.watchingScreen=id;this.emit();}
  stopScreen({silent=false,broadcast=true}={}){const screen=this.screenStream;if(!screen)return;this.screenStream=null;this.stopScreenAudio();for(const link of this.links.values()){if(link.screenSender){try{link.pc.removeTrack(link.screenSender);}catch{}link.screenSender=null;}}screen.getTracks().forEach(t=>{t.onended=null;t.stop();});if(broadcast)this.announce();if(!silent&&this.stream)this.onCue?.('screen_share_stop');this.emit();}
- mute(){if(!this.stream)return;this.muted=!this.muted;this.applyAudioState();this.announce();this.emit();}
- deafen(){this.deafened=!this.deafened;this.applyAudioState();this.emit();}
+ mute(){if(!this.stream)return;this.muted=!this.muted;this.applyAudioState();this.announce();this.onCue?.(this.muted?'voice_mute':'voice_unmute');this.emit();}
+ deafen(){this.deafened=!this.deafened;this.applyAudioState();if(this.stream)this.onCue?.(this.deafened?'voice_deafen':'voice_undeafen');this.emit();}
  applyAudioState(){
   const paused=this.reconnecting&&!this.hasLiveHandoff();
   if(this.screenMix)this.screenMix.track.enabled=!paused;

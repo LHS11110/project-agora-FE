@@ -80,15 +80,39 @@ test('playSoundCue plays all four cues, deduplicates rapid bursts, and handles s
     assert.equal(playSoundCue('screen_share_stop', { now: 1060 }), true);
     assert.equal(playSoundCue('voice_leave', { now: 1100 }), true);
     assert.equal(playSoundCue('mention', { now: 1200 }), true);
-    assert.equal(playSoundCue('unknown_cue', { now: 1300 }), false);
+    assert.equal(playSoundCue('voice_channel_switch', { now: 1220 }), true);
+    assert.equal(playSoundCue('voice_mute', { now: 1240 }), true);
+    assert.equal(playSoundCue('voice_unmute', { now: 1260 }), true);
+    assert.equal(playSoundCue('voice_deafen', { now: 1280 }), true);
+    assert.equal(playSoundCue('voice_undeafen', { now: 1300 }), true);
+    assert.equal(playSoundCue('unknown_cue', { now: 1320 }), false);
 
     const expectedOscillators = SOUND_CUE_PATTERNS.voice_join.length
       + SOUND_CUE_PATTERNS.screen_share_start.length
       + SOUND_CUE_PATTERNS.screen_share_stop.length
       + SOUND_CUE_PATTERNS.voice_leave.length
-      + SOUND_CUE_PATTERNS.mention.length;
+      + SOUND_CUE_PATTERNS.mention.length
+      + SOUND_CUE_PATTERNS.voice_channel_switch.length
+      + SOUND_CUE_PATTERNS.voice_mute.length
+      + SOUND_CUE_PATTERNS.voice_unmute.length
+      + SOUND_CUE_PATTERNS.voice_deafen.length
+      + SOUND_CUE_PATTERNS.voice_undeafen.length;
     assert.equal(mock.oscillators.length, expectedOscillators);
-    assert.deepEqual(mock.events.map(e => e.detail.cue), ['voice_join', 'screen_share_start', 'screen_share_stop', 'voice_leave', 'mention']);
+    assert.deepEqual(
+      mock.events.map(e => e.detail.cue),
+      [
+        'voice_join',
+        'screen_share_start',
+        'screen_share_stop',
+        'voice_leave',
+        'mention',
+        'voice_channel_switch',
+        'voice_mute',
+        'voice_unmute',
+        'voice_deafen',
+        'voice_undeafen',
+      ],
+    );
 
     resetSoundCueState();
     const suspended = installMockAudioContext('suspended');

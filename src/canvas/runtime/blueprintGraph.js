@@ -1,7 +1,8 @@
 import MinHeap from '../MinHeap.js';
 import { contentMode, isTextContent } from '../content/contentPresentation.js';
+import { isAgentCanvasObject } from '../agents/agentCanvasModel.js';
 export const isBlueprintCode = item => isTextContent(item) && contentMode(item) === 'code';
-export const isBlueprintNode = item => item?.kind === 'shape' && ['executor', 'output'].includes(item.runtimeRole);
+export const isBlueprintNode = item => item?.kind === 'shape' && ['executor', 'output'].includes(item.runtimeRole) && !isAgentCanvasObject(item);
 
 /** Directed control flow is a DAG; output nodes may forward to more output nodes. */
 export function resolveBlueprint(items, executorId) { return resolveGraph(items,executorId,false); }
@@ -9,7 +10,7 @@ export function resolveCode(items, codeId) { return resolveGraph(items,codeId,tr
 
 function resolveGraph(items, executorId, codeOnly) {
   executorId = String(executorId);
-  if (codeOnly ? !isBlueprintCode(items[executorId]) : items[executorId]?.runtimeRole !== 'executor') throw new Error(codeOnly?'코드 객체가 필요합니다.':'실행 객체가 필요합니다.');
+  if (codeOnly ? !isBlueprintCode(items[executorId]) : (items[executorId]?.runtimeRole !== 'executor' || isAgentCanvasObject(items[executorId]))) throw new Error(codeOnly?'코드 객체가 필요합니다.':'실행 객체가 필요합니다.');
   const adjacent = new Map();
   for (const [, edge] of Object.entries(items).filter(([, item]) => item?.kind === 'connector').sort(([a], [b]) => a.localeCompare(b))) {
     const from = String(edge.from), to = String(edge.to), source = items[from], target = items[to];

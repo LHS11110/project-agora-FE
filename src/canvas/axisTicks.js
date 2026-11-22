@@ -27,17 +27,24 @@ function ticks(origin, length, scale, step, direction) {
   }
   return result;
 }
-/** Bounded by the viewport, independent of scene object count or world extent. */
-export function axisTickLayout(camera, viewport, space = CANVAS_SPACE) {
+/**
+ * Bounded by the viewport, independent of scene object count or world extent.
+ * `forcedStep` lets an overscanned strip reuse the visible viewport's step, so the
+ * labels drawn while moving match the ones shown once the camera settles.
+ */
+export function axisTickLayout(camera, viewport, space = CANVAS_SPACE, forcedStep = null) {
   const {scale,x,y} = camera;
   const width = Math.max(0, viewport.width), height = Math.max(0, viewport.height);
   const originX = space.width * scale / 2 + x, originY = space.height * scale / 2 + y;
   if (!(scale > 0) || ![scale,x,y,width,height].every(Number.isFinite)) return {step:null,x:[],y:[],originX,originY};
   let step = niceAxisStep(80 / scale);
   if (!step || !Number.isFinite(step)) return {step:null,x:[],y:[],originX,originY};
-  // Reserve enough screen space even for long labels after a distant pan.
-  const longest = Math.max(formatAxisValue(-originX / scale).length,formatAxisValue((width-originX)/scale).length);
-  step = niceAxisStep(Math.max(80,Math.min(220,longest*6+20)) / scale);
+  // Reserve enough screen space even for long labels after a distant pan. Measure the
+  // labels that can actually appear (multiples of the step): raw edge coordinates such as
+  // -54.99999375 during a zoom looked long and flipped the step between 5 and 10.
+  const edgeLabel = value => formatAxisValue(Math.round(value / step) * step).length;
+  const longest = Math.max(edgeLabel(-originX / scale), edgeLabel((width - originX) / scale));
+  step = forcedStep > 0 ? forcedStep : niceAxisStep(Math.max(80,Math.min(220,longest*6+20)) / scale);
   if (!step || !Number.isFinite(step)) return {step:null,x:[],y:[],originX,originY};
   return {step,originX,originY,
     displayX:Math.max(8,Math.min(Math.max(8,width-8),originX)),

@@ -1,21 +1,34 @@
 import {useEffect,useRef} from 'react';
 import {selectedRunnableForShortcut} from './codeExecutionShortcut.js';
+import {isAgentCanvasObject,isAgentOrchestratorItem} from '../agents/agentCanvasModel.js';
 
 export default function useCodeExecutionShortcut(options) {
   const latest=useRef(options);latest.current=options;
   useEffect(()=>{
     let mounted=true;
     const onKeyDown=event=>{
-      const {selectedIds,selectedIdsRef,itemsRef,editingId,editingIdRef,sessionRef,dragRef,store,onMessage,canExecuteItem}= latest.current;
+      const {selectedIds,selectedIdsRef,itemsRef,editingId,editingIdRef,sessionRef,dragRef,store,multiAgentStore,onMessage,canExecuteItem}= latest.current;
       if(!sessionRef.current.editable||dragRef.current)return;
       const selection=(selectedIdsRef?.current??selectedIds).filter(id=>Boolean(itemsRef.current[id]));
       const id=selectedRunnableForShortcut(event,selection,itemsRef.current,editingIdRef?editingIdRef.current:editingId);
       if(id==null)return;
+      const targetItem=itemsRef.current[id];
+      const isAgent=isAgentCanvasObject(targetItem)&&Boolean(multiAgentStore);
       // Capture before Monaco so the shortcut never inserts a newline or runs twice.
       event.preventDefault();event.stopPropagation();
-      if(event.repeat||store.isRunning())return;
-      if(canExecuteItem&&!canExecuteItem(itemsRef.current[id])){onMessage('이 그룹에는 실행 권한이 없습니다.');return;}
-      const run=itemsRef.current[id]?.kind==='shape'&&itemsRef.current[id]?.runtimeRole==='executor'?store.run(id):store.runCode(id);
+      if(event.repeat||(isAgent?multiAgentStore.isRunning():store.isRunning()))return;
+      if(canExecuteItem&&!canExecuteItem(targetItem)){onMessage('이 그룹에는 실행 권한이 없습니다.');return;}
+      if(isAgent){
+        const run=isAgentOrchestratorItem(targetItem)?multiAgentStore.runOrchestrator(id):multiAgentStore.runAgent(id);
+        void run.then(()=>{
+          if(!mounted)return;
+          const state=multiAgentStore.getNodeState(id);
+          if(state?.error)onMessage(state.error);
+          else if(state?.completed)onMessage(state.failed?'에이전트 작업에 실패했습니다.':'에이전트 작업을 완료했습니다.');
+        });
+        return;
+      }
+      const run=targetItem?.kind==='shape'&&targetItem?.runtimeRole==='executor'?store.run(id):store.runCode(id);
       void run.then(()=>{
         if(!mounted)return;
         const state=store.get(id);

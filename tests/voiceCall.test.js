@@ -376,3 +376,45 @@ test('call channels connect only peers in the same channel and moving keeps the 
  call.setChannel('../bad');assert.equal(call.channel,'general');
  call.close();
 });
+
+test('switching active voice rooms and toggling mute or deafen emit distinct sound cues',async()=>{
+ const cues=[];
+ const tracks=[{kind:'audio',enabled:true,stop(){},getSettings(){return {channelCount:1};}}];
+ const call=new CanvasVoiceCall({
+  send:()=>true,
+  media:{getUserMedia:async()=>({getAudioTracks:()=>tracks,getTracks:()=>tracks})},
+  Peer:FakePeer,
+  audio:()=>({muted:false,volume:1,pause(){},play:async()=>{}}),
+  AudioContext:null,
+  onCue:cue=>cues.push(cue),
+ });
+ try{
+  call.handle({type:'rtc_peers',self_peer_id:'a',peers:[]});
+
+  // Idle channel selection and idle deafen/mute toggles stay silent.
+  call.setChannel('standup');
+  call.mute();
+  call.deafen();
+  call.deafen();
+  assert.deepEqual(cues,[]);
+
+  await call.join('standup');
+  await call.join('standup'); // clicking the same active channel does not replay switch cue
+  await call.join('design');
+  call.mute();
+  call.mute();
+  call.deafen();
+  call.deafen();
+  call.leave();
+
+  assert.deepEqual(cues,[
+   'voice_join',
+   'voice_channel_switch',
+   'voice_mute',
+   'voice_unmute',
+   'voice_deafen',
+   'voice_undeafen',
+   'voice_leave',
+  ]);
+ }finally{call.close();}
+});

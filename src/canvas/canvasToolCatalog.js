@@ -33,6 +33,8 @@ export const canvasToolCategories = [
     { id: 'executor', label: '실행 객체', description: '연결된 코드 실행', icon: 'code' },
     { id: 'code', label: '코드 객체', description: '블루프린트 코드 편집', icon: 'code' },
     { id: 'execution-output', label: '실행 결과 객체', description: '연결된 코드의 출력 표시', icon: 'document' },
+    { id: 'agent-node', label: 'AI 에이전트 객체', description: '프롬프트와 데이터 그래프를 연결하는 에이전트', icon: 'sparkle' },
+    { id: 'agent-orchestrator', label: '에이전트 오케스트레이터', description: '여러 AI 에이전트의 협업 그래프를 조율', icon: 'network' },
     { id: 'question', label: '문제 객체', description: '객관식·주관식 문제와 수동 채점', icon: 'document' },
     { id: 'table', label: '테이블', icon: 'table' },
     { id: 'chart', label: '그래프', description: '그래프 추가', icon: 'chart' },

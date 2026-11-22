@@ -43,6 +43,8 @@ import Icon from '../Icon.jsx';
 import ArrowHeadControls from '../ArrowHeadControls.jsx';
 import { MAX_TABLE_COLUMNS, MAX_TABLE_ROWS } from '../tableModel.js';
 import { LASER_COLOR, MAX_STROKE_WIDTH, MAX_ZOOM_SENSITIVITY, MIN_STROKE_WIDTH, MIN_ZOOM_SENSITIVITY, stickyNoteColors } from '../../canvas/canvasConstants.js';
+import { isAgentCanvasObject, isAgentNodeItem, isAgentOrchestratorItem } from '../../canvas/agents/agentCanvasModel.js';
+import { AgentEdgeControls, AgentNodeInspector, AgentOrchestratorInspector, AgentToolHint } from '../../canvas/agents/AgentInspectorSection.jsx';
 
 const KIND_EDIT_LABELS = {
   image: '이미지 편집', shape: '도형 편집', text: '텍스트 편집', note: '포스트잇 편집',
@@ -131,6 +133,8 @@ const InspectorBody = memo(function CanvasInspectorPanel({
   updateNewConnectorHead,
   updateNewShapeArrowHead,
   updateShapeArrowBend,
+  multiAgentStore,
+  updateAgentItem,
   zoomSensitivity
 }) {
   useUiLocale();
@@ -187,11 +191,11 @@ const InspectorBody = memo(function CanvasInspectorPanel({
     ? { className: 'object-property-fields', disabled: true }
     : { className: 'object-property-fields' };
   const headingTitle = activeTool !== 'select'
-    ? ui('{tool} 설정', {tool:ui(({ anchor:'앵커',frame:'프레임',project:'프로젝트 관리',notebook:'주피터 노트북',terminal:'터미널','continuous-value':'연속 값','discrete-value':'이산 값','user-group': '사용자 그룹', pen: '드로잉', laser: '레이저 포인터', eraser: '지우개', connect: '연결', shape: '도형', chart: '그래프', question: '문제', text: '텍스트', note: '포스트잇', math: '수식', table: '테이블', code: '코드', link: '동영상·링크' })[activeTool] || ui("도구"))})
+    ? ui('{tool} 설정', {tool:ui(({ anchor:'앵커',frame:'프레임',project:'프로젝트 관리',notebook:'주피터 노트북',terminal:'터미널','continuous-value':'연속 값','discrete-value':'이산 값','agent-node':'AI 에이전트 객체','agent-orchestrator':'에이전트 오케스트레이터','user-group': '사용자 그룹', pen: '드로잉', laser: '레이저 포인터', eraser: '지우개', connect: '연결', shape: '도형', chart: '그래프', question: '문제', text: '텍스트', note: '포스트잇', math: '수식', table: '테이블', code: '코드', link: '동영상·링크' })[activeTool] || ui("도구"))})
     : !hasSelection
     ? ui('환경 설정')
     : selectedObjectIds.length === 1
-    ? ui(KIND_EDIT_LABELS[selectedItem?.kind] || '객체 편집')
+    ? ui(isAgentNodeItem(selectedItem) ? 'AI 에이전트 편집' : isAgentOrchestratorItem(selectedItem) ? '오케스트레이터 편집' : KIND_EDIT_LABELS[selectedItem?.kind] || '객체 편집')
     : ui('객체 {count}개 편집', { count: selectedObjectIds.length });
   const envSections = <>
     <details className="inspector-section inspector-timer-section" open><summary className="inspector-timer-summary"><span className="inspector-label">{ui('개인 타이머')}</span></summary>{personalTimer}</details>
@@ -228,10 +232,12 @@ const InspectorBody = memo(function CanvasInspectorPanel({
             onRevealAfterAnimation={onRevealAfterAnimation}
           />
           {selectedObjectIds.length === 1 && selectedItem && <button type="button" className="inspector-secondary-action" disabled={!canWriteItem(selectedItem)} onClick={() => onOpenComments(primarySelectedItemId)}><Icon name="chat" size={14} /><span>{ui('객체 댓글')}</span></button>}
-          {(['executor', 'output'].includes(selectedItem?.runtimeRole) || (isTextContent(selectedItem) && contentMode(selectedItem) === 'code')) && <section className="inspector-section"><strong className="inspector-label">{ui('블루프린트 실행')}</strong><p className="inspector-hint">{ui('실행 객체 → 코드 객체 → 결과 객체 순서로 연결하세요. 실행 객체의 코드 실행 버튼을 눌러 실행합니다.')}</p><p className="inspector-hint">{ui('연결 화살표의 방향을 따릅니다. 결과 객체끼리 연결하면 같은 출력을 여러 곳에서 볼 수 있습니다.')}</p></section>}
+          {((['executor', 'output'].includes(selectedItem?.runtimeRole) && !isAgentCanvasObject(selectedItem)) || (isTextContent(selectedItem) && contentMode(selectedItem) === 'code')) && <section className="inspector-section"><strong className="inspector-label">{ui('블루프린트 실행')}</strong><p className="inspector-hint">{ui('실행 객체 → 코드 객체 → 결과 객체 순서로 연결하세요. 실행 객체의 코드 실행 버튼을 눌러 실행합니다.')}</p><p className="inspector-hint">{ui('연결 화살표의 방향을 따릅니다. 결과 객체끼리 연결하면 같은 출력을 여러 곳에서 볼 수 있습니다.')}</p></section>}
           <ObjectClipboardControls actions={objectClipboard} selectedCount={selectedObjectIds.length} blocked={clipboardBlocked} />
           </>}
           {selectionDetailStage >= 2 && <PropertyFieldsTag {...propertyFieldsProps}>
+            {isAgentNodeItem(selectedItem) && <AgentNodeInspector key={primarySelectedItemId} id={primarySelectedItemId} item={selectedItem} items={items} store={multiAgentStore} onPatchAgent={(targetId, patch) => updateAgentItem?.(targetId, patch)} onPatchConnector={(connId, patch) => updateAgentItem?.(connId, patch)} onNavigateObject={onNavigateObject} />}
+            {isAgentOrchestratorItem(selectedItem) && <AgentOrchestratorInspector key={primarySelectedItemId} id={primarySelectedItemId} item={selectedItem} items={items} store={multiAgentStore} onPatchOrchestrator={(targetId, patch) => updateAgentItem?.(targetId, patch)} onNavigateObject={onNavigateObject} />}
             {selectedItem?.kind === 'chart' && <ChartControls key={primarySelectedItemId} item={selectedItem} onChange={patch => updateChartItem(primarySelectedItemId, patch)} />}
             {portfolioActions && <PortfolioControls items={items} selectedIds={selectedObjectIds} canWriteItem={canWriteItem} frames={portfolioFrames} actions={portfolioActions} viewing={portfolioViewing} activeTool={activeTool} />}
             {showBatchCornerControls && <ObjectCornerControls item={selectedItem || items[cornerState.targetIds[0]]} value={cornerState.value} count={cornerState.targetIds.length} onChange={value => updateObjectCornerStyle(cornerState.targetIds, value)} />}
@@ -244,6 +250,7 @@ const InspectorBody = memo(function CanvasInspectorPanel({
             {selectedShapes.length === 1 && <ShapeGeometryControls item={selectedShapes[0][1]} onChange={(field, value) => updateShapeAppearance([selectedShapes[0][0]], field, value)} />}
             {selectedShapes.length === 1 && isVolumeShape(editableShape.shapeType) && <section className="inspector-section"><strong className="inspector-label">{ui('입체 표현')}</strong><div className="theme-switch" role="group" aria-label={ui('입체 표현')}><button type="button" className={editableShape.volumeStyle !== 'wireframe' ? 'active' : ''} aria-pressed={editableShape.volumeStyle !== 'wireframe'} onClick={() => updateShapeAppearance([selectedShapes[0][0]], 'volumeStyle', 'solid')}>{ui('면 표시')}</button><button type="button" className={editableShape.volumeStyle === 'wireframe' ? 'active' : ''} aria-pressed={editableShape.volumeStyle === 'wireframe'} onClick={() => updateShapeAppearance([selectedShapes[0][0]], 'volumeStyle', 'wireframe')}>{ui('윤곽선')}</button></div></section>}
             {selectedConnector && <LogicPortControls item={selectedConnector} items={items} onChange={(field, value) => updateConnectorAppearance(primarySelectedItemId, field, value)} />}
+            {selectedConnector && <AgentEdgeControls connector={selectedConnector} items={items} onPatchConnector={patch => updateAgentItem?.(primarySelectedItemId, patch)} />}
             {selectedConnector && <ConnectorLabelControls item={selectedConnector} onChange={(field, value) => updateConnectorAppearance(primarySelectedItemId, field, value)} />}
             {isTextContent(selectedItem) && <ContentRenderControls item={selectedItem} onChange={(field, value) => updateContentSetting(primarySelectedItemId, field, value)} />}
             {selectedTextIds.length > 0 && <section className="inspector-section">
@@ -299,6 +306,7 @@ const InspectorBody = memo(function CanvasInspectorPanel({
         {activeTool === 'select' && !hasSelection && portfolioActions && portfolioFrames.length > 0 && <PortfolioControls items={items} selectedIds={selectedObjectIds} canWriteItem={canWriteItem} frames={portfolioFrames} actions={portfolioActions} viewing={portfolioViewing} activeTool={activeTool} />}
         {activeTool !== 'select' && <>
           {(['executor', 'execution-output', 'code'].includes(activeTool)) && <section className="inspector-section"><strong className="inspector-label">{ui('블루프린트 실행')}</strong><p className="inspector-hint">{ui('실행 객체 → 코드 객체 → 결과 객체 순서로 연결하세요. 실행 객체의 코드 실행 버튼을 눌러 실행합니다.')}</p><p className="inspector-hint">{ui('연결 화살표의 방향을 따릅니다. 결과 객체끼리 연결하면 같은 출력을 여러 곳에서 볼 수 있습니다.')}</p></section>}
+          {(['agent-node', 'agent-orchestrator'].includes(activeTool)) && <AgentToolHint tool={activeTool} />}
           {activeTool === 'frame' && portfolioActions && <PortfolioControls items={items} selectedIds={selectedObjectIds} canWriteItem={canWriteItem} frames={portfolioFrames} actions={portfolioActions} viewing={portfolioViewing} activeTool={activeTool} />}
           {activeTool === 'shape' && <>
             <section className="inspector-section"><strong className="inspector-label">{ui("새 도형 스타일")}</strong><VectorStyleSelector value={shapeVisualStyle} onChange={setShapeVisualStyle} /></section>

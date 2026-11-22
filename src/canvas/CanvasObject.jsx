@@ -4,7 +4,8 @@ import {useObjectAnimation} from './portfolio/animationStore.js';
 import AnimatedVector from './portfolio/AnimatedVector.jsx';
 import UploadedMedia from './media/UploadedMedia.jsx';
 import ProjectObject from './projects/ProjectObject.jsx';
-import {objectContentPropsEqual} from './objectContentCache.js';
+import {objectContentPropsEqual,objectContentView} from './objectContentCache.js';
+import {renderValueEqual} from './canvasRenderEquality.js';
 import {selectedScrollArea} from './editorWheel.js';
 import RawNotebookObject from './notebook/NotebookObject.jsx';
 import RawNotebookCellObject from './notebook/NotebookCellObject.jsx';
@@ -29,6 +30,9 @@ import ConnectorBendHandles from '../components/canvas/ConnectorBendHandles.jsx'
 import RawUnifiedTextContent from './content/UnifiedTextContent.jsx';
 import RawTerminalObject from './runtime/TerminalObject.jsx';
 import RawBlueprintNode from './runtime/BlueprintNode.jsx';
+import RawCanvasAgentNode from './agents/CanvasAgentNode.jsx';
+import RawCanvasAgentOrchestratorNode from './agents/CanvasAgentOrchestratorNode.jsx';
+import { isAgentNodeItem, isAgentOrchestratorItem } from './agents/agentCanvasModel.js';
 import RuntimeCodeFrame from './runtime/RuntimeCodeFrame.jsx';
 import { contentMode, isTextContent } from './content/contentPresentation.js';
 import RawConnectorLabel from '../components/canvas/ConnectorLabel.jsx';
@@ -64,6 +68,9 @@ const PdfDocumentContent=memo(RawPdfDocumentContent,objectContentPropsEqual);
 const UserGroupContent=memo(RawUserGroupContent,objectContentPropsEqual);
 const TerminalObject=memo(RawTerminalObject,objectContentPropsEqual);
 const BlueprintNode=memo(RawBlueprintNode,objectContentPropsEqual);
+const agentContentPropsEqual=(before,after)=>before.id===after.id&&before.allItems===after.allItems&&before.store===after.store&&before.selected===after.selected&&before.readOnly===after.readOnly&&before.canExecute===after.canExecute&&before.onChange===after.onChange&&renderValueEqual(objectContentView(before.item),objectContentView(after.item));
+const CanvasAgentNode=memo(RawCanvasAgentNode,agentContentPropsEqual);
+const CanvasAgentOrchestratorNode=memo(RawCanvasAgentOrchestratorNode,agentContentPropsEqual);
 const UnifiedTextContent=memo(RawUnifiedTextContent,objectContentPropsEqual);
 const EditableTable=memo(RawEditableTable,objectContentPropsEqual);
 const ChartView=memo(RawChartView,objectContentPropsEqual);
@@ -72,7 +79,7 @@ const QuestionCard=memo(RawQuestionCard,objectContentPropsEqual);
 const SharedMediaContent=memo(RawSharedMediaContent,objectContentPropsEqual);
 const ConnectorLabel=memo(RawConnectorLabel,objectContentPropsEqual);
 
-function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=false, canExecute=true, id, item, notebookCells=[],notebookSiblingCells=[],notebookParent=null,notebookOrder=0,notebookCellCount=0,bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, token, runtimeStore, onUndo, onStartEditing, onTextChange, onTextColorChange, onMetadataChange, onFormulaChange, onTableChange, onQuestionChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
+function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=false, canExecute=true, id, item, allItems=null, multiAgentStore=null, notebookCells=[],notebookSiblingCells=[],notebookParent=null,notebookOrder=0,notebookCellCount=0,bounds, selected, allowSingleSelectionControls, activeTool, connectionStartId, editing, dirty, remoteEditors = [], connectorCurve, viewSize, token, runtimeStore, onUndo, onStartEditing, onTextChange, onTextColorChange, onMetadataChange, onFormulaChange, onTableChange, onQuestionChange, onStopEditing, onSave, onPointerDown, onResizeStart, onArrowBendStart, onPointerMove, onPointerUp, onCopy, onConnectorDoubleClick }) {
   useUiLocale();
   const fieldId = useId();
   const presentation=useContext(PresentationContext);
@@ -268,6 +275,8 @@ function CanvasObjectView({ presentationHidden=false, mediaWritable, readOnly=fa
   if (item.kind === 'shape' && item.runtimeRole==='notebook') return withResizeHandles(<div className={`${classes} notebook-object`} style={style} {...handlers}><NotebookObject id={id} item={item} cellItems={notebookCells} store={runtimeStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} canExecute={canExecute} onChange={onQuestionChange}/></div>);
   if (item.kind === 'shape' && item.runtimeRole==='notebook-cell') return withResizeHandles(<div className={`${classes} notebook-cell-object`} style={style} {...handlers}><NotebookCellObject id={id} item={item} notebook={notebookParent} notebookSiblings={notebookSiblingCells} notebookOrder={notebookOrder} notebookCellCount={notebookCellCount} store={runtimeStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} canExecute={canExecute} onChange={onQuestionChange}/></div>);
   if (item.kind === 'shape' && item.runtimeRole==='terminal') return withResizeHandles(<div className={`${classes} terminal-object`} style={style} {...handlers}><TerminalObject id={id} item={item} store={runtimeStore} selected={selected && activeTool==='select'} canExecute={canExecute}/></div>);
+  if (isAgentNodeItem(item)) return withResizeHandles(<div className={`${classes} agent-canvas-object agent-node-object`} style={style} {...handlers}><CanvasAgentNode id={id} item={item} allItems={allItems} store={multiAgentStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} canExecute={canExecute} onChange={onQuestionChange} /></div>);
+  if (isAgentOrchestratorItem(item)) return withResizeHandles(<div className={`${classes} agent-canvas-object agent-orchestrator-object`} style={style} {...handlers}><CanvasAgentOrchestratorNode id={id} item={item} allItems={allItems} store={multiAgentStore} selected={selected && activeTool==='select'} readOnly={readOnly||item.locked} canExecute={canExecute} onChange={onQuestionChange} /></div>);
   if (item.kind === 'shape' && ['executor', 'output'].includes(item.runtimeRole)) return withResizeHandles(<div className={`${classes} blueprint-object${item.runtimeRole==='executor'?' blueprint-executor-object':''}`} style={style} {...handlers}><BlueprintNode id={id} item={item} store={runtimeStore} selected={selected} canExecute={canExecute} canReset={canExecute&&!readOnly} /></div>);
   if (item.kind === 'pdf') return withResizeHandles(<div className={`${classes} pdf-object`} style={style} {...handlers}><PdfDocumentContent item={item} token={token} interactive={selected && activeTool === 'select'} canChangePage={mediaWritable??(!readOnly&&!item.locked)} onPageChange={contentActions.page}/></div>);
   if (item.kind === 'user-group') return withResizeHandles(<div className={`${classes} user-group-object`} style={style} {...handlers}><UserGroupContent item={item} token={token} /></div>);

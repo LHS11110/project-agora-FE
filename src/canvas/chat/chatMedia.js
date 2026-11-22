@@ -6,6 +6,16 @@ export const MAX_CHAT_MEDIA = 6;
 
 const IMAGE_EXT_RE = /\.(?:png|jpe?g|webp|gif|avif|bmp)$/i;
 const VIDEO_EXT_RE = /\.(?:mp4|m4v|mov|webm|ogv)$/i;
+const SUPPORTED_IMAGE_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/webp',
+  'image/gif',
+  'image/avif',
+  'image/bmp',
+  'image/x-ms-bmp',
+]);
 const INTERNAL_MEDIA_PATH_RE = /^\/api\/canvases\/[1-9][0-9]*\/media\/[A-Za-z0-9._-]+$/;
 const MARKDOWN_MEDIA_RE = /!\[([^\]]*)\]\(([^)\s]+)\)/g;
 const BARE_URL_RE = /https?:\/\/[^\s<>"'`]+/gi;
@@ -18,7 +28,7 @@ export function chatMediaFileType(file) {
   const type = String(file.type || '').toLowerCase();
   const name = String(file.name || '');
   if (type.startsWith('video/') || VIDEO_EXT_RE.test(name)) return 'video';
-  if ((type.startsWith('image/') && type !== 'image/svg+xml') || IMAGE_EXT_RE.test(name)) return 'image';
+  if (SUPPORTED_IMAGE_TYPES.has(type) || (type !== 'image/svg+xml' && IMAGE_EXT_RE.test(name))) return 'image';
   return null;
 }
 

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  canRemoveChannelGroup,
   chatTarget,
   groupChannelsByCategory,
   isCategoryItem,
@@ -13,13 +14,16 @@ import {
   newChannel,
   newChannelId,
   nextChannelOrder,
+  normalizeChannelGroupsForSave,
   normalizeChannelName,
   reorderCategoryPatch,
+  resolveChannelGroupAccess,
   validCategory,
   validChannel,
 } from '../src/canvas/channels/channelModel.js';
 import { isDrawableCanvasItem } from '../src/canvas/drawableItems.js';
 import { exportManifest } from '../src/canvas/asCode/manifest.js';
+import en from '../src/i18n/en.js';
 
 test('channels are listed per type after the built-in default, by order then name', () => {
   const items = {
@@ -124,4 +128,61 @@ test('channel and category items are never drawn or exported as canvas code', ()
   assert.equal(isDrawableCanvasItem(channel), false);
   assert.equal(isDrawableCanvasItem(category), false);
   assert.deepEqual(Object.keys(exportManifest({ c: channel, cat: category }).items), []);
+});
+
+test('channel group access helpers enforce admin vs non-admin group selection rules', () => {
+  const settings = {
+    groups: { 'admin-group': [], engineering: [], design: [], viewer: [] },
+    group_permissions: {
+      engineering: { read: true, write: true, execute: false },
+      design: { read: true, write: false, execute: false },
+      viewer: { read: true, write: false, execute: false },
+    },
+  };
+
+  const adminAccess = resolveChannelGroupAccess({
+    settings,
+    capabilities: { is_admin: true, groups: ['admin-group'], member_groups: ['admin-group'], write_groups: ['admin-group'] },
+    defaultGroups: ['admin-group'],
+  });
+  assert.deepEqual(adminAccess.available, ['admin-group', 'design', 'engineering', 'viewer']);
+  assert.deepEqual(adminAccess.initialGroups, ['admin-group']);
+  assert.equal(canRemoveChannelGroup(['admin-group', 'design'], 'admin-group', adminAccess), true);
+  assert.equal(canRemoveChannelGroup(['design'], 'design', adminAccess), false);
+  assert.deepEqual(normalizeChannelGroupsForSave(['engineering', 'design'], adminAccess), ['design', 'engineering']);
+
+  // Non-admin writer in engineering (write) and design (read-only) must keep one writable group
+  // and cannot assign unrelated canvas groups (e.g. viewer) unless already present when editing.
+  const writerAccess = resolveChannelGroupAccess({
+    settings,
+    capabilities: {
+      is_admin: false,
+      groups: ['engineering', 'design'],
+      member_groups: ['engineering', 'design'],
+      write_groups: ['engineering'],
+    },
+    defaultGroups: ['engineering', 'design'],
+    existingGroups: ['viewer'],
+  });
+  assert.deepEqual(writerAccess.available, ['design', 'engineering', 'viewer']);
+  assert.deepEqual(writerAccess.initialGroups, ['viewer']);
+  assert.equal(canRemoveChannelGroup(['engineering', 'design'], 'engineering', writerAccess), false);
+  assert.equal(canRemoveChannelGroup(['engineering', 'design'], 'design', writerAccess), true);
+  assert.deepEqual(normalizeChannelGroupsForSave(['design'], writerAccess), []);
+  assert.deepEqual(normalizeChannelGroupsForSave(['engineering', 'design'], writerAccess), ['design', 'engineering']);
+});
+
+test('channel creation and access group UI strings have English translations', () => {
+  const keys = [
+    '채널 유형',
+    '음성 채널',
+    '접속 허용 그룹',
+    '전체 선택',
+    '최소 하나 이상의 쓰기 가능 그룹이 필요합니다.',
+    '선택한 그룹에 채널을 만들 권한이 없습니다.',
+    '제한된 그룹 채널',
+  ];
+  for (const key of keys) {
+    assert.ok(typeof en[key] === 'string' && en[key].length > 0, `Missing en translation for: ${key}`);
+  }
 });

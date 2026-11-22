@@ -2,6 +2,12 @@ import { CHART_COLORS, chartDataset, chartNumber } from './charts/chartData.js';
 import { contentSource } from './content/contentPresentation.js';
 import { objectCornerRadius } from './objectCorners.js';
 import { hasAdvancedStyle, readObjectStyle } from './styling/objectStyleModel.js';
+import {
+  isAgentNodeItem,
+  isAgentOrchestratorItem,
+  readAgentNodeConfig,
+  readOrchestratorConfig,
+} from './agents/agentCanvasModel.js';
 
 function previewPalette(kind, src) {
   const darkTheme = typeof document !== 'undefined' && Boolean(document.querySelector('.canvas-app-page[data-theme="dark"]'));
@@ -323,7 +329,7 @@ export function richPreviewSignature(item = {}) {
   else if (kind === 'project') parts.push(item.title || '', Array.isArray(item.issues) ? item.issues.length : 0);
   else if (kind === 'user-group') parts.push(item.groupTitle || item.title || '', Array.isArray(item.members) ? item.members.length : 0);
   else if (kind === 'math') parts.push(contentSource(item));
-  else if (kind.startsWith('runtime:')) parts.push(item.title || '', item.filename || '', item.text || '', item.code || '', item.runtimeState?.status || '');
+  else if (kind.startsWith('runtime:')) parts.push(item.title || '', item.filename || '', item.text || '', item.code || '', item.format || '', item.runtimeState?.status || '');
   return parts.join('|');
 }
 
@@ -449,6 +455,20 @@ export function drawRichOverview(ctx, item, world, textAppearance = {}, imagePre
   if (kind === 'runtime:terminal') {
     const top = drawHeadingBar(ctx, 'TERM', src.title || 'Terminal', w, pad, '#38bdf8', palette.ink, palette.muted, codeFont);
     drawTextLines(ctx, src.text || '$ ready', pad, top, w - pad * 2, h - top - pad, 9, 12, codeFont, palette.muted);
+    return;
+  }
+
+  if (isAgentNodeItem(src)) {
+    const cfg = readAgentNodeConfig(src);
+    const top = drawHeadingBar(ctx, 'AGENT', src.title || cfg.role || '에이전트', w, pad, src.color || palette.accent, ink, palette.muted, fontFamily);
+    drawTextLines(ctx, src.text || cfg.systemPrompt || cfg.role || '', pad, top, w - pad * 2, h - top - pad, 9, 12, fontFamily, palette.muted);
+    return;
+  }
+
+  if (isAgentOrchestratorItem(src)) {
+    const cfg = readOrchestratorConfig(src);
+    const top = drawHeadingBar(ctx, 'ORCH', src.title || '오케스트레이터', w, pad, src.color || palette.accent, ink, palette.muted, fontFamily);
+    drawTextLines(ctx, cfg.goal || src.text || cfg.mode || '', pad, top, w - pad * 2, h - top - pad, 9, 12, fontFamily, palette.muted);
     return;
   }
 

@@ -7,10 +7,19 @@ import { connectorObjectSize } from '../../canvas/connectors/objectMetrics.js';
 import { OBJECT_SIZES } from '../connectorGeometry.js';
 import { shapeCatalog } from '../../canvas/shapeCatalog.js';
 import { codeLanguageLabel } from '../../canvas/codeLanguages.js';
+import { isAgentNodeItem, isAgentOrchestratorItem, readAgentNodeConfig, readOrchestratorConfig } from '../../canvas/agents/agentCanvasModel.js';
 import './connector-endpoint-info.css';
 
 const labels = { 'user-group': '사용자 그룹', text: '텍스트', note: '포스트잇', code: '코드', math: '수식', shape: '도형', table: '테이블', question: '문제', chart: '그래프', image: '이미지', link: '링크', stroke: '드로잉' };
 function summary(item) {
+  if (isAgentNodeItem(item)) {
+    const cfg = readAgentNodeConfig(item);
+    return `${item.title || ui('AI 에이전트')} · ${cfg.role}`;
+  }
+  if (isAgentOrchestratorItem(item)) {
+    const cfg = readOrchestratorConfig(item);
+    return `${item.title || ui('멀티 에이전트 오케스트레이터')} · ${cfg.mode}`;
+  }
   if (item.kind === 'user-group') return `${item.groupTitle || ui('사용자 그룹')} · ${(item.members || []).map(member => member.nickname).join(', ')}`;
   if (isTextContent(item) && contentMode(item) === 'code') return `${item.filename || 'snippet.js'} · ${codeLanguageLabel(item.language || 'text')}`;
   if (item.kind === 'shape') return ui(shapeCatalog.find(shape => shape.id === item.shapeType)?.label || '도형');
@@ -30,7 +39,7 @@ function EndpointCard({ label, id, item, onNavigate }) {
   const height = measured?.height ?? (Number(item?.height) || defaultHeight) * CANVAS_SPACE.height;
   const content = item ? summary(item) : '';
   return <article className="connector-endpoint-card">
-    <div className="connector-endpoint-heading"><strong>{label}</strong><span>{item ? ui(labels[item.kind]) || item.kind : ui("연결 대상 없음")}</span></div>
+    <div className="connector-endpoint-heading"><strong>{label}</strong><span>{item ? (isAgentNodeItem(item) ? ui('AI 에이전트') : isAgentOrchestratorItem(item) ? ui('오케스트레이터') : ui(labels[item.kind]) || item.kind) : ui("연결 대상 없음")}</span></div>
     <code className="connector-endpoint-id" title={String(id || '')}>{id || '—'}</code>
     {item ? <><p className="connector-endpoint-summary" title={content}>{content.slice(0, 240)}</p>
       <dl className="connector-endpoint-details"><div><dt>{ui("위치")}</dt><dd>{Math.round((Number(item.x) || 0) * CANVAS_SPACE.width)}, {Math.round((Number(item.y) || 0) * CANVAS_SPACE.height)}</dd></div><div><dt>{ui("크기")}</dt><dd>{Math.round(width)} × {Math.round(height)} px</dd></div><div><dt>{ui("회전")}</dt><dd>{Math.round(Number(item.rotation) || 0)}°</dd></div></dl>

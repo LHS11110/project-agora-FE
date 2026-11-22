@@ -4,6 +4,7 @@ import CanvasVoicePanel from '../../canvas/voice/CanvasVoicePanel.jsx';
 import {
   CHAT_MEDIA_ACCEPT,
   MAX_CHAT_MEDIA,
+  chatMediaFileType,
   composeChatMessageWithMedia,
   parseChatMessageMedia,
   validateChatMediaFile,
@@ -103,6 +104,10 @@ const CanvasChatPanel = memo(function CanvasChatPanel({
       revokeAttachmentPreviews(pendingRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    setMediaNotice('');
+  }, [channels?.activeText]);
 
   if (!chatHistoryLoading) loadingOlder.current = false;
   const loadAtTop = () => {
@@ -210,10 +215,14 @@ const CanvasChatPanel = memo(function CanvasChatPanel({
         }
       }
     }
-    const mediaFiles = clipboardFiles.filter(file => validateChatMediaFile(file).ok);
-    if (!mediaFiles.length) return;
+    const candidateFiles = clipboardFiles.filter(file => {
+      const mime = String(file?.type || '').toLowerCase();
+      return Boolean(chatMediaFileType(file)) || mime.startsWith('image/') || mime.startsWith('video/');
+    });
+    if (!candidateFiles.length) return;
     event.preventDefault();
-    void enqueueMediaFiles(mediaFiles);
+    event.stopPropagation();
+    void enqueueMediaFiles(candidateFiles);
   };
 
   const hasDraggedFiles = event => Array.from(event.dataTransfer?.types || []).includes('Files');
@@ -348,9 +357,15 @@ const CanvasChatPanel = memo(function CanvasChatPanel({
             activeId={channels.activeText}
             unread={channels.unread}
             canManage={channels.canManage}
+            groupAccess={channels.groupAccess}
             onSelect={channels.selectText}
-            onCreate={(name, categoryId) => channels.create('text', name, categoryId)}
+            onCreate={(type, name, categoryId, accessGroups) => {
+              const created = channels.create(type, name, categoryId, accessGroups);
+              if (created && type === 'voice') onTabChange?.('voice');
+              return created;
+            }}
             onRename={channels.rename}
+            onUpdateGroups={channels.updateGroups}
             onDelete={channels.remove}
             onCreateCategory={channels.createCategory}
             onRenameCategory={channels.renameCategory}
@@ -515,9 +530,15 @@ const CanvasChatPanel = memo(function CanvasChatPanel({
             joinedId={voice.state.active ? voice.state.channel : null}
             members={voice.state.channelMembers}
             canManage={channels.canManage}
+            groupAccess={channels.groupAccess}
             onSelect={id => (voice.state.active ? voice.call.join(id) : voice.call.setChannel(id))}
-            onCreate={(name, categoryId) => channels.create('voice', name, categoryId)}
+            onCreate={(type, name, categoryId, accessGroups) => {
+              const created = channels.create(type, name, categoryId, accessGroups);
+              if (created && type === 'text') onTabChange?.('chat');
+              return created;
+            }}
             onRename={channels.rename}
+            onUpdateGroups={channels.updateGroups}
             onDelete={channels.remove}
             onCreateCategory={channels.createCategory}
             onRenameCategory={channels.renameCategory}

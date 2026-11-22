@@ -14,7 +14,7 @@ export async function executeCanvasCode({ canvasId, token, user, objectId, noteb
     ...(action === 'manage' ? {management} : action === 'reset' ? {management:{action:'reset'}} : {}),
     ...(action === 'notebook' ? {operation:operation||'execute'} : {}),
     ...(action==='service'?{service}:{}),
-    ...(action==='agent'?{operation:operation||'run',message:String(agent?.message||''),selected_ids:agent?.selected_ids||[],history:agent?.history||[],anchor:agent?.anchor,allow_delete:agent?.allow_delete===true,options:agent?.options||{},api_key:typeof agent?.api_key==='string'?agent.api_key:'',session_id:agent?.session_id,turn_id:agent?.turn_id,include_history:agent?.include_history!==false,offset:agent?.offset,before:agent?.before,limit:agent?.limit}:{}),
+    ...(action==='agent'?{operation:operation||'run',message:String(agent?.message||''),selected_ids:agent?.selected_ids||[],history:agent?.history||[],anchor:agent?.anchor,allow_delete:agent?.allow_delete===true,options:agent?.options||{},api_key:typeof agent?.api_key==='string'?agent.api_key:'',...(agent?.cli_tool?{cli_tool:agent.cli_tool}:{}),session_id:agent?.session_id,turn_id:agent?.turn_id,include_history:agent?.include_history!==false,offset:agent?.offset,before:agent?.before,limit:agent?.limit}:{}),
     object_id: String(objectId || ''),
     code: String(code || ''),
     ...(action === 'notebook'
@@ -66,6 +66,12 @@ export function settleRuntimeSocketResponse(pendingRequests, event) {
       AGENT_SESSION_ACCESS_DENIED: '이 대화에 포함된 객체를 볼 수 있는 권한이 없습니다.',
       AGENT_SESSION_RUNNING: '이 대화에서 작업이 진행 중입니다. 완료 후 다시 시도해주세요.',
       AGENT_STATUS_BUSY: '에이전트 상태 조회 요청이 많습니다. 잠시 후 다시 시도해주세요.',
+      CLI_TOOL_NOT_INSTALLED: 'VM에 선택한 CLI 도구가 설치되어 있지 않습니다. 에이전트 설정에서 먼저 설치해주세요.',
+      CLI_INSTALL_FAILED: 'VM에 CLI 도구를 설치하지 못했습니다.',
+      CLI_AGENT_FAILED: 'VM CLI 에이전트 실행에 실패했습니다.',
+      RUNTIME_EXECUTION_DENIED: '캔버스 실행 권한이 필요합니다. (RUNTIME_EXECUTION_DENIED)',
+      RUNTIME_VM_UNAVAILABLE: '캔버스 VM에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.',
+      RUNTIME_MANAGER_UNAVAILABLE: 'VM 런타임 관리자에 연결할 수 없습니다.',
       RUNTIME_BUSY: '다른 실행 요청을 처리하고 있습니다. 완료 후 다시 시도해주세요.',
     };
     const error = new Error(event.message || busyMessages[event.code] || event.code || '코드 실행에 실패했습니다.');

@@ -24,6 +24,29 @@ export const SOUND_CUE_PATTERNS = {
     { freq: 698.46, delay: 0, duration: 0.13, gain: 0.12, type: 'sine' },
     { freq: 1046.5, delay: 0.085, duration: 0.26, gain: 0.13, type: 'triangle' },
   ],
+  voice_channel_switch: [
+    { freq: 587.33, delay: 0, duration: 0.09, gain: 0.09, type: 'sine' },
+    { freq: 739.99, delay: 0.055, duration: 0.11, gain: 0.1, type: 'sine' },
+    { freq: 880.0, delay: 0.11, duration: 0.18, gain: 0.11, type: 'triangle' },
+  ],
+  voice_mute: [
+    { freq: 659.25, delay: 0, duration: 0.08, gain: 0.1, type: 'sine' },
+    { freq: 523.25, delay: 0.05, duration: 0.12, gain: 0.1, type: 'triangle' },
+  ],
+  voice_unmute: [
+    { freq: 523.25, delay: 0, duration: 0.08, gain: 0.1, type: 'sine' },
+    { freq: 659.25, delay: 0.05, duration: 0.12, gain: 0.1, type: 'triangle' },
+  ],
+  voice_deafen: [
+    { freq: 587.33, delay: 0, duration: 0.08, gain: 0.1, type: 'sine' },
+    { freq: 440.0, delay: 0.05, duration: 0.09, gain: 0.1, type: 'sine' },
+    { freq: 349.23, delay: 0.1, duration: 0.15, gain: 0.11, type: 'triangle' },
+  ],
+  voice_undeafen: [
+    { freq: 349.23, delay: 0, duration: 0.08, gain: 0.1, type: 'sine' },
+    { freq: 440.0, delay: 0.05, duration: 0.09, gain: 0.1, type: 'sine' },
+    { freq: 587.33, delay: 0.1, duration: 0.15, gain: 0.11, type: 'triangle' },
+  ],
 };
 
 let sharedContext = null;

@@ -1,4 +1,5 @@
 import { createId } from '../canvasIds.js';
+import { normalizeObjectGroups } from '../permissions/creationGroups.js';
 
 // Chat channels, call channels, and channel categories are canvas items without
 // a visual footprint, like the portfolio item. A text channel's messages are
@@ -187,4 +188,68 @@ export function reorderCategoryPatch(items, categoryId, targetCategoryId) {
 /** History/compose payload fields that address a text channel. */
 export function chatTarget(channelId) {
   return channelId && channelId !== DEFAULT_TEXT_CHANNEL ? { room_id: DEFAULT_TEXT_CHANNEL, object_id: channelId } : { room_id: DEFAULT_TEXT_CHANNEL };
+}
+
+/**
+ * Computes available/selectable access groups and initial defaults when creating
+ * or editing a channel item, matching server ACL rules.
+ */
+export function resolveChannelGroupAccess({ settings = null, capabilities = null, defaultGroups = [], existingGroups = [] } = {}) {
+  const isAdmin = Boolean(capabilities?.is_admin || settings?.can_manage);
+  const writable = new Set(capabilities?.write_groups || capabilities?.groups || []);
+  const member = new Set([...(capabilities?.member_groups || []), ...(capabilities?.groups || []), ...writable]);
+  const existing = normalizeObjectGroups(existingGroups);
+  const available = [...new Set(
+    (isAdmin
+      ? [
+          ...Object.keys(settings?.groups || {}),
+          ...Object.keys(settings?.group_permissions || {}),
+          ...Object.keys(capabilities?.group_bits || {}),
+          ...member,
+          ...existing,
+        ]
+      : [...member, ...existing]
+    ).filter(group => typeof group === 'string' && group.length),
+  )].sort();
+  const selectable = isAdmin ? available : [...new Set([...member, ...existing])].sort();
+  const normalizedDefaults = normalizeObjectGroups(defaultGroups).filter(group => selectable.includes(group));
+  let initialGroups;
+  if (existing.length > 0) initialGroups = existing;
+  else if (normalizedDefaults.length > 0) initialGroups = normalizedDefaults;
+  else if (isAdmin && available.includes('admin-group')) initialGroups = ['admin-group'];
+  else if (writable.size > 0) initialGroups = [...writable].filter(group => selectable.includes(group)).sort();
+  else initialGroups = selectable.slice(0, 1);
+
+  return {
+    isAdmin,
+    available,
+    selectable,
+    writableGroups: [...writable].sort(),
+    memberGroups: [...member].sort(),
+    initialGroups,
+  };
+}
+
+/** Returns whether removing `group` keeps a valid writable group set on the channel. */
+export function canRemoveChannelGroup(selectedGroups, group, { isAdmin = false, writableGroups = [] } = {}) {
+  const selected = normalizeObjectGroups(selectedGroups);
+  if (!selected.includes(group)) return true;
+  const remaining = selected.filter(entry => entry !== group);
+  if (remaining.length < 1) return false;
+  const writableSet = new Set(writableGroups);
+  if (!isAdmin && writableSet.size > 0 && !remaining.some(entry => writableSet.has(entry))) return false;
+  return true;
+}
+
+/** Filters and validates selected groups before creating or updating a channel item. */
+export function normalizeChannelGroupsForSave(selectedGroups, access) {
+  const normalized = normalizeObjectGroups(selectedGroups);
+  if (!access) return normalized;
+  const selectableSet = new Set(access.selectable || []);
+  const groups = selectableSet.size > 0 ? normalized.filter(group => selectableSet.has(group)) : normalized;
+  if (!groups.length) return [];
+  if (!access.isAdmin && access.writableGroups?.length > 0 && !groups.some(group => access.writableGroups.includes(group))) {
+    return [];
+  }
+  return groups;
 }

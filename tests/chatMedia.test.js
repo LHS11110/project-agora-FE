@@ -16,15 +16,27 @@ import en from '../src/i18n/en.js';
 test('validateChatMediaFile accepts images and videos within size limits and rejects invalid files', () => {
   assert.equal(chatMediaFileType({ name: 'photo.png', type: 'image/png' }), 'image');
   assert.equal(chatMediaFileType({ name: 'anim.gif', type: 'image/gif' }), 'image');
+  assert.equal(chatMediaFileType({ name: 'photo.webp', type: 'image/webp' }), 'image');
+  assert.equal(chatMediaFileType({ name: 'photo.avif', type: 'image/avif' }), 'image');
+  assert.equal(chatMediaFileType({ name: 'photo.bmp', type: 'image/bmp' }), 'image');
+  assert.equal(chatMediaFileType({ name: '', type: 'image/png' }), 'image');
   assert.equal(chatMediaFileType({ name: 'clip.mp4', type: 'video/mp4' }), 'video');
   assert.equal(chatMediaFileType({ name: 'clip.webm', type: '' }), 'video');
   assert.equal(chatMediaFileType({ name: 'vector.svg', type: 'image/svg+xml' }), null);
+  assert.equal(chatMediaFileType({ name: 'live.heic', type: 'image/heic' }), null);
+  assert.equal(chatMediaFileType({ name: 'scan.tiff', type: 'image/tiff' }), null);
   assert.equal(chatMediaFileType({ name: 'doc.pdf', type: 'application/pdf' }), null);
 
   assert.deepEqual(validateChatMediaFile({ name: 'ok.jpg', type: 'image/jpeg', size: 1024 }), { ok: true, mediaType: 'image' });
+  assert.deepEqual(validateChatMediaFile({ name: '', type: 'image/png', size: 128 }), { ok: true, mediaType: 'image' });
+  assert.deepEqual(validateChatMediaFile({ name: 'ok.webp', type: 'image/webp', size: 1024 }), { ok: true, mediaType: 'image' });
+  assert.deepEqual(validateChatMediaFile({ name: 'ok.avif', type: 'image/avif', size: 1024 }), { ok: true, mediaType: 'image' });
+  assert.deepEqual(validateChatMediaFile({ name: 'ok.bmp', type: 'image/bmp', size: 1024 }), { ok: true, mediaType: 'image' });
   assert.deepEqual(validateChatMediaFile({ name: 'ok.mp4', type: 'video/mp4', size: 5 * 1024 * 1024 }), { ok: true, mediaType: 'video' });
   assert.equal(validateChatMediaFile({ name: 'huge.png', type: 'image/png', size: CHAT_IMAGE_LIMIT + 1 }).ok, false);
   assert.equal(validateChatMediaFile({ name: 'huge.mp4', type: 'video/mp4', size: CHAT_VIDEO_LIMIT + 1 }).ok, false);
+  assert.equal(validateChatMediaFile({ name: 'unsupported.heic', type: 'image/heic', size: 1024 }).ok, false);
+  assert.equal(validateChatMediaFile({ name: 'unsupported.svg', type: 'image/svg+xml', size: 256 }).ok, false);
   assert.equal(validateChatMediaFile({ name: 'script.js', type: 'text/javascript', size: 10 }).ok, false);
 });
 

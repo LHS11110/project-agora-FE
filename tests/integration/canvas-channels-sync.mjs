@@ -28,6 +28,7 @@ const page=await context.newPage();page.on('pageerror',error=>{errors.push(error
 page.on('dialog',dialog=>dialog.accept());
 const channelItems=()=>Object.entries(latest).filter(([,v])=>v?.kind==='channel');
 const byName=name=>channelItems().find(([,v])=>v.name===name);
+const channelButton=(scope,name)=>scope.locator('.channel-select',{has:page.locator('.channel-name',{hasText:new RegExp('^'+name+'$')})});
 const until=async(check,label)=>{for(let i=0;i<100;i++){try{if(check())return;}catch{}await page.waitForTimeout(50);}assert.fail('server state: '+label);};
 const chat=page.getByRole('navigation',{name:'채팅 채널'});
 if(!await chat.isVisible().catch(()=>false)){await page.getByRole('button',{name:'음성 통화'}).first().click();await page.getByRole('tab',{name:'채팅'}).click();}
@@ -37,27 +38,27 @@ const rowAction=async(scope,name,label)=>{await scope.locator('.channel-row',{ha
 const submit=async(scope,name)=>{await scope.getByRole('textbox').fill(name);await scope.getByRole('button',{name:'추가',exact:true}).click();};
 
 // 1. Text channel: created on the server with its channel fields, listed, and selected.
-await chat.getByRole('button',{name:'채팅 채널 추가'}).click();await submit(chat,'기획');
-await chat.getByRole('button',{name:'기획',exact:true}).waitFor();await until(()=>byName('기획'),'text channel');
+await chat.getByRole('button',{name:'채널 추가',exact:true}).click();await chat.getByRole('radio',{name:'채팅 채널'}).click();await submit(chat,'기획');
+await channelButton(chat,'기획').waitFor();await until(()=>byName('기획'),'text channel');
 assert.deepEqual((({kind,channelType,name,order})=>({kind,channelType,name,order}))(byName('기획')[1]),{kind:'channel',channelType:'text',name:'기획',order:1});
-assert.equal(await chat.getByRole('button',{name:'기획',exact:true}).getAttribute('aria-current'),'true');
+assert.equal(await channelButton(chat,'기획').getAttribute('aria-current'),'true');
 
 // 2. Category, and a channel created inside it.
 await chat.getByRole('button',{name:'카테고리 추가'}).click();await submit(chat,'팀');
 await chat.getByRole('button',{name:'팀',exact:true}).waitFor();await until(()=>byName('팀'),'category');
 const categoryId=byName('팀')[0];assert.equal(byName('팀')[1].channelType,'category');
-await chat.getByRole('button',{name:'팀 채널 추가'}).click();await submit(chat.locator(`[data-category-id="${categoryId}"]`),'디자인');
-await chat.locator(`[data-category-id="${categoryId}"]`).getByRole('button',{name:'디자인',exact:true}).waitFor();
+await chat.locator(`[data-category-id="${categoryId}"] .channel-category-header`).hover();await chat.getByRole('button',{name:'팀 채널 추가'}).click();await submit(chat.locator(`[data-category-id="${categoryId}"]`),'디자인');
+await channelButton(chat.locator(`[data-category-id="${categoryId}"]`),'디자인').waitFor();
 await until(()=>byName('디자인')[1].categoryId===categoryId,'channel in category');
 
 // 3. Rename and move an uncategorized channel into the category.
 await rowAction(chat,'기획','이름 변경');
 await chat.getByRole('textbox').fill('기획실');await chat.getByLabel('카테고리 선택').selectOption(categoryId);await chat.getByRole('button',{name:'저장',exact:true}).click();
-await chat.locator(`[data-category-id="${categoryId}"]`).getByRole('button',{name:'기획실',exact:true}).waitFor();
+await channelButton(chat.locator(`[data-category-id="${categoryId}"]`),'기획실').waitFor();
 await until(()=>byName('기획실')[1].categoryId===categoryId,'moved channel');
 
 // 4. Chat in a channel targets that channel's thread.
-const before=packets.length;await chat.getByRole('button',{name:'기획실',exact:true}).click();
+const before=packets.length;await channelButton(chat,'기획실').click();
 await page.getByRole('textbox',{name:'채팅 메시지 입력'}).fill('안녕하세요');await page.getByRole('textbox',{name:'채팅 메시지 입력'}).press('Enter');
 await page.waitForTimeout(200);
 assert.equal(packets.slice(before).find(p=>p.type==='chat')?.object_id,byName('기획실')[0]);
@@ -67,20 +68,20 @@ if(process.env.AGORA_E2E_SCREENSHOT)await page.locator('#canvas-communication-pa
 // 5. Channels survive a reload (the server stored complete channel items).
 await page.reload();await page.waitForFunction(()=>window.frelogCanvas);
 if(!await chat.isVisible().catch(()=>false)){await page.getByRole('button',{name:'음성 통화'}).first().click();await page.getByRole('tab',{name:'채팅'}).click();}
-await chat.locator(`[data-category-id="${categoryId}"]`).getByRole('button',{name:'디자인',exact:true}).waitFor();
+await channelButton(chat.locator(`[data-category-id="${categoryId}"]`),'디자인').waitFor();
 
 // 6. Deleting the category keeps its channels as uncategorized; deleting a channel removes it.
 await chat.locator(`[data-category-id="${categoryId}"] .channel-category-header`).hover();await chat.getByRole('button',{name:'카테고리 삭제: 팀'}).click();
 await page.waitForFunction(()=>!document.querySelector('.channel-list-text [data-category-id]'));
 await until(()=>!byName('팀')&&byName('디자인')[1].categoryId===undefined,'category removed, channel uncategorized');
 await rowAction(chat,'디자인','채널 삭제');
-await chat.getByRole('button',{name:'디자인',exact:true}).waitFor({state:'detached'});await until(()=>!byName('디자인'),'channel removed');
+await channelButton(chat,'디자인').waitFor({state:'detached'});await until(()=>!byName('디자인'),'channel removed');
 
 // 7. Voice channel: created, listed, and selectable.
 await page.getByRole('tab',{name:'통화'}).click();const voiceNav=page.getByRole('navigation',{name:'통화 채널'});
-await voiceNav.getByRole('button',{name:'통화 채널 추가'}).click();await submit(voiceNav,'회의');
-await voiceNav.getByRole('button',{name:'회의',exact:true}).waitFor();await until(()=>byName('회의')[1].channelType==='voice','voice channel');
-await voiceNav.getByRole('button',{name:'회의',exact:true}).click();
+await voiceNav.getByRole('button',{name:'채널 추가',exact:true}).click();await voiceNav.getByRole('radio',{name:'음성 채널'}).click();await submit(voiceNav,'회의');
+await channelButton(voiceNav,'회의').waitFor();await until(()=>byName('회의')[1].channelType==='voice','voice channel');
+await channelButton(voiceNav,'회의').click();
 await page.waitForFunction(()=>[...document.querySelectorAll('.channel-list-voice .channel-row.is-active .channel-name')].some(n=>n.textContent==='회의'));
 
 assert.deepEqual(errors,[]);console.log('PASS channels sync: text/category/voice create, rename, move, chat target, reload, delete');

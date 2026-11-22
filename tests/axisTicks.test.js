@@ -37,3 +37,27 @@ test('offscreen axes pin to each edge without changing coordinate values',()=>{
   for(const t of layout.y)assert.ok(Math.abs(t.position-layout.originY+t.value)<1e-8);
  }
 });
+
+test('an overscanned strip with the visible step labels the same values as the settled view', () => {
+  // Max zoom far from the origin: the wider strip alone would choose a coarser step (10 vs 5).
+  const camera = { x: -11000, y: -7000, scale: 16 }, viewport = { width: 800, height: 600 }, overscan = 256;
+  const settled = axisTickLayout(camera, viewport);
+  const wide = { x: camera.x + overscan, y: camera.y, scale: camera.scale };
+  const strip = axisTickLayout(wide, { width: viewport.width + overscan * 2, height: viewport.height }, undefined, settled.step);
+  assert.equal(strip.step, settled.step);
+  const stripValues = new Set(strip.x.map(row => row.value));
+  for (const row of settled.x) {
+    assert.ok(stripValues.has(row.value), `strip lacks ${row.label}`);
+    const inStrip = strip.x.find(candidate => candidate.value === row.value);
+    assert.ok(Math.abs(inStrip.position - overscan - row.position) < 1e-6, `${row.label} position`);
+  }
+});
+
+test('the step does not flip with sub-pixel camera positions during zoom or pan', () => {
+  // Raw edge coordinates like -54.99999375 used to look like long labels and coarsen the step.
+  for (const scale of [0.05, 0.3, 1, 1.7, 4, 9.3, 16]) {
+    const steps = new Set();
+    for (let i = 0; i < 400; i++) steps.add(axisTickLayout({ x: -11000 + i * 0.00731, y: -7000 + i * 0.0137, scale }, { width: 800, height: 600 }).step);
+    assert.equal(steps.size, 1, `scale ${scale}: ${[...steps]}`);
+  }
+});

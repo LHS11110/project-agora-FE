@@ -23,5 +23,5 @@ function compareRenderValue(a, b) {
 export function canvasObjectPropsEqual(previous, next) {
   const keys = Object.keys(next);
   return keys.length === Object.keys(previous).length && keys.every(key =>
-    typeof next[key] === 'function' ? previous[key] === next[key] : renderValueEqual(previous[key],next[key]));
+    key === 'allItems' || typeof next[key] === 'function' ? previous[key] === next[key] : renderValueEqual(previous[key],next[key]));
 }

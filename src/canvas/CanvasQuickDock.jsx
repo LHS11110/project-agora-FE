@@ -5,7 +5,7 @@ import {canvasToolCategories} from './canvasToolCatalog.js';
 import {ui} from '../i18n/locale.js';
 import {useUiLocale} from '../i18n/useUiLocale.js';
 const tools=Object.fromEntries(canvasToolCategories.flatMap(c=>c.tools).map(t=>[t.id,t]));
-const pages=[QUICK_DOCK_TOOLS.slice(0,10),[...QUICK_DOCK_TOOLS.slice(10),'frame','project','continuous-value','discrete-value','notebook','terminal','executor','code','anchor']];
+const pages=[QUICK_DOCK_TOOLS.slice(0,10),[...QUICK_DOCK_TOOLS.slice(10),'frame','project','continuous-value','discrete-value','notebook','terminal','executor','code','agent-node','agent-orchestrator','anchor']];
 const CanvasQuickDock = memo(function CanvasQuickDock({anchors=[],setAnchors=()=>{},selectedItemIds=[],onNavigateAnchor=()=>{},allowPageKeys=true,navigationGuard,shortcutGuard,undoCount=0,onUndo,canUndo=false,canWrite=true,activeTool,onSelectTool,onUploadImage,toolsExpanded,onToggleTools}){
  useUiLocale();const fieldId=useId(),imageInput=useRef(null),latest=useRef(null),[page,setPage]=useState(0),[open,setOpen]=useState(false),[name,setName]=useState(''),[type,setType]=useState('point'),[x,setX]=useState('0'),[y,setY]=useState('0'),[error,setError]=useState(''),[targetIds,setTargetIds]=useState(null);
  latest.current={canWrite,onSelectTool,shortcutGuard,anchors,onNavigateAnchor,allowPageKeys,navigationGuard,open};

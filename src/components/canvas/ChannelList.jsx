@@ -2,22 +2,46 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ui } from '../../i18n/locale.js';
 import {
   CHANNEL_NAME_LIMIT,
+  canRemoveChannelGroup,
   groupChannelsByCategory,
+  normalizeChannelGroupsForSave,
   normalizeChannelName,
+  resolveChannelGroupAccess,
 } from '../../canvas/channels/channelModel.js';
+import { normalizeObjectGroups } from '../../canvas/permissions/creationGroups.js';
 import Icon from '../Icon.jsx';
+
+function groupCapabilityLabel(group, settings) {
+  if (group === 'admin-group') return ui('관리자');
+  const policy = settings?.group_permissions?.[group];
+  if (!policy) return settings?.groups && !Object.hasOwn(settings.groups, group) ? ui('미등록 그룹') : '';
+  return ['read', 'write', 'execute']
+    .filter(cap => policy[cap])
+    .map(cap => ui({ read: '읽기', write: '쓰기', execute: '실행' }[cap]))
+    .join(' · ') || ui('접근 불가');
+}
 
 function ChannelNameForm({
   initial = '',
   label,
   submitLabel,
+  allowTypeSelect = false,
+  initialType = 'text',
   categories = null,
   initialCategoryId = null,
+  groupAccess = null,
+  initialGroups = null,
   onSubmit,
   onCancel,
 }) {
   const [value, setValue] = useState(initial);
+  const [channelType, setChannelType] = useState(initialType);
   const [categoryId, setCategoryId] = useState(initialCategoryId || '');
+  const access = useMemo(
+    () => (groupAccess ? resolveChannelGroupAccess({ ...groupAccess, existingGroups: initialGroups || [] }) : null),
+    [groupAccess, initialGroups],
+  );
+  const [selectedGroups, setSelectedGroups] = useState(() => (access ? access.initialGroups : []));
   const [busy, setBusy] = useState(false);
   const input = useRef(null);
   const id = useId();
@@ -27,17 +51,51 @@ function ChannelNameForm({
     input.current?.select();
   }, []);
 
+  const initialAccessKey = access ? access.initialGroups.join('\0') : '';
+  useEffect(() => {
+    if (selectedGroups.length === 0 && access?.initialGroups.length) {
+      setSelectedGroups(access.initialGroups);
+    }
+  }, [initialAccessKey]);
+
+  const hasGroupConstraint = Boolean(access && access.selectable.length > 0);
+  const groupsForSave = useMemo(
+    () => (access ? normalizeChannelGroupsForSave(selectedGroups, access) : null),
+    [access, selectedGroups],
+  );
+
+  const toggleGroup = (group, enabled) => {
+    if (!access) return;
+    setSelectedGroups(current => {
+      if (enabled) {
+        if (!access.selectable.includes(group)) return current;
+        return normalizeObjectGroups([...current, group]);
+      }
+      if (!canRemoveChannelGroup(current, group, access)) return current;
+      return current.filter(entry => entry !== group);
+    });
+  };
+
   const submit = async event => {
     event.preventDefault();
     const name = normalizeChannelName(value);
     if (!name || busy) return;
+    if (hasGroupConstraint && (!groupsForSave || !groupsForSave.length)) return;
     setBusy(true);
     try {
-      if (await onSubmit(name, categoryId || null) !== false) onCancel();
+      const ok = await onSubmit({
+        name,
+        type: channelType,
+        categoryId: categoryId || null,
+        groups: groupsForSave,
+      });
+      if (ok !== false) onCancel();
     } finally {
       setBusy(false);
     }
   };
+
+  const canSelectAll = Boolean(access && access.selectable.length > 1 && selectedGroups.length < access.selectable.length);
 
   return (
     <form
@@ -48,6 +106,32 @@ function ChannelNameForm({
         if (event.key === 'Escape') onCancel();
       }}
     >
+      {allowTypeSelect && (
+        <div className="channel-type-toggle" role="radiogroup" aria-label={ui('채널 유형')}>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={channelType === 'text'}
+            className={channelType === 'text' ? 'is-selected' : ''}
+            onClick={() => setChannelType('text')}
+            disabled={busy}
+          >
+            <Icon name="hash" size={12} />
+            <span>{ui('채팅 채널')}</span>
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={channelType === 'voice'}
+            className={channelType === 'voice' ? 'is-selected' : ''}
+            onClick={() => setChannelType('voice')}
+            disabled={busy}
+          >
+            <Icon name="volume" size={12} />
+            <span>{ui('음성 채널')}</span>
+          </button>
+        </div>
+      )}
       <div className="channel-name-form-main">
         <label className="sr-only" htmlFor={id}>{label}</label>
         <input
@@ -61,13 +145,19 @@ function ChannelNameForm({
           disabled={busy}
           autoComplete="off"
         />
-        <button type="submit" disabled={busy || !normalizeChannelName(value)}>{submitLabel}</button>
+        <button
+          type="submit"
+          disabled={busy || !normalizeChannelName(value) || (hasGroupConstraint && (!groupsForSave || !groupsForSave.length))}
+        >
+          {submitLabel}
+        </button>
         <button type="button" onClick={onCancel} aria-label={ui('취소')}><Icon name="close" size={12} /></button>
       </div>
       {Array.isArray(categories) && categories.length > 0 && (
         <label className="channel-category-picker">
           <span>{ui('카테고리')}</span>
           <select
+            id={`${id}-category`}
             name="channel-category"
             aria-label={ui('카테고리 선택')}
             value={categoryId}
@@ -80,6 +170,48 @@ function ChannelNameForm({
             ))}
           </select>
         </label>
+      )}
+      {access && access.available.length > 0 && (
+        <div className="channel-group-section">
+          <div className="channel-group-header">
+            <span>{ui('접속 허용 그룹')} ({selectedGroups.length}/{access.available.length})</span>
+            {canSelectAll && (
+              <button
+                type="button"
+                className="channel-group-select-all"
+                onClick={() => setSelectedGroups(access.selectable)}
+                disabled={busy}
+              >
+                {ui('전체 선택')}
+              </button>
+            )}
+          </div>
+          <div className="channel-group-picker" role="group" aria-label={ui('접속 허용 그룹')}>
+            {access.available.map((group, index) => {
+              const checked = selectedGroups.includes(group);
+              const canUncheck = canRemoveChannelGroup(selectedGroups, group, access);
+              const canCheck = access.selectable.includes(group);
+              const capLabel = groupCapabilityLabel(group, groupAccess?.settings);
+              return (
+                <label
+                  key={group}
+                  title={checked && !canUncheck ? ui('최소 하나 이상의 쓰기 가능 그룹이 필요합니다.') : undefined}
+                >
+                  <input
+                    id={`${id}-group-${index}`}
+                    name={`channel-group-${index}`}
+                    type="checkbox"
+                    checked={checked}
+                    disabled={busy || (checked ? !canUncheck : !canCheck)}
+                    onChange={event => toggleGroup(group, event.target.checked)}
+                  />
+                  <span className="channel-group-name">{group}</span>
+                  {capLabel && <small>{capLabel}</small>}
+                </label>
+              );
+            })}
+          </div>
+        </div>
       )}
     </form>
   );
@@ -98,9 +230,11 @@ export default function ChannelList({
   members = {},
   joinedId = null,
   canManage = false,
+  groupAccess = null,
   onSelect,
   onCreate,
   onRename,
+  onUpdateGroups,
   onDelete,
   onCreateCategory,
   onRenameCategory,
@@ -116,6 +250,10 @@ export default function ChannelList({
   const icon = kind === 'voice' ? 'volume' : 'hash';
   const label = kind === 'voice' ? ui('통화 채널') : ui('채팅 채널');
   const grouped = useMemo(() => groupChannelsByCategory(channels, categories), [channels, categories]);
+  const allAvailableGroups = useMemo(
+    () => (groupAccess ? resolveChannelGroupAccess(groupAccess).available : []),
+    [groupAccess],
+  );
 
   const toggleCategory = categoryId => {
     setCollapsed(current => {
@@ -152,18 +290,29 @@ export default function ChannelList({
       return (
         <li key={channel.id}>
           <ChannelNameForm
+            key={`edit-channel:${channel.id}`}
             initial={channel.name}
             label={ui('채널 이름')}
             submitLabel={ui('저장')}
             categories={onMoveChannel ? categories : null}
             initialCategoryId={channel.categoryId}
-            onSubmit={async (name, nextCategoryId) => {
+            groupAccess={onUpdateGroups ? groupAccess : null}
+            initialGroups={normalizeObjectGroups(channel.item?.permission)}
+            onSubmit={async ({ name, categoryId: nextCategoryId, groups: nextGroups }) => {
               const renamed = name === channel.name ? true : await onRename(channel.id, name);
               if (renamed === false) return false;
               if (onMoveChannel && (nextCategoryId || null) !== (channel.categoryId || null)) {
                 const moved = await onMoveChannel(channel.id, nextCategoryId || null, null);
                 if (moved === false) return false;
                 if (nextCategoryId) expandCategory(nextCategoryId);
+              }
+              if (onUpdateGroups && Array.isArray(nextGroups) && nextGroups.length > 0) {
+                const prevGroups = normalizeObjectGroups(channel.item?.permission);
+                const changed = nextGroups.length !== prevGroups.length || nextGroups.some((group, index) => group !== prevGroups[index]);
+                if (changed) {
+                  const updated = await onUpdateGroups(channel.id, nextGroups);
+                  if (updated === false) return false;
+                }
               }
               return true;
             }}
@@ -174,6 +323,10 @@ export default function ChannelList({
     }
 
     const canDrag = Boolean(canManage && !channel.builtIn && onMoveChannel);
+    const channelGroups = !channel.builtIn ? normalizeObjectGroups(channel.item?.permission) : [];
+    const restrictedGroups = allAvailableGroups.length > 1
+      && channelGroups.length > 0
+      && channelGroups.length < allAvailableGroups.length;
 
     return (
       <li
@@ -211,6 +364,15 @@ export default function ChannelList({
         >
           <Icon name={icon} size={13} />
           <span className="channel-name">{channel.name}</span>
+          {restrictedGroups && (
+            <span
+              className="channel-lock-icon"
+              title={`${ui('접속 허용 그룹')}: ${channelGroups.join(', ')}`}
+              aria-label={`${ui('제한된 그룹 채널')}: ${channelGroups.join(', ')}`}
+            >
+              <Icon name="lock" size={11} />
+            </span>
+          )}
           {count > 0 && !active && (
             <span className="channel-unread" aria-label={`${ui('읽지 않은 메시지')} ${count}`}>
               {count > 99 ? '99+' : count}
@@ -259,7 +421,7 @@ export default function ChannelList({
   const visibleSections = grouped.sections.filter(section => canManage || section.channels.length > 0);
 
   return (
-    <nav className={`channel-list channel-list-${kind}`} aria-label={label}>
+    <nav className={`channel-list channel-list-${kind}${editing ? ' is-editing' : ''}`} aria-label={label}>
       <div
         className={`channel-list-heading${dropTarget?.type === 'uncategorized' ? ' is-drop-target' : ''}`}
         onDragOver={canManage && onMoveChannel && dragging?.type === 'channel' ? event => {
@@ -298,8 +460,8 @@ export default function ChannelList({
                 type="button"
                 className="channel-add"
                 onClick={() => setEditing({ type: 'new-channel', categoryId: null })}
-                aria-label={kind === 'voice' ? ui('통화 채널 추가') : ui('채팅 채널 추가')}
-                title={kind === 'voice' ? ui('통화 채널 추가') : ui('채팅 채널 추가')}
+                aria-label={ui('채널 추가')}
+                title={ui('채널 추가')}
               >
                 <Icon name="plus" size={13} />
               </button>
@@ -313,9 +475,19 @@ export default function ChannelList({
         {editing?.type === 'new-channel' && !editing.categoryId && (
           <li>
             <ChannelNameForm
+              key="new-channel:uncategorized"
               label={ui('새 채널 이름')}
               submitLabel={ui('추가')}
-              onSubmit={name => onCreate(name, null)}
+              allowTypeSelect
+              initialType={kind}
+              categories={categories}
+              initialCategoryId={null}
+              groupAccess={groupAccess}
+              onSubmit={({ name, type, categoryId, groups }) => {
+                const ok = onCreate(type, name, categoryId, groups);
+                if (ok !== false && categoryId) expandCategory(categoryId);
+                return ok;
+              }}
               onCancel={() => setEditing(null)}
             />
           </li>
@@ -347,10 +519,11 @@ export default function ChannelList({
           >
             {isEditingCat ? (
               <ChannelNameForm
+                key={`edit-category:${category.id}`}
                 initial={category.name}
                 label={ui('카테고리 이름')}
                 submitLabel={ui('저장')}
-                onSubmit={name => onRenameCategory(category.id, name)}
+                onSubmit={({ name }) => onRenameCategory(category.id, name)}
                 onCancel={() => setEditing(null)}
               />
             ) : (
@@ -448,9 +621,19 @@ export default function ChannelList({
                 {isCreatingInCat && (
                   <li>
                     <ChannelNameForm
+                      key={`new-channel:${category.id}`}
                       label={ui('새 채널 이름')}
                       submitLabel={ui('추가')}
-                      onSubmit={name => onCreate(name, category.id)}
+                      allowTypeSelect
+                      initialType={kind}
+                      categories={categories}
+                      initialCategoryId={category.id}
+                      groupAccess={groupAccess}
+                      onSubmit={({ name, type, categoryId, groups }) => {
+                        const ok = onCreate(type, name, categoryId, groups);
+                        if (ok !== false && categoryId) expandCategory(categoryId);
+                        return ok;
+                      }}
                       onCancel={() => setEditing(null)}
                     />
                   </li>
@@ -467,9 +650,10 @@ export default function ChannelList({
       {editing?.type === 'new-category' && onCreateCategory && (
         <div className="channel-category-new">
           <ChannelNameForm
+            key="new-category"
             label={ui('새 카테고리 이름')}
             submitLabel={ui('추가')}
-            onSubmit={onCreateCategory}
+            onSubmit={({ name }) => onCreateCategory(name)}
             onCancel={() => setEditing(null)}
           />
         </div>
