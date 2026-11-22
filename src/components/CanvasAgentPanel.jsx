@@ -3,8 +3,11 @@ import { createPortal } from 'react-dom';
 import { AgentMark } from './CanvasAgentLauncher.jsx';
 import {
   AGENT_DEFAULTS,
+  AGENT_PROVIDERS,
+  agentProvider,
   loadAgentPreferences,
   modelOptions,
+  normalizeAgentModel,
   saveAgentPreferences,
 } from './agentPreferences.js';
 import { isAgentConnectionError, agentTurnOutcome } from './agentRecovery.js';
@@ -16,59 +19,49 @@ import {
   normalizeAgentKey,
   saveAgentKey,
 } from './agentCredentials.js';
+import { hasAgentConsent, revokeAgentConsent, saveAgentConsent } from './agentConsent.js';
 import { intlLocale, ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
 import './canvas-agent.css';
 import MarkdownText from './MarkdownText.jsx';
 
-// Provider headers (x-{second,minute,day}-rate-limit*) describe the moment of the last
-// response. A second/minute window has fully refilled once that much time passed;
-// the daily reset time is not reported, so its remaining count stays as observed.
-const WINDOW_SECONDS = { second: 1, minute: 60 };
-function windowRemaining(entry, key, observed, now) {
-  if (!entry) return null;
-  if (observed && WINDOW_SECONDS[key] && now - observed >= WINDOW_SECONDS[key] && entry.limit != null) return entry.limit;
-  return entry.remaining;
-}
-
-function LimitCard({ telemetry, now, onRefresh, refreshing, personal }) {
-  const locale = useUiLocale();
-  const data = telemetry?.limits || {}, observed = telemetry?.limits_observed_at;
-  const retry = Math.max(0, Math.ceil((telemetry?.retry_at || 0) - now));
+// Shown before a provider is used: what is sent where, the provider's data terms,
+// and the confirmations its terms require (age, terms, overseas transfer).
+function ConsentCard({ provider, onAccept, disabled }) {
+  const [checks, setChecks] = useState({ terms: false, transfer: false, extra: false });
+  const ready = checks.terms && checks.transfer && (!provider.extraConsent || checks.extra);
+  const toggle = name => event => setChecks(previous => ({ ...previous, [name]: event.target.checked }));
   return (
-    <section className="canvas-agent-limits" aria-label={ui('API 호출 한도')}>
-      <div className="canvas-agent-section-title">
-        <strong>{ui('API 호출 한도')}</strong>
-        <button
-          type="button"
-          className="canvas-agent-quota-refresh"
-          aria-label={ui('호출 한도 새로고침')}
-          title={ui('모델 호출 없이 서버에 보관된 최근 응답을 확인합니다')}
-          disabled={refreshing}
-          onClick={onRefresh}
-        >
-          ↻
-        </button>
-        <span>{observed ? ui('{time} 응답 기준', { time: new Date(observed * 1000).toLocaleTimeString(intlLocale(locale)) }) : ui('첫 응답 후 표시')}</span>
-      </div>
-      <div className="canvas-agent-limit-grid">
-        {[['second', '초당'], ['minute', '분당'], ['day', '일일']].map(([key, label]) => (
-          <div key={key}>
-            <span>{ui(label)}</span>
-            <strong>{windowRemaining(data[key], key, observed, now) ?? '—'}<small> / {data[key]?.limit ?? '—'}</small></strong>
-            <span>{ui('잔여 / 한도')}</span>
-          </div>
-        ))}
-      </div>
+    <section className="canvas-agent-consent" aria-label={ui('{provider} 사용 전 확인', { provider: provider.label })}>
+      <strong>{ui('{provider} 사용 전 확인', { provider: provider.label })}</strong>
+      <p>{ui('AI 에이전트는 요청, 선택한 객체, 에이전트가 읽은 캔버스 내용(다른 참가자가 작성한 내용 포함)을 {provider}로 보냅니다. {provider}는 미국 등 해외에서 이를 처리합니다.', { provider: provider.label })}</p>
+      <p>{ui(provider.dataNotice)}</p>
       <p>
-        {personal ? ui('현재 개인 API 키의 한도입니다.') : ui('서버 기본 API 키를 사용하는 모든 캔버스의 공유 한도입니다.')}
-        {retry > 0 && <b role="status">{` ${ui('약 {seconds}초 후 다시 시도할 수 있습니다.', { seconds: retry })}`}</b>}
+        <a href={provider.termsUrl} target="_blank" rel="noreferrer">{ui('{provider} 이용약관', { provider: provider.label })}</a>
+        {' · '}
+        <a href={provider.policyUrl} target="_blank" rel="noreferrer">{ui('{provider} 이용 정책·개인정보', { provider: provider.label })}</a>
       </p>
+      <label className="canvas-agent-check">
+        <input type="checkbox" name="agent-consent-terms" checked={checks.terms} onChange={toggle('terms')} />
+        {ui('만 18세 이상이며, {provider}의 이용약관과 이용 정책을 지키겠습니다. 개인 API 키를 쓰면 키 소유자로서 그 사용에 책임을 집니다.', { provider: provider.label })}
+      </label>
+      <label className="canvas-agent-check">
+        <input type="checkbox" name="agent-consent-transfer" checked={checks.transfer} onChange={toggle('transfer')} />
+        {ui('위 내용이 {provider}(해외)로 전송되는 것에 동의합니다.', { provider: provider.label })}
+      </label>
+      {provider.extraConsent && (
+        <label className="canvas-agent-check">
+          <input type="checkbox" name="agent-consent-extra" checked={checks.extra} onChange={toggle('extra')} />
+          {ui(provider.extraConsent)}
+        </label>
+      )}
+      <button type="button" disabled={disabled || !ready} onClick={onAccept}>{ui('동의하고 사용')}</button>
+      <small>{ui('동의하지 않으면 이 제공 서비스로 AI 에이전트를 사용할 수 없습니다. 동의는 에이전트 설정에서 철회할 수 있습니다.')}</small>
     </section>
   );
 }
 
-export default function CanvasAgentPanel({ open, onClose, request, selectedIds, anchor, canvasId, onBusyChange, theme = 'light', isAdmin = false }) {
+export default function CanvasAgentPanel({ open, onClose, request, selectedIds, anchor, canvasId, onBusyChange, theme = 'light', isAdmin = false, userId = null }) {
   const locale = useUiLocale();
   const fieldId = useId();
   const [optimistic, setOptimistic] = useState(null);
@@ -81,9 +74,16 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [preferences, setPreferences] = useState(loadAgentPreferences);
   const [now, setNow] = useState(() => Date.now() / 1000);
-  const [refreshing, setRefreshing] = useState(false);
-  const [personalKey, setPersonalKey] = useState(loadAgentKey);
-  const [keyDraft, setKeyDraft] = useState(loadAgentKey);
+  const [, setRefreshing] = useState(false);
+  // Personal keys are kept per provider; switching providers swaps in that provider's key.
+  const [personalKey, setPersonalKey] = useState(() => loadAgentKey(preferences.provider));
+  const [keyDraft, setKeyDraft] = useState(() => loadAgentKey(preferences.provider));
+  const [modelDraft, setModelDraft] = useState(preferences.model);
+  const provider = agentProvider(preferences.provider);
+  const [consentRevision, setConsentRevision] = useState(0);
+  const consented = consentRevision >= 0 && hasAgentConsent(userId, provider.id);
+  const statusOptions = modelOptions(preferences);
+  const statusKey = JSON.stringify(statusOptions);
   const [recovery, setRecovery] = useState(null);
   const [startedAt, setStartedAt] = useState(null);
 
@@ -127,13 +127,13 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
     if (!open) return undefined;
     let live = true;
     if (!busy) {
-      requestRef.current({ operation: 'status', api_key: personalKey })
+      requestRef.current({ operation: 'status', api_key: personalKey, options: statusOptions })
         .then(value => { if (live) setStatus(value); })
         .catch(e => { if (live) setError(e.message); });
     }
     const timer = setInterval(() => setNow(Date.now() / 1000), 1000);
     return () => { live = false; clearInterval(timer); };
-  }, [open, canvasId, personalKey]);
+  }, [open, canvasId, personalKey, statusKey]);
 
   useEffect(() => { followLatest.current = true; }, [conversation.activeId]);
   useEffect(() => {
@@ -147,6 +147,27 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
     setPreferences(previous => ({ ...previous, [name]: value }));
   }
 
+  function chooseProvider(id) {
+    const next = agentProvider(id).id;
+    const key = loadAgentKey(next);
+    setPreferences(previous => ({ ...previous, provider: next, model: '' }));
+    setModelDraft('');
+    setPersonalKey(key);
+    setKeyDraft(key);
+    setStatus(null);
+    setError('');
+  }
+
+  function applyModel(value) {
+    const model = normalizeAgentModel(value);
+    if (value.trim() && !model) {
+      setError(ui('모델 이름은 영문·숫자와 . _ : / @ - 만 사용할 수 있습니다.'));
+      return;
+    }
+    setModelDraft(model);
+    update('model', model);
+  }
+
   function applyKey(value) {
     const normalized = normalizeAgentKey(value);
     if (value.trim() && !normalized) {
@@ -158,7 +179,7 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
       refreshStatus();
       return;
     }
-    saveAgentKey(normalized);
+    saveAgentKey(normalized, preferences.provider);
     setPersonalKey(normalized);
     setKeyDraft(normalized);
     setStatus(null);
@@ -168,7 +189,7 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
   async function refreshStatus() {
     setRefreshing(true);
     try {
-      setStatus(await requestRef.current({ operation: 'status', api_key: personalKey }));
+      setStatus(await requestRef.current({ operation: 'status', api_key: personalKey, options: statusOptions }));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -236,6 +257,7 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
     || !prompt.trim()
     || !canContinue
     || session?.status === 'running'
+    || !consented
     || status?.configured === false
     || (status?.telemetry?.retry_at || 0) > now;
 
@@ -315,7 +337,7 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
             <span>
               {working
                 ? ui('캔버스에서 작업 중 · {seconds}초', { seconds: elapsed })
-                : ui('EXAONE · 아이디어를 함께 만드는 공간')}
+                : ui('{provider} · 아이디어를 함께 만드는 공간', { provider: provider.label })}
             </span>
           </div>
           <button
@@ -380,7 +402,14 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
             <p className="canvas-agent-reconnecting" role="status">{ui('연결을 복구하고 있습니다. 대화와 입력 내용은 유지됩니다.')}</p>
           )}
 
-          <LimitCard telemetry={status?.telemetry} now={now} onRefresh={refreshStatus} refreshing={refreshing || busy} personal={Boolean(personalKey)} />
+          {!consented && (
+            <ConsentCard
+              key={provider.id}
+              provider={provider}
+              disabled={busy}
+              onAccept={() => { saveAgentConsent(userId, provider.id); setConsentRevision(value => value + 1); }}
+            />
+          )}
 
           {settingsOpen && (
             <section className="canvas-agent-settings" aria-label={ui('에이전트 설정')}>
@@ -390,12 +419,15 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
                   type="button"
                   disabled={busy}
                   onClick={() => {
-                    setPreferences({
+                    // Tuning resets; the chosen provider and model stay.
+                    setPreferences(previous => ({
                       ...AGENT_DEFAULTS,
                       engine: 'api',
+                      provider: previous.provider,
+                      model: previous.model,
                       includeHistory: true,
                       attachSelection: true,
-                    });
+                    }));
                     setAllowDelete(false);
                   }}
                 >
@@ -405,14 +437,55 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
               <fieldset disabled={busy}>
                 <legend>{ui('모델 설정')}</legend>
 
+                    <div className="canvas-agent-settings-grid">
+                      <label htmlFor={`${fieldId}-provider`}>
+                        {ui('모델 제공 서비스')}
+                        <select
+                          id={`${fieldId}-provider`}
+                          name="agent-provider"
+                          value={provider.id}
+                          onChange={e => chooseProvider(e.target.value)}
+                        >
+                          {AGENT_PROVIDERS.map(entry => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
+                        </select>
+                      </label>
+                      <label htmlFor={`${fieldId}-model`}>
+                        {ui('모델')}
+                        <input
+                          id={`${fieldId}-model`}
+                          name="agent-model"
+                          type="text"
+                          list={`${fieldId}-model-options`}
+                          maxLength={128}
+                          autoComplete="off"
+                          autoCapitalize="none"
+                          spellCheck={false}
+                          value={modelDraft}
+                          placeholder={provider.defaultModel || status?.model || ui('서버 기본 모델')}
+                          onChange={e => setModelDraft(e.target.value)}
+                          onBlur={e => applyModel(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); applyModel(e.currentTarget.value); } }}
+                        />
+                        <datalist id={`${fieldId}-model-options`}>
+                          {provider.models.map(model => <option key={model} value={model} />)}
+                        </datalist>
+                      </label>
+                    </div>
+                    <small>{ui('모델을 비워 두면 제공 서비스의 기본 모델을 사용합니다.')}</small>
+                    {consented && (
+                      <div className="canvas-agent-key-actions">
+                        <span>{ui('{provider} 이용 조건과 데이터 전송에 동의함', { provider: provider.label })}</span>
+                        <button type="button" disabled={busy} onClick={() => { revokeAgentConsent(userId, provider.id); setConsentRevision(value => value + 1); }}>{ui('동의 철회')}</button>
+                      </div>
+                    )}
                     <section className="canvas-agent-credentials">
                       <label htmlFor={`${fieldId}-api-key`}>
-                        {ui('EXAONE 2.5 API 키')}
+                        {ui('{provider} API 키', { provider: provider.label })}
                         <input
                           id={`${fieldId}-api-key`}
                           name="agent-api-key"
                           type="password"
-                          aria-label={ui('EXAONE API 키')}
+                          aria-label={ui('{provider} API 키', { provider: provider.label })}
                           value={keyDraft}
                           autoComplete="off"
                           autoCapitalize="none"
@@ -423,11 +496,12 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
                         />
                       </label>
                       <div className="canvas-agent-key-actions">
-                        <span>{personalKey ? ui('개인 키 사용 중') : ui('서버 기본 키 사용 중')}</span>
-                        <button type="button" disabled={busy || !keyDraft.trim()} onClick={() => applyKey(keyDraft)}>{ui('키 적용')}</button>
-                        <button type="button" disabled={busy || !personalKey} onClick={() => applyKey('')}>{ui('서버 기본 키 사용')}</button>
+                        <span>{personalKey ? ui('개인 키 사용 중') : status?.default_configured === false ? ui('API 키 필요') : ui('서버 기본 키 사용 중')}</span>
+                        <button type="button" disabled={busy || !consented || !keyDraft.trim()} onClick={() => applyKey(keyDraft)}>{ui('키 적용')}</button>
+                        <button type="button" disabled={busy || !personalKey} onClick={() => applyKey('')}>{status?.default_configured === false ? ui('키 지우기') : ui('서버 기본 키 사용')}</button>
                       </div>
                       <small>{ui('개인 키는 현재 탭에만 보관하며 캔버스에 저장하거나 다른 참가자에게 공유하지 않습니다. 키 인증은 실제 요청 시 확인됩니다.')}</small>
+                      <small>{ui('키는 제공 서비스별로 따로 보관하며, 선택한 제공 서비스의 공식 API로만 전송됩니다.')}</small>
                     </section>
                     <div className="canvas-agent-settings-grid">
                       <label htmlFor={`${fieldId}-max-tokens`}>
@@ -460,20 +534,6 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
                       </label>
                     </div>
                     <small>{ui('토큰 상한에는 추론도 포함됩니다. 한 요청이 여러 모델 호출을 사용할 수 있습니다.')}</small>
-                    <details>
-                      <summary>{ui('응답 생성 세부 설정')}</summary>
-                      <label htmlFor={`${fieldId}-temperature`}>
-                        {ui('다양성 (Temperature)')}
-                        <input id={`${fieldId}-temperature`} name="agent-temperature" type="range" aria-label="Temperature" min="0" max="2" step="0.1" value={preferences.temperature} onChange={e => update('temperature', Number(e.target.value))} />
-                        <output>{preferences.temperature}</output>
-                      </label>
-                      <label htmlFor={`${fieldId}-top-p`}>
-                        {ui('후보 범위 (Top P)')}
-                        <input id={`${fieldId}-top-p`} name="agent-top-p" type="range" aria-label="Top P" min="0.05" max="1" step="0.05" value={preferences.top_p} onChange={e => update('top_p', Number(e.target.value))} />
-                        <output>{preferences.top_p}</output>
-                      </label>
-                      <small>{ui('권장값: Temperature 1 · Top P 0.95')}</small>
-                    </details>
 
                 <label className="canvas-agent-check" htmlFor={`${fieldId}-attach-selection`}>
                   <input id={`${fieldId}-attach-selection`} name="agent-attach-selection" type="checkbox" checked={preferences.attachSelection} onChange={e => update('attachSelection', e.target.checked)} />
@@ -552,14 +612,16 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
             {session?.status === 'interrupted' && (
               <p className="canvas-agent-error">{ui('이전 작업의 연결이 종료되었습니다. 이미 반영된 변경을 확인한 뒤 다시 요청해주세요.')}</p>
             )}
-            {status?.configured === false && (
-              <p className="canvas-agent-error">{ui('API 키가 설정되지 않았습니다. 에이전트 설정에서 개인 EXAONE API 키를 입력해주세요.')}</p>
+            {consented && status?.configured === false && (
+              <p className="canvas-agent-error">{ui('API 키가 설정되지 않았습니다. 에이전트 설정에서 {provider} API 키를 입력해주세요.', { provider: provider.label })}</p>
             )}
             <div ref={bottom} />
           </div>
         </div>
 
         <form onSubmit={submit}>
+          {/* Provider terms: tell users they are talking to AI and to verify outputs. */}
+          <p className="canvas-agent-ai-notice">{ui('AI가 생성한 응답입니다. 사실 관계는 직접 확인한 뒤 사용하세요.')}</p>
           <div className="canvas-agent-context">
             <span>
               {preferences.attachSelection && selectedIds.length
@@ -601,7 +663,7 @@ export default function CanvasAgentPanel({ open, onClose, request, selectedIds, 
           />
           <footer>
             <span>
-              {`${status?.model || 'k-exaone_v2.5'} · Ctrl + Enter`}
+              {`${provider.label} · ${status?.model || preferences.model || provider.defaultModel} · Ctrl + Enter`}
             </span>
               <button type="submit" disabled={blocked}>
               {busy ? ui('작업 중…') : ui('보내기')}

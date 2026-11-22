@@ -4,6 +4,7 @@ import Icon from '../../components/Icon.jsx';
 import MarkdownText from '../../components/MarkdownText.jsx';
 import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
+import { agentProvider } from '../../components/agentPreferences.js';
 import {
   AGENT_ROLE_PRESETS,
   readAgentNodeConfig,
@@ -72,7 +73,8 @@ export default function CanvasAgentNode({
             ? ui('완료')
             : ui('준비');
 
-  const engineLabel = config.engine === 'mock' ? ui('모형 에이전트') : 'EXAONE API';
+  const provider = agentProvider(config.provider);
+  const engineLabel = config.engine === 'mock' ? ui('모형 에이전트') : `${provider.label}${config.model || provider.defaultModel ? ` · ${config.model || provider.defaultModel}` : ''}`;
 
   const inputItems = [...connections.inputNodes, ...connections.routerNodes, ...connections.promptInputs, ...connections.dataInputs, ...connections.upstreamAgents, ...connections.feedbackAgents];
   const outputItems = [...connections.outgoingRouters, ...connections.downstreamAgents, ...connections.feedbackTargets, ...connections.outputSinks];
@@ -282,7 +284,7 @@ export default function CanvasAgentNode({
                 value={config.engine}
                 onChange={e => commitPatch({ engine: e.target.value })}
               >
-                <option value="api">{ui('EXAONE 2.5 API')}</option>
+                <option value="api">{ui('모델 API')}</option>
                 <option value="mock">{ui('모형 에이전트')}</option>
               </CanvasSelect>
             </label>

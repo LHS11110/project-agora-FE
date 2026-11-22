@@ -28,3 +28,18 @@ Authenticator enrollment uses `qrcode` (MIT) to create QR images locally. Its ex
 ## Rust WASM renderer
 
 `public/licenses/rust/inventory.json` records the resolved wasm32 Cargo dependency superset and upstream license declarations. License texts are retained alongside it and published under `/licenses/rust/`. Regenerate these files with `python3 scripts/wgpu-notices.py` after changing Cargo.lock. The application renderer itself uses this repository’s MIT license.
+
+## Web fonts
+
+The pages load Cormorant Garamond, DM Mono, DM Sans, Noto Sans KR and Noto Serif KR from Google Fonts at runtime (`index.html`). All five are licensed under the SIL Open Font License 1.1. The font files are not bundled; Google Fonts serves them with its own license notices. Loading them sends the browser's IP address and request headers to Google; the privacy policy discloses this.
+
+## Trademarks and sign-in buttons
+
+Google, YouTube and the Google "G" logo are trademarks of Google LLC. Kakao and the Kakao symbol are trademarks of Kakao Corp. NAVER is a trademark of NAVER Corp. ORCID™, the ORCID logo, and the iD logo are trademarks of ORCID, Inc. They identify the sign-in and media services only and do not imply endorsement.
+
+The sign-in buttons follow the providers' guidelines (checked 2026-11-23):
+
+- Google: light-theme button (#FFFFFF fill, 1px #747775 stroke, #1F1F1F text), standard-color "G" unmodified, visible text.
+- Kakao: #FEE500 container, #000000 speech-bubble symbol, label #000000 85%, 12px radius. The symbol is drawn inline; replace it with the official resource from Kakao Developers ([Tools] > [Resource download] > [Kakao Login]) when updating the button.
+- NAVER: the official NAVER Login guide could not be reached from the build environment. The "N" mark is a text approximation; replace it with the official NAVER Login button resource from NAVER Developers before relying on it.
+- ORCID: official green iD icon (`src/assets/orcid-id.svg`), unmodified, 24px, with text that says what happens. The ORCID Public API may be used only for non-commercial purposes and its credentials belong to an individual ORCID account; a revenue-generating deployment needs ORCID member credentials.

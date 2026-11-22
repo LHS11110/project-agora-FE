@@ -1,5 +1,14 @@
-const storageKey = 'agora-agent-personal-api-key';
+import { agentProvider } from './agentPreferences.js';
+
+const providerStoragePrefix = 'agora-agent-api-key:';
+// Keys of removed engines: VM CLI agents (per tool) and EXAONE, which is no longer
+// offered. They are dropped from the tab so they are not left behind in storage.
 const legacyCliStoragePrefix = 'agora-agent-cli-api-key:';
+const legacyExaoneStorageKey = 'agora-agent-personal-api-key';
+
+function keyName(provider) {
+  return `${providerStoragePrefix}${agentProvider(provider).id}`;
+}
 
 export function normalizeAgentKey(value) {
   if (typeof value !== 'string') return '';
@@ -7,10 +16,9 @@ export function normalizeAgentKey(value) {
   return key.length <= 4096 && /^[\x21-\x7e]*$/.test(key) ? key : '';
 }
 
-// VM CLI agents were removed. Drop any per-tool keys an earlier version kept in
-// this tab so they are not left behind in browser storage.
-function purgeLegacyCliKeys() {
+function purgeLegacyKeys() {
   try {
+    sessionStorage.removeItem(legacyExaoneStorageKey);
     for (let index = sessionStorage.length - 1; index >= 0; index--) {
       const name = sessionStorage.key(index);
       if (name?.startsWith(legacyCliStoragePrefix)) sessionStorage.removeItem(name);
@@ -20,20 +28,21 @@ function purgeLegacyCliKeys() {
   }
 }
 
-export function loadAgentKey() {
-  purgeLegacyCliKeys();
+/** Personal keys are per provider and live only in this tab (sessionStorage). */
+export function loadAgentKey(provider) {
+  purgeLegacyKeys();
   try {
-    return normalizeAgentKey(sessionStorage.getItem(storageKey));
+    return normalizeAgentKey(sessionStorage.getItem(keyName(provider)));
   } catch {
     return '';
   }
 }
 
-export function saveAgentKey(value) {
+export function saveAgentKey(value, provider) {
   const key = normalizeAgentKey(value);
   try {
-    if (key) sessionStorage.setItem(storageKey, key);
-    else sessionStorage.removeItem(storageKey);
+    if (key) sessionStorage.setItem(keyName(provider), key);
+    else sessionStorage.removeItem(keyName(provider));
   } catch {
     /* Keep the key only in component memory if browser storage is unavailable. */
   }

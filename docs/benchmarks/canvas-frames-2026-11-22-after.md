@@ -78,6 +78,8 @@
 
 캔버스 에이전트는 이제 EXAONE API 엔진만 쓴다. 서버 기본 키나, 사용자가 이 탭에만 저장한 개인 키(`sessionStorage`)로 호출한다.
 
+> **2026-11-23 갱신:** 이후 EXAONE API 약관이 서비스 통합을 금지한다는 사실을 확인해 EXAONE을 제거했다. 에이전트는 OpenAI·Anthropic·Google Gemini·OpenRouter API 중 사용자가 고른 것을 쓴다. 검토와 대응은 [AI_PROVIDER_COMPLIANCE.md](../AI_PROVIDER_COMPLIANCE.md)에 있다.
+
 | 저장소 | 커밋 | 변경 |
 | --- | --- | --- |
 | hypervisor-for-agora | `336625e` | 게스트 `cli_agent.py`와 테스트 삭제. 러너의 CLI 서비스 스레드, 관리자의 `cli_agent_exchange`, 터미널 `PATH`의 CLI 전역 bin 제거. 설치·업데이트 시 남은 `cli_agent.py`를 지운다. 테스트 78개 통과 |

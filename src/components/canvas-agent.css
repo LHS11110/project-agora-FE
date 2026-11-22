@@ -55,3 +55,6 @@
 
 /* Agent execution mode switcher and VM CLI panel */
 .canvas-agent-settings input[type="text"],.canvas-agent-settings input[type="password"]{box-sizing:border-box;width:100%;height:32px;border:1px solid var(--agent-line);border-radius:7px;padding:5px 8px;background:var(--agent-bg);color:var(--agent-ink);font:inherit;font-size:12px;user-select:text}
+/* Shown before a provider is used: its data terms and the confirmations they require. */
+.canvas-agent-consent{display:flex;flex-direction:column;gap:7px;margin:16px 18px;padding:12px;border:1px solid var(--agent-line);border-radius:12px;background:var(--agent-card);font-size:11px}.canvas-agent-consent p{margin:0;color:var(--agent-muted);font-size:10px;line-height:1.5}.canvas-agent-consent a{color:inherit;text-decoration:underline}.canvas-agent-consent .canvas-agent-check{display:flex;gap:7px;align-items:flex-start;font-size:10.5px;line-height:1.45}.canvas-agent-consent button{align-self:flex-start;padding:5px 10px;font-size:11px}.canvas-agent-consent small{color:var(--agent-muted);font-size:9px}
+.canvas-agent-ai-notice{margin:0 0 6px;color:var(--agent-muted);font-size:9.5px}

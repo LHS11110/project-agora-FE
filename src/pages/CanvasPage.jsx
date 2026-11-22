@@ -81,6 +81,8 @@ import { createMultiAgentStore } from '../canvas/agents/multiAgentStore.js';
 import MultiAgentActivity from '../canvas/agents/MultiAgentActivity.jsx';
 import { buildMultiAgentTemplate, isAgentCanvasObject, isAgentOrchestratorItem } from '../canvas/agents/agentCanvasModel.js';
 import { loadAgentKey } from '../components/agentCredentials.js';
+import { agentProvider } from '../components/agentPreferences.js';
+import { requireAgentConsent } from '../components/agentConsent.js';
 import Timer, {initialTimer} from '../canvas/CanvasTimer.jsx';
 import CanvasAgentLauncher from '../components/CanvasAgentLauncher.jsx';
 import CanvasAgentPanel from '../components/CanvasAgentPanel.jsx';
@@ -218,6 +220,8 @@ function CanvasWorkspace() {
   const liveContent=useMemo(()=>createLiveContentRegistry(),[canvasId]);
   const liveContentIds=useSyncExternalStore(liveContent.subscribe,liveContent.getSnapshot,liveContent.getSnapshot);
   const { token, user } = useAuth();
+  const agentUserRef = useRef(null);
+  agentUserRef.current = user?.user_id ?? null;
   const [portfolioViewing, setPortfolioViewing] = useState(false), [portfolioIndex, setPortfolioIndex] = useState(0), [portfolioSettings, setPortfolioSettings] = useState(false), [portfolioLocked, setPortfolioLocked] = useState(false);
   const frameStore = useMemo(() => createFrameStore(), []), framePages = useSyncExternalStore(frameStore.subscribe, frameStore.getSnapshot, frameStore.getSnapshot);
   const currentFrameRef = useRef(null), presentationPendingRef = useRef(null), presentationBusy = useRef(0), seenCursor = useRef(''), [presentationSending, setPresentationSending] = useState(false);
@@ -248,8 +252,13 @@ function CanvasWorkspace() {
   }), []);
   const multiAgentStore = useMemo(() => createMultiAgentStore({
     getItems: () => itemsRef.current,
-    executeAgent: ({ operation, ...agent }, onOutput) => runtimeRequestRef.current({ action: 'agent', operation, agent }, onOutput),
-    resolveApiKey: () => loadAgentKey(),
+    executeAgent: async ({ operation, ...agent }, onOutput) => {
+      // Graph runs need the same per-provider consent as the panel.
+      requireAgentConsent(agentUserRef.current, operation, agent.options);
+      return runtimeRequestRef.current({ action: 'agent', operation, agent }, onOutput);
+    },
+    // Each agent node may name its own provider; use this tab's key for that provider.
+    resolveApiKey: config => loadAgentKey(agentProvider(config?.provider).id),
     getAnchor: id => getAgentAnchorRef.current(id),
     saveOutput: (id, records) => saveBlueprintOutputRef.current(id, records),
     saveValue: (id, patch) => saveBlueprintValueRef.current(id, patch),
@@ -2689,7 +2698,10 @@ function CanvasWorkspace() {
       onChatHighlightVisible: () => { if (chatJumpNote) { comments.dismiss(chatJumpNote); setChatJumpNote(null); } },
       onAgentBusyChange: (...args) => setAgentBusy(...args),
       onAgentClose: () => setShowAgent(false),
-      onAgentRequest: ({ operation, ...agent }, onOutput) => executeCanvasCode({ canvasId, action: 'agent', operation, agent, sendRaw, pendingRequests: runtimeSocketRequestsRef.current }, onOutput),
+      onAgentRequest: async ({ operation, ...agent }, onOutput) => {
+        requireAgentConsent(agentUserRef.current, operation, agent.options);
+        return executeCanvasCode({ canvasId, action: 'agent', operation, agent, sendRaw, pendingRequests: runtimeSocketRequestsRef.current }, onOutput);
+      },
     };
     const uiActions = useMemo(() => Object.fromEntries(
       Object.keys(uiActionsRef.current).map((key) => [key, (...args) => uiActionsRef.current[key](...args)])
@@ -2887,7 +2899,7 @@ function CanvasWorkspace() {
         {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{ui(toast)}</div>}
         {comments.activeId && <ObjectCommentsPanel token={token} comments={comments} participants={mentionParticipants} connection={connection} />}
         <MentionNotifications notifications={comments.notifications} onJump={jumpToMention} onDismiss={comments.dismiss} channelName={id => textChannels.find(channel => channel.id === id)?.name} />
-        <CanvasAgentPanel key={`${canvasId}:${user?.user_id || ''}`} theme={theme} isAdmin={Boolean(capabilities?.is_admin)} onBusyChange={uiActions.onAgentBusyChange} open={showAgent} onClose={uiActions.onAgentClose} canvasId={canvasId} selectedIds={selectedObjectIds} anchor={showAgent ? centeredItemPosition(0, 0) : null} request={uiActions.onAgentRequest} />
+        <CanvasAgentPanel key={`${canvasId}:${user?.user_id || ''}`} theme={theme} isAdmin={Boolean(capabilities?.is_admin)} onBusyChange={uiActions.onAgentBusyChange} open={showAgent} onClose={uiActions.onAgentClose} canvasId={canvasId} selectedIds={selectedObjectIds} anchor={showAgent ? centeredItemPosition(0, 0) : null} request={uiActions.onAgentRequest} userId={user?.user_id ?? null} />
         {showRuntimeSettings && <RuntimeSettingsDialog request={management => executeCanvasCode({ canvasId, action: 'manage', management, sendRaw, pendingRequests: runtimeSocketRequestsRef.current })} canManage={canWriteCanvas && canUseCanvas(capabilities, 'execute')} canvasId={canvasId} token={token} user={user} initialLanguage={selectedItem?.language || 'cpp'} isRunning={() => runtimeStore.isRunning()} onClose={() => setShowRuntimeSettings(false)} />}
         {versionsOpened.current && <CanvasVersionDialog open={showVersions} api={canvasCodeApi} canvasId={canvasId} onClose={() => setShowVersions(false)} onInspect={source => { setCanvasCodeSource(source); setShowVersions(false); setShowCanvasCode(true); }} />}
         {showCanvasCode && <CanvasAsCodeDialog api={canvasCodeApi} canvasId={canvasId} initialSource={canvasCodeSource} onClose={() => setShowCanvasCode(false)} />}
