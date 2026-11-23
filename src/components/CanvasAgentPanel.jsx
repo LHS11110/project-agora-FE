@@ -39,13 +39,14 @@ function AgentRetryNotice({ message, onRetry }) {
   </div>;
 }
 
-export default function CanvasAgentPanel({ open, onClose, request, anchor, canvasId, canvasConnection = 'connected', selectedIds = [], selectedLabel, canDeleteSelected = false, onBusyChange, theme = 'light', token }) {
+export default function CanvasAgentPanel({ open, onClose, request, anchor, canvasId, canvasConnection = 'connected', selectedIds = [], selectedLabel, canEditSelected = false, onBusyChange, theme = 'light', token }) {
   useUiLocale();
   const fieldId = useId();
   const [optimistic, setOptimistic] = useState(null);
   const [prompt, setPrompt] = useState('');
   const [deleteEnabled, setDeleteEnabled] = useState(false);
-  useEffect(() => { if (!open) setDeleteEnabled(false); }, [open]);
+  const [editApproval, setEditApproval] = useState(null);
+  useEffect(() => { if (!open) { setDeleteEnabled(false); setEditApproval(null); } }, [open]);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
   const [error, setError] = useState('');
@@ -210,7 +211,10 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
     || !status?.ready;
   const blocked = unavailable || !prompt.trim() || status?.configured !== true
     || (status?.telemetry?.retry_at || 0) > now;
-  const deleteTarget = deleteEnabled && canDeleteSelected && selectedIds.length === 1 ? selectedIds[0] : null;
+  const editableSelection = canEditSelected && selectedIds.length === 1 ? selectedIds[0] : null;
+  const editTarget = editableSelection && editApproval === editableSelection ? editableSelection : null;
+  useEffect(() => { setEditApproval(null); }, [editableSelection]);
+  const deleteTarget = deleteEnabled && canEditSelected && selectedIds.length === 1 ? selectedIds[0] : null;
 
   async function submit(event, deleteId = null) {
     event.preventDefault();
@@ -218,6 +222,7 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
     if (deleteId && !window.confirm(ui('선택한 객체 “{object}”와 연결된 댓글을 삭제할까요?', { object: selectedLabel || deleteId }))) return;
     const selected = selectedIds.slice(0, 10);
     const original = prompt;
+    setEditApproval(null);
     const text = deleteId ? ui('선택한 객체 삭제') : prompt.trim();
     const sessionId = conversation.activeId, turnId = crypto.randomUUID();
     let recovering = false;
@@ -243,6 +248,7 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
           options: modelOptions,
           consent_version: terms.version,
           selected_ids: selected.length ? selected : undefined,
+          confirmed_edit_id: !deleteId && editTarget ? editTarget : undefined,
           confirmed_delete_id: deleteId || undefined,
           session_id: sessionId,
           turn_id: turnId,
@@ -450,7 +456,7 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
             disabled={busy || !canContinue}
             onChange={e => editPrompt(e.target.value)}
             onKeyDown={e => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.nativeEvent.keyCode !== 229) {
                 e.preventDefault();
                 submit(e);
               }
@@ -458,6 +464,10 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
           />
           {consented && (
             <div className="canvas-agent-delete-controls">
+              <label>
+                <input type="checkbox" checked={Boolean(editTarget)} disabled={working || !editableSelection} onChange={event => setEditApproval(event.target.checked ? editableSelection : null)} />
+                {ui('선택한 객체만 수정 허용')}
+              </label>
               <label>
                 <input type="checkbox" checked={deleteEnabled} disabled={working} onChange={event => setDeleteEnabled(event.target.checked)} />
                 {ui('선택 객체 삭제 허용')}
@@ -471,7 +481,7 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
           )}
           <footer>
             <span>
-              {`${provider.label} · ${status?.model || provider.defaultModel} · Ctrl + Enter`}
+              {`${provider.label} · ${status?.model || provider.defaultModel} · ${ui('Enter 보내기 · Shift+Enter 줄바꿈')}`}
             </span>
               <button type="submit" disabled={blocked}>
               {busy ? ui('작업 중…') : ui('보내기')}

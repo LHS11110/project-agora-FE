@@ -662,3 +662,9 @@ body .app-shell.is-canvas-shell .app-sidebar>.brand-lockup>.frelog-wordmark{disp
   border-color: #fff5;
   border-top-color: #fff;
 }
+
+.canvas-object-highlight-layer{position:absolute;inset:0;overflow:visible;pointer-events:none}
+.canvas-object-highlight{fill:#ffc84d24;stroke:#e88909;stroke-width:3;pointer-events:none}
+.canvas-object-highlight.is-pulsing{animation:canvas-object-highlight-pulse 700ms ease-in-out 3}
+@keyframes canvas-object-highlight-pulse{50%{opacity:.3}}
+@media(prefers-reduced-motion:reduce){.canvas-object-highlight.is-pulsing{animation:none}}

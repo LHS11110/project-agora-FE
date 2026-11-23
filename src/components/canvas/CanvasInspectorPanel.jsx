@@ -99,6 +99,8 @@ const InspectorBody = memo(function CanvasInspectorPanel({
   selectedArrow,
   selectedConnector,
   selectedItem,
+  objectHighlighted,
+  onObjectHighlight,
   objectClipboard, clipboardBlocked, canWriteItem = () => true, canWriteCanvas = true, deleteItem,
   laserColor, setLaserColor, onSaveAnchor,
   user, token, updateUserGroup, canvasParticipants = [], onInsertUserGroup, userGroupTemplate, onUserGroupTemplateChange,
@@ -306,6 +308,19 @@ const InspectorBody = memo(function CanvasInspectorPanel({
               onApplyAutoLayout={onApplyAutoLayout}
             />}
           </PropertyFieldsTag>}
+            {selectionDetailStage >= 3 && selectedItem && selectedItem.kind !== 'channel' && (
+              <section className="inspector-section">
+                <strong className="inspector-label">{ui('객체 하이라이트')}</strong>
+                <button type="button" className="inspector-secondary-action" aria-pressed={objectHighlighted}
+                  onClick={() => onObjectHighlight(primarySelectedItemId, 'toggle')}>
+                  {ui(objectHighlighted ? '하이라이트 해제' : '하이라이트 표시')}
+                </button>
+                <button type="button" className="inspector-secondary-action"
+                  onClick={() => onObjectHighlight(primarySelectedItemId, 'pulse')}>
+                  {ui('하이라이트 애니메이션 재생')}
+                </button>
+              </section>
+            )}
         </div>}
         {activeTool === 'select' && (
           <HiddenObjectsManager

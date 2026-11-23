@@ -36,8 +36,22 @@ try{
   await page.getByRole('button',{name:'동의 철회',exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'에이전트 설정',exact:true}).count(),0);
   assert.equal(await page.locator('[name=agent-api-key]').count(),0);
-  await page.getByLabel('에이전트에게 요청').fill('회의 준비 메모를 추가해줘');
-  await page.getByRole('button',{name:/보내기/,exact:false}).click();await page.getByText('코드를 수정했습니다. 객체 ID: code-a').waitFor();
+  const prompt = page.getByLabel('에이전트에게 요청');
+  const editSetting=page.getByRole('checkbox',{name:'선택한 객체만 수정 허용'});
+  assert.equal(await editSetting.isChecked(),false);
+  await editSetting.check();
+  await page.evaluate(()=>window.agentFixture.select({ids:['code-b'],writable:true}));
+  await page.waitForFunction(()=>!Array.from(document.querySelectorAll('label')).find(label=>label.textContent==='선택한 객체만 수정 허용')?.querySelector('input').checked);
+  await page.evaluate(()=>window.agentFixture.select({ids:['code-a'],writable:true}));
+  await editSetting.check();
+  await prompt.fill('선택한 객체의 제목을 바꿔줘');
+  await prompt.press('Shift+Enter');
+  assert.match(await prompt.inputValue(),/\n$/);
+  await prompt.dispatchEvent('keydown',{key:'Enter',isComposing:true,bubbles:true});
+  assert.equal(await page.evaluate(()=>window.agentCalls.some(call=>call.operation==='run')),false);
+  await prompt.press('Enter');
+  await page.getByText('코드를 수정했습니다. 객체 ID: code-a').waitFor();
+  assert.equal(await editSetting.isChecked(),false);
   const run=await page.evaluate(()=>window.agentCalls.find(call=>call.message));
   for (const field of ['api_key','history','allow_delete','include_history']) {
     assert.equal(Object.hasOwn(run,field),false);
@@ -46,6 +60,7 @@ try{
   assert.equal(run.consent_version,version);
   assert.deepEqual(run.selected_ids,['code-a']);
   assert.equal(run.confirmed_delete_id,undefined);
+  assert.equal(run.confirmed_edit_id,'code-a');
   const deleteSetting=page.getByRole('checkbox',{name:'선택 객체 삭제 허용'});
   assert.equal(await deleteSetting.isChecked(),false);
   await deleteSetting.check();

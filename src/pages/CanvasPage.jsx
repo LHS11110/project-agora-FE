@@ -1796,16 +1796,44 @@ function CanvasWorkspace() {
     }
     setEditingId((current) => String(current) === key ? null : current);
   }, [broadcastEditorPresence, editingId, updateFormulaItem]);
-  const focusCanvasObject = (id) => {
+  const [objectHighlights, setObjectHighlights] = useState(() => new Set());
+  const [highlightPulse, setHighlightPulse] = useState(null);
+  useEffect(() => {
+    if (!highlightPulse) return;
+    const timer = setTimeout(() => setHighlightPulse(null), 2200);
+    return () => clearTimeout(timer);
+  }, [highlightPulse]);
+
+  function highlightObject(id, mode) {
+    const key = String(id);
+    const item = itemsRef.current[key];
+    if (!item || !canUseItem(item, accessRef.current, 'read') || isObjectInvisibleAtTime(item, Date.now())
+        || item.kind === 'channel') return;
+    if (mode === 'toggle') {
+      setObjectHighlights(previous => {
+        const next = new Set(previous);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    } else {
+      setHighlightPulse({ id: key, key: createId() });
+    }
+    if (mode === 'agent') focusCanvasObject(key, { select: false });
+  }
+
+  const focusCanvasObject = (id, { select = true } = {}) => {
     const target = itemsRef.current[String(id)];
     const board = boardRef.current?.getBoundingClientRect();
     if (!target || !board) return;
     const bounds = objectBounds(target, itemsRef.current, boardSize.width, boardSize.height);
     const centerX = (bounds.minX + bounds.maxX) / 2;
     const centerY = (bounds.minY + bounds.maxY) / 2;
-    finishEditing(editingId);
-    setActiveTool('select');
-    selectItems([String(id)], String(id));
+    if (select) {
+      finishEditing(editingId);
+      setActiveTool('select');
+      selectItems([String(id)], String(id));
+    }
     cancelCameraMotionRef.current();
     setCamera((current) => ({
       ...current,
@@ -2721,7 +2749,9 @@ function CanvasWorkspace() {
       onAgentBusyChange: (...args) => setAgentBusy(...args),
       onAgentClose: () => setShowAgent(false),
       onAgentRequest: async ({ operation, ...agent }, onOutput) => {
-        return executeCanvasCode({ canvasId, action: 'agent', operation, agent, sendRaw, pendingRequests: runtimeSocketRequestsRef.current }, onOutput);
+        const result = await executeCanvasCode({ canvasId, action: 'agent', operation, agent, sendRaw, pendingRequests: runtimeSocketRequestsRef.current }, onOutput);
+        if (typeof result.highlight_id === 'string') highlightObject(result.highlight_id, 'agent');
+        return result;
       },
     };
     const uiActions = useMemo(() => Object.fromEntries(
@@ -2783,6 +2813,22 @@ function CanvasWorkspace() {
                   {activeTool === 'connect' && connectionStartId != null && items[connectionStartId] && <ConnectorCreationPreview boardRef={boardRef} itemsRef={itemsRef} startId={connectionStartId} boardSize={boardSize} pointerPosition={pointerPosition} spatialIndex={spatialIndex} vectorHitOrder={vectorHitOrder} cameraScale={camera.scale} representationScale={representationScale} />}
                   {selectedItem && (!isObjectInvisibleAtTime(selectedItem, revealNow) || previewHiddenEffective) && canWriteItem(selectedItem) && !isObjectLocked(selectedItem) && !['connector', 'frame'].includes(selectedItem.kind) && activeTool === 'select' && !editingId && <RotationHandles sceneRef={sceneRef} id={String(primarySelectedItemId)} item={selectedItem} viewSize={boardSize} onPointerDown={startObjectRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
                   {selectionIsSingleGroup && selectedObjectIds.every(id => canWriteItem(items[id]) && !isObjectLocked(items[id]) && (!isObjectInvisibleAtTime(items[id], revealNow) || previewHiddenEffective)) && selectedObjectIds.length > 1 && activeTool === 'select' && !editingId && <GroupRotationHandles sceneRef={sceneRef} ids={selectedObjectIds} items={items} viewSize={boardSize} onPointerDown={startGroupRotation} onPointerMove={moveObject} onPointerUp={stopObjectDrag} />}
+                  {(objectHighlights.size > 0 || highlightPulse) && (
+                    <svg className="canvas-object-highlight-layer" width={boardSize.width} height={boardSize.height} aria-hidden="true">
+                      {[...new Set([...objectHighlights, ...(highlightPulse ? [highlightPulse.id] : [])])].map(id => {
+                        const item = items[id];
+                        if (!item || !canUseItem(item, capabilities, 'read') || isObjectInvisibleAtTime(item, revealNow)) return null;
+                        const bounds = objectBounds(item, items, boardSize.width, boardSize.height);
+                        const pulse = highlightPulse?.id === id;
+                        return <rect key={pulse ? highlightPulse.key : id}
+                          className={pulse ? 'canvas-object-highlight is-pulsing' : 'canvas-object-highlight'}
+                          x={bounds.minX * boardSize.width - 4} y={bounds.minY * boardSize.height - 4}
+                          width={(bounds.maxX - bounds.minX) * boardSize.width + 8}
+                          height={(bounds.maxY - bounds.minY) * boardSize.height + 8}
+                          rx="6" vectorEffect="non-scaling-stroke" />;
+                      })}
+                    </svg>
+                  )}
                   <RemoteCursorLayer updaterRef={remoteCursorUpdaterRef} activePeerIds={activePeerIds} visibleBounds={visibleBounds} />
                 </div>
               </div></BlurBudgetContext.Provider>
@@ -2845,6 +2891,8 @@ function CanvasWorkspace() {
             selectedArrow,
             selectedConnector,
             selectedItem,
+            objectHighlighted: objectHighlights.has(String(primarySelectedItemId)),
+            onObjectHighlight: highlightObject,
             objectClipboard, clipboardBlocked, canWriteItem: uiActions.canWriteItem, canWriteCanvas,
             deleteItem: uiActions.deleteItem,
             user, token, updateUserGroup: uiActions.updateUserGroup,
@@ -2922,7 +2970,7 @@ function CanvasWorkspace() {
         <MentionNotifications notifications={comments.notifications} onJump={jumpToMention} onDismiss={comments.dismiss} channelName={id => textChannels.find(channel => channel.id === id)?.name} />
         {agentEligible && (agentAccess || showAgent) && <CanvasAgentPanel key={`${canvasId}:${user?.user_id || ''}`} theme={theme} isAdmin={Boolean(capabilities?.is_admin)} onBusyChange={uiActions.onAgentBusyChange} open={showAgent} onClose={uiActions.onAgentClose} canvasId={canvasId} selectedIds={selectedObjectIds}
           selectedLabel={selectedItem ? String(selectedItem.title || selectedItem.name || selectedItem.filename || selectedItem.text || selectedItem.kind).slice(0, 100) : undefined}
-          canDeleteSelected={Boolean(selectedItem && canWriteItem(selectedItem) && !isObjectLocked(selectedItem))}
+          canEditSelected={Boolean(selectedItem && canWriteItem(selectedItem) && !isObjectLocked(selectedItem))}
           anchor={showAgent ? centeredItemPosition(0, 0) : null} request={uiActions.onAgentRequest} token={token} canvasConnection={connection} />}
         {showRuntimeSettings && <RuntimeSettingsDialog request={management => executeCanvasCode({ canvasId, action: 'manage', management, sendRaw, pendingRequests: runtimeSocketRequestsRef.current })} canManage={canWriteCanvas && canUseCanvas(capabilities, 'execute')} canvasId={canvasId} token={token} user={user} initialLanguage={selectedItem?.language || 'cpp'} isRunning={() => runtimeStore.isRunning()} onClose={() => setShowRuntimeSettings(false)} />}
         {versionsOpened.current && <CanvasVersionDialog open={showVersions} api={canvasCodeApi} canvasId={canvasId} onClose={() => setShowVersions(false)} onInspect={source => { setCanvasCodeSource(source); setShowVersions(false); setShowCanvasCode(true); }} />}

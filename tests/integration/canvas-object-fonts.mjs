@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 const {chromium}=await import(process.env.AGORA_E2E_PLAYWRIGHT_MODULE||'playwright-core');
 const origin=process.env.AGORA_E2E_ORIGIN||'https://localhost:5191';
 const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox',...(process.env.AGORA_E2E_HOST_RESOLVER?['--host-resolver-rules='+process.env.AGORA_E2E_HOST_RESOLVER]:[])]});
-const user={email:'roles@example.invalid',nickname:'Roles',tag_number:1,role:'ROLE_USER',status:'ACTIVE'};
+const user={user_id:7,email:'roles@example.invalid',nickname:'Roles',tag_number:1,role:'ROLE_USER',status:'ACTIVE'};
 const token='eyJhbGciOiJIUzI1NiJ9.'+Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+600})).toString('base64url')+'.roles';
 const policies={'admin-group':{read:true,write:true,execute:true},default:{read:true,write:false,execute:false}};
 const items={box:{kind:'shape',shapeType:'rectangle',x:.2,y:.2,width:.15,height:.12,color:'#6852d6',fill:'#eee9fb',permission:'default'},exec:{kind:'shape',shapeType:'rectangle',runtimeRole:'executor',x:.12,y:.55,width:.22,height:.2,permission:'default'},code:{kind:'code',code:'print(1)',language:'python',filename:'main.py',x:.42,y:.5,width:.2,height:.2,permission:'default'},output:{kind:'shape',shapeType:'rectangle',runtimeRole:'output',x:.72,y:.55,width:.2,height:.2,permission:'default'},e1:{kind:'connector',from:'exec',to:'code',permission:'default'},e2:{kind:'connector',from:'code',to:'output',permission:'default'}};
@@ -27,13 +27,43 @@ try{for(const role of ['admin']){let executions=0,writes=0,settingsUpdate=null,r
 const context=await browser.newContext({viewport:{width:1920,height:1400},locale:'ko-KR',ignoreHTTPSErrors:process.env.AGORA_E2E_INSECURE_LOCAL_TLS==='1'});
 await context.addInitScript(({token,user})=>{((t)=>{const f=window.fetch;window.fetch=function(input){return String(input?.url??input).includes('/api/auth/session/refresh')?Promise.resolve(new Response(JSON.stringify({accessToken:t}),{status:200,headers:{'Content-Type':'application/json'}})):f.apply(this,arguments);};})(token);localStorage.setItem('agora_user',JSON.stringify(user));},{token,user});
 const settings=()=>({canvas_name:'Role fixture',settings_revision:revision,visibility:'private',participants:[],group_permissions:policies,can_manage:admin});
-await context.route(url=>url.pathname.startsWith('/api/'),r=>{const path=new URL(r.request().url()).pathname.replace(/\/runtime\/execute\/stream$/, '/runtime/execute');let data={canvas_id:999003,canvas_name:'Role fixture'};if(path==='/api/auth/me')data=user;else if(path.endsWith('/access'))data={ws_port:8002,canvas_access_token:'fixture'};else if((path.endsWith('/runtime/execute')||path.endsWith('/runtime/build'))){executions++;data={output:'1\n',exitCode:0};}else if(path.endsWith('/runtime/settings'))data={revision:0,languages:{cpp:{engine:'clang21',standard:'c++17'}},catalog:{cpp:{label:'C++',engines:{clang21:{label:'Clang',mode:'shared'}},fields:{standard:{label:'언어 표준',values:['c++17']}}}}};else if(path.endsWith('/settings'))data=settings();return r.fulfill(new URL(r.request().url()).pathname.endsWith('/runtime/execute/stream')?{contentType:'application/x-ndjson',body:JSON.stringify({type:'result',result:data})+'\n'}:{json:data});});
-await context.routeWebSocket(/\/wss\/port\//,ws=>{const rtc=ws.url().includes('/rtc/');if(!rtc){peers.add(ws);ws.onClose(()=>peers.delete(ws));}const client=new URL(ws.url()).searchParams.get('client_id');setTimeout(()=>ws.send(JSON.stringify(rtc?{type:'rtc_ready'}:{type:'init_items',items:latest,...caps,groups:['default'],sync_protocol:2,sync_user_id:7,revision,accepted_count:0,rtc_canvas_connection_id:'fixture',rtc_canvas_connection_hash:'proof'})),100);ws.onMessage(raw=>{const data=JSON.parse(String(raw));if(data.type==='canvas_sync')ws.send(JSON.stringify({type:'canvas_snapshot',client_id:data.client_id,items:latest,...caps,sync_protocol:2,sync_user_id:7,revision,accepted_count:receipts.get(data.client_id)||0}));if(data.type==='rtc_join')ws.send(JSON.stringify({type:'rtc_peers',self_peer_id:'peer',peers:[]}));if(data.type==='canvas_settings_update'){settingsUpdate=data;revision++;ws.send(JSON.stringify({type:'canvas_settings_result',ok:true,request_id:data.request_id,settings:settings()}));}if(data.type==='canvas_ops'){writes++;receipts.set(data.client_id,data.request_count);for(const op of data.operations){
+await context.route(url=>url.pathname.startsWith('/api/'),r=>{const path=new URL(r.request().url()).pathname.replace(/\/runtime\/execute\/stream$/, '/runtime/execute');let data={canvas_id:999003,canvas_name:'Role fixture'};if(path==='/api/auth/me')data=user;else if(path==='/api/users/agent-terms')data={version:'agent-local-v3',body:'테스트 약관',accepted:true};else if(path.endsWith('/access'))data={ws_port:8002,canvas_access_token:'fixture'};else if((path.endsWith('/runtime/execute')||path.endsWith('/runtime/build'))){executions++;data={output:'1\n',exitCode:0};}else if(path.endsWith('/runtime/settings'))data={revision:0,languages:{cpp:{engine:'clang21',standard:'c++17'}},catalog:{cpp:{label:'C++',engines:{clang21:{label:'Clang',mode:'shared'}},fields:{standard:{label:'언어 표준',values:['c++17']}}}}};else if(path.endsWith('/settings'))data=settings();return r.fulfill(new URL(r.request().url()).pathname.endsWith('/runtime/execute/stream')?{contentType:'application/x-ndjson',body:JSON.stringify({type:'result',result:data})+'\n'}:{json:data});});
+await context.routeWebSocket(/\/wss\/port\//,ws=>{const rtc=ws.url().includes('/rtc/');if(!rtc){peers.add(ws);ws.onClose(()=>peers.delete(ws));}const client=new URL(ws.url()).searchParams.get('client_id');setTimeout(()=>ws.send(JSON.stringify(rtc?{type:'rtc_ready'}:{type:'init_items',items:latest,...caps,groups:['default'],sync_protocol:2,sync_user_id:7,revision,accepted_count:0,rtc_canvas_connection_id:'fixture',rtc_canvas_connection_hash:'proof'})),100);ws.onMessage(raw=>{const data=JSON.parse(String(raw));if(data.type==='runtime_execute'&&data.action==='agent'){
+ const draft={id:'fixture-draft',status:'draft',can_continue:true,owner_id:7};
+ const result=data.operation==='status'?{ready:true,configured:true}:data.operation==='sessions'?{sessions:[],draft}:data.operation==='session_get'?{session:draft,messages:[]}:{answer:'객체를 찾았습니다.',highlight_id:'question'};
+ ws.send(JSON.stringify({type:'runtime_result',ok:true,request_id:data.request_id,result}));
+ return;
+}if(data.type==='canvas_sync')ws.send(JSON.stringify({type:'canvas_snapshot',client_id:data.client_id,items:latest,...caps,sync_protocol:2,sync_user_id:7,revision,accepted_count:receipts.get(data.client_id)||0}));if(data.type==='rtc_join')ws.send(JSON.stringify({type:'rtc_peers',self_peer_id:'peer',peers:[]}));if(data.type==='canvas_settings_update'){settingsUpdate=data;revision++;ws.send(JSON.stringify({type:'canvas_settings_result',ok:true,request_id:data.request_id,settings:settings()}));}if(data.type==='canvas_ops'){writes++;receipts.set(data.client_id,data.request_count);for(const op of data.operations){
  if(op.action==='delete'){delete latest[op.id];continue;}
  if(op.action==='translate'){for(const id of op.ids){latest[id]={...latest[id],x:latest[id].x+op.dx,y:latest[id].y+op.dy};}continue;}
  latest[op.id]={...latest[op.id],...op.patch};for(const field of op.unset||[])delete latest[op.id][field];
  }const deleted=Object.fromEntries(data.operations.filter(o=>o.action==='delete').map(o=>[o.id,null]));revision++;for(const peer of peers)peer.send(JSON.stringify({type:'canvas_commit',client_id:data.client_id,author_id:7,request_count:data.request_count,revision,items:{...latest,...deleted}}));}});});
 const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(origin+'/canvases/999003');await page.waitForFunction(()=>window.frelogCanvas?.read().items.box);
+
+if(process.argv.includes('--highlight-only')){
+ await page.locator('.canvas-object[data-item-id="question"] .question-card header').click();
+ const highlight=page.locator('.canvas-object-highlight');
+ await page.getByRole('button',{name:'하이라이트 표시',exact:true}).click();
+ await highlight.waitFor();
+ await page.getByRole('button',{name:'하이라이트 해제',exact:true}).click();
+ await highlight.waitFor({state:'detached'});
+ const priorRevision=revision;
+ await page.getByRole('button',{name:'하이라이트 애니메이션 재생',exact:true}).click();
+ await page.locator('.canvas-object-highlight.is-pulsing').waitFor();
+ await highlight.waitFor({state:'detached'});
+ assert.equal(revision,priorRevision,'Highlight must not persist a canvas edit');
+ await page.getByRole('button',{name:'AI 에이전트',exact:true}).click();
+ const input=page.getByRole('textbox',{name:'에이전트에게 요청'});
+ await input.fill('문제 객체 찾아서 하이라이트해줘');
+ await page.getByRole('button',{name:'보내기',exact:true}).click();
+ await page.locator('.canvas-object-highlight.is-pulsing').waitFor();
+ await highlight.waitFor({state:'detached'});
+ assert.equal(revision,priorRevision,'Agent highlight must not persist a canvas edit');
+ assert.deepEqual(errors,[]);
+ console.log('PASS persistent and animated object highlights without a canvas write');
+ await context.close();
+ continue;
+}
 
 const cases=[['box',12,null],['exec',12,'.blueprint-node header strong'],['code',13,'.syntax-code-preview'],['output',12,'.blueprint-node header strong'],['e1',12,'.connector-name-label'],['question',12,'.question-prompt'],['chart',9,'.chart-svg text'],['group',12,'.user-group-content h3'],['image',8,'.object-caption'],['pdf',12,'.pdf-document-heading strong'],['link',8,'.shared-link-copy strong'],['plain',13,'.unified-plain-preview'],['note',10,'.sticky-note-content'],['table',9,'td'],['math',16,null],['stroke',13,null]];
 async function effectiveFont(id,selector){return page.locator(`.canvas-object[data-item-id="${id}"]`).locator(selector).first().evaluate(el=>{let size=parseFloat(getComputedStyle(el).fontSize);for(let node=el;node;node=node.parentElement){const transform=getComputedStyle(node).transform;if(transform!=='none'){const m=new DOMMatrixReadOnly(transform);size*=Math.hypot(m.a,m.b);}}return size;});}
