@@ -278,7 +278,7 @@ body .profile-form {gap:19px;padding-top:25px;}
 body .profile-form .input-wrap {height:44px;}
 body .profile-form .input-wrap input {font-size:13px;}
 body .disabled-input {background:#f7f7f9;color:#9d97a5;}
-body .profile-page :is(.mfa-settings,.passkey-settings) {margin-top:22px;padding:25px 26px;border-color:var(--fl-border);border-radius:12px;}
+body .profile-page :is(.mfa-settings,.passkey-settings,.session-settings) {margin-top:22px;padding:25px 26px;border-color:var(--fl-border);border-radius:12px;}
 body .profile-page :is(.mfa-status,.passkey-status) {font-size:10px;background:#f2f0f6;color:#82798f;border-color:#e7e2ee;}
 body .profile-page :is(.mfa-status,.passkey-status).enabled {background:#edf6f0;color:#518165;border-color:#dbeade;}
 body .profile-security-note {background:#fafafb;border-color:var(--fl-border);color:var(--fl-muted);}
@@ -506,7 +506,7 @@ body .tutorial-footnote {background:#faf9fc;border-color:var(--fl-border);color:
  body .library-actions,body .search-field {width:100%;}
  body .canvas-grid {grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
  body .profile-edit-card {padding:22px 20px;}
- body .profile-page :is(.mfa-settings,.passkey-settings) {padding:22px 20px;}
+ body .profile-page :is(.mfa-settings,.passkey-settings,.session-settings) {padding:22px 20px;}
  body .page-title-row {align-items:flex-start;gap:12px;}
  body .profile-status {font-size:9px;white-space:nowrap;}
  body .profile-security-note p {font-size:10px;}
@@ -545,8 +545,8 @@ body .home-scroll-page .language-switcher {background:#fff;border-color:var(--fl
 body .home-scroll-page .language-switcher select {color:var(--fl-secondary);}
 body .home-scroll-page .language-switcher option {color:var(--fl-ink);background:#fff;}
 body :is(.mfa-settings,.mfa-login) {--mfa-ink:var(--fl-ink);--mfa-muted:var(--fl-secondary);--mfa-line:var(--fl-border);--mfa-soft:var(--fl-subtle);}
-body .profile-page :is(.mfa-settings,.passkey-settings) .button.button-dark {background:var(--fl-accent);border-color:var(--fl-accent);color:#fff;}
-body .profile-page :is(.mfa-settings,.passkey-settings) .button.button-dark:hover:not(:disabled) {background:var(--fl-accent-hover);border-color:var(--fl-accent-hover);}
+body .profile-page :is(.mfa-settings,.passkey-settings,.session-settings) .button.button-dark {background:var(--fl-accent);border-color:var(--fl-accent);color:#fff;}
+body .profile-page :is(.mfa-settings,.passkey-settings,.session-settings) .button.button-dark:hover:not(:disabled) {background:var(--fl-accent-hover);border-color:var(--fl-accent-hover);}
 body .profile-page .passkey-settings .plain-input {border-color:#dcdce3;color:var(--fl-ink);font-size:13px;border-radius:7px;}
 body .profile-page .passkey-description,body .profile-page .passkey-empty {font-size:12px;color:var(--fl-secondary);}
 body .profile-page .mfa-settings .card-heading h2 {color:var(--fl-ink);font-size:17px;}

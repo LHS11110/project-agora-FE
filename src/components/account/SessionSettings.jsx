@@ -17,6 +17,8 @@ export default function SessionSettings(){
   <div className="card-heading"><span className="settings-badge" aria-hidden="true"><Icon name="logout" size={18}/></span><div><h2 id="session-title">{ui('로그인 세션')}</h2><p>{ui('다른 기기에 남아 있는 로그인을 종료합니다.')}</p></div></div>
   <p className="passkey-description">{ui('기기를 분실했거나 다른 사람이 로그인했을 수 있다면 모든 기기에서 로그아웃하세요. 비밀번호를 변경하면 다른 기기의 로그인은 자동으로 종료됩니다.')}</p>
   {error&&<div className="form-error" role="alert">{ui(error)}</div>}
-  <button type="button" className="button" onClick={signOutEverywhere} disabled={busy}>{busy?ui('로그아웃하는 중…'):ui('모든 기기에서 로그아웃')}</button>
+  <div className="form-actions">
+   <button type="button" className="button button-dark" onClick={signOutEverywhere} disabled={busy}>{busy?ui('로그아웃하는 중…'):ui('모든 기기에서 로그아웃')}</button>
+  </div>
  </section>;
 }
