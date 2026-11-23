@@ -11,7 +11,7 @@ function read(){const saved=localStorage.getItem(dbKey);if(saved)return JSON.par
 function write(db){localStorage.setItem(dbKey,JSON.stringify(db));}
 function summary(s){const {messages,...value}=s;return {...value,can_delete:s.owner_id===userId&&!['draft','running'].includes(s.status),can_continue:s.owner_id===userId};}
 function notice(){window.dispatchEvent(new CustomEvent('agora:agent-sessions-changed',{detail:{canvasId:'1'}}));}
-window.agentFixture={failNext429:false,disconnectNext:false,omitSession:null,read,notice};
+window.agentFixture={failNext429:false,disconnectNext:false,omitSession:null,objects:{'code-a':'테스트 코드','code-b':'다른 코드'},read,notice};
 async function request(payload,output){
  window.agentCalls.push(payload);
  if(payload.operation==='status')return {ready:true,configured:true,model:'qwen2.5:1.5b',credential_source:'none',default_configured:true,telemetry};
@@ -24,7 +24,11 @@ async function request(payload,output){
  if(db.drafts[userId]===s.id){s.title=payload.message;db.index.unshift(s.id);const next=`next-draft-${db.next++}`;db.sessions[next]=draft(next,userId);db.drafts[userId]=next;}
  write(db);notice();output('객체 수정 중');
  const finish=()=>{const latest=read(),current=latest.sessions[s.id],failed=window.agentFixture.failNext429;window.agentFixture.failNext429=false;
- const answer=failed?'요청이 너무 많습니다. 잠시 후 다시 시도해주세요.':'코드를 수정했습니다. 객체 ID: code-a';
+ if(!failed&&payload.confirmed_delete_id){
+   if(payload.selected_ids?.length!==1||payload.selected_ids[0]!==payload.confirmed_delete_id)throw Error('Invalid delete scope');
+   delete window.agentFixture.objects[payload.confirmed_delete_id];
+ }
+ const answer=failed?'요청이 너무 많습니다. 잠시 후 다시 시도해주세요.':payload.confirmed_delete_id?'확인한 객체를 삭제했습니다.':'코드를 수정했습니다. 객체 ID: code-a';
  current.messages[current.messages.length-1].status=failed?'failed':'complete';current.status=failed?'failed':'complete';current.updated_at=Date.now();current.messages.push({id:payload.turn_id+':result',turn_id:payload.turn_id,role:'assistant',created_at:Date.now(),content:answer,status:current.status,kind:failed?'error':'answer',code:failed?'AGENT_PROVIDER_BUSY':''});write(latest);notice();
  const result={answer,telemetry,session_id:s.id,next_draft_id:latest.drafts[userId]};
  if(failed){const error=Error(answer);error.code='AGENT_PROVIDER_BUSY';error.payload={result:{...result,error:error.code,message:answer}};throw error;}
@@ -33,5 +37,8 @@ async function request(payload,output){
  await new Promise(resolve=>setTimeout(resolve,100));return finish();
 }
 
-function App(){const [open,setOpen]=useState(true),[busy,setBusy]=useState(false);return <div className="canvas-app-page" style={{position:'relative',height:'100vh','--surface':'#fff','--line':'#e7e7ec','--ink-strong':'#302c3e','--ink-muted':'#827c93','--canvas-panel-top':'16px'}}><div className="board-topline" style={{position:'absolute',bottom:16,right:16,height:40,border:'1px solid #ddd',padding:8,borderRadius:10}}>요약 · 확대 · 캔버스 설정</div><CanvasAgentLauncher open={open} busy={busy} onClick={()=>setOpen(value=>!value)}/><CanvasAgentPanel open={open} onClose={()=>setOpen(false)} onBusyChange={setBusy} canvasId="1" selectedIds={['code-a']} anchor={{x:.2,y:.3}} request={request}/></div>};
+function App(){const [open,setOpen]=useState(true),[busy,setBusy]=useState(false);
+const [selection,select]=useState({ids:['code-a'],writable:true});
+window.agentFixture.select=select;
+return <div className="canvas-app-page" style={{position:'relative',height:'100vh','--surface':'#fff','--line':'#e7e7ec','--ink-strong':'#302c3e','--ink-muted':'#827c93','--canvas-panel-top':'16px'}}><div className="board-topline" style={{position:'absolute',bottom:16,right:16,height:40,border:'1px solid #ddd',padding:8,borderRadius:10}}>요약 · 확대 · 캔버스 설정</div><CanvasAgentLauncher open={open} busy={busy} onClick={()=>setOpen(value=>!value)}/><CanvasAgentPanel open={open} onClose={()=>setOpen(false)} onBusyChange={setBusy} canvasId="1" selectedIds={selection.ids} selectedLabel={window.agentFixture.objects[selection.ids[0]]} canDeleteSelected={selection.writable} anchor={{x:.2,y:.3}} request={request}/></div>};
 createRoot(document.getElementById('root')).render(<App/>);

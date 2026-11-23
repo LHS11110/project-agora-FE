@@ -297,7 +297,7 @@ export default function CanvasAgentNode({
               data-object-action="agent"
               onClick={() => store?.openAgentPanel?.()}
             >
-              {ui('에이전트 설정')}
+              {ui('AI 에이전트 열기')}
             </button>}
           </div>
         )}

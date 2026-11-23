@@ -1,7 +1,6 @@
 import { useId, useMemo } from 'react';
-import { intlLocale, ui } from '../../i18n/locale.js';
+import { ui } from '../../i18n/locale.js';
 import { useUiLocale } from '../../i18n/useUiLocale.js';
-import { agentProvider } from '../../components/agentPreferences.js';
 import {
   AGENT_ACCENT_COLORS,
   AGENT_ROLE_PRESETS,
@@ -613,7 +612,7 @@ export function AgentNodeInspector({
   onPatchConnector,
   onNavigateObject,
 }) {
-  const locale = useUiLocale();
+  useUiLocale();
   const fieldId = useId();
   const config = useMemo(() => readAgentNodeConfig(item), [item]);
   const connections = useMemo(() => inspectAgentConnections(items || {}, id), [items, id]);
@@ -708,64 +707,9 @@ export function AgentNodeInspector({
         </select>
       </label>
 
-      {config.engine !== 'mock' && (
-        <div className="agent-inspector-grid">
-          <label className="agent-inspector-field" htmlFor={`${fieldId}-model`}>
-            <span>{ui('Claude 모델')}</span>
-            <select id={`${fieldId}-model`} name="agent-model" aria-label={ui('Claude 모델')} value={config.model} onChange={e => update({ model: e.target.value })}>
-              <option value="">{agentProvider(config.provider).defaultModel}</option>
-              {agentProvider(config.provider).models.filter(model => model !== agentProvider(config.provider).defaultModel)
-                .map(model => <option key={model} value={model}>{model}</option>)}
-            </select>
-          </label>
-        </div>
-      )}
-
-      {config.engine === 'mock' ? (
+      {config.engine === 'mock' && (
         <MockAgentResponseFields config={config} onChange={update} className="agent-inspector-field" />
-      ) : (
-        <div className="agent-inspector-grid">
-          <label className="agent-inspector-field" htmlFor={`${fieldId}-reasoning`}>
-            <span>{ui('추론 수준')}</span>
-            <select
-              id={`${fieldId}-reasoning`}
-              value={config.reasoning_effort}
-              onChange={e => update({ reasoning_effort: e.target.value })}
-            >
-              <option value="low">{ui('낮음')}</option>
-              <option value="high">{ui('높음')}</option>
-              <option value="max">{ui('최대')}</option>
-            </select>
-          </label>
-          <label className="agent-inspector-field" htmlFor={`${fieldId}-tokens`}>
-            <span>{ui('응답 토큰')}</span>
-            <select
-              id={`${fieldId}-tokens`}
-              value={config.max_tokens}
-              onChange={e => update({ max_tokens: Number(e.target.value) })}
-            >
-              {[1024, 2048, 4096, 8192, 16384, 32768].map(val => (
-                <option key={val} value={val}>{val.toLocaleString(intlLocale(locale))}</option>
-              ))}
-            </select>
-          </label>
-        </div>
       )}
-
-      {config.engine !== 'mock' && <label className="agent-inspector-field" htmlFor={`${fieldId}-steps`}>
-        <span>{ui('최대 작업 단계')}</span>
-        <input
-          id={`${fieldId}-steps`}
-          type="number"
-          min="1"
-          max="12"
-          value={config.max_steps}
-          onChange={e => {
-            const n = Number(e.target.value);
-            if (Number.isInteger(n) && n >= 1 && n <= 12) update({ max_steps: n });
-          }}
-        />
-      </label>}
 
       <label className="agent-inspector-check" htmlFor={`${fieldId}-attach`}>
         <input
@@ -867,7 +811,7 @@ export function AgentNodeInspector({
         className="inspector-secondary-action"
         onClick={store.openAgentPanel}
       >
-        <span>{ui('에이전트 설정')}</span>
+        <span>{ui('AI 에이전트 열기')}</span>
       </button>}
     </section>
   );

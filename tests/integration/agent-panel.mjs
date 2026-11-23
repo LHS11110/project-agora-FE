@@ -8,13 +8,13 @@ try{
   await page.route('**/api/users/agent-terms', async route => {
     if (route.request().method() === 'PUT') {
       const decision = route.request().postDataJSON();
-      assert.equal(decision.version, 'agent-local-v2');
+      assert.equal(decision.version, 'agent-local-v3');
       accepted = decision.accepted;
     }
-    await route.fulfill({json:{version:'agent-local-v2',body:'DB에 저장된 약관 본문',accepted}});
+    await route.fulfill({json:{version:'agent-local-v3',body:'DB에 저장된 약관 본문',accepted}});
   });
   await page.goto(new URL('/tests/browser/agent-panel.html',process.env.AGENT_TEST_ORIGIN || 'https://127.0.0.1:5191').href);await page.getByRole('dialog').waitFor();
-  await page.getByText('Agora AI 에이전트 이용약관 (agent-local-v2)',{exact:true}).click();
+  await page.getByText('Agora AI 에이전트 이용약관 (agent-local-v3)',{exact:true}).click();
   await page.getByText('DB에 저장된 약관 본문',{exact:true}).waitFor();
   await page.locator('[name=agent-consent-terms]').check();
   assert.equal(await page.locator('[name=agent-consent-transfer]').count(),0);
@@ -22,16 +22,44 @@ try{
   await page.waitForFunction(() => !document.querySelector('[name=agent-consent-terms]'));
   assert.equal(accepted,true);
   await page.reload();
-  await page.getByRole('button',{name:'에이전트 설정',exact:true}).click();
-  await page.getByText('Agora AI 에이전트 이용약관에 동의함',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'동의 철회',exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'에이전트 설정',exact:true}).count(),0);
   assert.equal(await page.locator('[name=agent-api-key]').count(),0);
   await page.getByLabel('에이전트에게 요청').fill('회의 준비 메모를 추가해줘');
   await page.getByRole('button',{name:/보내기/,exact:false}).click();await page.getByText('코드를 수정했습니다. 객체 ID: code-a').waitFor();
   const run=await page.evaluate(()=>window.agentCalls.find(call=>call.message));
-  for (const field of ['api_key','selected_ids','history','allow_delete','include_history']) {
+  for (const field of ['api_key','history','allow_delete','include_history']) {
     assert.equal(Object.hasOwn(run,field),false);
   }
-  assert.deepEqual(run.options,{provider:'local',max_tokens:768,max_steps:1});
+  assert.deepEqual(run.options,{provider:'local',max_tokens:768,max_steps:4});
+  assert.deepEqual(run.selected_ids,['code-a']);
+  assert.equal(run.confirmed_delete_id,undefined);
+  const deleteSetting=page.getByRole('checkbox',{name:'선택 객체 삭제 허용'});
+  assert.equal(await deleteSetting.isChecked(),false);
+  await deleteSetting.check();
+  const deleteButton=page.getByRole('button',{name:'선택한 객체 삭제',exact:true});
+  for(const selection of [{ids:[],writable:true},{ids:['code-a','code-b'],writable:true},{ids:['code-a'],writable:false}]){
+    await page.evaluate(selection=>window.agentFixture.select(selection),selection);
+    await page.waitForFunction(()=>[...document.querySelectorAll('button')].find(button=>button.textContent==='선택한 객체 삭제')?.disabled);
+  }
+  assert.equal(await page.evaluate(()=>window.agentCalls.some(call=>call.confirmed_delete_id)),false);
+  await page.evaluate(()=>window.agentFixture.select({ids:['code-a'],writable:true}));
+  await page.getByLabel('에이전트에게 요청').fill('선택한 객체를 삭제해줘');
+  await page.getByRole('button',{name:/보내기/,exact:false}).click();
+  await page.waitForFunction(()=>window.agentCalls.some(call=>call.message==='선택한 객체를 삭제해줘'));
+  assert.equal(await page.evaluate(()=>window.agentCalls.some(call=>call.confirmed_delete_id)),false);
+  page.once('dialog',dialog=>dialog.dismiss());
+  await deleteButton.click();
+  assert.equal(await page.evaluate(()=>window.agentCalls.some(call=>call.confirmed_delete_id)),false);
+  page.once('dialog',async dialog=>{
+    assert.match(dialog.message(),/테스트 코드/);
+    await dialog.accept();
+  });
+  await deleteButton.click();
+  await page.waitForFunction(()=>window.agentCalls.some(call=>call.confirmed_delete_id==='code-a'));
+  assert.equal(await deleteSetting.isChecked(),false);
+  await page.getByText('확인한 객체를 삭제했습니다.',{exact:true}).waitFor();
+  assert.deepEqual(await page.evaluate(()=>window.agentFixture.objects),{'code-b':'다른 코드'});
   await page.evaluate(async ()=>{
     const {reviewAgentPrompt}=await import('/src/components/agentConsent.js');
     window.review=reviewAgentPrompt('<script>connected input</script>');
@@ -44,12 +72,10 @@ try{
   assert.deepEqual(errors,[]);await page.screenshot({path:`/tmp/agora-agent-panel-${viewport.width}.png`});await page.getByRole('button',{name:'닫기',exact:true}).click();assert.equal(await page.getByRole('dialog').count(),0);
   const launcher=await page.getByRole('button',{name:'AI 에이전트',exact:true}).boundingBox(),summary=await page.locator('.board-topline').boundingBox();assert(launcher.y+launcher.height<summary.y,'Launcher must not overlap bottom summary');await page.screenshot({path:`/tmp/agora-agent-launcher-${viewport.width}.png`});
   await page.getByRole('button',{name:'AI 에이전트',exact:true}).click();assert.equal(await page.locator('[name=agent-consent-terms]').count(),0);
-  const settings=page.getByRole('button',{name:'에이전트 설정',exact:true});
-  if (await settings.getAttribute('aria-expanded') !== 'true') await settings.click();
   await page.getByRole('button',{name:'동의 철회',exact:true}).click();
   await page.locator('[name=agent-consent-terms]').waitFor();
   assert.equal(accepted,false);
   await page.emulateMedia({reducedMotion:'reduce'});assert.equal(await page.locator('.canvas-agent-panel').evaluate(el=>getComputedStyle(el).animationName),'none');await page.close();
  }
- console.log('PASS: current consent, local-only model, graph review and desktop/mobile layout');
+ console.log('PASS: current consent, one-object deletion, graph review and desktop/mobile layout');
 }finally{await browser.close();}

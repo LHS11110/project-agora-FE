@@ -13,7 +13,7 @@ import './canvas-agent.css';
 
 import MarkdownText from './MarkdownText.jsx';
 
-const modelOptions = { provider: 'local', max_tokens: 768, max_steps: 1 };
+const modelOptions = { provider: 'local', max_tokens: 768, max_steps: 4 };
 
 function ConsentCard({ terms, onAccept, disabled }) {
   const [accepted, setAccepted] = useState(false);
@@ -32,16 +32,17 @@ function ConsentCard({ terms, onAccept, disabled }) {
   </section>;
 }
 
-export default function CanvasAgentPanel({ open, onClose, request, anchor, canvasId, onBusyChange, theme = 'light', token }) {
+export default function CanvasAgentPanel({ open, onClose, request, anchor, canvasId, selectedIds = [], selectedLabel, canDeleteSelected = false, onBusyChange, theme = 'light', token }) {
   useUiLocale();
   const fieldId = useId();
   const [optimistic, setOptimistic] = useState(null);
   const [prompt, setPrompt] = useState('');
+  const [deleteEnabled, setDeleteEnabled] = useState(false);
+  useEffect(() => { if (!open) setDeleteEnabled(false); }, [open]);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState('');
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now() / 1000);
   const [, setRefreshing] = useState(false);
   const [terms, setTerms] = useState(null);
@@ -204,22 +205,30 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
     };
   }, [recovery, conversation.metadata, conversation.reload, canvasId]);
 
-  const blocked = busy
-    || !prompt.trim()
+  const unavailable = busy
     || !canContinue
     || session?.status === 'running'
     || termsPending
     || !consented
-    || status?.configured !== true
+    || !status?.ready;
+  const blocked = unavailable || !prompt.trim() || status?.configured !== true
     || (status?.telemetry?.retry_at || 0) > now;
+  const deleteTarget = deleteEnabled && canDeleteSelected && selectedIds.length === 1 ? selectedIds[0] : null;
 
-  async function submit(event) {
+  async function submit(event, deleteId = null) {
     event.preventDefault();
-    if (blocked) return;
-    const original = prompt, text = prompt.trim(), sessionId = conversation.activeId, turnId = crypto.randomUUID();
+    if (deleteId ? unavailable || deleteId !== deleteTarget : blocked) return;
+    if (deleteId && !window.confirm(ui('선택한 객체 “{object}”와 연결된 댓글을 삭제할까요?', { object: selectedLabel || deleteId }))) return;
+    const selected = selectedIds.slice(0, 10);
+    const original = prompt;
+    const text = deleteId ? ui('선택한 객체 삭제') : prompt.trim();
+    const sessionId = conversation.activeId, turnId = crypto.randomUUID();
     let recovering = false;
-    inputDrafts.current.set(sessionId, '');
-    setPrompt('');
+    if (deleteId) setDeleteEnabled(false);
+    else {
+      inputDrafts.current.set(sessionId, '');
+      setPrompt('');
+    }
     setOptimistic({ id: turnId, turn_id: turnId, session_id: sessionId, role: 'user', content: text, status: 'running', created_at: Date.now() });
     runningRef.current = sessionId;
     activeTurnRef.current = { turnId };
@@ -235,6 +244,8 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
           message: text,
           anchor,
           options: modelOptions,
+          selected_ids: selected.length ? selected : undefined,
+          confirmed_delete_id: deleteId || undefined,
           session_id: sessionId,
           turn_id: turnId,
         },
@@ -290,19 +301,16 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
                 : ui('{provider} · 아이디어를 함께 만드는 공간', { provider: provider.label })}
             </span>
           </div>
-          <button
-            type="button"
-            className="canvas-agent-settings-toggle"
-            aria-label={ui('에이전트 설정')}
-            aria-expanded={settingsOpen}
-            onClick={() => setSettingsOpen(value => !value)}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-              <path d="M4 7h16M4 17h16" />
-              <circle cx="9" cy="7" r="3" fill="currentColor" />
-              <circle cx="15" cy="17" r="3" fill="currentColor" />
-            </svg>
-          </button>
+          {consented && (
+            <button
+              type="button"
+              className="canvas-agent-withdraw"
+              disabled={busy || termsPending}
+              onClick={() => updateConsent(false)}
+            >
+              {ui('동의 철회')}
+            </button>
+          )}
           <button
             type="button"
             className="canvas-agent-close"
@@ -358,17 +366,6 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
           </div>}
           {terms && !consented && (
             <ConsentCard terms={terms} disabled={busy || termsPending} onAccept={() => updateConsent(true)} />
-          )}
-
-          {settingsOpen && (
-            <section className="canvas-agent-settings" aria-label={ui('에이전트 설정')}>
-              <strong>{ui('로컬 Qwen')}</strong>
-              <p>{ui('Qwen2.5 1.5B · 답변과 메모 생성 · 출력 최대 768토큰')}</p>
-              {consented && <div className="canvas-agent-key-actions">
-                <span>{ui('Agora AI 에이전트 이용약관에 동의함')}</span>
-                <button type="button" disabled={busy || termsPending} onClick={() => updateConsent(false)}>{ui('동의 철회')}</button>
-              </div>}
-            </section>
           )}
 
           <div className="canvas-agent-conversation" aria-live="polite">
@@ -458,6 +455,19 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
               }
             }}
           />
+          {consented && (
+            <div className="canvas-agent-delete-controls">
+              <label>
+                <input type="checkbox" checked={deleteEnabled} disabled={working} onChange={event => setDeleteEnabled(event.target.checked)} />
+                {ui('선택 객체 삭제 허용')}
+              </label>
+              {deleteEnabled && (
+                <button type="button" disabled={unavailable || !deleteTarget} onClick={event => submit(event, deleteTarget)}>
+                  {ui('선택한 객체 삭제')}
+                </button>
+              )}
+            </div>
+          )}
           <footer>
             <span>
               {`${provider.label} · ${status?.model || provider.defaultModel} · Ctrl + Enter`}

@@ -2,7 +2,7 @@ import { ui } from '../i18n/locale.js';
 
 import { api } from '../api/client.js';
 
-export const AGENT_CONSENT_VERSION = 'agent-local-v2';
+export const AGENT_CONSENT_VERSION = 'agent-local-v3';
 const endpoint = '/api/users/agent-terms';
 
 export function loadAgentTerms(token) {
