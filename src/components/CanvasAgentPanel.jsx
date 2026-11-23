@@ -16,6 +16,15 @@ import { hasAgentConsent, revokeAgentConsent, saveAgentConsent } from './agentCo
 import { intlLocale, ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
 import './canvas-agent.css';
+
+const externalEndpoint = 'https://openrouter.ai/api/v1';
+const externalProvider = {
+  id: 'openrouter',
+  label: 'OpenRouter',
+  termsUrl: 'https://openrouter.ai/terms',
+  policyUrl: 'https://openrouter.ai/privacy',
+  dataNotice: 'OpenRouter 중계와 Anthropic 모델 처리에 각 공급자의 데이터 정책이 적용됩니다. 설정에 입력한 키는 OpenRouter 인증에만 사용합니다. 본인 명의의 개발자 API 키를 사용하세요.',
+};
 import MarkdownText from './MarkdownText.jsx';
 
 // Shown before a provider is used: what is sent where, the provider's data terms,
@@ -30,15 +39,20 @@ function ConsentCard({ provider, onAccept, disabled }) {
       <p>{ui('현재 요청, 새 객체 배치 위치 및 작업 중 생성된 내용이 {provider}(미국)에 전송됩니다. 개인정보나 기밀정보를 입력하지 마세요.', { provider: provider.label })}</p>
       <p>{ui(provider.dataNotice)}</p>
       <p>
+        <a href="/terms" target="_blank" rel="noreferrer">{ui('Agora AI 에이전트 이용약관')}</a>
+        {' · '}
         <a href={provider.termsUrl} target="_blank" rel="noreferrer">{ui('{provider} 이용약관', { provider: provider.label })}</a>
         {' · '}
-        <a href="https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data" target="_blank" rel="noreferrer">{ui('데이터 보관 정책')}</a>
-        {' · '}
+        {provider.id === 'anthropic' && <>
+          <a href="https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data" target="_blank" rel="noreferrer">{ui('데이터 보관 정책')}</a>
+          {' · '}
+        </>}
         <a href={provider.policyUrl} target="_blank" rel="noreferrer">{ui('{provider} 이용 정책·개인정보', { provider: provider.label })}</a>
       </p>
+      {provider.id === 'openrouter' && <p>{ui('모델 이용 요금은 입력한 키의 OpenRouter 계정에 청구됩니다. Agora는 키를 현재 요청 처리에만 사용하고 저장하지 않습니다.')}</p>}
       <label className="canvas-agent-check">
         <input type="checkbox" name="agent-consent-terms" checked={checks.terms} onChange={toggle('terms')} />
-        {ui('만 18세 이상이며, {provider}의 이용약관과 이용 정책을 지키겠습니다.', { provider: provider.label })}
+        {ui('만 19세 이상이며, Agora AI 에이전트 이용약관과 {provider}의 이용약관 및 이용 정책에 동의합니다.', { provider: provider.label })}
       </label>
       <label className="canvas-agent-check">
         <input type="checkbox" name="agent-consent-transfer" checked={checks.transfer} onChange={toggle('transfer')} />
@@ -63,10 +77,19 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
   const [preferences, setPreferences] = useState(loadAgentPreferences);
   const [now, setNow] = useState(() => Date.now() / 1000);
   const [, setRefreshing] = useState(false);
-  const provider = agentProvider(preferences.provider);
+  const [external, setExternal] = useState(false);
+  const [endpoint, setEndpoint] = useState('');
+  const [externalModel, setExternalModel] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const provider = external ? externalProvider : agentProvider(preferences.provider);
   const [consentRevision, setConsentRevision] = useState(0);
   const consented = consentRevision >= 0 && hasAgentConsent(userId, provider.id);
-  const statusOptions = modelOptions(preferences);
+  const externalSettingsValid = endpoint.trim().replace(/\/$/, '') === externalEndpoint
+    && /^anthropic\/claude-[a-zA-Z0-9._-]+$/.test(externalModel.trim());
+  const statusOptions = external
+    ? { ...modelOptions(preferences), provider: 'openrouter', model: externalModel.trim() }
+    : modelOptions(preferences);
+  useEffect(() => { if (!open) setApiKey(''); }, [open]);
   const statusKey = JSON.stringify(statusOptions);
   const [recovery, setRecovery] = useState(null);
   const [startedAt, setStartedAt] = useState(null);
@@ -110,14 +133,15 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
   useEffect(() => {
     if (!open) return undefined;
     let live = true;
-    if (!busy) {
+    if (!busy && (!external || externalSettingsValid)) {
+      setStatus(null);
       requestRef.current({ operation: 'status', options: statusOptions })
         .then(value => { if (live) setStatus(value); })
         .catch(e => { if (live) setError(e.message); });
     }
     const timer = setInterval(() => setNow(Date.now() / 1000), 1000);
     return () => { live = false; clearInterval(timer); };
-  }, [open, canvasId, statusKey]);
+  }, [open, canvasId, statusKey, externalSettingsValid]);
 
   useEffect(() => { followLatest.current = true; }, [conversation.activeId]);
   useEffect(() => {
@@ -203,6 +227,7 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
     || !canContinue
     || session?.status === 'running'
     || !consented
+    || (external && (!externalSettingsValid || !/^sk-or-v1-[a-zA-Z0-9_-]+$/.test(apiKey)))
     || status?.configured !== true
     || (status?.telemetry?.retry_at || 0) > now;
 
@@ -213,6 +238,7 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
     let recovering = false;
     inputDrafts.current.set(sessionId, '');
     setPrompt('');
+    setApiKey('');
     setOptimistic({ id: turnId, turn_id: turnId, session_id: sessionId, role: 'user', content: text, status: 'running', created_at: Date.now() });
     runningRef.current = sessionId;
     activeTurnRef.current = { turnId };
@@ -224,9 +250,11 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
     try {
       const result = await requestRef.current(
         {
+          operation: 'run',
           message: text,
           anchor,
-          options: modelOptions(preferences),
+          options: statusOptions,
+          ...(external ? {api_key: apiKey} : {}),
           session_id: sessionId,
           turn_id: turnId,
         },
@@ -346,6 +374,7 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
           {!consented && (
             <ConsentCard
               key={provider.id}
+              key={provider.id}
               provider={provider}
               disabled={busy}
               onAccept={() => { saveAgentConsent(userId, provider.id); setConsentRevision(value => value + 1); }}
@@ -374,7 +403,24 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
               <fieldset disabled={busy}>
                 <legend>{ui('모델 설정')}</legend>
 
-                <div className="canvas-agent-settings-grid">
+                <label htmlFor={`${fieldId}-connection`}>
+                  {ui('모델 연결 방식')}
+                  <select id={`${fieldId}-connection`} name="agent-connection" value={external ? 'external' : 'server'} onChange={event => {
+                    setApiKey('');
+                    setStatus(null);
+                    setError('');
+                    setExternal(event.target.value === 'external');
+                  }}>
+                    <option value="server">{ui('서버 제공 모델')}</option>
+                    <option value="external">{ui('외부 OpenAI 호환 연결')}</option>
+                  </select>
+                </label>
+                {external ? <div className="canvas-agent-settings-grid">
+                  <label htmlFor={`${fieldId}-endpoint`}>{ui('API 엔드포인트')}<input id={`${fieldId}-endpoint`} name="agent-endpoint" type="url" value={endpoint} placeholder={externalEndpoint} onChange={event => setEndpoint(event.target.value)} /></label>
+                  <label htmlFor={`${fieldId}-external-model`}>{ui('모델 ID')}<input id={`${fieldId}-external-model`} name="agent-external-model" value={externalModel} maxLength={128} onChange={event => setExternalModel(event.target.value)} /></label>
+                  {consented && <label htmlFor={`${fieldId}-api-key`}>{ui('개인 개발자 API 키')}<input id={`${fieldId}-api-key`} name="agent-api-key" type="password" autoComplete="off" value={apiKey} maxLength={256} onChange={event => setApiKey(event.target.value)} /></label>}
+                  <small>{ui('현재 OpenRouter 공식 HTTPS 엔드포인트와 운영자가 승인한 Claude 모델만 이용할 수 있습니다. 요청당 최대 10단계, 단계당 출력 8,192토큰, 계정당 UTC 하루 최대 80단계를 적용합니다.')}</small>
+                </div> : <div className="canvas-agent-settings-grid">
                   <label htmlFor={`${fieldId}-model`}>
                     {ui('Claude 모델')}
                     <select id={`${fieldId}-model`} name="agent-model" aria-label={ui('Claude 모델')} value={preferences.model} onChange={e => update('model', e.target.value)}>
@@ -382,12 +428,11 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
                       {provider.models.filter(model => model !== provider.defaultModel).map(model => <option key={model} value={model}>{model}</option>)}
                     </select>
                   </label>
-                </div>
-                <small>{ui('모델을 비워 두면 제공 서비스의 기본 모델을 사용합니다.')}</small>
+                </div>}
                 {consented && (
                   <div className="canvas-agent-key-actions">
                     <span>{ui('{provider} 이용 조건과 데이터 전송에 동의함', { provider: provider.label })}</span>
-                    <button type="button" disabled={busy} onClick={() => { revokeAgentConsent(userId, provider.id); setConsentRevision(value => value + 1); }}>{ui('동의 철회')}</button>
+                    <button type="button" disabled={busy} onClick={() => { revokeAgentConsent(userId, provider.id); setApiKey(''); setConsentRevision(value => value + 1); }}>{ui('동의 철회')}</button>
                   </div>
                 )}
                 <div className="canvas-agent-settings-grid">
@@ -453,7 +498,7 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
               <article key={message.id || index} className={`canvas-agent-message ${message.role}${message.kind === 'error' ? ' is-error' : ''}`}>
                 <div className="canvas-agent-message-heading">
                   <small>
-                    {message.role === 'user' ? (message.nickname || session?.nickname || ui('나')) : ui('에이전트')}
+                    {message.role === 'user' ? (message.nickname || session?.nickname || ui('나')) : ui('AI 에이전트 생성 응답')}
                     {message.status === 'running' ? ui(' · 요청 중') : message.status === 'failed' ? ui(' · 실패') : message.status === 'interrupted' ? ui(' · 연결 종료') : ''}
                   </small>
                   {message.role === 'user' && (

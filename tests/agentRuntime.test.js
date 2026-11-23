@@ -59,3 +59,21 @@ test('busy errors explain the cause without losing error codes', async () => {
   assert.equal(pending.size, 0);
 
 });
+
+test('an external key appears only in an explicit external run frame', async () => {
+  const pending = new Map();
+  const options = { provider: 'openrouter', model: 'anthropic/claude-approved' };
+  for (const operation of ['run', 'status']) {
+    let sent;
+    const result = executeCanvasCode({
+      action: 'agent', operation, pendingRequests: pending,
+      agent: { message: 'test', api_key: 'sk-or-v1-test', options, endpoint: 'https://example.invalid' },
+      sendRaw: event => { sent = event; return true; },
+    });
+    assert.equal(sent.api_key, operation === 'run' ? 'sk-or-v1-test' : undefined);
+    assert.equal(sent.endpoint, undefined);
+    assert.equal(sent.options.api_key, undefined);
+    settleRuntimeSocketResponse(pending, { type: 'runtime_result', request_id: sent.request_id, ok: true, result: {} });
+    await result;
+  }
+});

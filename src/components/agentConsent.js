@@ -2,7 +2,7 @@ import { ui } from '../i18n/locale.js';
 import { agentProvider } from './agentPreferences.js';
 
 // Prior consent covered a different set of recipients and canvas data.
-export const AGENT_CONSENT_VERSION = 'claude-prompt-v1';
+export const AGENT_CONSENT_VERSION = 'agent-adult-v3';
 const storageKey = 'agora-agent-consent-v1';
 
 function readAll() {
@@ -22,7 +22,8 @@ function writeAll(value) {
   }
 }
 
-const entry = (userId, provider) => `${userId ?? 'anonymous'}:${agentProvider(provider).id}`;
+const consentProvider = provider => provider === 'openrouter' ? provider : agentProvider(provider).id;
+const entry = (userId, provider) => `${userId ?? 'anonymous'}:${consentProvider(provider)}`;
 const memory = new Map();
 
 export function hasAgentConsent(userId, provider) {
@@ -47,8 +48,8 @@ export function revokeAgentConsent(userId, provider) {
 /** Blocks model runs (panel and multi-agent graph) until the user has consented. */
 export function requireAgentConsent(userId, operation, options) {
   if (operation !== 'run') return;
-  const provider = agentProvider(options?.provider);
-  if (hasAgentConsent(userId, provider.id)) return;
+  const provider = options?.provider === 'openrouter' ? { label: 'OpenRouter' } : agentProvider(options?.provider);
+  if (hasAgentConsent(userId, options?.provider)) return;
   const error = new Error(ui('에이전트 설정에서 {provider} 이용 조건과 데이터 전송에 동의한 뒤 사용해주세요.', { provider: provider.label }));
   error.code = 'AGENT_CONSENT_REQUIRED';
   throw error;

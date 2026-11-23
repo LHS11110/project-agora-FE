@@ -25,6 +25,7 @@ const REMOTE_RUNNING_TTL_MS = 120_000;
 
 export function createMultiAgentStore({
   getItems,
+  hasAdultAccess = () => true,
   executeAgent,
   getAnchor,
   saveOutput,
@@ -387,7 +388,9 @@ export function createMultiAgentStore({
     resume() {
       disposed = false;
     },
+    hasAdultAccess,
     async runAgent(agentId) {
+      if (!hasAdultAccess()) return null;
       const id = String(agentId);
       const items = getItems();
       const item = items[id];
@@ -431,6 +434,7 @@ export function createMultiAgentStore({
       }
     },
     async runOrchestrator(orchestratorId) {
+      if (!hasAdultAccess()) return null;
       const rootId = String(orchestratorId);
       const items = getItems();
       const rootItem = items[rootId];
@@ -509,6 +513,7 @@ export function createMultiAgentStore({
       }
     },
     async runInput(inputId) {
+      if (!hasAdultAccess()) return null;
       const id = String(inputId);
       const items = getItems();
       const item = items[id];
@@ -579,6 +584,7 @@ export function createMultiAgentStore({
       }
     },
     async runRouter(routerId) {
+      if (!hasAdultAccess()) return null;
       const id = String(routerId);
       const items = getItems();
       const item = items[id];

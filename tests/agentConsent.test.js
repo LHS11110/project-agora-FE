@@ -16,7 +16,7 @@ test('model runs require per-account, per-provider consent; status checks do not
   assert.equal(hasAgentConsent(8, 'anthropic'), false);
   assert.doesNotThrow(() => requireAgentConsent(7, 'run', {}));
   revokeAgentConsent(7, 'anthropic');
-  data.set('agora-agent-consent-v1', JSON.stringify({ '7:anthropic': '2026-11-23' }));
+  data.set('agora-agent-consent-v1', JSON.stringify({ '7:anthropic': 'claude-prompt-v1' }));
   assert.equal(hasAgentConsent(7, 'anthropic'), false);
   assert.ok(AGENT_CONSENT_VERSION);
 });

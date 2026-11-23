@@ -2637,6 +2637,21 @@ const messages = {
   "데이터 보관 정책": ["数据保留政策", "データ保持ポリシー", "Politique de conservation des données"],
   "만 18세 이상이며, {provider}의 이용약관과 이용 정책을 지키겠습니다.": ["我已满 18 岁，并会遵守 {provider} 的服务条款和使用政策。", "私は 18 歳以上で、{provider} の利用規約と利用ポリシーを遵守します。", "J’ai au moins 18 ans et je respecterai les conditions et la politique d’utilisation de {provider}."],
   "서버에 {provider}가 설정되면 에이전트를 사용할 수 있습니다.": ["服务器配置 {provider} 后即可使用代理。", "サーバーで {provider} が設定されるとエージェントを利用できます。", "L’agent sera disponible une fois {provider} configuré sur le serveur."],
+  "만 19세 이상으로 확인된 계정만 AI 에이전트를 사용할 수 있습니다.": ["仅限经确认已满 19 岁的账户使用 AI 代理。", "AI エージェントは、19 歳以上であることが確認されたアカウントのみ利用できます。", "Les agents IA sont réservés aux comptes dont l’âge de 19 ans ou plus a été vérifié."],
+  "AI 에이전트 생성": ["由 AI 代理生成", "AI エージェントが生成", "Créé par l’agent IA"],
+  "AI 생성": ["AI 生成", "AI 生成", "Généré par IA"],
+  "Agora AI 에이전트 이용약관": ["Agora AI 代理服务条款", "Agora AI エージェント利用規約", "Conditions d’utilisation de l’agent IA Agora"],
+  "모델 이용 요금은 입력한 키의 OpenRouter 계정에 청구됩니다. Agora는 키를 현재 요청 처리에만 사용하고 저장하지 않습니다.": ["模型使用费用将计入所输入密钥对应的 OpenRouter 账户。Agora 仅在处理当前请求时使用该密钥，不会保存。", "モデルの利用料金は、入力したキーの OpenRouter アカウントに請求されます。Agora はキーを現在のリクエストの処理にのみ使用し、保存しません。", "L’utilisation du modèle est facturée au compte OpenRouter de la clé saisie. Agora n’utilise la clé que pour traiter la requête en cours et ne la conserve pas."],
+  "만 19세 이상이며, Agora AI 에이전트 이용약관과 {provider}의 이용약관 및 이용 정책에 동의합니다.": ["我已满 19 岁，并同意 Agora AI 代理服务条款以及 {provider} 的服务条款和使用政策。", "私は 19 歳以上で、Agora AI エージェント利用規約および {provider} の利用規約と利用ポリシーに同意します。", "J’ai au moins 19 ans et j’accepte les conditions d’utilisation de l’agent IA Agora ainsi que les conditions et la politique d’utilisation de {provider}."],
+  "모델 연결 방식": ["模型连接方式", "モデルの接続方法", "Mode de connexion au modèle"],
+  "서버 제공 모델": ["服务器提供的模型", "サーバー提供モデル", "Modèle fourni par le serveur"],
+  "외부 OpenAI 호환 연결": ["外部 OpenAI 兼容连接", "外部 OpenAI 互換接続", "Connexion externe compatible OpenAI"],
+  "API 엔드포인트": ["API 端点", "API エンドポイント", "Point de terminaison de l’API"],
+  "모델 ID": ["模型 ID", "モデル ID", "ID du modèle"],
+  "개인 개발자 API 키": ["个人开发者 API 密钥", "個人の開発者 API キー", "Clé API de développeur personnelle"],
+  "현재 OpenRouter 공식 HTTPS 엔드포인트와 운영자가 승인한 Claude 모델만 이용할 수 있습니다. 요청당 최대 10단계, 단계당 출력 8,192토큰, 계정당 UTC 하루 최대 80단계를 적용합니다.": ["目前仅可使用 OpenRouter 官方 HTTPS 端点和运营方批准的 Claude 模型。每个请求最多 10 步，每步最多输出 8,192 个令牌，每个账户每个 UTC 日最多 80 步。", "現在は OpenRouter の公式 HTTPS エンドポイントと運営者が承認した Claude モデルのみ利用できます。1 リクエストあたり最大 10 ステップ、1 ステップあたり出力 8,192 トークン、アカウントごとに UTC 1 日最大 80 ステップの制限があります。", "Seuls le point de terminaison HTTPS officiel d’OpenRouter et les modèles Claude approuvés par l’opérateur sont disponibles. Limites : 10 étapes par requête, 8 192 jetons de sortie par étape et 80 étapes par compte et par jour UTC."],
+  "AI 에이전트 생성 응답": ["AI 代理生成的回复", "AI エージェントの応答", "Réponse de l’agent IA"],
+  "OpenRouter 중계와 Anthropic 모델 처리에 각 공급자의 데이터 정책이 적용됩니다. 설정에 입력한 키는 OpenRouter 인증에만 사용합니다. 본인 명의의 개발자 API 키를 사용하세요.": ["OpenRouter 的中转和 Anthropic 的模型处理分别适用各自的数据政策。设置中输入的密钥仅用于 OpenRouter 认证。请使用以您本人名义申请的开发者 API 密钥。", "OpenRouter による中継と Anthropic によるモデル処理には、それぞれの提供者のデータポリシーが適用されます。設定で入力したキーは OpenRouter の認証にのみ使用します。ご本人名義の開発者 API キーを使用してください。", "Les politiques de données d’OpenRouter (relais) et d’Anthropic (traitement par le modèle) s’appliquent. La clé saisie dans les paramètres sert uniquement à l’authentification auprès d’OpenRouter. Utilisez une clé API de développeur à votre nom."],
 };
 
 export default messages;

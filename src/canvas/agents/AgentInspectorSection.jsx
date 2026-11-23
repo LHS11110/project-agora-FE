@@ -862,13 +862,13 @@ export function AgentNodeInspector({
         )}
       </div>
 
-      <button
+      {store?.openAgentPanel && <button
         type="button"
         className="inspector-secondary-action"
-        onClick={() => store?.openAgentPanel?.()}
+        onClick={store.openAgentPanel}
       >
         <span>{ui('에이전트 설정')}</span>
-      </button>
+      </button>}
     </section>
   );
 }

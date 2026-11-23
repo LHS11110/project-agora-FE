@@ -291,7 +291,7 @@ export default function CanvasAgentNode({
             {config.engine === 'mock' && (
               <MockAgentResponseFields config={config} onChange={commitPatch} readOnly={readOnly} />
             )}
-            {config.engine !== 'mock' && <button
+            {config.engine !== 'mock' && store?.openAgentPanel && <button
               type="button"
               className="agent-mini-link"
               data-object-action="agent"
@@ -304,7 +304,7 @@ export default function CanvasAgentNode({
       </div>
 
       <footer className="agent-card-footer">
-        <button
+        {store?.hasAdultAccess() && <button
           type="button"
           className={`agent-run-btn${running ? ' is-stop' : ''}`}
           data-object-action="agent"
@@ -330,7 +330,7 @@ export default function CanvasAgentNode({
               <span className="agent-run-kbd" aria-hidden="true">⇧↵</span>
             </>
           )}
-        </button>
+        </button>}
       </footer>
     </section>
   );
