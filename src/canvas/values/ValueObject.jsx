@@ -2,19 +2,60 @@ import {useEffect,useId,useRef,useState} from 'react';
 import CanvasSelect from '../content/CanvasSelect.jsx';
 import {ui} from '../../i18n/locale.js';
 import {useUiLocale} from '../../i18n/useUiLocale.js';
-import {createValue,displayedValue,validValue,valueDefinition} from './valueData.js';
+import {createValue,displayedValue,parseRealValue,validValue,valueDefinition} from './valueData.js';
 import './value-object.css';
 const labels={real:'실수 값',integer:'정수 값',button:'버튼 값',select:'선택 값',text:'입력 값'};
 export default function ValueObject({id,item,readOnly,onChange}){
  useUiLocale();
  const fieldId=useId();
  const [settings,setSettings]=useState(false),[draft,setDraft]=useState(null),[error,setError]=useState(''),[number,setNumber]=useState(String(item.valueNumber));
- const queued=useRef(null),frame=useRef(null),current=useRef({item,readOnly,onChange});current.current={item,readOnly,onChange};
+ const [realDraft,setRealDraft]=useState(null),[sliderPreview,setSliderPreview]=useState(null);
+ const sliderGesture=useRef(null);
+ const sliderRef=useRef(null);
  useEffect(()=>{setNumber(String(item.valueNumber));},[item.valueNumber]);
- const flush=()=>{if(frame.current!==null)cancelAnimationFrame(frame.current);frame.current=null;const value=queued.current;queued.current=null;if(value!==null&&!current.current.readOnly)current.current.onChange(id,{valueNumber:value});};
- useEffect(()=>()=>{if(frame.current!==null)cancelAnimationFrame(frame.current);},[]);
+ useEffect(()=>{
+  if(readOnly||settings||item.valueType!=='real'){
+   sliderGesture.current=null;
+   setSliderPreview(null);
+   setRealDraft(null);
+  }
+ },[readOnly,settings,item.valueType]);
+ useEffect(()=>{
+  const slider=sliderRef.current;
+  if(!slider)return;
+  const preventWheel=event=>event.preventDefault();
+  slider.addEventListener('wheel',preventWheel,{passive:false});
+  return ()=>slider.removeEventListener('wheel',preventWheel);
+ },[settings,item.valueType]);
  const change=patch=>{if(readOnly)return;const next=valueDefinition(item,patch);if(!next){setError(ui('값과 범위 설정을 확인해주세요.'));return;}setError('');onChange(id,patch);};
- const numeric=value=>{setNumber(value);const n=Number(value);if(value.trim()&&Number.isFinite(n)&&validValue({...item,valueNumber:n}))change({valueNumber:n});};
+ const changeNumber=value=>{if(value!==item.valueNumber&&validValue({...item,valueNumber:value}))change({valueNumber:value});};
+ const numeric=value=>{setNumber(value);const n=Number(value);if(value.trim()&&Number.isFinite(n))changeNumber(n);};
+ const finishRealInput=value=>{
+  setRealDraft(null);
+  const n=parseRealValue(value,item.valueMin,item.valueMax);
+  if(n!==null)changeNumber(n);
+ };
+ const startSlider=event=>{
+  if(readOnly||!event.isPrimary||event.button!==0)return;
+  sliderGesture.current={pointerId:event.pointerId,value:null};
+  event.currentTarget.setPointerCapture(event.pointerId);
+ };
+ const moveSlider=event=>{
+  const value=event.currentTarget.valueAsNumber;
+  if(sliderGesture.current){
+   sliderGesture.current.value=value;
+   setSliderPreview(value);
+  }else{
+   changeNumber(value);
+  }
+ };
+ const finishSlider=(event,commit)=>{
+  const gesture=sliderGesture.current;
+  if(!gesture||gesture.pointerId!==event.pointerId)return;
+  sliderGesture.current=null;
+  setSliderPreview(null);
+  if(commit&&gesture.value!==null)changeNumber(gesture.value);
+ };
  const configure=()=>{setDraft({...item,valueOptions:item.valueOptions.join('\n')});setError('');setSettings(true);};
  return <section className="canvas-value-object" data-value-type={item.valueType} data-value={String(displayedValue(item))}>
   <header><strong>{item.title||ui(labels[item.valueType])}</strong>{!readOnly&&<button type="button" data-object-action="value" aria-label={ui('값 객체 설정')} onClick={configure}>⚙</button>}</header>
@@ -26,8 +67,29 @@ export default function ValueObject({id,item,readOnly,onChange}){
     {draft.valueType==='select'&&<label>{ui('선택 항목 · 한 줄에 하나')}<textarea id={`${fieldId}-options`} name="value-options" rows={3} maxLength={4096} value={draft.valueOptions} onChange={e=>setDraft({...draft,valueOptions:e.target.value})}/></label>}
     <div className="value-settings-actions"><button type="button" onClick={()=>setSettings(false)}>{ui('취소')}</button><button type="submit">{ui('설정 저장')}</button></div>
    </form>:<>
-    {item.valueType==='real'&&<><output className="value-current">{number}</output><input id={`${fieldId}-slider`} name="value-slider" aria-label={ui('실수 슬라이더')} type="range" disabled={readOnly} min={item.valueMin} max={item.valueMax} step={item.valueStep} value={number} onChange={e=>{const n=Number(e.target.value);setNumber(e.target.value);queued.current=n;if(frame.current===null)frame.current=requestAnimationFrame(flush);}} onPointerUp={flush} onBlur={flush}/></>}
-    {['real','integer'].includes(item.valueType)&&<div className="value-number-row">{item.valueType==='integer'&&<button disabled={readOnly||item.valueNumber<=item.valueMin} aria-label={ui('값 감소')} onClick={()=>change({valueNumber:Math.max(item.valueMin,item.valueNumber-item.valueStep)})}>−</button>}<input id={`${fieldId}-number`} name="value-number" aria-label={ui(labels[item.valueType])} type="number" readOnly={readOnly} min={item.valueMin} max={item.valueMax} step={item.valueType==='integer'?item.valueStep:'any'} value={number} onChange={e=>numeric(e.target.value)} onBlur={()=>setNumber(String(item.valueNumber))}/>{item.valueType==='integer'&&<button disabled={readOnly||item.valueNumber>=item.valueMax} aria-label={ui('값 증가')} onClick={()=>change({valueNumber:Math.min(item.valueMax,item.valueNumber+item.valueStep)})}>+</button>}</div>}
+    {item.valueType==='real'&&<>
+     <output className="value-current">{sliderPreview??item.valueNumber}</output>
+     <input ref={sliderRef} id={`${fieldId}-slider`} name="value-slider" aria-label={ui('실수 슬라이더')} type="range" disabled={readOnly}
+      min={item.valueMin} max={item.valueMax} step={item.valueStep} value={sliderPreview??item.valueNumber}
+      onPointerDown={startSlider} onChange={moveSlider} onPointerUp={event=>finishSlider(event,true)}
+      onPointerCancel={event=>finishSlider(event,false)} onLostPointerCapture={event=>finishSlider(event,false)}/>
+     <div className="value-number-row">
+      <input id={`${fieldId}-number`} name="value-number" aria-label={ui(labels.real)} type="text" inputMode="decimal" readOnly={readOnly}
+       value={realDraft??String(sliderPreview??item.valueNumber)}
+       onChange={event=>setRealDraft(event.target.value)}
+       onBlur={event=>{if(realDraft!==null)finishRealInput(event.currentTarget.value);}}
+       onKeyDown={event=>{
+        if(event.nativeEvent.isComposing)return;
+        if(event.key==='Enter'){event.preventDefault();event.currentTarget.blur();}
+        if(event.key==='Escape'){event.preventDefault();setRealDraft(null);}
+       }}/>
+     </div>
+    </>}
+    {item.valueType==='integer'&&<div className="value-number-row">
+     <button disabled={readOnly||item.valueNumber<=item.valueMin} aria-label={ui('값 감소')} onClick={()=>changeNumber(Math.max(item.valueMin,item.valueNumber-item.valueStep))}>−</button>
+     <input id={`${fieldId}-number`} name="value-number" aria-label={ui(labels.integer)} type="number" readOnly={readOnly} min={item.valueMin} max={item.valueMax} step={item.valueStep} value={number} onChange={e=>numeric(e.target.value)} onBlur={()=>setNumber(String(item.valueNumber))}/>
+     <button disabled={readOnly||item.valueNumber>=item.valueMax} aria-label={ui('값 증가')} onClick={()=>changeNumber(Math.min(item.valueMax,item.valueNumber+item.valueStep))}>+</button>
+    </div>}
     {item.valueType==='button'&&<button className="value-toggle" aria-label={ui('버튼 값')} aria-pressed={Boolean(item.valueNumber)} disabled={readOnly} onClick={()=>change({valueNumber:item.valueNumber?0:1})}>{ui(item.valueNumber?'켜짐':'꺼짐')}<small>{item.valueNumber}</small></button>}
     {item.valueType==='select'&&<CanvasSelect id={`${fieldId}-select`} name="value-select" aria-label={ui('선택 값')} disabled={readOnly} value={item.valueNumber} onChange={e=>change({valueNumber:Number(e.target.value)})}>{item.valueOptions.map((v,index)=><option value={index} key={index}>{v}</option>)}</CanvasSelect>}
     {item.valueType==='text'&&<input id={`${fieldId}-text`} name="value-text" aria-label={ui('입력 값')} maxLength={4096} readOnly={readOnly} value={item.valueText} onChange={e=>change({valueText:e.target.value})}/>}

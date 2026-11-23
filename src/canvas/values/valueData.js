@@ -23,3 +23,10 @@ export function valueDefinition(item,patch){
  if(next.valueType==='select')next.valueNumber=Math.min(next.valueOptions.length-1,Math.max(0,Math.round(next.valueNumber)));
  return validValue(next)?next:null;
 }
+
+export function parseRealValue(text,min,max){
+ const decimal=text.trim().replace(',','.');
+ if(!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(decimal))return null;
+ const value=Number(decimal);
+ return Number.isFinite(value)&&value>=min&&value<=max?value:null;
+}

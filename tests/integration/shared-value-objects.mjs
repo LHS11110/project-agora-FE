@@ -2,6 +2,7 @@ import {sheetWorkbook} from '../fixtures/sheetWorkbook.mjs';
 import assert from 'node:assert/strict';
 const {chromium}=await import(process.env.AGORA_E2E_PLAYWRIGHT_MODULE||'playwright-core');
 const origin=process.env.AGORA_E2E_ORIGIN||'https://localhost:5191';
+const valuesOnly=process.argv.includes('--values-only');
 const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox',...(process.env.AGORA_E2E_HOST_RESOLVER?['--host-resolver-rules='+process.env.AGORA_E2E_HOST_RESOLVER]:[])]});
 const user={email:'roles@example.invalid',nickname:'Roles',tag_number:1,role:'ROLE_USER',status:'ACTIVE'};
 const token='eyJhbGciOiJIUzI1NiJ9.'+Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+600})).toString('base64url')+'.roles';
@@ -31,11 +32,42 @@ const page=await context.newPage();page.on('pageerror',e=>{errors.push(e.message
 await page.locator('.canvas-loading-status.is-overlay').waitFor({state:'hidden'});const observer=await context.newPage();observer.on('pageerror',e=>errors.push(e.message));await observer.goto(origin+'/canvases/999003');await observer.waitForFunction(()=>window.frelogCanvas?.read().items.real);
 const card=(p,id)=>p.locator(`[data-item-id="${id}"] .canvas-value-object`);
 await card(page,'real').getByLabel('실수 슬라이더').evaluate(node=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(node,'0.37');node.dispatchEvent(new Event('input',{bubbles:true}));});await observer.waitForFunction(()=>window.frelogCanvas.read().items.real.valueNumber===.37);
+const realInput=card(page,'real').getByLabel('실수 값',{exact:true});
+const realSlider=card(page,'real').getByLabel('실수 슬라이더');
+const readReal=p=>p.evaluate(()=>window.frelogCanvas.read().items.real.valueNumber);
+await realInput.fill('0.');
+await card(observer,'real').getByLabel('실수 값',{exact:true}).fill('0.41');
+await card(observer,'real').getByLabel('실수 값',{exact:true}).press('Enter');
+await page.waitForFunction(()=>window.frelogCanvas.read().items.real.valueNumber===.41);
+assert.equal(await realInput.inputValue(),'0.');
+await realInput.fill('0.415');
+assert.equal(await readReal(observer),.41);
+await realInput.press('Enter');
+await observer.waitForFunction(()=>window.frelogCanvas.read().items.real.valueNumber===.415);
+await realInput.fill('0.95');
+await realInput.press('Escape');
+assert.equal(await realInput.inputValue(),'0.415');
+const sliderBounds=await realSlider.boundingBox();
+const sliderY=sliderBounds.y+sliderBounds.height/2;
+await page.mouse.move(sliderBounds.x+sliderBounds.width*.42,sliderY);
+await page.mouse.down();
+await page.mouse.move(sliderBounds.x+sliderBounds.width*.75,sliderY,{steps:5});
+const preview=Number(await realSlider.inputValue());
+assert.ok(preview>.65&&preview<.85);
+assert.equal(await readReal(observer),.415);
+await page.mouse.up();
+await observer.waitForFunction(value=>window.frelogCanvas.read().items.real.valueNumber===value,preview);
+await realSlider.hover();
+await page.mouse.wheel(0,-120);
+assert.equal(await realSlider.inputValue(),String(preview));
+await realSlider.press('ArrowRight');
+await observer.waitForFunction(value=>window.frelogCanvas.read().items.real.valueNumber>value,preview);
 await card(page,'integer').getByLabel('정수 값',{exact:true}).fill('12');await observer.waitForFunction(()=>window.frelogCanvas.read().items.integer.valueNumber===12);
 await card(page,'button').getByRole('button',{name:'버튼 값',exact:true}).click();await observer.waitForFunction(()=>window.frelogCanvas.read().items.button.valueNumber===1);
-await card(page,'select').getByLabel('선택 값',{exact:true}).selectOption('2');await observer.waitForFunction(()=>window.frelogCanvas.read().items.select.valueNumber===2);
+await card(page,'select').getByLabel('선택 값',{exact:true}).hover();await card(page,'select').locator('select').selectOption('2');await observer.waitForFunction(()=>window.frelogCanvas.read().items.select.valueNumber===2);
 await card(page,'text').getByLabel('입력 값',{exact:true}).fill('shared input');await observer.waitForFunction(()=>window.frelogCanvas.read().items.text?.valueText==='shared input');
 await card(page,'real').getByRole('button',{name:'값 객체 설정'}).click();await card(page,'real').getByLabel('최댓값',{exact:true}).fill('0.2');await card(page,'real').getByRole('button',{name:'설정 저장'}).click();await observer.waitForFunction(()=>window.frelogCanvas.read().items.real.valueMax===.2&&window.frelogCanvas.read().items.real.valueNumber===.2);
+if(valuesOnly){assert.deepEqual(errors,[]);await context.close();continue;}
 await page.locator('[data-item-id="pdf"]').click({position:{x:20,y:10}});await page.getByRole('button',{name:'PDF 다음 페이지'}).click();await observer.waitForFunction(()=>window.frelogCanvas.read().items.pdf.pdfPage===2);await observer.getByLabel('PDF 2페이지').waitFor();
 await page.getByRole('button',{name:'공유 재생',exact:true}).click();await observer.waitForFunction(()=>window.frelogCanvas.read().items.video.mediaState?.paused===false);
 await page.getByLabel('공유 재생 위치').evaluate(node=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(node,'42');node.dispatchEvent(new Event('input',{bubbles:true}));});await observer.waitForFunction(()=>window.frelogCanvas.read().items.video.mediaState?.time===42);await page.getByRole('button',{name:'공유 일시정지',exact:true}).click();await observer.waitForFunction(()=>window.frelogCanvas.read().items.video.mediaState?.paused===true);
@@ -70,4 +102,4 @@ await observer.waitForFunction(()=>Object.values(window.frelogCanvas?.read().ite
 assert.match(pdfUpload,/name="file"/);assert.doesNotMatch(pdfUpload,/name="thumbnail"/);
 await observer.reload();await observer.waitForFunction(()=>Object.values(window.frelogCanvas?.read().items||{}).filter(i=>i.kind==='table'&&i.filename?.startsWith('workbook.xlsx')).length===2);
 console.log('PASS CSV, multi-sheet XLSX and PDF thumbnail-failure uploads persist and broadcast');
-await page.screenshot({path:'/tmp/shared-value-objects.png'});assert.deepEqual(errors,[]);await context.close();}console.log('PASS two browsers share real/discrete values, range settings, PDF page, YouTube playback, execution state and reconnect persistence');}finally{await browser.close();}
+await page.screenshot({path:'/tmp/shared-value-objects.png'});assert.deepEqual(errors,[]);await context.close();}console.log(valuesOnly?'PASS real and discrete values and range settings across two tabs':'PASS two browsers share real/discrete values, range settings, PDF page, YouTube playback, execution state and reconnect persistence');}finally{await browser.close();}
