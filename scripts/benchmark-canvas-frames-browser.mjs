@@ -104,6 +104,7 @@ const objectMakers = {
     { id: crypto.randomUUID(), cellType: 'code', source: pythonCode.split('\n').slice(0, 14).join('\n') },
     { id: crypto.randomUUID(), cellType: 'code', source: 'print(total)' }] }),
   youtube: (i) => ({ kind: 'link', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', mediaType: 'youtube', embedUrl: 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ', title: `영상 ${i}`, mediaLoop: false }),
+  html: (i) => ({ kind: 'code', language: 'html', code: `<style>h2{color:#4f46e5}li:nth-child(odd){background:#eef2ff}</style><h2>HTML 미리보기 ${i}</h2><ul>${Array.from({ length: 8 }, (_, k) => `<li>항목 ${k}</li>`).join('')}</ul><script>document.querySelector('h2').dataset.ready='1'</script>` }),
   markdown: () => ({ kind: 'text', renderMode: 'markdown', text: '## 회의 메모\n- 첫째 항목\n- **둘째** 항목\n\n| a | b |\n|---|---|\n| 1 | 2 |' }),
   value: () => ({ kind: 'value', title: '모드', valueType: 'select', valueMin: 0, valueMax: 100, valueStep: 1, valueNumber: 0, valueText: '', valueOptions: ['A', 'B', 'C'] }),
 };
@@ -154,6 +155,7 @@ const SCENARIOS = {
   'notebook-8': { label: '주피터 노트북 8개 (3셀)', items: () => gridOfKinds(['notebook'], 8) },
   'youtube-8': { label: '유튜브 링크 8개 (썸네일)', items: () => gridOfKinds(['youtube'], 8) },
   'youtube-live': { label: '유튜브 링크 8개, 재생 버튼 6회 클릭', items: () => gridOfKinds(['youtube'], 8), play: 6 },
+  'html-8': { label: 'HTML 객체 8개 (CSS·스크립트 포함 미리보기)', items: () => gridOfKinds(['html'], 8) },
   'markdown-8': { label: '마크다운 텍스트 8개', items: () => gridOfKinds(['markdown'], 8) },
   'value-select-8': { label: '선택형 값 객체 8개 (기본 select 사용)', items: () => gridOfKinds(['value'], 8) },
   'mixed-all': { label: '위 객체 종류 9가지 × 8개 혼합', items: () => gridOfKinds(['image', 'pdf', 'code', 'drawing', 'table', 'notebook', 'youtube', 'markdown', 'value'], 8) },
