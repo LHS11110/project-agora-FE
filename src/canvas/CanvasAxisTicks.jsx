@@ -29,16 +29,45 @@ function createTickNode(horizontal) {
   return node;
 }
 
-function labelPosition(position, origin, size, horizontal) {
-  if (horizontal) return { x: position, y: origin + (origin > size - 30 ? -8 : 15), align: 0.5 };
-  const left = origin > size - 100;
-  return { x: origin + (left ? -8 : 8), y: position + 3, align: left ? 1 : 0 };
+// Default side of the labels: below the x axis and right of the y axis, unless the
+// axis is pinned near the far viewport edge.
+function defaultFlip(origin, size, horizontal) {
+  return horizontal ? origin > size - 30 : origin > size - 100;
 }
 
-function labelCovered(position, width, covered) {
-  if (!covered) return false;
+function labelPosition(position, origin, horizontal, flip) {
+  if (horizontal) return { x: position, y: origin + (flip ? -8 : 15), align: 0.5 };
+  return { x: origin + (flip ? -8 : 8), y: position + 3, align: flip ? 1 : 0 };
+}
+
+function labelBox(position, width) {
   const left = position.x - width * position.align;
-  return covered(left - 3, position.y - 12, left + width + 3, position.y + 4);
+  return [left - 3, position.y - 12, left + width + 3, position.y + 4];
+}
+
+function labelFits(box, size, horizontal) {
+  return horizontal ? box[1] >= 0 && box[3] <= size : box[0] >= 0 && box[2] <= size;
+}
+
+/**
+ * Which side of the axis a label goes on. The axes stay under the canvas objects,
+ * so a label is never hidden: when an object covers its default side, it moves to
+ * the other side of the axis if that side is free and inside the viewport.
+ */
+function labelSide(position, origin, size, horizontal, width, covered) {
+  const flip = defaultFlip(origin, size, horizontal);
+  if (!covered || !covered(...labelBox(labelPosition(position, origin, horizontal, flip), width))) return flip;
+  const other = labelBox(labelPosition(position, origin, horizontal, !flip), width);
+  return labelFits(other, size, horizontal) && !covered(...other) ? !flip : flip;
+}
+
+// Candidate offsets of the origin "0" label: below-right of the origin by default,
+// then the other quadrants when an object covers it.
+const ORIGIN_OFFSETS = [[0, 0], [0, -15], [-14, 0], [-14, -15]];
+function originOffset(originX, originY, covered) {
+  if (!covered) return ORIGIN_OFFSETS[0];
+  const free = ORIGIN_OFFSETS.find(([dx, dy]) => !covered(originX + 3 + dx, originY + 2 + dy, originX + 15 + dx, originY + 18 + dy));
+  return free || ORIGIN_OFFSETS[0];
 }
 
 function paint(group, rows, origin, size, horizontal, covered, measureLabel) {
@@ -56,11 +85,6 @@ function paint(group, rows, origin, size, horizontal, covered, measureLabel) {
       spare.push(node);
     }
   }
-
-  const left = horizontal ? false : origin > size - 100;
-  const textX = left ? '-8' : '8';
-  const textAnchor = left ? 'end' : 'start';
-  const textY = horizontal ? String(origin > size - 30 ? -8 : 15) : '';
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -80,13 +104,17 @@ function paint(group, rows, origin, size, horizontal, covered, measureLabel) {
       node.setAttribute('transform', tr);
       node._tr = tr;
     }
+    const flip = covered
+      ? labelSide(row.position, origin, size, horizontal, measureLabel(row.label), covered)
+      : defaultFlip(origin, size, horizontal);
     if (horizontal) {
+      const textY = flip ? '-8' : '15';
       if (node._ty !== textY) { text.setAttribute('y', textY); node._ty = textY; }
     } else {
+      const textX = flip ? '-8' : '8', textAnchor = flip ? 'end' : 'start';
       if (node._tx !== textX) { text.setAttribute('x', textX); node._tx = textX; }
       if (node._anchor !== textAnchor) { text.setAttribute('text-anchor', textAnchor); node._anchor = textAnchor; }
     }
-    text.style.visibility = covered && labelCovered(labelPosition(row.position, origin, size, horizontal), measureLabel(row.label), covered) ? 'hidden' : '';
     if (node._label !== row.label) {
       text.textContent = row.label;
       node._label = row.label;
@@ -131,7 +159,9 @@ function getTickSprite(state, label, colors, dpr) {
 }
 
 const STRIP_X_H = 44;
-const STRIP_Y_W = 108;
+// Room for labels on both sides of the axis (they switch sides around objects).
+const STRIP_Y_W = 208;
+const STRIP_Y_ORIGIN = 104;
 const STRIP_OVERSCAN = 256;
 
 function syncStripVisibility(el, stateKey, state, visible) {
@@ -145,11 +175,9 @@ function syncStripVisibility(el, stateKey, state, visible) {
 function drawFastStrip(canvas, ctxKey, trKey, cacheKey, state, camera, origin, viewportWidth, viewportHeight, horizontal, colors, trimEdges = false, covered) {
   if (!canvas || !viewportWidth || !viewportHeight) return;
   const dpr = Math.min(2, globalThis.devicePixelRatio || 1);
-  const left = !horizontal && origin > viewportWidth - 100;
-  const textFlip = horizontal ? (origin > viewportHeight - 30) : left;
-  const stripPos = horizontal
-    ? Math.round(origin - 22)
-    : Math.round(left ? origin - 100 : origin - 6);
+  const size = horizontal ? viewportHeight : viewportWidth;
+  const textFlip = defaultFlip(origin, size, horizontal);
+  const stripPos = Math.round(origin - (horizontal ? 22 : STRIP_Y_ORIGIN));
   const localOrigin = origin - stripPos;
   // The visible viewport decides the step; the overscanned strip only extends it.
   const visibleStep = axisTickLayout(camera, { width: viewportWidth, height: viewportHeight }).step;
@@ -249,17 +277,16 @@ function drawFastStrip(canvas, ctxKey, trKey, cacheKey, state, camera, origin, v
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  const textX = left ? -8 : 8;
-  const textY = horizontal ? (origin > viewportHeight - 30 ? -8 : 15) : 0;
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const sprite = getTickSprite(state, row.label, colors, dpr);
     if (!sprite) continue;
-    const position = row.position - STRIP_OVERSCAN;
-    if (labelCovered(labelPosition(position, origin, horizontal ? viewportHeight : viewportWidth, horizontal), sprite.tw, covered)) continue;
+    const flip = covered ? labelSide(row.position - STRIP_OVERSCAN, origin, size, horizontal, sprite.tw, covered) : textFlip;
+    const textX = flip ? -8 : 8;
+    const textY = flip ? -8 : 15;
     const dx = horizontal
       ? Math.round(row.position - sprite.w * 0.5)
-      : Math.round(left ? localOrigin + textX - 3 - sprite.tw : localOrigin + textX - 3);
+      : Math.round(flip ? localOrigin + textX - 3 - sprite.tw : localOrigin + textX - 3);
     const dy = horizontal
       ? Math.round(localOrigin + textY - 11)
       : Math.round(row.position + 3 - 11);
@@ -320,7 +347,11 @@ const CanvasAxisTicks = memo(function CanvasAxisTicks({ boardRef, camera, showXA
       const covered = coverage && ((...box) => coverage(c.camera, ...box));
       const layout = axisTickLayout(c.camera, { width, height });
       const zero = svg.current.parentElement.querySelector('.coordinate-origin');
-      if (zero) zero.style.visibility = covered?.(layout.originX + 3, layout.originY + 2, layout.originX + 15, layout.originY + 18) ? 'hidden' : '';
+      if (zero) {
+        const [dx, dy] = originOffset(layout.originX, layout.originY, covered);
+        const shift = dx || dy ? `${dx}px ${dy}px` : '';
+        if (zero.style.translate !== shift) zero.style.translate = shift;
+      }
       if (!settled && (fastX.current || fastY.current)) {
         if (!svgHidden) { svg.current.style.visibility = 'hidden'; svgHidden = true; }
         const colors = readColors();
