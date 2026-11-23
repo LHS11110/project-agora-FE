@@ -1,22 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AGENT_CONSENT_VERSION, hasAgentConsent, requireAgentConsent, revokeAgentConsent, saveAgentConsent } from '../src/components/agentConsent.js';
+import { AGENT_CONSENT_VERSION, loadAgentTerms, requireAgentConsent, saveAgentDecision } from '../src/components/agentConsent.js';
 
-test('model runs require per-account, per-provider consent; status checks do not', () => {
-  const data = new Map();
-  globalThis.localStorage = {
-    getItem: key => data.get(key) ?? null,
-    setItem: (key, value) => data.set(key, value),
-    removeItem: key => data.delete(key),
-  };
-  assert.throws(() => requireAgentConsent(7, 'run', { provider: 'anthropic' }), error => error.code === 'AGENT_CONSENT_REQUIRED');
-  assert.doesNotThrow(() => requireAgentConsent(7, 'status', { provider: 'anthropic' }));
-  saveAgentConsent(7, 'anthropic');
-  assert.doesNotThrow(() => requireAgentConsent(7, 'run', { provider: 'anthropic' }));
-  assert.equal(hasAgentConsent(8, 'anthropic'), false);
-  assert.doesNotThrow(() => requireAgentConsent(7, 'run', {}));
-  revokeAgentConsent(7, 'anthropic');
-  data.set('agora-agent-consent-v1', JSON.stringify({ '7:anthropic': 'claude-prompt-v1' }));
-  assert.equal(hasAgentConsent(7, 'anthropic'), false);
-  assert.ok(AGENT_CONSENT_VERSION);
+test('agent decisions use the account API and require current terms', async t => {
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url, 'https://agora.example/api/users/agent-terms');
+    if (options.method === 'PUT') {
+      const decision = JSON.parse(options.body);
+      assert.equal(decision.version, AGENT_CONSENT_VERSION);
+      terms = { ...terms, ...decision };
+    }
+    return new Response(JSON.stringify(terms), { headers: { 'Content-Type': 'application/json' } });
+  });
+  globalThis.window = { location: { href: 'https://agora.example/canvases/7' } };
+  t.after(() => { delete globalThis.window; });
+  let terms = { version: 'agent-local-v1', body: 'terms', accepted: true };
+  await assert.rejects(requireAgentConsent(undefined, 'run'), { code: 'AGENT_CONSENT_REQUIRED' });
+  await requireAgentConsent(undefined, 'status');
+  await saveAgentDecision(undefined, true);
+  await requireAgentConsent(undefined, 'run');
+  assert.equal((await loadAgentTerms()).accepted, true);
+  await saveAgentDecision(undefined, false);
+  await assert.rejects(requireAgentConsent(undefined, 'run'), { code: 'AGENT_CONSENT_REQUIRED' });
 });

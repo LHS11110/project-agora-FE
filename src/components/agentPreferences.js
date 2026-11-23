@@ -6,17 +6,11 @@ export const AGENT_DEFAULTS = {
   top_p: 0.95,
 };
 
-export const AGENT_PROVIDERS = [
-  {
-    id: 'anthropic', label: 'Anthropic Claude', defaultModel: 'claude-opus-5-5', models: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'],
-    termsUrl: 'https://www.anthropic.com/legal/commercial-terms', policyUrl: 'https://www.anthropic.com/legal/aup',
-    dataNotice: 'Anthropic은 API 입력과 출력으로 모델을 학습하지 않습니다.',
-  },
-];
-export const DEFAULT_AGENT_PROVIDER = 'anthropic';
-export function agentProvider(id) {
-  return AGENT_PROVIDERS.find(provider => provider.id === id) || AGENT_PROVIDERS[0];
-}
+export const LOCAL_AGENT_PROVIDER = {
+  id: 'local', label: '로컬 Qwen', defaultModel: 'qwen2.5:1.5b', models: ['qwen2.5:1.5b'],
+};
+export const DEFAULT_AGENT_PROVIDER = LOCAL_AGENT_PROVIDER.id;
+export function agentProvider() { return LOCAL_AGENT_PROVIDER; }
 
 const key = 'agora-agent-preferences-v1';
 

@@ -1,56 +1,26 @@
 import { ui } from '../i18n/locale.js';
-import { agentProvider } from './agentPreferences.js';
 
-// Prior consent covered a different set of recipients and canvas data.
-export const AGENT_CONSENT_VERSION = 'agent-adult-v3';
-const storageKey = 'agora-agent-consent-v1';
+import { api } from '../api/client.js';
 
-function readAll() {
-  try {
-    const value = JSON.parse(localStorage.getItem(storageKey));
-    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-  } catch {
-    return {};
-  }
+export const AGENT_CONSENT_VERSION = 'agent-local-v2';
+const endpoint = '/api/users/agent-terms';
+
+export function loadAgentTerms(token) {
+  return api(endpoint, { token });
 }
 
-function writeAll(value) {
-  try {
-    localStorage.setItem(storageKey, JSON.stringify(value));
-  } catch {
-    /* Without storage the consent lasts only for this page. */
-  }
+export function saveAgentDecision(token, accepted) {
+  return api(endpoint, {
+    method: 'PUT', token,
+    body: { version: AGENT_CONSENT_VERSION, accepted },
+  });
 }
 
-const consentProvider = provider => provider === 'openrouter' ? provider : agentProvider(provider).id;
-const entry = (userId, provider) => `${userId ?? 'anonymous'}:${consentProvider(provider)}`;
-const memory = new Map();
-
-export function hasAgentConsent(userId, provider) {
-  const name = entry(userId, provider);
-  return readAll()[name] === AGENT_CONSENT_VERSION || memory.get(name) === AGENT_CONSENT_VERSION;
-}
-
-export function saveAgentConsent(userId, provider) {
-  const name = entry(userId, provider);
-  memory.set(name, AGENT_CONSENT_VERSION);
-  writeAll({ ...readAll(), [name]: AGENT_CONSENT_VERSION });
-}
-
-export function revokeAgentConsent(userId, provider) {
-  const name = entry(userId, provider);
-  memory.delete(name);
-  const all = readAll();
-  delete all[name];
-  writeAll(all);
-}
-
-/** Blocks model runs (panel and multi-agent graph) until the user has consented. */
-export function requireAgentConsent(userId, operation, options) {
+export async function requireAgentConsent(token, operation) {
   if (operation !== 'run') return;
-  const provider = options?.provider === 'openrouter' ? { label: 'OpenRouter' } : agentProvider(options?.provider);
-  if (hasAgentConsent(userId, options?.provider)) return;
-  const error = new Error(ui('에이전트 설정에서 {provider} 이용 조건과 데이터 전송에 동의한 뒤 사용해주세요.', { provider: provider.label }));
+  const terms = await loadAgentTerms(token);
+  if (terms.version === AGENT_CONSENT_VERSION && terms.accepted === true) return;
+  const error = new Error(ui('Agora AI 에이전트 이용약관에 동의한 뒤 사용해주세요.'));
   error.code = 'AGENT_CONSENT_REQUIRED';
   throw error;
 }
@@ -67,7 +37,7 @@ export function reviewAgentPrompt(message, signal) {
     const dialog = document.createElement('dialog');
     const title = document.createElement('h2');
     title.id = 'canvas-agent-review-title';
-    title.textContent = ui('Claude에 보낼 내용 확인');
+    title.textContent = ui('로컬 모델에 보낼 내용 확인');
     dialog.setAttribute('aria-labelledby', title.id);
     const notice = document.createElement('p');
     notice.textContent = ui('전송할 권한이 있는 내용만 보내세요. 개인정보나 기밀정보가 포함된 경우 취소하세요.');

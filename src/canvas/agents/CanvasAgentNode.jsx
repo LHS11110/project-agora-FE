@@ -304,7 +304,7 @@ export default function CanvasAgentNode({
       </div>
 
       <footer className="agent-card-footer">
-        {store?.hasAdultAccess() && <button
+        {store?.hasAgentAccess() && <button
           type="button"
           className={`agent-run-btn${running ? ' is-stop' : ''}`}
           data-object-action="agent"

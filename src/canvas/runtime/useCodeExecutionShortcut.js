@@ -14,7 +14,7 @@ export default function useCodeExecutionShortcut(options) {
       if(id==null)return;
       const targetItem=itemsRef.current[id];
       const isAgent=isAgentRunnableItem(targetItem)&&Boolean(multiAgentStore);
-      if (isAgent && !multiAgentStore.hasAdultAccess()) return;
+      if (isAgent && !multiAgentStore.hasAgentAccess()) return;
       // Capture before Monaco so the shortcut never inserts a newline or runs twice.
       event.preventDefault();event.stopPropagation();
       if(event.repeat||(isAgent?multiAgentStore.isRunning():store.isRunning()))return;

@@ -219,6 +219,8 @@ function CanvasWorkspace() {
   const liveContent=useMemo(()=>createLiveContentRegistry(),[canvasId]);
   const liveContentIds=useSyncExternalStore(liveContent.subscribe,liveContent.getSnapshot,liveContent.getSnapshot);
   const { token, user } = useAuth();
+  const agentTokenRef = useRef(token);
+  agentTokenRef.current = token;
   const agentUserRef = useRef(null);
   agentUserRef.current = user?.user_id ?? null;
   const [portfolioViewing, setPortfolioViewing] = useState(false), [portfolioIndex, setPortfolioIndex] = useState(0), [portfolioSettings, setPortfolioSettings] = useState(false), [portfolioLocked, setPortfolioLocked] = useState(false);
@@ -252,21 +254,18 @@ function CanvasWorkspace() {
   useEffect(purgeAgentKeys, []);
   const multiAgentStore = useMemo(() => createMultiAgentStore({
     getItems: () => itemsRef.current,
-    hasAdultAccess: () => agentUserRef.current != null
-      && accessRef.current?.agentAdultUserId === String(agentUserRef.current),
+    hasAgentAccess: () => agentUserRef.current != null && canUseCanvas(accessRef.current, 'read'),
     executeAgent: async ({ operation, ...agent }, onOutput, signal) => {
-      if (!multiAgentStore.hasAdultAccess()) {
-        throw Object.assign(new Error(ui('만 19세 이상으로 확인된 계정만 AI 에이전트를 사용할 수 있습니다.')), { code: 'AGENT_ADULT_ACCESS_REQUIRED' });
+      if (!multiAgentStore.hasAgentAccess()) {
+        throw Object.assign(new Error(ui('캔버스에 연결해야 AI 에이전트를 사용할 수 있습니다.')), { code: 'AGENT_SCOPE_DENIED' });
       }
-      // Graph runs need the same per-provider consent as the panel.
-      requireAgentConsent(agentUserRef.current, operation, agent.options);
+      await requireAgentConsent(agentTokenRef.current, operation);
       if (operation === 'run') {
         const approved = await reviewAgentPrompt(agent.message, signal);
         if (!approved || signal?.aborted) {
           throw Object.assign(new Error(ui('AI 요청 전송을 취소했습니다.')), { code: 'AGENT_ABORTED' });
         }
-        requireAgentConsent(agentUserRef.current, operation, agent.options);
-        if (!multiAgentStore.hasAdultAccess()) throw new Error('AGENT_ADULT_ACCESS_REQUIRED');
+        if (!multiAgentStore.hasAgentAccess()) throw new Error('AGENT_SCOPE_DENIED');
       }
       return runtimeRequestRef.current({ action: 'agent', operation, agent: { ...agent, consent_version: AGENT_CONSENT_VERSION } }, onOutput);
     },
@@ -394,8 +393,8 @@ function CanvasWorkspace() {
   });
   const [settings, setSettings] = useState(null);
   const [connection, setConnection] = useState('connecting');
-  const agentAdultAccess = connection === 'connected' && user?.user_id != null
-    && capabilities?.agentAdultUserId === String(user.user_id);
+  const agentAccess = connection === 'connected' && user?.user_id != null
+    && canUseCanvas(capabilities, 'read');
   const [reconnectEpoch, setReconnectEpoch] = useState(0);
   const [error, setError] = useState('');
   const { eraserWidth, changeEraserWidth, eraserMode, changeEraserMode } = useEraserSize();
@@ -2337,7 +2336,7 @@ function CanvasWorkspace() {
       return false;
     };
     multiAgentStore.focusCanvasObject = focusCanvasObject;
-    multiAgentStore.openAgentPanel = agentAdultAccess ? () => setShowAgent(true) : null;
+    multiAgentStore.openAgentPanel = agentAccess ? () => setShowAgent(true) : null;
     multiAgentStore.patchConnector = (connectorId, patch) => updateTableItem(connectorId, patch);
     multiAgentStore.startConnectorFrom = (sourceId) => {
       if (!hostSessionRef.current.editable || !canWriteCanvas) return;
@@ -2722,7 +2721,6 @@ function CanvasWorkspace() {
       onAgentBusyChange: (...args) => setAgentBusy(...args),
       onAgentClose: () => setShowAgent(false),
       onAgentRequest: async ({ operation, ...agent }, onOutput) => {
-        requireAgentConsent(agentUserRef.current, operation, agent.options);
         return executeCanvasCode({ canvasId, action: 'agent', operation, agent: { ...agent, consent_version: AGENT_CONSENT_VERSION }, sendRaw, pendingRequests: runtimeSocketRequestsRef.current }, onOutput);
       },
     };
@@ -2745,7 +2743,7 @@ function CanvasWorkspace() {
           <ResizablePanel {...toolsHandle}><CanvasToolPanel onOpenAnchors={uiActions.onOpenAnchors} activeTool={activeTool} onSelectTool={uiActions.onSelectTool} color={color} onColorChange={uiActions.onColorChange} onUploadPdf={uiActions.onUploadPdf} onUploadSheet={uiActions.onUploadSheet} onUploadImage={uiActions.onUploadImage} onUploadMedia={uiActions.onUploadMedia} favoriteColors={favoriteColors} onSaveFavorite={uiActions.onSaveFavorite} /></ResizablePanel>
           <CanvasQuickDock anchors={personalAnchors} setAnchors={uiActions.setAnchors} selectedItemIds={selectedItemIds} onNavigateAnchor={uiActions.onNavigateAnchor} allowPageKeys={selectedItemIds.length === 0 && !portfolioViewing} navigationGuard={uiActions.navigationGuard} shortcutGuard={uiActions.shortcutGuard} undoCount={undoCount} onUndo={uiActions.onUndo} canUndo={!watchState.watching_id && hostStatus.editable && editingId == null} canWrite={canWriteCanvas} activeTool={activeTool} onSelectTool={uiActions.onSelectTool} onUploadImage={uiActions.onUploadImage}
             toolsExpanded={!toolsHandle.collapsed} onToggleTools={uiActions.onToggleTools} />
-          <main className="board-region">{agentAdultAccess && <CanvasAgentLauncher open={showAgent} busy={agentBusy || multiAgentBusy} disabled={Boolean(watchState.watching_id) || !canvasSnapshotLoadedRef.current} onClick={() => setShowAgent(value => !value)} />}<MultiAgentActivity store={multiAgentStore} onFocusObject={focusCanvasObject} /><div className="board-topline"><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowVersions(false); setCanvasCodeSource(null); setShowCanvasCode(true); }}><Icon name="code" size={15} />{ui("캔버스 코드")}</button><button className="board-toggle" title={ui("변경 이력")} aria-haspopup="dialog" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(false); setShowVersions(true); }}><Icon name="document" size={15} />{ui("변경 이력")}</button><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => setShowRuntimeSettings(true)}><Icon name="settings" size={15} />{ui("실행 환경")}</button><button className="zoom-button" disabled={camera.scale >= MAX_CANVAS_SCALE - 1e-6} aria-label={ui("확대")} title={ui("클릭: 한 단계 확대 · 길게 누르기: 계속 확대")} onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" disabled={camera.scale <= MIN_CANVAS_SCALE + 1e-6} aria-label={ui("축소")} title={ui("클릭: 한 단계 축소 · 길게 누르기: 계속 축소")} onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>{ui("맞춤")}</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />{"" + ui("격자") + " "}{showGrid ? ui("켜짐") : ui("꺼짐")}</button></div></div>
+          <main className="board-region">{agentAccess && <CanvasAgentLauncher open={showAgent} busy={agentBusy || multiAgentBusy} disabled={Boolean(watchState.watching_id) || !canvasSnapshotLoadedRef.current} onClick={() => setShowAgent(value => !value)} />}<MultiAgentActivity store={multiAgentStore} onFocusObject={focusCanvasObject} /><div className="board-topline"><div className="board-toolbar-actions"><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowVersions(false); setCanvasCodeSource(null); setShowCanvasCode(true); }}><Icon name="code" size={15} />{ui("캔버스 코드")}</button><button className="board-toggle" title={ui("변경 이력")} aria-haspopup="dialog" disabled={!canvasSnapshotLoadedRef.current} onClick={() => { finishEditing(editingId); setShowCanvasCode(false); setShowVersions(true); }}><Icon name="document" size={15} />{ui("변경 이력")}</button><button className="board-toggle" disabled={!canvasSnapshotLoadedRef.current} onClick={() => setShowRuntimeSettings(true)}><Icon name="settings" size={15} />{ui("실행 환경")}</button><button className="zoom-button" disabled={camera.scale >= MAX_CANVAS_SCALE - 1e-6} aria-label={ui("확대")} title={ui("클릭: 한 단계 확대 · 길게 누르기: 계속 확대")} onPointerDown={(event) => startZoomHold(event, 1 + 0.3 * zoomSensitivity)} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 + 0.3 * zoomSensitivity)}>+</button><span className="zoom-value">{formatCanvasZoom(camera.scale)}</span><button className="zoom-button" disabled={camera.scale <= MIN_CANVAS_SCALE + 1e-6} aria-label={ui("축소")} title={ui("클릭: 한 단계 축소 · 길게 누르기: 계속 축소")} onPointerDown={(event) => startZoomHold(event, 1 / (1 + 0.3 * zoomSensitivity))} onPointerUp={stopZoomHold} onPointerCancel={cancelZoomHold} onLostPointerCapture={stopZoomHold} onClick={() => clickZoom(1 / (1 + 0.3 * zoomSensitivity))}>−</button><button className="zoom-button zoom-reset" onClick={() => { cancelPanInertia(); setCamera(fitCanvasCamera(viewportSize)); }}>{ui("맞춤")}</button><button className={`board-toggle${showGrid ? ' active' : ''}`} onClick={toggleGrid} aria-pressed={showGrid}><Icon name="grid" size={15} />{"" + ui("격자") + " "}{showGrid ? ui("켜짐") : ui("꺼짐")}</button></div></div>
             <div className="canvas-stage" data-grid-spacing={gridSpacing.x} data-grid-spacing-x={gridSpacing.x} data-grid-spacing-y={gridSpacing.y} style={backgroundStyle} ref={boardRef} tabIndex={-1} {...stagePointerHandlers({
               disabled: Boolean(watchState.watching_id), touchNavigation, activeTool, dragRef, panRef, spacePressedRef, startPan, cancelCameraMotion: cancelPanInertia, startDrawing, moveDrawing, stopDrawing, moveObject, stopObjectDrag, hideCursor, sendCursorPosition, pickVector: (event, doubleClick = false, capture = false) => {
                 if (!['select', 'connect'].includes(activeTool) || event.button !== 0 || event.target.closest?.('.stage-label, button, input, textarea')) return false;
@@ -2922,7 +2920,7 @@ function CanvasWorkspace() {
         {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{ui(toast)}</div>}
         {comments.activeId && <ObjectCommentsPanel token={token} comments={comments} participants={mentionParticipants} connection={connection} />}
         <MentionNotifications notifications={comments.notifications} onJump={jumpToMention} onDismiss={comments.dismiss} channelName={id => textChannels.find(channel => channel.id === id)?.name} />
-        {agentAdultAccess && <CanvasAgentPanel key={`${canvasId}:${user?.user_id || ''}`} theme={theme} isAdmin={Boolean(capabilities?.is_admin)} onBusyChange={uiActions.onAgentBusyChange} open={showAgent} onClose={uiActions.onAgentClose} canvasId={canvasId} selectedIds={selectedObjectIds} anchor={showAgent ? centeredItemPosition(0, 0) : null} request={uiActions.onAgentRequest} userId={user?.user_id ?? null} />}
+        {agentAccess && <CanvasAgentPanel key={`${canvasId}:${user?.user_id || ''}`} theme={theme} isAdmin={Boolean(capabilities?.is_admin)} onBusyChange={uiActions.onAgentBusyChange} open={showAgent} onClose={uiActions.onAgentClose} canvasId={canvasId} selectedIds={selectedObjectIds} anchor={showAgent ? centeredItemPosition(0, 0) : null} request={uiActions.onAgentRequest} token={token} />}
         {showRuntimeSettings && <RuntimeSettingsDialog request={management => executeCanvasCode({ canvasId, action: 'manage', management, sendRaw, pendingRequests: runtimeSocketRequestsRef.current })} canManage={canWriteCanvas && canUseCanvas(capabilities, 'execute')} canvasId={canvasId} token={token} user={user} initialLanguage={selectedItem?.language || 'cpp'} isRunning={() => runtimeStore.isRunning()} onClose={() => setShowRuntimeSettings(false)} />}
         {versionsOpened.current && <CanvasVersionDialog open={showVersions} api={canvasCodeApi} canvasId={canvasId} onClose={() => setShowVersions(false)} onInspect={source => { setCanvasCodeSource(source); setShowVersions(false); setShowCanvasCode(true); }} />}
         {showCanvasCode && <CanvasAsCodeDialog api={canvasCodeApi} canvasId={canvasId} initialSource={canvasCodeSource} onClose={() => setShowCanvasCode(false)} />}

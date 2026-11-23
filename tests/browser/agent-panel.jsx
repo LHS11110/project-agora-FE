@@ -14,7 +14,7 @@ function notice(){window.dispatchEvent(new CustomEvent('agora:agent-sessions-cha
 window.agentFixture={failNext429:false,disconnectNext:false,omitSession:null,read,notice};
 async function request(payload,output){
  window.agentCalls.push(payload);
- if(payload.operation==='status')return {ready:true,configured:true,model:'claude-opus-5-5',credential_source:'server',default_configured:true,telemetry};
+ if(payload.operation==='status')return {ready:true,configured:true,model:'qwen2.5:1.5b',credential_source:'none',default_configured:true,telemetry};
  const db=read();
  if(payload.operation==='sessions')return {sessions:db.index.filter(id=>id!==window.agentFixture.omitSession).map(id=>summary(db.sessions[id])),draft:summary(db.sessions[db.drafts[userId]]),user_id:userId,next_offset:null};
  if(payload.operation==='session_delete'){const session=db.sessions[payload.session_id];if(!session||session.owner_id!==userId)throw Error('Delete denied');delete db.sessions[payload.session_id];db.index=db.index.filter(id=>id!==payload.session_id);write(db);notice();return {deleted:true};}

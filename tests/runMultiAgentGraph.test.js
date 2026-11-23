@@ -696,9 +696,9 @@ test('agent abort rejects without CLI cancel requests, and busy errors retry', a
   assert.equal(busyRes.answer, 'recovered after busy retries');
 });
 
-test('an unverified account cannot start agent work from any graph entry point', async () => {
+test('an account without canvas access cannot start agent work from any graph entry point', async () => {
   const store = createMultiAgentStore({
-    hasAdultAccess: () => false,
+    hasAgentAccess: () => false,
     getItems: () => assert.fail('denied runs must not read canvas data'),
     executeAgent: () => assert.fail('denied runs must not request a model'),
   });
