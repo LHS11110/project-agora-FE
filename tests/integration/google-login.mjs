@@ -11,14 +11,14 @@ try{
  await page.screenshot({path:process.env.AGORA_E2E_SCREENSHOT||'/tmp/agora-google-login.png'});
  let starts=0;await context.route('**/api/auth/oauth2/authorize/google',r=>{starts++;return r.fulfill({contentType:'text/html',body:'OAuth redirect intercepted by UI test'});});
  await button.click();await page.waitForURL('**/api/auth/oauth2/authorize/google');assert.equal(starts,1);
- await page.goto(origin+'/login?oauth=account_exists');await page.getByRole('alert').filter({hasText:'같은 이메일의 기존 계정'}).waitFor();assert.equal(new URL(page.url()).search,'');
+ await page.goto(origin+'/login?oauth=account_exists');await page.getByRole('alert').filter({hasText:'이미 존재하는 계정'}).waitFor();assert.equal(new URL(page.url()).search,'');
  let exchanges=0;const token='eyJhbGciOiJIUzI1NiJ9.'+Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+600})).toString('base64url')+'.ui-test';
  const user={email:'oauth-ui@example.invalid',nickname:'OAuth UI',tag_number:1,role:'ROLE_USER',status:'ACTIVE'};
  await context.route('**/api/auth/oauth2/session',r=>{exchanges++;return r.fulfill({json:{accessToken:token,user,tokenType:'Bearer'}});});
  await context.route('**/api/auth/me',r=>r.fulfill({json:user}));
  await page.evaluate(()=>sessionStorage.setItem('frelog_oauth_return','/docs'));
  await page.goto(origin+'/login?oauth=success');await page.waitForURL('**/docs');
- assert.equal(exchanges,1);assert.equal(await page.evaluate(()=>localStorage.getItem('agora_token')),token);
+ assert.equal(exchanges,1);assert.equal(await page.evaluate(()=>localStorage.getItem('agora_token')),null);
  assert.equal(new URL(page.url()).search,'');assert.deepEqual(errors,[]);
  console.log('PASS Google button, authorization navigation, existing-account error, one-use handoff, auth persistence and local return navigation (mocked provider)');
 }finally{await browser.close();}

@@ -10,7 +10,7 @@ const waitCount=(page,count)=>page.waitForFunction(n=>Object.values(window.frelo
 try{
  for(const participant of fixture.users){
   const context=await browser.newContext({viewport:{width:1440,height:1000},locale:'ko-KR'});
-  await context.addInitScript(({token,user})=>{localStorage.setItem('agora_token',token);localStorage.setItem('agora_user',JSON.stringify(user));localStorage.setItem('frelog_locale','ko');},participant);
+  await context.addInitScript(({token,user})=>{((t)=>{const f=window.fetch;window.fetch=function(input){return String(input?.url??input).includes('/api/auth/session/refresh')?Promise.resolve(new Response(JSON.stringify({accessToken:t}),{status:200,headers:{'Content-Type':'application/json'}})):f.apply(this,arguments);};})(token);localStorage.setItem('agora_user',JSON.stringify(user));localStorage.setItem('frelog_locale','ko');},participant);
   const page=await context.newPage();pages.push(page);page.on('pageerror',error=>errors.push(error.message));await page.goto(origin+`/canvases/${fixture.canvasId}`);await page.locator('.connection-pill.connected').waitFor();
  }
  const [owner,guest]=pages,dock=owner.locator('.canvas-quick-dock'),undo=dock.getByRole('button',{name:'실행 취소',exact:true});

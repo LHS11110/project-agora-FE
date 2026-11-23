@@ -10,7 +10,7 @@ const object=(page,id)=>page.locator(`.canvas-object[data-item-id="${id}"]`);
 try{
  for(const participant of state.users){
   const context=await browser.newContext({viewport:{width:1920,height:1200},locale:'ko-KR'});
-  await context.addInitScript(({token,user})=>{localStorage.setItem('agora_token',token);localStorage.setItem('agora_user',JSON.stringify(user));localStorage.setItem('frelog_locale','ko');},participant);
+  await context.addInitScript(({token,user})=>{((t)=>{const f=window.fetch;window.fetch=function(input){return String(input?.url??input).includes('/api/auth/session/refresh')?Promise.resolve(new Response(JSON.stringify({accessToken:t}),{status:200,headers:{'Content-Type':'application/json'}})):f.apply(this,arguments);};})(token);localStorage.setItem('agora_user',JSON.stringify(user));localStorage.setItem('frelog_locale','ko');},participant);
   const page=await context.newPage();pages.push(page);page.on('pageerror',error=>errors.push(error.message));
   page.on('request',r=>{if(r.url().endsWith('/runtime/execute/stream'))executions++;});
   await page.goto(origin+`/canvases/${state.canvasId}`);await page.waitForFunction(()=>window.frelogCanvas?.read().items.out);

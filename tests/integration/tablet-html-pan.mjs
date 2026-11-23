@@ -77,19 +77,21 @@ async function setupMockContext(browser, viewport) {
     locale: 'ko-KR',
     ignoreHTTPSErrors: true,
   });
-  await context.addInitScript(({ token, user }) => {
+  await context.addInitScript(({ user }) => {
     if (window !== window.top) return;
-    localStorage.setItem('agora_token', token);
+    // Access tokens are no longer stored; the cached profile makes the app restore the
+    // session through /api/auth/session/refresh (fulfilled below).
     localStorage.setItem('agora_user', JSON.stringify(user));
     localStorage.setItem('frelog_ui_locale', 'ko');
     localStorage.setItem('agora_home_intro_seen', '1');
-  }, { token, user });
+  }, { user });
   context.setDefaultTimeout(30000);
 
   await context.route((url) => url.pathname.startsWith('/api/'), (route) => {
     const pathname = new URL(route.request().url()).pathname;
     let json = {};
-    if (pathname === '/api/auth/me') json = user;
+    if (pathname === '/api/auth/session/refresh') json = { accessToken: token, user };
+    else if (pathname === '/api/auth/me') json = user;
     else if (pathname === '/api/canvases/search' || pathname === '/api/canvases') {
       json = { items: [], content: [], total: 0, totalElements: 0, totalPages: 0 };
     } else if (pathname.endsWith('/access')) {

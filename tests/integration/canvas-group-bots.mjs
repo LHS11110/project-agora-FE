@@ -7,7 +7,7 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 1000
 const owner = { nickname: 'Owner', tag_number: 1 }, viewer = { nickname: 'Viewer', tag_number: 1 };
 const user = { ...owner, email: 'owner@example.invalid', role: 'ROLE_USER', status: 'ACTIVE' };
 const token = 'eyJhbGciOiJIUzI1NiJ9.' + Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 600 })).toString('base64url') + '.fixture';
-await context.addInitScript(({ user, token }) => { localStorage.setItem('agora_user', JSON.stringify(user)); localStorage.setItem('agora_token', token); }, { user, token });
+await context.addInitScript(({ user, token }) => { localStorage.setItem('agora_user', JSON.stringify(user)); ((t)=>{const f=window.fetch;window.fetch=function(input){return String(input?.url??input).includes('/api/auth/session/refresh')?Promise.resolve(new Response(JSON.stringify({accessToken:t}),{status:200,headers:{'Content-Type':'application/json'}})):f.apply(this,arguments);};})(token); }, { user, token });
 let settings = { canvas_id: 999004, canvas_name: 'Groups and bots', description: '', settings_revision: 0, visibility: 'private', password_protected: false, participants: [owner, viewer], owner, can_manage: true, groups: { 'admin-group': [owner], default: [owner, viewer] }, initial_group: 'default', group_permissions: { 'admin-group': { read: true, write: true, execute: true }, default: { read: true, write: true, execute: true } } };
 let canvasSocket; let bots = [], rotations = 0; const updates = [], errors = [];
 await context.route(url => url.pathname.startsWith('/api/'), async route => {

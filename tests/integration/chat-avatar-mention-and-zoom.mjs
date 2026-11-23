@@ -49,7 +49,7 @@ try {
     });
     await context.addInitScript(({ token, user }) => {
       if (window !== window.top) return;
-      localStorage.setItem('agora_token', token);
+      ((t)=>{const f=window.fetch;window.fetch=function(input){return String(input?.url??input).includes('/api/auth/session/refresh')?Promise.resolve(new Response(JSON.stringify({accessToken:t}),{status:200,headers:{'Content-Type':'application/json'}})):f.apply(this,arguments);};})(token);
       localStorage.setItem('agora_user', JSON.stringify(user));
     }, { token, user });
     context.setDefaultTimeout(45000);

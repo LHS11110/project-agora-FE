@@ -12,7 +12,7 @@ const latest={t:makeCollaborativeItem({kind:'text',text:'',renderMode:'plain',x:
 let revision=0;const clients=new Map(),errors=[];
 try{
  const context=await browser.newContext({viewport:{width:1440,height:1000},locale:'ko-KR',ignoreHTTPSErrors:process.env.AGORA_E2E_INSECURE_LOCAL_TLS==='1'});
- await context.addInitScript(({token,user})=>{localStorage.setItem('agora_token',token);localStorage.setItem('agora_user',JSON.stringify(user));},{token,user});
+ await context.addInitScript(({token,user})=>{((t)=>{const f=window.fetch;window.fetch=function(input){return String(input?.url??input).includes('/api/auth/session/refresh')?Promise.resolve(new Response(JSON.stringify({accessToken:t}),{status:200,headers:{'Content-Type':'application/json'}})):f.apply(this,arguments);};})(token);localStorage.setItem('agora_user',JSON.stringify(user));},{token,user});
  await context.route(url=>url.pathname.startsWith('/api/'),r=>{
   const path=new URL(r.request().url()).pathname;
   return r.fulfill({json:path==='/api/auth/me'?user:path.endsWith('/access')?{ws_port:8002,canvas_access_token:'fixture'}:path.endsWith('/settings')?{canvas_name:'Collaborative undo',settings_revision:0,visibility:'private',participants:[],can_manage:true}:{canvas_id:999004,canvas_name:'Collaborative undo'}});

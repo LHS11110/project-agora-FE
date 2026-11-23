@@ -29,7 +29,7 @@ try{
   await contextWithLogin.route('**/api/auth/mfa/verify',route=>{verifies++;assert.deepEqual(route.request().postDataJSON(),{challengeToken:'orcid-mfa-challenge',code:'123456'});return route.fulfill({json:{accessToken:token,user,mfaRequired:false}});});
   const returned=await contextWithLogin.newPage();returned.on('pageerror',error=>errors.push(error.message));await returned.goto(origin+'/login?orcid=success');
   if(mfa){await returned.getByRole('heading',{name:'2단계 인증',exact:true}).waitFor();assert.equal(await returned.evaluate(()=>localStorage.getItem('agora_token')),null);await returned.getByRole('textbox',{name:'인증 코드',exact:true}).fill('123456');await returned.getByRole('button',{name:'인증하고 로그인',exact:true}).click();}
-  await returned.waitForURL('**/docs');assert.equal(handoffs,1);assert.equal(verifies,mfa?1:0);assert.equal(await returned.evaluate(()=>localStorage.getItem('agora_token')),token);assert.equal(JSON.parse(await returned.evaluate(()=>localStorage.getItem('agora_user'))).email,null);await contextWithLogin.close();
+  await returned.waitForURL('**/docs');assert.equal(handoffs,1);assert.equal(verifies,mfa?1:0);assert.equal(await returned.evaluate(()=>localStorage.getItem('agora_token')),null);assert.equal(JSON.parse(await returned.evaluate(()=>localStorage.getItem('agora_user'))).email,null);await contextWithLogin.close();
  }
  for(const outcome of ['cancelled','failed','success']){
   const contextWithFailure=await context();let handoffs=0;await contextWithFailure.route('**/api/irade/auth/session',route=>{handoffs++;return route.fulfill({status:401,json:{message:'Expired handoff'}});});

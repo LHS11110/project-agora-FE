@@ -121,7 +121,7 @@ try {
   async function installRoutes(context, { authenticated = true } = {}) {
     if (authenticated) {
       await context.addInitScript(({ authToken, authUser }) => {
-        localStorage.setItem('agora_token', authToken);
+        ((t)=>{const f=window.fetch;window.fetch=function(input){return String(input?.url??input).includes('/api/auth/session/refresh')?Promise.resolve(new Response(JSON.stringify({accessToken:t}),{status:200,headers:{'Content-Type':'application/json'}})):f.apply(this,arguments);};})(authToken);
         localStorage.setItem('agora_user', JSON.stringify(authUser));
         sessionStorage.setItem('frelog.home-intro.v1', 'seen');
       }, { authToken: token, authUser: user });

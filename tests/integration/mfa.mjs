@@ -20,7 +20,7 @@ try{
   await page.getByRole('textbox',{name:'인증 코드',exact:true}).fill('000000');await page.getByRole('button',{name:'인증하고 로그인'}).click();await page.getByRole('alert').waitFor();assert.equal(await page.evaluate(()=>localStorage.getItem('agora_token')),null);
   await page.getByRole('button',{name:'복구 코드 사용',exact:true}).click();await page.getByRole('textbox',{name:'복구 코드',exact:true}).fill('ABCD-EFGH-IJKL-MNOP');await page.getByRole('button',{name:'인증하고 로그인'}).click();await page.waitForURL('**/docs');await page.waitForTimeout(250);assert.equal(new URL(page.url()).pathname,'/docs');assert.equal(await page.evaluate(()=>localStorage.getItem('agora_token')),token);assert.equal(attempts,2);assert.equal(handoffs,google?1:0);await c.close();
  }
- const c=await context();await c.addInitScript(({token,user})=>{localStorage.setItem('agora_token',token);localStorage.setItem('agora_user',JSON.stringify(user));},{token,user});
+ const c=await context();await c.addInitScript(({token,user})=>{((t)=>{const f=window.fetch;window.fetch=function(input){return String(input?.url??input).includes('/api/auth/session/refresh')?Promise.resolve(new Response(JSON.stringify({accessToken:t}),{status:200,headers:{'Content-Type':'application/json'}})):f.apply(this,arguments);};})(token);localStorage.setItem('agora_user',JSON.stringify(user));},{token,user});
  let enabled=false;const codes=Array.from({length:10},(_,i)=>`ABCD-EFGH-IJKL-MNO${i}`);const secret='JBSWY3DPEHPK3PXP';
  await c.route('**/api/auth/mfa',r=>r.fulfill({json:{available:true,enabled,recoveryCodesRemaining:enabled?10:0}}));
  await c.route('**/api/auth/mfa/enrollment',r=>r.fulfill({json:{secret,uri:`otpauth://totp/FreLog:demo?secret=${secret}&issuer=FreLog`}}));

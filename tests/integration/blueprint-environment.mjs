@@ -17,7 +17,7 @@ try {
  const pages=[],errors=[];
  for(let i=0;i<2;i++){
   const context=await browser.newContext({viewport:{width:1920,height:1200},locale:'ko-KR'});
-  await context.addInitScript(({token,user})=>{localStorage.setItem('agora_token',token);localStorage.setItem('agora_user',JSON.stringify(user));localStorage.setItem('frelog_locale','ko')},state);
+  await context.addInitScript(({token,user})=>{((t)=>{const f=window.fetch;window.fetch=function(input){return String(input?.url??input).includes('/api/auth/session/refresh')?Promise.resolve(new Response(JSON.stringify({accessToken:t}),{status:200,headers:{'Content-Type':'application/json'}})):f.apply(this,arguments);};})(token);localStorage.setItem('agora_user',JSON.stringify(user));localStorage.setItem('frelog_locale','ko')},state);
   const page=await context.newPage(); page.on('pageerror',e=>errors.push(e.message));
   await page.goto(origin+'/canvases/'+state.canvas_id);
   await page.waitForFunction(()=>window.frelogCanvas&&document.querySelector('.connection-pill.connected')&&!document.querySelector('.canvas-loading-status.is-overlay'),null,{timeout:60000});

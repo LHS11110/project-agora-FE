@@ -12,7 +12,7 @@ async function context(providers={google:true,naver:true,kakao:true}){
  await c.route('**/api/auth/email/status',r=>r.fulfill({json:{available:true}}));return c;
 }
 try{
- for(const [provider,label] of [['google','Google로 계속하기'],['naver','네이버로 계속하기'],['kakao','카카오로 계속하기']]){
+ for(const [provider,label] of [['google','Google로 계속하기'],['naver','네이버 로그인'],['kakao','카카오 로그인']]){
   const c=await context();await c.route('**/api/auth/oauth2/authorize/'+provider,r=>r.fulfill({contentType:'text/html',body:'<title>OAuth vendor redirect fixture</title>'}));
   const p=await c.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(origin+'/login');await p.getByRole('button',{name:label,exact:true}).waitFor();
   if(process.env.AGORA_E2E_SCREENSHOTS&&provider==='naver'){await p.evaluate(()=>document.fonts.ready);await p.screenshot({path:'/tmp/agora-social-login-desktop.png',fullPage:true});await p.setViewportSize({width:390,height:844});await p.screenshot({path:'/tmp/agora-social-login-mobile.png',fullPage:true});assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));}
@@ -30,7 +30,7 @@ try{
   if(process.env.AGORA_E2E_SCREENSHOTS&&provider==='naver')await p.screenshot({path:'/tmp/agora-social-enrollment.png',fullPage:true});
   await submit.click();await p.getByRole('alert').filter({hasText:'이용약관 및 개인정보 수집·저장에 동의해주세요.'}).waitFor();assert.equal(enrollments,0);
   await p.getByLabel('이용약관 및 개인정보 수집·저장에 모두 동의합니다').check();
-  await submit.click();await p.waitForURL('**/docs');assert.equal(enrollments,1);assert.equal(await p.evaluate(()=>localStorage.getItem('agora_token')),token);await c.close();
+  await submit.click();await p.waitForURL('**/docs');assert.equal(enrollments,1);assert.equal(await p.evaluate(()=>localStorage.getItem('agora_token')),null);await c.close();
  }
  for(const provider of ['naver','kakao']){
   const c=await context();let verifies=0;await c.route('**/api/auth/oauth2/session',r=>r.fulfill({json:{mfaRequired:true,challengeToken:provider+'-challenge'}}));await c.route('**/api/auth/mfa/verify',r=>{verifies++;assert.equal(r.request().postDataJSON().challengeToken,provider+'-challenge');return r.fulfill({json:{accessToken:token,user,mfaRequired:false}});});
@@ -46,6 +46,6 @@ try{
  await collision.route('**/api/auth/oauth2/email/request',r=>{assert.deepEqual(r.request().postDataJSON(),{email:'existing@gmail.com',enrollmentToken:'gmail-conflict'});return r.fulfill({status:409,json:{code:'USER_001',message:'이미 존재하는 계정입니다. 기존 로그인 방식을 사용해주세요.'}});});
  await collision.route('**/api/auth/email/verify',r=>{verifies++;return r.fulfill({status:400,json:{}});});await collision.route('**/api/auth/oauth2/enrollment',r=>{enrollments++;return r.fulfill({status:409,json:{}});});
  const existing=await collision.newPage();await existing.goto(origin+'/login?oauth=success');await existing.getByRole('heading',{name:'이메일 확인',exact:true}).waitFor();await existing.getByRole('textbox',{name:'이메일',exact:true}).fill('existing@gmail.com');await existing.getByRole('button',{name:'인증 메일 보내기',exact:true}).click();await existing.getByRole('alert').filter({hasText:'이미 존재하는 계정입니다.'}).waitFor();assert.equal(await existing.getByRole('textbox',{name:'이메일 인증 코드',exact:true}).count(),0);assert.ok(await existing.getByRole('button',{name:'인증하고 가입하기',exact:true}).isDisabled());assert.equal(verifies,0);assert.equal(enrollments,0);await collision.close();
- const disabled=await context({google:true,naver:false,kakao:false});const p=await disabled.newPage();await p.goto(origin+'/login');await p.getByRole('button',{name:'Google로 계속하기',exact:true}).waitFor();assert.equal(await p.getByRole('button',{name:'네이버로 계속하기',exact:true}).count(),0);assert.equal(await p.getByRole('button',{name:'카카오로 계속하기',exact:true}).count(),0);
+ const disabled=await context({google:true,naver:false,kakao:false});const p=await disabled.newPage();await p.goto(origin+'/login');await p.getByRole('button',{name:'Google로 계속하기',exact:true}).waitFor();assert.equal(await p.getByRole('button',{name:'네이버 로그인',exact:true}).count(),0);assert.equal(await p.getByRole('button',{name:'카카오 로그인',exact:true}).count(),0);
  assert.deepEqual(errors,[]);console.log('PASS Google/Naver/Kakao buttons, provider routes, disabled providers, one-use handoff, email-proof-first enrollment, return paths, duplicate-account notices without mail/linking and no early JWT (mocked vendor APIs)');
 }finally{await browser.close()}

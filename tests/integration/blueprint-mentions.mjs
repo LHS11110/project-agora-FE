@@ -137,7 +137,7 @@ async function open(auth) {
     const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 2200, height: 1400 }, locale: 'ko-KR' });
     if (attachMock) await attachMock(context, auth);
     await context.addInitScript(({ token, user }) => {
-        localStorage.setItem('agora_token', token); localStorage.setItem('agora_user', JSON.stringify(user)); localStorage.setItem('frelog_locale', 'ko');
+        ((t)=>{const f=window.fetch;window.fetch=function(input){return String(input?.url??input).includes('/api/auth/session/refresh')?Promise.resolve(new Response(JSON.stringify({accessToken:t}),{status:200,headers:{'Content-Type':'application/json'}})):f.apply(this,arguments);};})(token); localStorage.setItem('agora_user', JSON.stringify(user)); localStorage.setItem('frelog_locale', 'ko');
         const send = WebSocket.prototype.send; const registered = new WeakSet();
         WebSocket.prototype.send = function (data) { try { const x = JSON.parse(data); if (x.type === 'canvas_settings_get') { window.testSocket = this; window.testInbox ||= []; if (!registered.has(this)) { registered.add(this); const record = raw => { try { window.testInbox.push(typeof raw === 'string' ? JSON.parse(raw) : raw) } catch { } }; const prev = this.onmessage; if (typeof prev === 'function') this.onmessage = function (event) { record(event.data); return prev.call(this, event); }; else this.addEventListener('message', event => record(event.data)); } } } catch { } return send.call(this, data) };
     }, auth);

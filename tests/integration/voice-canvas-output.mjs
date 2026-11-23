@@ -21,7 +21,7 @@ try{
   const token='eyJhbGciOiJIUzI1NiJ9.'+Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+600})).toString('base64url')+'.voice-fixture';
   const context=await browser.newContext({viewport:{width:1280,height:900},permissions:['microphone'],locale:'ko-KR',ignoreHTTPSErrors:process.env.AGORA_E2E_INSECURE_LOCAL_TLS==='1'});
   await context.addInitScript(({user,token})=>{
-   localStorage.setItem('agora_user',JSON.stringify(user));localStorage.setItem('agora_token',token);
+   localStorage.setItem('agora_user',JSON.stringify(user));((t)=>{const f=window.fetch;window.fetch=function(input){return String(input?.url??input).includes('/api/auth/session/refresh')?Promise.resolve(new Response(JSON.stringify({accessToken:t}),{status:200,headers:{'Content-Type':'application/json'}})):f.apply(this,arguments);};})(token);
    const capture=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);window.voiceCaptured=[];
    navigator.mediaDevices.getUserMedia=async request=>{const stream=await capture({...request,audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});window.voiceCaptured.push(stream);return stream;};
    window.voiceGraphs=[];window.voicePlayers=[];

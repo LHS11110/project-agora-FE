@@ -30,7 +30,7 @@ try {
   const context = await browser.newContext({ viewport: { width: 1680, height: 1050 }, locale: 'ko-KR', ignoreHTTPSErrors: process.env.AGORA_E2E_INSECURE_LOCAL_TLS === '1' });
   await context.addInitScript(({ token, user }) => {
     sessionStorage.setItem('frelog.home-intro.v1', 'seen');
-    localStorage.setItem('agora_token', token);
+    ((t)=>{const f=window.fetch;window.fetch=function(input){return String(input?.url??input).includes('/api/auth/session/refresh')?Promise.resolve(new Response(JSON.stringify({accessToken:t}),{status:200,headers:{'Content-Type':'application/json'}})):f.apply(this,arguments);};})(token);
     localStorage.setItem('agora_user', JSON.stringify(user));
     localStorage.setItem('frelog_canvas_panel_visibility_v1', JSON.stringify({ tools: false, inspector: false, chat: true }));
   }, { token, user });

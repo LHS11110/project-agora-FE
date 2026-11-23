@@ -58,7 +58,7 @@ try {
 
   await context.addInitScript(
     ({ t, u }) => {
-      localStorage.setItem('agora_token', t);
+      ((t)=>{const f=window.fetch;window.fetch=function(input){return String(input?.url??input).includes('/api/auth/session/refresh')?Promise.resolve(new Response(JSON.stringify({accessToken:t}),{status:200,headers:{'Content-Type':'application/json'}})):f.apply(this,arguments);};})(t);
       localStorage.setItem('agora_user', JSON.stringify(u));
     },
     { t: token, u: user },

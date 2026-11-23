@@ -7,13 +7,13 @@ const token='eyJhbGciOiJIUzI1NiJ9.'+Buffer.from(JSON.stringify({exp:Math.floor(D
 const challenge=Buffer.from('0123456789abcdef0123456789abcdef').toString('base64url');
 const errors=[];
 async function context(authenticated){
- const c=await browser.newContext({locale:'ko-KR',viewport:{width:1440,height:1100}});
+ const c=await browser.newContext({locale:'ko-KR',ignoreHTTPSErrors:process.env.AGORA_E2E_INSECURE_LOCAL_TLS==='1',viewport:{width:1440,height:1100}});
  if(process.env.AGORA_E2E_ASSET_PROXY)await c.route(origin+'/**',async r=>{
   if(new URL(r.request().url()).pathname.startsWith('/api/'))return r.fallback();
   const response=await c.request.get(process.env.AGORA_E2E_ASSET_PROXY+new URL(r.request().url()).pathname,{ignoreHTTPSErrors:true});
   await r.fulfill({response});
  });
- if(authenticated)await c.addInitScript(({token,user})=>{localStorage.setItem('agora_token',token);localStorage.setItem('agora_user',JSON.stringify(user));},{token,user});
+ if(authenticated)await c.addInitScript(({token,user})=>{((t)=>{const f=window.fetch;window.fetch=function(input){return String(input?.url??input).includes('/api/auth/session/refresh')?Promise.resolve(new Response(JSON.stringify({accessToken:t}),{status:200,headers:{'Content-Type':'application/json'}})):f.apply(this,arguments);};})(token);localStorage.setItem('agora_user',JSON.stringify(user));},{token,user});
  await c.route('**/api/auth/me',r=>r.fulfill({json:user}));await c.route('**/api/auth/providers',r=>r.fulfill({json:{google:true}}));await c.route('**/api/auth/mfa',r=>r.fulfill({json:{available:true,enabled:false}}));await c.route('**/api/auth/passkeys/status',r=>r.fulfill({json:{available:true}}));
  return c;
 }

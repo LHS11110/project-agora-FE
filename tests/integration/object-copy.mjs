@@ -17,7 +17,7 @@ const peers=new Set(),receipts=new Map();
 const errors=[];
 try{for(const role of ['admin']){let executions=0,writes=0,settingsUpdate=null,revision=0,latest=structuredClone(items);const admin=role==='admin';const caps={groups:['default'],write_groups:admin?['default']:[],execute_groups:role==='viewer'?[]:['default'],is_admin:admin};
 const context=await browser.newContext({viewport:{width:2100,height:1450},locale:'ko-KR',ignoreHTTPSErrors:process.env.AGORA_E2E_INSECURE_LOCAL_TLS==='1'});
-await context.addInitScript(({token,user})=>{localStorage.setItem('frelog_tool_categories',JSON.stringify({structure:true}));localStorage.setItem('agora_token',token);localStorage.setItem('agora_user',JSON.stringify(user));},{token,user});
+await context.addInitScript(({token,user})=>{localStorage.setItem('frelog_tool_categories',JSON.stringify({structure:true}));((t)=>{const f=window.fetch;window.fetch=function(input){return String(input?.url??input).includes('/api/auth/session/refresh')?Promise.resolve(new Response(JSON.stringify({accessToken:t}),{status:200,headers:{'Content-Type':'application/json'}})):f.apply(this,arguments);};})(token);localStorage.setItem('agora_user',JSON.stringify(user));},{token,user});
 await context.addInitScript(()=>{
  window.__copyWorkers=0;window.__copyBatches=0;window.__writes=0;window.__copiedText='';const Native=Worker;
  window.Worker=class extends Native{constructor(url,...args){super(url,...args);if(String(url).includes('copyWorker')){window.__copyWorkers++;const send=this.postMessage.bind(this);this.postMessage=(data,...rest)=>{if(data.type==='batch')window.__copyBatches++;return send(data,...rest);};}}};

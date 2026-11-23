@@ -59,7 +59,7 @@ async function installRoutes(context, { user, token, caps }) {
   await context.addInitScript(({ token: t, user: u }) => {
     if (window !== window.top) return;
     localStorage.setItem('frelog_tool_categories', JSON.stringify({ structure: true }));
-    localStorage.setItem('agora_token', t);
+    ((t)=>{const f=window.fetch;window.fetch=function(input){return String(input?.url??input).includes('/api/auth/session/refresh')?Promise.resolve(new Response(JSON.stringify({accessToken:t}),{status:200,headers:{'Content-Type':'application/json'}})):f.apply(this,arguments);};})(t);
     localStorage.setItem('agora_user', JSON.stringify(u));
 
     window.__soundCues = [];
