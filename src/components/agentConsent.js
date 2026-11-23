@@ -2,24 +2,33 @@ import { ui } from '../i18n/locale.js';
 
 import { api } from '../api/client.js';
 
-export const AGENT_CONSENT_VERSION = 'agent-local-v3';
 const endpoint = '/api/users/agent-terms';
 
-export function loadAgentTerms(token) {
-  return api(endpoint, { token });
+function validateTerms(terms) {
+  if (!terms || typeof terms.version !== 'string' || !terms.version.trim()
+      || typeof terms.body !== 'string' || !terms.body.trim() || typeof terms.accepted !== 'boolean') {
+    throw new Error(ui('에이전트 약관 상태를 확인하지 못했습니다.'));
+  }
+  return terms;
 }
 
-export function saveAgentDecision(token, accepted) {
-  return api(endpoint, {
+export async function loadAgentTerms(token) {
+  return validateTerms(await api(endpoint, { token }));
+}
+
+export async function saveAgentDecision(token, version, accepted) {
+  const terms = validateTerms(await api(endpoint, {
     method: 'PUT', token,
-    body: { version: AGENT_CONSENT_VERSION, accepted },
-  });
+    body: { version, accepted },
+  }));
+  if (terms.version !== version) throw new Error(ui('에이전트 약관 상태를 확인하지 못했습니다.'));
+  return terms;
 }
 
 export async function requireAgentConsent(token, operation) {
   if (operation !== 'run') return;
   const terms = await loadAgentTerms(token);
-  if (terms.version === AGENT_CONSENT_VERSION && terms.accepted === true) return;
+  if (terms.accepted) return terms.version;
   const error = new Error(ui('Agora AI 에이전트 이용약관에 동의한 뒤 사용해주세요.'));
   error.code = 'AGENT_CONSENT_REQUIRED';
   throw error;

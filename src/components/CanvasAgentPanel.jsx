@@ -6,7 +6,7 @@ import { isAgentConnectionError, agentTurnOutcome } from './agentRecovery.js';
 import AgentTime from './AgentTime.jsx';
 import AgentSessionPicker from './AgentSessionPicker.jsx';
 import useAgentSessions from './useAgentSessions.js';
-import { AGENT_CONSENT_VERSION, loadAgentTerms, saveAgentDecision } from './agentConsent.js';
+import { loadAgentTerms, saveAgentDecision } from './agentConsent.js';
 import { ui } from '../i18n/locale.js';
 import { useUiLocale } from '../i18n/useUiLocale.js';
 import './canvas-agent.css';
@@ -32,7 +32,14 @@ function ConsentCard({ terms, onAccept, disabled }) {
   </section>;
 }
 
-export default function CanvasAgentPanel({ open, onClose, request, anchor, canvasId, selectedIds = [], selectedLabel, canDeleteSelected = false, onBusyChange, theme = 'light', token }) {
+function AgentRetryNotice({ message, onRetry }) {
+  return <div className="canvas-agent-retry" role="alert">
+    <p>{message}</p>
+    <button type="button" onClick={onRetry}>{ui('다시 시도')}</button>
+  </div>;
+}
+
+export default function CanvasAgentPanel({ open, onClose, request, anchor, canvasId, canvasConnection = 'connected', selectedIds = [], selectedLabel, canDeleteSelected = false, onBusyChange, theme = 'light', token }) {
   useUiLocale();
   const fieldId = useId();
   const [optimistic, setOptimistic] = useState(null);
@@ -44,35 +51,31 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
   const [error, setError] = useState('');
   const [progress, setProgress] = useState('');
   const [now, setNow] = useState(() => Date.now() / 1000);
-  const [, setRefreshing] = useState(false);
+  const [statusError, setStatusError] = useState(false);
+  const [statusReload, setStatusReload] = useState(0);
   const [terms, setTerms] = useState(null);
   const [termsPending, setTermsPending] = useState(false);
   const [termsError, setTermsError] = useState(false);
   const [termsReload, setTermsReload] = useState(0);
-  const consented = terms?.version === AGENT_CONSENT_VERSION && terms.accepted === true;
+  const consented = terms?.accepted === true;
 
   useEffect(() => {
     if (!open) return;
     let active = true;
     setTerms(null);
     setTermsError(false);
-    loadAgentTerms(token).then(value => {
-      if (!active) return;
-      if (value?.version !== AGENT_CONSENT_VERSION || typeof value.body !== 'string') {
-        setTermsError(true);
-      } else {
-        setTerms(value);
-      }
-    }).catch(() => { if (active) setTermsError(true); });
+    loadAgentTerms(token)
+      .then(value => { if (active) setTerms(value); })
+      .catch(() => { if (active) setTermsError(true); });
     return () => { active = false; };
   }, [open, token, termsReload]);
 
   async function updateConsent(accepted) {
-    if (termsPending) return;
+    if (!terms || termsPending) return;
     setTermsPending(true);
     setTermsError(false);
     try {
-      setTerms(await saveAgentDecision(token, accepted));
+      setTerms(await saveAgentDecision(token, terms.version, accepted));
     } catch {
       setTermsError(true);
     } finally {
@@ -86,7 +89,7 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
   requestRef.current = request;
   const activeTurnRef = useRef(null);
   const bottom = useRef(null), bodyRef = useRef(null), followLatest = useRef(true);
-  const conversation = useAgentSessions({ canvasId, open, requestRef });
+  const conversation = useAgentSessions({ canvasId, open: open && canvasConnection === 'connected', requestRef });
   const inputDrafts = useRef(new Map());
   const storedMessages = conversation.detail?.messages || [];
   const messages = optimistic && optimistic.session_id === conversation.activeId && !storedMessages.some(message => message.id === optimistic.id)
@@ -118,17 +121,21 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
 
   useEffect(() => { onBusyChange?.(working); }, [working, onBusyChange]);
   useEffect(() => {
-    if (!open) return undefined;
-    let live = true;
-    if (!busy) {
-      setStatus(null);
-      requestRef.current({ operation: 'status', options: modelOptions })
-        .then(value => { if (live) setStatus(value); })
-        .catch(e => { if (live) setError(e.message); });
-    }
+    if (!open) return;
     const timer = setInterval(() => setNow(Date.now() / 1000), 1000);
-    return () => { live = false; clearInterval(timer); };
-  }, [open, canvasId]);
+    return () => clearInterval(timer);
+  }, [open]);
+
+  useEffect(() => {
+    setStatus(null);
+    setStatusError(false);
+    if (!open || canvasConnection !== 'connected') return;
+    let live = true;
+    conversation.metadata({ operation: 'status', options: modelOptions })
+      .then(value => { if (live) setStatus(value); })
+      .catch(() => { if (live) setStatusError(true); });
+    return () => { live = false; };
+  }, [open, canvasId, canvasConnection, statusReload, conversation.metadata]);
 
   useEffect(() => { followLatest.current = true; }, [conversation.activeId]);
   useEffect(() => {
@@ -138,19 +145,8 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
     }
   }, [conversation.activeId, messages.at(-1)?.id]);
 
-  async function refreshStatus() {
-    setRefreshing(true);
-    try {
-      setStatus(await requestRef.current({ operation: 'status', options: modelOptions }));
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setRefreshing(false);
-    }
-  }
-
   function applyTelemetry(telemetry) {
-    if (telemetry) setStatus(previous => ({ ...previous, telemetry }));
+    if (telemetry) setStatus(previous => previous && { ...previous, telemetry });
   }
 
   useEffect(() => {
@@ -209,6 +205,7 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
     || !canContinue
     || session?.status === 'running'
     || termsPending
+    || termsError
     || !consented
     || !status?.ready;
   const blocked = unavailable || !prompt.trim() || status?.configured !== true
@@ -244,6 +241,7 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
           message: text,
           anchor,
           options: modelOptions,
+          consent_version: terms.version,
           selected_ids: selected.length ? selected : undefined,
           confirmed_delete_id: deleteId || undefined,
           session_id: sessionId,
@@ -356,14 +354,20 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
             followLatest.current = !element || element.scrollHeight - element.scrollTop - element.clientHeight < 96;
           }}
         >
-          {conversation.connection === 'reconnecting' && (
+          {(canvasConnection !== 'connected' || conversation.connection === 'reconnecting') && (
             <p className="canvas-agent-reconnecting" role="status">{ui('연결을 복구하고 있습니다. 대화와 입력 내용은 유지됩니다.')}</p>
           )}
 
-          {termsError && <div role="alert">
-            <p>{ui('에이전트 약관 상태를 확인하지 못했습니다.')}</p>
-            <button type="button" onClick={() => setTermsReload(value => value + 1)}>{ui('다시 시도')}</button>
-          </div>}
+          {termsError && (
+            <AgentRetryNotice message={ui('에이전트 약관 상태를 확인하지 못했습니다.')} onRetry={() => setTermsReload(value => value + 1)} />
+          )}
+          {!termsError && (statusError || status?.configured === false) && (
+            <AgentRetryNotice message={statusError ? ui('AI 에이전트에 연결하지 못했습니다.')
+              : ui('서버에 {provider}가 설정되면 에이전트를 사용할 수 있습니다.', { provider: provider.label })} onRetry={() => {
+              setStatusReload(value => value + 1);
+              void conversation.reload();
+            }} />
+          )}
           {terms && !consented && (
             <ConsentCard terms={terms} disabled={busy || termsPending} onAccept={() => updateConsent(true)} />
           )}
@@ -428,9 +432,6 @@ export default function CanvasAgentPanel({ open, onClose, request, anchor, canva
             {conversation.error && <p className="canvas-agent-error" role="alert">{conversation.error}</p>}
             {session?.status === 'interrupted' && (
               <p className="canvas-agent-error">{ui('이전 작업의 연결이 종료되었습니다. 이미 반영된 변경을 확인한 뒤 다시 요청해주세요.')}</p>
-            )}
-            {consented && status?.configured === false && (
-              <p className="canvas-agent-error">{ui('서버에 {provider}가 설정되면 에이전트를 사용할 수 있습니다.', { provider: provider.label })}</p>
             )}
             <div ref={bottom} />
           </div>

@@ -58,3 +58,7 @@
 .canvas-agent-delete-controls{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0;font-size:11px;color:var(--agent-muted)}
 .canvas-agent-delete-controls label{display:flex;align-items:center;gap:5px}
 .canvas-agent-delete-controls button{font-size:11px}
+
+.canvas-agent-retry{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:12px 18px 0;padding:10px 12px;border:1px solid var(--agent-line);border-radius:10px;background:var(--agent-soft)}
+.canvas-agent-retry p{margin:0;color:var(--agent-muted);font-size:11px;line-height:1.5}
+.canvas-agent-retry button{flex:none;padding:5px 10px;font-size:11px}

@@ -81,7 +81,7 @@ import { createMultiAgentStore } from '../canvas/agents/multiAgentStore.js';
 import MultiAgentActivity from '../canvas/agents/MultiAgentActivity.jsx';
 import { buildMultiAgentTemplate, isAgentCanvasObject, isAgentOrchestratorItem } from '../canvas/agents/agentCanvasModel.js';
 import { purgeAgentKeys } from '../components/agentCredentials.js';
-import { AGENT_CONSENT_VERSION, requireAgentConsent, reviewAgentPrompt } from '../components/agentConsent.js';
+import { requireAgentConsent, reviewAgentPrompt } from '../components/agentConsent.js';
 import Timer, {initialTimer} from '../canvas/CanvasTimer.jsx';
 import CanvasAgentLauncher from '../components/CanvasAgentLauncher.jsx';
 import CanvasAgentPanel from '../components/CanvasAgentPanel.jsx';
@@ -259,7 +259,7 @@ function CanvasWorkspace() {
       if (!multiAgentStore.hasAgentAccess()) {
         throw Object.assign(new Error(ui('캔버스에 연결해야 AI 에이전트를 사용할 수 있습니다.')), { code: 'AGENT_SCOPE_DENIED' });
       }
-      await requireAgentConsent(agentTokenRef.current, operation);
+      const consentVersion = await requireAgentConsent(agentTokenRef.current, operation);
       if (operation === 'run') {
         const approved = await reviewAgentPrompt(agent.message, signal);
         if (!approved || signal?.aborted) {
@@ -267,7 +267,7 @@ function CanvasWorkspace() {
         }
         if (!multiAgentStore.hasAgentAccess()) throw new Error('AGENT_SCOPE_DENIED');
       }
-      return runtimeRequestRef.current({ action: 'agent', operation, agent: { ...agent, consent_version: AGENT_CONSENT_VERSION } }, onOutput);
+      return runtimeRequestRef.current({ action: 'agent', operation, agent: { ...agent, consent_version: consentVersion } }, onOutput);
     },
     getAnchor: id => getAgentAnchorRef.current(id),
     saveOutput: (id, records) => saveBlueprintOutputRef.current(id, records),
@@ -393,8 +393,8 @@ function CanvasWorkspace() {
   });
   const [settings, setSettings] = useState(null);
   const [connection, setConnection] = useState('connecting');
-  const agentAccess = connection === 'connected' && user?.user_id != null
-    && canUseCanvas(capabilities, 'read');
+  const agentEligible = user?.user_id != null && canUseCanvas(capabilities, 'read');
+  const agentAccess = connection === 'connected' && agentEligible;
   const [reconnectEpoch, setReconnectEpoch] = useState(0);
   const [error, setError] = useState('');
   const { eraserWidth, changeEraserWidth, eraserMode, changeEraserMode } = useEraserSize();
@@ -2721,7 +2721,7 @@ function CanvasWorkspace() {
       onAgentBusyChange: (...args) => setAgentBusy(...args),
       onAgentClose: () => setShowAgent(false),
       onAgentRequest: async ({ operation, ...agent }, onOutput) => {
-        return executeCanvasCode({ canvasId, action: 'agent', operation, agent: { ...agent, consent_version: AGENT_CONSENT_VERSION }, sendRaw, pendingRequests: runtimeSocketRequestsRef.current }, onOutput);
+        return executeCanvasCode({ canvasId, action: 'agent', operation, agent, sendRaw, pendingRequests: runtimeSocketRequestsRef.current }, onOutput);
       },
     };
     const uiActions = useMemo(() => Object.fromEntries(
@@ -2920,10 +2920,10 @@ function CanvasWorkspace() {
         {toast && <div className="toast-message" role="status"><Icon name="check" size={16} />{ui(toast)}</div>}
         {comments.activeId && <ObjectCommentsPanel token={token} comments={comments} participants={mentionParticipants} connection={connection} />}
         <MentionNotifications notifications={comments.notifications} onJump={jumpToMention} onDismiss={comments.dismiss} channelName={id => textChannels.find(channel => channel.id === id)?.name} />
-        {agentAccess && <CanvasAgentPanel key={`${canvasId}:${user?.user_id || ''}`} theme={theme} isAdmin={Boolean(capabilities?.is_admin)} onBusyChange={uiActions.onAgentBusyChange} open={showAgent} onClose={uiActions.onAgentClose} canvasId={canvasId} selectedIds={selectedObjectIds}
+        {agentEligible && (agentAccess || showAgent) && <CanvasAgentPanel key={`${canvasId}:${user?.user_id || ''}`} theme={theme} isAdmin={Boolean(capabilities?.is_admin)} onBusyChange={uiActions.onAgentBusyChange} open={showAgent} onClose={uiActions.onAgentClose} canvasId={canvasId} selectedIds={selectedObjectIds}
           selectedLabel={selectedItem ? String(selectedItem.title || selectedItem.name || selectedItem.filename || selectedItem.text || selectedItem.kind).slice(0, 100) : undefined}
           canDeleteSelected={Boolean(selectedItem && canWriteItem(selectedItem) && !isObjectLocked(selectedItem))}
-          anchor={showAgent ? centeredItemPosition(0, 0) : null} request={uiActions.onAgentRequest} token={token} />}
+          anchor={showAgent ? centeredItemPosition(0, 0) : null} request={uiActions.onAgentRequest} token={token} canvasConnection={connection} />}
         {showRuntimeSettings && <RuntimeSettingsDialog request={management => executeCanvasCode({ canvasId, action: 'manage', management, sendRaw, pendingRequests: runtimeSocketRequestsRef.current })} canManage={canWriteCanvas && canUseCanvas(capabilities, 'execute')} canvasId={canvasId} token={token} user={user} initialLanguage={selectedItem?.language || 'cpp'} isRunning={() => runtimeStore.isRunning()} onClose={() => setShowRuntimeSettings(false)} />}
         {versionsOpened.current && <CanvasVersionDialog open={showVersions} api={canvasCodeApi} canvasId={canvasId} onClose={() => setShowVersions(false)} onInspect={source => { setCanvasCodeSource(source); setShowVersions(false); setShowCanvasCode(true); }} />}
         {showCanvasCode && <CanvasAsCodeDialog api={canvasCodeApi} canvasId={canvasId} initialSource={canvasCodeSource} onClose={() => setShowCanvasCode(false)} />}

@@ -11,10 +11,13 @@ function read(){const saved=localStorage.getItem(dbKey);if(saved)return JSON.par
 function write(db){localStorage.setItem(dbKey,JSON.stringify(db));}
 function summary(s){const {messages,...value}=s;return {...value,can_delete:s.owner_id===userId&&!['draft','running'].includes(s.status),can_continue:s.owner_id===userId};}
 function notice(){window.dispatchEvent(new CustomEvent('agora:agent-sessions-changed',{detail:{canvasId:'1'}}));}
-window.agentFixture={failNext429:false,disconnectNext:false,omitSession:null,objects:{'code-a':'테스트 코드','code-b':'다른 코드'},read,notice};
+window.agentFixture={failInitialStatus:new URLSearchParams(location.search).has('failStatus'),failNext429:false,disconnectNext:false,omitSession:null,objects:{'code-a':'테스트 코드','code-b':'다른 코드'},read,notice};
 async function request(payload,output){
  window.agentCalls.push(payload);
- if(payload.operation==='status')return {ready:true,configured:true,model:'qwen2.5:1.5b',credential_source:'none',default_configured:true,telemetry};
+ if(payload.operation==='status'){
+   if(window.agentFixture.failInitialStatus){window.agentFixture.failInitialStatus=false;throw Error('Test status failure');}
+   return {ready:true,configured:true,model:'qwen2.5:1.5b',credential_source:'none',default_configured:true,telemetry};
+ }
  const db=read();
  if(payload.operation==='sessions')return {sessions:db.index.filter(id=>id!==window.agentFixture.omitSession).map(id=>summary(db.sessions[id])),draft:summary(db.sessions[db.drafts[userId]]),user_id:userId,next_offset:null};
  if(payload.operation==='session_delete'){const session=db.sessions[payload.session_id];if(!session||session.owner_id!==userId)throw Error('Delete denied');delete db.sessions[payload.session_id];db.index=db.index.filter(id=>id!==payload.session_id);write(db);notice();return {deleted:true};}

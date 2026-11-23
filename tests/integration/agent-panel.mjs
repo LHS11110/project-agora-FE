@@ -4,24 +4,35 @@ const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome',hea
 try{
  for(const viewport of [{width:1440,height:900},{width:390,height:844}]){
   const page=await browser.newPage({viewport,ignoreHTTPSErrors:true});const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  let accepted = false;
+  let accepted = false, failTerms = true;
+  const version = 'agent-test-next-version';
   await page.route('**/api/users/agent-terms', async route => {
+    if (failTerms) {
+      failTerms = false;
+      await route.fulfill({status:503,json:{message:'temporary failure'}});
+      return;
+    }
     if (route.request().method() === 'PUT') {
       const decision = route.request().postDataJSON();
-      assert.equal(decision.version, 'agent-local-v3');
+      assert.equal(decision.version, version);
       accepted = decision.accepted;
     }
-    await route.fulfill({json:{version:'agent-local-v3',body:'DB에 저장된 약관 본문',accepted}});
+    await route.fulfill({json:{version:version,body:'DB에 저장된 약관 본문',accepted}});
   });
-  await page.goto(new URL('/tests/browser/agent-panel.html',process.env.AGENT_TEST_ORIGIN || 'https://127.0.0.1:5191').href);await page.getByRole('dialog').waitFor();
-  await page.getByText('Agora AI 에이전트 이용약관 (agent-local-v3)',{exact:true}).click();
+  await page.goto(new URL('/tests/browser/agent-panel.html?failStatus',process.env.AGENT_TEST_ORIGIN || 'https://127.0.0.1:5191').href);await page.getByRole('dialog').waitFor();
+  const termsNotice = page.getByRole('alert').filter({hasText:'에이전트 약관 상태를 확인하지 못했습니다.'});
+  await termsNotice.getByRole('button',{name:'다시 시도'}).click();
+  const statusNotice = page.getByRole('alert').filter({hasText:'AI 에이전트에 연결하지 못했습니다.'});
+  await statusNotice.getByRole('button',{name:'다시 시도'}).click();
+  await statusNotice.waitFor({state:'hidden'});
+  await page.getByText(`Agora AI 에이전트 이용약관 (${version})`,{exact:true}).click();
   await page.getByText('DB에 저장된 약관 본문',{exact:true}).waitFor();
   await page.locator('[name=agent-consent-terms]').check();
   assert.equal(await page.locator('[name=agent-consent-transfer]').count(),0);
   await page.getByRole('button',{name:'동의하고 사용'}).click();
   await page.waitForFunction(() => !document.querySelector('[name=agent-consent-terms]'));
   assert.equal(accepted,true);
-  await page.reload();
+  await page.goto(new URL('/tests/browser/agent-panel.html',page.url()).href);
   await page.getByRole('button',{name:'동의 철회',exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'에이전트 설정',exact:true}).count(),0);
   assert.equal(await page.locator('[name=agent-api-key]').count(),0);
@@ -32,6 +43,7 @@ try{
     assert.equal(Object.hasOwn(run,field),false);
   }
   assert.deepEqual(run.options,{provider:'local',max_tokens:768,max_steps:4});
+  assert.equal(run.consent_version,version);
   assert.deepEqual(run.selected_ids,['code-a']);
   assert.equal(run.confirmed_delete_id,undefined);
   const deleteSetting=page.getByRole('checkbox',{name:'선택 객체 삭제 허용'});

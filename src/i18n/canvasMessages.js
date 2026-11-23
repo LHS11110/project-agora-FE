@@ -2624,6 +2624,7 @@ const messages = {
   "선택 객체 삭제 허용": ["允许删除所选对象","選択したオブジェクトの削除を許可","Autoriser la suppression de l’objet sélectionné"],
   "선택한 객체 삭제": ["删除所选对象","選択したオブジェクトを削除","Supprimer l’objet sélectionné"],
   "선택한 객체 “{object}”와 연결된 댓글을 삭제할까요?": ["删除所选对象“{object}”及其评论？","選択したオブジェクト「{object}」とコメントを削除しますか？","Supprimer l’objet « {object} » et ses commentaires ?"],
+  "AI 에이전트에 연결하지 못했습니다.": ["无法连接到 AI 智能体","AI エージェントに接続できませんでした。","Impossible de se connecter à l’agent IA."],
   "동의 철회": ["撤回同意","同意を撤回","Retirer le consentement"],
   "AI가 생성한 응답입니다. 사실 관계는 직접 확인한 뒤 사용하세요.": ["回复由 AI 生成。使用前请自行核实事实。","応答は AI が生成したものです。事実関係はご自身で確認してから使ってください。","Les réponses sont générées par l'IA. Vérifiez les faits avant de vous y fier."],
   "{provider} · 아이디어를 함께 만드는 공간": ["{provider} · 共同构思的空间","{provider} · アイデアを一緒に形にする場所","{provider} · Un espace pour construire des idées ensemble"],
