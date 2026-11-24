@@ -14,7 +14,7 @@ self.onmessage=event=>{
  if(request.type==='decode')incoming=incoming.then(async()=>{
   const message=await decode(request.data);if(message.type==='transport_ready'&&message.encoding==='gzip-v1')gzip=true;
   self.postMessage({type:'decoded',message});
- }).catch(()=>self.postMessage({type:'error'}));
+ }).catch(()=>self.postMessage({type:'decode_error'}));
  if(request.type==='encode')outgoing=outgoing.then(async()=>{
   const text=typeof request.data==='string'?request.data:JSON.stringify(request.data),raw=new TextEncoder().encode(text);
   let data=text,bytes=raw.length;

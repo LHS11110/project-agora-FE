@@ -85,6 +85,9 @@ const methods = [
   ['canvas.settings() · update_settings(field, value=...)','설정 조회·변경. 변경은 관리자 전용이며 expected_revision 충돌 검사를 적용합니다.'],
   ['canvas.invite(nickname, tag_number) · remove_participant(...)','관리자가 기존 참여자 API로 사용자를 초대하거나 제외합니다.'],
   ['canvas.refresh() · canvas.items · next_event(timeout=5)','최신 스냅샷과 이벤트를 수신합니다. 객체 이벤트는 최근 256개, 커서는 참여자별 최신 위치를 유지하며 누락은 event_overflow로 알립니다.'],
+  ['canvas.find_objects(query, kind=None)','읽기 권한이 있는 스냅샷에서 객체를 검색합니다. 결과의 x와 y는 정규화된 캔버스 좌표입니다.'],
+  ['canvas.agent_status() · run_agent(message)','현재 약관에 동의한 사용자로 로컬 에이전트를 호출합니다. 하이라이트 결과는 highlight_id로 확인합니다.'],
+  ['client.agent_terms() · set_agent_consent(version, accepted)','현재 에이전트 약관을 조회하고 사용자가 확인한 버전의 동의 여부를 기록합니다.'],
   ['canvas.execute(language, code, stdin=None)','기존 런타임 API로 코드를 실행하고 결과를 반환합니다. 블루프린트 자동 순회와 결과 객체 갱신은 별도 구현이 필요합니다.'],
   ['canvas.send_event(event) · publish(event)','기존 브로커의 채팅·댓글·멘션 등 요청과 커서 같은 일방향 이벤트를 전달합니다. 서버 권한 검증은 동일합니다.'],
   ['client.request(method, path, raw=True)','기존 HTTP API를 호출합니다. raw=True 응답의 content로 파일을 읽고 files= 인자로 multipart 업로드를 요청할 수 있습니다.'],
@@ -95,8 +98,8 @@ export default function PythonSdkDocs(){return <section className="docs-section 
   <div className="docs-section-title"><span className="section-kicker">PYTHON / AUTOMATION</span><h2>Python SDK</h2><p>{ui('기존 HTTPS API와 WSS 브로커를 이용해 캔버스를 자동화합니다. 익명 접속이나 DB·내부 포트 접근 없이 사용자 또는 봇의 권한으로 작업합니다.')}</p></div>
   <Heading id="sdk-install">{ui('설치와 연결')}</Heading>
   <p>{ui('Python 3.10 이상이 필요합니다. 패키지는 아직 PyPI에 게시하지 않았으므로 wheel을 내려받거나 백엔드 저장소의 sdk/python 경로에서 설치하세요.')}</p>
-  <a className="button button-outline sdk-download" href="/downloads/agora_canvas-0.1.4-py3-none-any.whl" download>{ui('Python 모듈 다운로드')} <span>0.1.4 · MIT</span></a>
-  <Code>{'python -m pip install ./agora_canvas-0.1.4-py3-none-any.whl\n\n# Or install from the cloned backend repository:\npython -m pip install ./project-agora-BE/sdk/python'}</Code>
+  <a className="button button-outline sdk-download" href="/downloads/agora_canvas-0.1.5-py3-none-any.whl" download>{ui('Python 모듈 다운로드')} <span>0.1.5 · MIT</span></a>
+  <Code>{'python -m pip install ./agora_canvas-0.1.5-py3-none-any.whl\n\n# Or install from the cloned backend repository:\npython -m pip install ./project-agora-BE/sdk/python'}</Code>
   <p>{ui('외부 주소는 https://frelog.p-e.kr입니다. TLS 인증서 검증은 항상 활성화되며 내부 CA가 필요한 환경에서는 ca_file을 지정합니다. with 블록이 끝나면 연결을 정리합니다.')}</p>
   <Heading id="sdk-auth">{ui('사용자 인증과 MFA')}</Heading>
   <p>{ui('이메일·비밀번호 로그인은 MFA를 그대로 적용하고, 15분마다 만료되는 사용자 토큰을 세션 쿠키로 자동 갱신합니다. OAuth·패스키 로그인으로 받은 사용자 토큰을 AgoraClient(token=...)에 전달하면 갱신 없이 만료 시점까지만 사용할 수 있으므로, 장시간 실행하는 스크립트에는 봇 토큰을 사용하세요. 사용자 토큰은 발급받은 네트워크의 IP에 묶입니다.')}</p>

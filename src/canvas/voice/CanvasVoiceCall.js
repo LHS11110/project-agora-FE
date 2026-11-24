@@ -213,7 +213,7 @@ export default class CanvasVoiceCall {
   this.self='';this.clearSignals();
   if(seamless&&this.stream){this.retireConnectedLinks();}else{for(const id of this.links.keys())this.drop(id);this.clearAllHandoffs();}
   if(this.pending){++this.generation;this.pending=false;if(!this.stream)this.closeAudioContext();}
-  this.reconnecting=Boolean(this.stream)&&(!seamless||!this.hasLiveHandoff());this.applyAudioState();
+  this.reconnecting=Boolean(this.stream);this.applyAudioState();
   if(this.stream&&this.reconnectTimer===null)this.reconnectTimer=setTimeout(()=>{this.leave();this.error='VOICE_RECONNECT_TIMEOUT';this.emit();},this.reconnectTimeout);
   this.emit();
  }
@@ -231,7 +231,7 @@ export default class CanvasVoiceCall {
  rebuildLink(id){
   const peer=this.peers.get(id);this.drop(id);
   if(!peer?.voice_active||!this.self||!this.stream||this.closed)return false;
-  this.connect(peer);const rebuilt=this.links.get(id);if(rebuilt){rebuilt.recovering=true;this.emit();}
+  this.connect(peer,{initiate:true});const rebuilt=this.links.get(id);if(rebuilt){rebuilt.recovering=true;this.emit();}
   return Boolean(rebuilt);
  }
  armTimeout(id,link){
@@ -246,7 +246,7 @@ export default class CanvasVoiceCall {
   if(reset){link.retries=0;link.exhausted=false;}
   const nextRetries=link.retries+1;
   if(nextRetries>4){link.recovering=false;link.exhausted=true;this.error='VOICE_CONNECTION_FAILED';clearTimeout(link.repairTimer);link.repairTimer=setTimeout(()=>{link.repairTimer=null;if(this.current(id,link))this.repair(id,true);},15000);this.emit();return;}
-  this.announce();clearTimeout(link.repairTimer);link.repairTimer=null;
+  clearTimeout(link.repairTimer);link.repairTimer=null;
   if(link.pc.connectionState==='failed'||link.pc.iceConnectionState==='failed'||link.pc.connectionState==='closed'||nextRetries>=3){
    if(this.rebuildLink(id)){const rebuilt=this.links.get(id);if(rebuilt)rebuilt.retries=nextRetries;}
    this.emit();return;
@@ -260,8 +260,8 @@ export default class CanvasVoiceCall {
   for(const peer of this.peers.values())if(peer.voice_active){this.connect(peer);const link=this.links.get(peer.peer_id);if(link&&!this.isTransportConnected(link.pc))this.repair(peer.peer_id,true);}
   this.emit();
  }
- connect(peer){
-  if(this.closed||!this.self||!this.stream||!this.inChannel(peer)||peer.peer_id===this.self||this.links.has(peer.peer_id))return;
+ connect(peer,{initiate=false}={}){
+  if(this.closed||this.mediaConfigured===false||!this.self||!this.stream||!this.inChannel(peer)||peer.peer_id===this.self||this.links.has(peer.peer_id))return;
   let pc;try{pc=new this.Peer({iceServers:this.iceServers,iceTransportPolicy:this.iceTransportPolicy,bundlePolicy:'max-bundle',rtcpMuxPolicy:'require'});}catch{this.error='VOICE_CONNECTION_FAILED';this.emit();return;}
   const audio=this.audio();audio.autoplay=true;audio.muted=this.deafened;audio.volume=this.volumeFor(peer)/100;
   const key=this.volumeKey(peer),waitingHandoff=this.handoffs.has(key);
@@ -325,7 +325,7 @@ export default class CanvasVoiceCall {
    if(!link.needsNegotiation||pc.signalingState!=='stable')return;
    // Elect one initial offerer. Slow TURN gathering plus simultaneous initial
    // offers can leave Chromium's rolled-back gatherer without relay candidates.
-   if(!pc.localDescription&&!pc.remoteDescription&&this.self>id)return;
+   if(!initiate&&!pc.localDescription&&!pc.remoteDescription&&this.self>id)return;
    link.needsNegotiation=false;
    try{link.offering=true;await pc.setLocalDescription();if(this.current(id,link))this.signal({type:'rtc_signal',peer_id:id,action:pc.localDescription.type,description:pc.localDescription.toJSON()},link);}
    catch(error){link.needsNegotiation=true;throw error;}
@@ -361,6 +361,15 @@ export default class CanvasVoiceCall {
    if(event.action==='offer'){link.needsNegotiation=false;await pc.setLocalDescription();if(this.current(id,link))this.signal({type:'rtc_signal',peer_id:id,action:'answer',description:pc.localDescription.toJSON()},link);}
   });
  }
+ scheduleRelayRefresh(delay){
+  clearTimeout(this.relayTimer);
+  this.relayTimer=setTimeout(()=>{
+   this.relayTimer=null;
+   if(this.closed||!this.self)return;
+   this.scheduleRelayRefresh(15000);
+   this.signal({type:'rtc_media_config'});
+  },delay);
+ }
  applyRelay(config){
   if(!config)return;
   const servers=Array.isArray(config.ice_servers)?config.ice_servers:[];
@@ -368,11 +377,11 @@ export default class CanvasVoiceCall {
   const unchanged=valid&&this.mediaConfigured===true&&this.sameIceServers(this.iceServers,servers);
   this.mediaConfigured=valid;this.iceTransportPolicy='relay';this.iceServers=valid?servers:[];
   clearTimeout(this.relayTimer);this.relayTimer=null;
-  if(!valid){for(const id of this.links.keys())this.drop(id);this.clearAllHandoffs();this.error='VOICE_RELAY_UNAVAILABLE';this.emit();return;}
+  if(!valid){for(const id of this.links.keys())this.drop(id);this.clearAllHandoffs();this.error='VOICE_RELAY_UNAVAILABLE';this.scheduleRelayRefresh(15000);this.emit();return;}
   if(this.error==='VOICE_RELAY_UNAVAILABLE')this.error='';
   if(!unchanged){for(const [id,link] of this.links){try{link.pc.setConfiguration({...link.pc.getConfiguration(),iceServers:servers,iceTransportPolicy:'relay'});link.pc.restartIce();}catch{this.repair(id,true);}}}
   const remaining=Number(config.expires_at)*1000-Date.now()-300000;
-  this.relayTimer=setTimeout(()=>{this.relayTimer=null;if(!this.closed)this.signal({type:'rtc_media_config'});},Math.max(60000,Math.min(43200000,Number.isFinite(remaining)?remaining:43200000)));
+  this.scheduleRelayRefresh(Math.max(60000,Math.min(43200000,Number.isFinite(remaining)?remaining:43200000)));
   this.emit();
  }
  notePeerReturning(peer){
@@ -386,14 +395,19 @@ export default class CanvasVoiceCall {
   if(this.closed)return;
   if(event.type==='rtc_peers'){
    if(typeof event.self_peer_id!=='string'||!event.self_peer_id)return;
-   if(this.self!==event.self_peer_id)this.retireConnectedLinks();
+   const membershipChanged=this.self!==event.self_peer_id;
+   if(membershipChanged)this.retireConnectedLinks();
    this.applyRelay(event.media_relay);
    this.self=event.self_peer_id;this.peers=new Map((Array.isArray(event.peers)?event.peers:[]).map(p=>[p.peer_id,p]));
    clearTimeout(this.reconnectTimer);this.reconnectTimer=null;this.reconnecting=false;this.applyAudioState();
    for(const id of [...this.links.keys()])if(!this.inChannel(this.peers.get(id)))this.drop(id);
    for(const p of this.peers.values())if(p.voice_active)this.notePeerReturning(p);
-   this.announce();for(const p of this.peers.values())this.connect(p);this.emit();
-  }else if(event.type==='rtc_media_config'){this.applyRelay(event.media_relay);}
+   if(membershipChanged&&this.stream)this.announce();
+   for(const p of this.peers.values())this.connect(p);this.emit();
+  }else if(event.type==='rtc_media_config'){
+   this.applyRelay(event.media_relay);
+   for(const peer of this.peers.values())this.connect(peer);
+  }
   else if(event.type==='rtc_peer_joined'){this.peers.set(event.peer.peer_id,event.peer);if(event.peer.voice_active)this.notePeerReturning(event.peer);this.connect(event.peer);this.emit();}
   else if(event.type==='rtc_peer_left'){
    const leftPeer=this.peers.get(event.peer_id),leftLink=this.links.get(event.peer_id),leftKey=leftPeer?this.volumeKey(leftPeer):null;
@@ -406,8 +420,8 @@ export default class CanvasVoiceCall {
    this.peers.delete(event.peer_id);if(this.watchingScreen===event.peer_id)this.watchingScreen=null;this.emit();
   }
   else if(event.type==='voice_state'){
-   const peer=this.peers.get(event.peer_id);if(!peer)return;Object.assign(peer,{voice_active:event.active,voice_muted:event.muted,screen_sharing:event.active&&event.screen_sharing===true,voice_channel:typeof event.channel==='string'&&event.channel?event.channel:'general'});
-   if(event.active&&this.inChannel(peer)){this.notePeerReturning(peer);this.connect(peer);const existing=this.links.get(event.peer_id);if(existing&&(existing.exhausted||existing.pc.connectionState==='failed'||existing.pc.iceConnectionState==='failed'||existing.pc.connectionState==='closed'))this.repair(event.peer_id,true);}
+   const peer=this.peers.get(event.peer_id);if(!peer)return;const wasInChannel=this.inChannel(peer);Object.assign(peer,{voice_active:event.active,voice_muted:event.muted,screen_sharing:event.active&&event.screen_sharing===true,voice_channel:typeof event.channel==='string'&&event.channel?event.channel:'general'});
+   if(event.active&&this.inChannel(peer)){if(!wasInChannel)this.notePeerReturning(peer);this.connect(peer);}
    else{this.drop(event.peer_id);this.clearHandoff(this.volumeKey(peer));}
    if(!event.screen_sharing&&this.watchingScreen===event.peer_id)this.watchingScreen=null;this.emit();
   }else if(event.type==='voice_notice'){

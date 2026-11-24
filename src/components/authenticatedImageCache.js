@@ -37,7 +37,7 @@ function revokeIfUnused(entry) {
   if (!entry || entry.refs > 0 || entry.revoked) return;
   entry.revoked = true;
   if (entry.objectUrl) URL.revokeObjectURL(entry.objectUrl);
-  totalBytes = Math.max(0, totalBytes - entry.size);
+  if (entry.counted) totalBytes -= entry.size;
 }
 
 function evict() {
@@ -71,6 +71,7 @@ async function fetchImageEntry(target) {
     objectUrl,
     size: blob.size,
     retain: target.retain,
+    counted: target.retain,
     refs: 0,
     revoked: false,
   };
@@ -121,6 +122,11 @@ export async function acquireAuthenticatedImage(source, token) {
   }
   const entry = await promise;
   if (!entry) return null;
+  if (entry.revoked) {
+    // The cache can evict the entry before this caller acquires its reference.
+    const objectUrl = URL.createObjectURL(entry.blob);
+    return { ...entry, src: objectUrl, objectUrl, retain: false, counted: false, refs: 1, revoked: false };
+  }
   entry.refs += 1;
   return entry;
 }

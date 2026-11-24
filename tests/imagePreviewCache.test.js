@@ -158,3 +158,37 @@ test('newly visible previews overtake queued offscreen decodes without duplicati
  pending.shift()({width:10,height:10});await tick();assert.equal(cache.queued,0);
  }finally{cache.destroy();}
 });
+
+test('a new chat image retains its object URL when existing attachments fill the cache', async (t) => {
+  const revoked = new Set();
+  let nextUrl = 0;
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { location: { href: 'https://chat.example.test/' } },
+  });
+  t.after(() => {
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  });
+  t.mock.method(URL, 'createObjectURL', () => `blob:chat-${++nextUrl}`);
+  t.mock.method(URL, 'revokeObjectURL', url => revoked.add(url));
+  const image = new Blob([new Uint8Array(20 * 1024 * 1024)], { type: 'image/png' });
+  t.mock.method(globalThis, 'fetch', async () => ({
+    ok: true,
+    status: 200,
+    headers: new Headers({ 'content-type': image.type }),
+    blob: async () => image,
+  }));
+
+  const cache = await import('../src/components/authenticatedImageCache.js');
+  const sources = ['/api/canvases/4/media/first.png', '/api/canvases/4/media/second.png', '/api/canvases/4/media/third.png'];
+  const entries = [];
+  t.after(() => {
+    for (const entry of entries) cache.releaseAuthenticatedImage(entry);
+    for (const source of sources) cache.invalidateAuthenticatedImage(source, 'chat-test');
+  });
+
+  for (const source of sources) entries.push(await cache.acquireAuthenticatedImage(source, 'chat-test'));
+  assert.ok(entries.every(entry => !revoked.has(entry.src)));
+});

@@ -13,3 +13,15 @@ test('rolling send budget reserves capacity for host data and resumes without dr
  socket.bufferedAmount=0;assert.equal(budget.send(socket,{payload:{type:'host_commit'}},2001),true);
  assert.equal(sent.length,182);
 });
+
+test('RTC flow control includes frames queued for compression',()=>{
+ const budget=new SocketSendBudget();
+ let pending=60*1024;
+ const socket={readyState:1,bufferedAmount:8*1024,pendingCodecBytes:()=>pending,send(){}};
+ assert.equal(budget.send(socket,{payload:{type:'cursor'}}),false);
+ assert.equal(budget.send(socket,{type:'rtc_signal'}),true);
+ pending=256*1024;
+ assert.equal(budget.send(socket,{type:'rtc_signal'}),false);
+ pending=0;
+ assert.equal(budget.send(socket,{type:'rtc_signal'}),true);
+});

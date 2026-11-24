@@ -418,3 +418,63 @@ test('switching active voice rooms and toggling mute or deafen emit distinct sou
   ]);
  }finally{call.close();}
 });
+
+test('a rebuilt link can send an offer even when the remote peer was the initial offerer', async () => {
+ class OfferPeer extends FakePeer {
+  async setLocalDescription() {
+   this.localDescription = { type: 'offer', toJSON: () => ({ type: 'offer', sdp: 'test-offer' }) };
+  }
+ }
+ const { call, events } = fixture({ Peer: OfferPeer });
+ try {
+  call.handle({ type: 'rtc_peers', self_peer_id: 'z', peers: [{ peer_id: 'b', voice_active: true }] });
+  await call.join();
+  const original = call.links.get('b');
+  original.pc.onnegotiationneeded();
+  await original.serial;
+  assert.equal(events.some(event => event.action === 'offer'), false);
+
+  original.pc.connectionState = 'failed';
+  call.repair('b');
+  const rebuilt = call.links.get('b');
+  assert.notEqual(rebuilt, original);
+  rebuilt.pc.onnegotiationneeded();
+  await rebuilt.serial;
+  assert.equal(events.filter(event => event.action === 'offer').length, 1);
+ } finally {
+  call.close();
+ }
+});
+
+test('same-session membership refreshes and participant updates do not restart failed links', async () => {
+ const { call, events } = fixture();
+ try {
+  await call.join();
+  const link = call.links.get('b');
+  link.pc.connectionState = 'failed';
+  const before = events.length;
+  call.handle({ type: 'rtc_peers', self_peer_id: 'a', peers: [{ peer_id: 'b', voice_active: true }] });
+  call.handle({ type: 'voice_state', peer_id: 'b', active: true, muted: true });
+  assert.equal(events.length, before);
+  assert.equal(call.links.get('b'), link);
+ } finally {
+  call.close();
+ }
+});
+
+test('temporary TURN configuration loss retries and restores the active call',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const {call,stream,events}=fixture();
+ try{
+  await call.join();
+  call.handle({type:'rtc_media_config',media_relay:{ice_servers:[]}});
+  call.handle({type:'rtc_peers',self_peer_id:'a',peers:[{peer_id:'b',voice_active:true}]});
+  assert.equal(call.links.size,0);
+  t.mock.timers.tick(15000);
+  assert.equal(events.at(-1).type,'rtc_media_config');
+  call.handle({type:'rtc_media_config',media_relay:{ice_servers:[{urls:'turns:relay.example',username:'test',credential:'test'}]}});
+  assert.equal(call.stream,stream);
+  assert.ok(call.links.has('b'));
+  assert.equal(call.snapshot.error,'');
+ }finally{call.close();}
+});

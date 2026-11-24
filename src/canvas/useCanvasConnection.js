@@ -122,11 +122,13 @@ export function useCanvasConnection(options) {
     let socket;
     let rtcSocket;
     let reconnectTimer = null;
+    let rtcReconnectTimer = null;
+    let lastCanvasMessageAt = Date.now();
     let keepaliveTimer = null;
     let lastCanvasActivityAt = Date.now();
-    let lastRtcActivityAt = Date.now();
     let rtcJoined = false;
     let pendingKeepalivePongs = 0;
+    let canvasKeepaliveSentAt = 0;
     let rtcReady = false;
     let canvasConnectionId = '';
     let canvasConnectionHash = '';
@@ -342,19 +344,37 @@ export function useCanvasConnection(options) {
           () => { lastCanvasActivityAt = Date.now(); },
         );
         wsRef.current = socket;
-        rtcSocket = trackSocketWrites(
-          installSocketCodec(new WebSocket(canvasCodecUrl(rtcSocketUrl(canvasId, access.ws_port, access.canvas_access_token)))),
-          () => { lastRtcActivityAt = Date.now(); },
-        );
-        rtcWsRef.current = rtcSocket;
-        lastCanvasActivityAt = Date.now();
-        lastRtcActivityAt = Date.now();
-        rtcJoined = false;
+        lastCanvasActivityAt = lastCanvasMessageAt = Date.now();
+        let lastRtcMessageAt = Date.now();
+        let rtcReconnectAttempts = 0;
+        const canReconnectRtc = () => !cancelled && !autoReconnectRef.current
+          && wsRef.current === socket && socket.readyState === WebSocket.OPEN && Boolean(canvasConnectionId);
+        const reconnectRtc = (delay, retryCanvas = false) => {
+          if (cancelled || autoReconnectRef.current || rtcReconnectTimer !== null) return;
+          voiceCallRef?.current?.reconnect({ seamless: navigator.onLine !== false });
+          if (retryCanvas || !canReconnectRtc() || rtcReconnectAttempts >= 2) {
+            requestServerReconnect({ retry_after_ms: delay });
+            return;
+          }
+          rtcReconnectAttempts += 1;
+          rtcReconnectTimer = window.setTimeout(() => {
+            rtcReconnectTimer = null;
+            if (canReconnectRtc()) openRtcSocket();
+          }, delay);
+        };
         pendingKeepalivePongs = 0;
+        let lastKeepaliveCheckAt = Date.now();
         if (keepaliveTimer !== null) window.clearInterval(keepaliveTimer);
         keepaliveTimer = window.setInterval(() => {
-          if (cancelled) return;
+          if (cancelled || pageFrozenRef.current || navigator.onLine === false) return;
           const now = Date.now();
+          // A throttled tab still sends probes. Give queued replies a turn before declaring a timeout.
+          const checkTimeout = now - lastKeepaliveCheckAt < 50000;
+          lastKeepaliveCheckAt = now;
+          if (checkTimeout && wsRef.current === socket && pendingKeepalivePongs > 0 && now - Math.max(lastCanvasMessageAt, canvasKeepaliveSentAt) >= 75000) {
+            requestServerReconnect();
+            return;
+          }
           if (
             wsRef.current === socket &&
             socket?.readyState === WebSocket.OPEN &&
@@ -365,21 +385,23 @@ export function useCanvasConnection(options) {
             now - lastCanvasActivityAt >= 20000
           ) {
             pendingKeepalivePongs += 1;
+            canvasKeepaliveSentAt = now;
             try { socket.send(JSON.stringify({ type: 'ping' })); } catch { pendingKeepalivePongs = 0; }
           }
-          if (
+          if (checkTimeout && rtcSocket && rtcWsRef.current === rtcSocket && now - lastRtcMessageAt >= 75000) {
+            rtcSocket.close();
+          } else if (
             rtcWsRef.current === rtcSocket &&
             rtcSocket?.readyState === WebSocket.OPEN &&
-            rtcReady &&
             rtcJoined &&
-            now - lastRtcActivityAt >= 20000
+            now - lastRtcMessageAt >= 20000
           ) {
             try { rtcSocket.send(JSON.stringify({ type: 'rtc_list' })); } catch { /* Socket closed mid-send. */ }
           }
         }, 25000);
-        const handleRtcMessage = (event) => {
-          if(cancelled||rtcWsRef.current!==rtcSocket)return;
-          lastRtcActivityAt = Date.now();
+        const handleRtcMessage = (event, currentSocket) => {
+          if(cancelled||rtcWsRef.current!==currentSocket)return;
+          lastRtcMessageAt = Date.now();
           let data;
           try { data = typeof event.data==='string'?JSON.parse(event.data):event.data; } catch { return; }
           voiceCallRef?.current?.handle(data);
@@ -396,6 +418,7 @@ export function useCanvasConnection(options) {
           }
           if (data.type === 'rtc_peers') {
             rtcJoined = true;
+            rtcReconnectAttempts = 0;
             rtcMembershipRetryRef.current=0;
             let mesh = peerMeshRef.current;
             if (!mesh) {
@@ -432,37 +455,39 @@ export function useCanvasConnection(options) {
             return;
           }
           if (data.type === 'rtc_disconnected') {
-            if (!autoReconnectRef.current || !canvasSnapshotLoadedRef.current) resetPeerMesh();
+            currentSocket.close();
             return;
           }
-          if(data.type==='error'&&canvasSnapshotLoadedRef.current&&['RTC_CANVAS_CONNECTION_INVALID','RTC_ALREADY_JOINED','SESSION_NOT_FOUND'].includes(data.code)){
-            const attempt=Math.min(rtcMembershipRetryRef.current++,5);
-            voiceCallRef?.current?.reconnect({ seamless: typeof navigator === 'undefined' || navigator.onLine !== false });requestServerReconnect({retry_after_ms:Math.min(500*2**attempt,15000)});return;
+          if (data.type === 'error' && ['RTC_CANVAS_CONNECTION_INVALID', 'RTC_ALREADY_JOINED', 'SESSION_NOT_FOUND'].includes(data.code)) {
+            const attempt = Math.min(rtcMembershipRetryRef.current++, 5);
+            reconnectRtc(Math.min(500 * 2 ** attempt, 15000), true);
+            return;
           }
           if (rtcMembershipRecovery.handle(data, hostSessionRef.current.term)) return;
           if (data.type === 'error' && (data.code?.startsWith('RTC_') || data.code?.startsWith('CANVAS_RELAY_') || ['HOST_FENCED', 'ITEM_ACCESS_DENIED', 'RATE_LIMITED'].includes(data.code))) {
             if (!autoReconnectRef.current) setToast(`브로커 연결 오류: ${data.code}`);
-            if (data.code === 'RATE_LIMITED' || data.code?.startsWith('CANVAS_RELAY_')) requestServerReconnect({ retry_after_ms: 500 });
           }
         };
-        rtcSocket.onmessage = handleRtcMessage;
-        rtcSocket.onerror = () => {
-          if (!cancelled && canvasSnapshotLoadedRef.current) requestServerReconnect({ retry_after_ms: 500 });
-          if (!cancelled && !autoReconnectRef.current && wsRef.current?.readyState === WebSocket.OPEN) setToast('캔버스 브로커에 연결할 수 없습니다.');
+        const openRtcSocket = () => {
+          const currentSocket = installSocketCodec(new WebSocket(canvasCodecUrl(rtcSocketUrl(canvasId, access.ws_port, access.canvas_access_token))));
+          rtcSocket = rtcWsRef.current = currentSocket;
+          rtcReady = rtcJoined = false;
+          joinedCanvasConnectionId = '';
+          lastRtcMessageAt = Date.now();
+          currentSocket.onmessage = event => handleRtcMessage(event, currentSocket);
+          currentSocket.onclose = event => {
+            if (cancelled || rtcWsRef.current !== currentSocket) return;
+            rtcWsRef.current = null;
+            rtcReady = rtcJoined = false;
+            if (event.code === 1008) {
+              resetPeerMesh();
+              setToast('캔버스 브로커 연결이 종료되었습니다.');
+              return;
+            }
+            reconnectRtc(500);
+          };
         };
-        rtcSocket.onclose = (event) => {
-          rtcJoined = false;
-          if(cancelled||rtcWsRef.current!==rtcSocket)return;
-          const recoverable=event.code!==1008&&canvasSnapshotLoadedRef.current;
-          if(recoverable){voiceCallRef?.current?.reconnect({ seamless: typeof navigator === 'undefined' || navigator.onLine !== false });requestServerReconnect({retry_after_ms:500});}
-          else{
-            voiceCallRef?.current?.suspend();
-            if(event.code===1008){autoReconnectRef.current=false;serverReconnectRequestedRef.current=false;if(reconnectTimer!==null){clearTimeout(reconnectTimer);reconnectTimer=null;}}
-          }
-          rtcWsRef.current = null;
-          if (!autoReconnectRef.current || !canvasSnapshotLoadedRef.current) resetPeerMesh(recoverable);
-          if (!autoReconnectRef.current && wsRef.current?.readyState === WebSocket.OPEN) setToast('캔버스 브로커 연결이 종료되었습니다.');
-        };
+        openRtcSocket();
         socket.onopen = () => {
           if (cancelled) return;
           setConnection('connecting');
@@ -470,7 +495,7 @@ export function useCanvasConnection(options) {
         };
         socket.onmessage = (event) => {
           if(cancelled||wsRef.current!==socket)return;
-          lastCanvasActivityAt = Date.now();
+          lastCanvasActivityAt = lastCanvasMessageAt = Date.now();
           let data;
           try { data = typeof event.data==='string'?JSON.parse(event.data):event.data; } catch { return; }
           if(settleRuntimeSocketResponse(runtimeSocketRequestsRef.current,data))return;
@@ -791,20 +816,20 @@ export function useCanvasConnection(options) {
       rtcMembershipRecovery.dispose();
       if (keepaliveTimer !== null) { window.clearInterval(keepaliveTimer); keepaliveTimer = null; }
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+      if (rtcReconnectTimer !== null) window.clearTimeout(rtcReconnectTimer);
       rtcReady = false;
       canvasConnectionId = '';
       canvasConnectionHash = '';
       joinedCanvasConnectionId = '';
       const seamlessVoice = preservePeerMesh && (typeof navigator === 'undefined' || navigator.onLine !== false);
-      voiceCallRef?.current?.reconnect({ seamless: seamlessVoice });
-      if (!preservePeerMesh) resetPeerMesh(true);
+      if (preservePeerMesh) voiceCallRef?.current?.reconnect({ seamless: seamlessVoice });
+      else resetPeerMesh(true);
       if (rtcSocket && rtcSocket.readyState !== WebSocket.CLOSED) {
         if (preservePeerMesh) {
           rtcSocket.onopen = null;
           rtcSocket.onmessage = null;
           rtcSocket.onerror = null;
           rtcSocket.onclose = null;
-          voiceCallRef?.current?.reconnect({ seamless: seamlessVoice });
         }
         rtcSocket.close();
       }

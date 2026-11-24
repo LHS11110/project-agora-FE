@@ -17,6 +17,7 @@ function ChatImageAttachment({ attachment, token, onOpenLightbox }) {
   const cached = attachment.internal ? peekAuthenticatedImage(attachment.url, token) : null;
   const [src, setSrc] = useState(() => (attachment.internal ? (cached?.src || '') : attachment.url));
   const [error, setError] = useState(false);
+  const [transportVersion, setTransportVersion] = useState(0);
 
   useEffect(() => {
     setError(false);
@@ -29,6 +30,11 @@ function ChatImageAttachment({ attachment, token, onOpenLightbox }) {
     const immediate = peekAuthenticatedImage(attachment.url, token);
     if (immediate?.src) setSrc(immediate.src);
     else setSrc('');
+
+    const retryOnReconnect = () => {
+      if (!acquired) setTransportVersion(version => version + 1);
+    };
+    window.addEventListener('agora:canvas-transport-ready', retryOnReconnect);
 
     acquireAuthenticatedImage(attachment.url, token)
       .then(entry => {
@@ -49,9 +55,10 @@ function ChatImageAttachment({ attachment, token, onOpenLightbox }) {
 
     return () => {
       active = false;
+      window.removeEventListener('agora:canvas-transport-ready', retryOnReconnect);
       if (acquired) releaseAuthenticatedImage(acquired);
     };
-  }, [attachment.url, attachment.internal, token]);
+  }, [attachment.url, attachment.internal, token, transportVersion]);
 
   if (error) {
     return (

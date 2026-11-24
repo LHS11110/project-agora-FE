@@ -249,7 +249,7 @@ function CanvasWorkspace() {
   const getAgentAnchorRef = useRef(() => ({ x: 0, y: 0 }));
   const runtimeStore = useMemo(() => createBlueprintStore({
     getItems: () => itemsRef.current,
-    execute: request => runtimeRequestRef.current(request), saveOutput: (id, records) => saveBlueprintOutputRef.current(id, records), saveState: (id, state) => saveRuntimeStateRef.current(id, state),saveValue:(id,patch)=>saveBlueprintValueRef.current(id,patch)
+    execute: ({ onOutput, ...request }) => runtimeRequestRef.current(request, onOutput), saveOutput: (id, records) => saveBlueprintOutputRef.current(id, records), saveState: (id, state) => saveRuntimeStateRef.current(id, state),saveValue:(id,patch)=>saveBlueprintValueRef.current(id,patch)
   }), []);
   useEffect(purgeAgentKeys, []);
   const multiAgentStore = useMemo(() => createMultiAgentStore({
