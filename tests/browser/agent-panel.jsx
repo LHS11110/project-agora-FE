@@ -16,7 +16,7 @@ async function request(payload,output){
  window.agentCalls.push(payload);
  if(payload.operation==='status'){
    if(window.agentFixture.failInitialStatus){window.agentFixture.failInitialStatus=false;throw Error('Test status failure');}
-   return {ready:true,configured:true,model:'qwen2.5:1.5b',credential_source:'none',default_configured:true,telemetry};
+   return {ready:true,configured:true,model:'gemma4:12b',credential_source:'none',default_configured:true,telemetry};
  }
  const db=read();
  if(payload.operation==='sessions')return {sessions:db.index.filter(id=>id!==window.agentFixture.omitSession).map(id=>summary(db.sessions[id])),draft:summary(db.sessions[db.drafts[userId]]),user_id:userId,next_offset:null};

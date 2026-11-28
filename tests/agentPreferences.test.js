@@ -53,6 +53,6 @@ test('saved cloud providers and model names resolve to the supported local model
   const saved = normalizeAgentPreferences({ provider: 'anthropic', model: 'claude-sonnet-5-5' });
   assert.equal(saved.provider, 'local');
   assert.equal(saved.model, '');
-  assert.equal(agentProvider('gemini').defaultModel, 'qwen2.5:1.5b');
-  assert.equal(modelOptions(normalizeAgentPreferences({ model: 'qwen2.5:1.5b' })).model, 'qwen2.5:1.5b');
+  assert.equal(agentProvider('gemini').defaultModel, 'gemma4:12b');
+  assert.equal(modelOptions(normalizeAgentPreferences({ model: 'gemma4:12b' })).model, 'gemma4:12b');
 });

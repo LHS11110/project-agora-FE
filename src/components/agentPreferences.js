@@ -7,7 +7,7 @@ export const AGENT_DEFAULTS = {
 };
 
 export const LOCAL_AGENT_PROVIDER = {
-  id: 'local', label: '로컬 Qwen', defaultModel: 'qwen2.5:1.5b', models: ['qwen2.5:1.5b'],
+  id: 'local', label: '로컬 Gemma', defaultModel: 'gemma4:12b', models: ['gemma4:12b'],
 };
 export const DEFAULT_AGENT_PROVIDER = LOCAL_AGENT_PROVIDER.id;
 export function agentProvider() { return LOCAL_AGENT_PROVIDER; }
